@@ -1,0 +1,87 @@
+# Copyright (c) 2012-2017 The Khronos Group Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+version 1.0
+
+fragment resnet_v1_conv_layer(
+    input: tensor,
+    channels: extent,
+    size: extent[],
+    stride: extent[] = [],
+    activation: logical = true,
+    normalization: logical = true,
+    scope: string )
+-> ( activated: tensor )
+{
+    output = conv_layer(input, channels = channels, size = size, stride = stride, scope = scope)
+    normalized = batch_normalization_layer(output, epsilon = 1e-3, scope = scope + '/norm') if normalization else output
+    activated = relu(normalized) if activation else normalized
+}
+
+fragment resnet_v1_unit( input: tensor, channels: extent, bottleneck: extent, stride: extent[], scope: string ) -> ( output: tensor )
+{
+    shortcut = resnet_v1_conv_layer(input, channels = channels, size = [1,1], stride = stride, scope = scope + '/shortcut', activation = false)
+    conv1 = resnet_v1_conv_layer(input, channels = bottleneck, size = [1,1], scope = scope + '/conv1')
+    conv2 = resnet_v1_conv_layer(conv1, channels = bottleneck, size = [3,3], stride = stride, scope = scope + '/conv2')
+    conv3 = resnet_v1_conv_layer(conv2, channels = channels, size = [1,1], scope = scope + '/conv3', activation = false)
+    output = relu(shortcut + conv3)
+}
+
+fragment _resnet_v1_block( input: tensor, params: (extent,extent,extent)[], _scope: string, index: extent ) -> ( output: tensor )
+{
+    channels, bottleneck, stride = params[0]
+    unit = resnet_v1_unit(input, channels = channels, bottleneck = bottleneck, stride = [stride] * 2,
+                          scope = _scope + '/unit' + string(index))
+    output = _resnet_v1_block(unit, params = params[1:], _scope = _scope, index = index + 1) if length_of(params) > 1 else unit
+}
+
+fragment resnet_v1_block( input: tensor, params: (extent,extent,extent)[], scope: string ) -> ( output: tensor )
+{
+    output = _resnet_v1_block(input, params = params, _scope = scope, index = 1)
+}
+
+fragment resnet_v1( input: tensor, classes: extent, blocks: (extent,extent,extent)[][], scope: string = '' ) -> ( output: tensor )
+{
+    conv1 = resnet_v1_conv_layer(input, channels = 64, size = [7,7], stride = [2,2], scope = 'conv1')
+    pool1 = max_pool_layer(conv1, size = [3,3], stride = [2,2], padding = [(0,1), (0,1)])
+    block1 = resnet_v1_block(pool1, scope = 'block1', params = blocks[0])
+    block2 = resnet_v1_block(block1, scope = 'block2', params = blocks[1])
+    block3 = resnet_v1_block(block2, scope = 'block3', params = blocks[2])
+    block4 = resnet_v1_block(block3, scope = 'block4', params = blocks[3])
+    pooled = mean_reduce(block4, axes = [2,3])
+    output = softmax(resnet_v1_conv_layer(pooled, channels = classes, size = [1,1], scope = 'logits', activation = false, normalization = false))
+}
+
+graph ResNet101( input ) -> ( output )
+{
+    input = external(shape = [1,3,224,224])
+    output = resnet_v1(input, classes = 1000, blocks = [
+        [(256, 64, 1)] * 2 + [(256, 64, 2)],
+        [(512, 128, 1)] * 3 + [(512, 128, 2)],
+        [(1024, 256, 1)] * 22 + [(1024, 256, 2)],
+        [(2048, 512, 1)] * 3
+    ])
+}
+
+graph ResNet200( input ) -> ( output )
+{
+    input = external(shape = [1,3,224,224])
+    output = resnet_v1(input, classes = 1000, blocks = [
+        [(256, 64, 1)] * 2 + [(256, 64, 2)],
+        [(512, 128, 1)] * 23 + [(512, 128, 2)],
+        [(1024, 256, 1)] * 35 + [(1024, 256, 2)],
+        [(2048, 512, 1)] * 3
+    ])
+}
