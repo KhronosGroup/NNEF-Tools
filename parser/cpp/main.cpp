@@ -186,7 +186,6 @@ int main( int argc, const char * argv[] )
             }
 
             nnef::TensorHeader header;
-            header.quantization = "okok";
             if ( !nnef::read_tensor_header(bin, header) )
             {
                 std::cerr << "Failed to read binary header from file: " << binaryFilename << std::endl;
