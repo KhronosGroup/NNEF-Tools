@@ -151,6 +151,10 @@ int main( int argc, const char * argv[] )
         {
             binary = true;
         }
+        else
+        {
+            std::cerr << "unrecognized option: " << argv[i] << std::endl;
+        }
     }
 
     PrintCallback callback;
