@@ -28,18 +28,19 @@ Build
 The example can be compiled with cmake.
 
 Example of build commands under Linux:
-
+````
 $ cd <NNEF parser root directory>
 $ mkdir build && cd build
 $ cmake ..
 $ make
-
+````
 
 How to run
 ----------
 
 Example of execution under Linux:
-
-cd <NNEF parser build directory>
-./bin/nnef-parser ../examples/googlenet_comp.txt -layers
-./bin/nnef-parser ../examples/googlenet_flat.txt
+````
+$ cd <NNEF parser build directory>
+$ ./bin/nnef-parser ../examples/googlenet_comp.txt --layers
+$ ./bin/nnef-parser ../examples/googlenet_flat.txt
+````
