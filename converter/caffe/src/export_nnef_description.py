@@ -21,7 +21,7 @@ def export_nnef_format(net, outputs, compress):
     dirname = net.name
     if not os.path.exists(dirname):
         os.makedirs(dirname)
-    with open(dirname+"/"+net.name+".desc","w") as f:
+    with open(dirname+"/graph.nnef","w") as f:
         f.write(net.nnef_standard(outputs))
     net.save_nnef_bins_weights()
     if compress:

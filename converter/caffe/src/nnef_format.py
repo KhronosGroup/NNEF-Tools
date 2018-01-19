@@ -288,13 +288,15 @@ def save_nnef_tensor(filename, tensor):
     file.write(struct.pack('h', 0xEF)[0]) # MAGIC NUMBER
     file.write(struct.pack("B", 1))
     file.write(struct.pack("B", 0)) # VERSION
-    data_offset = 12 + len(tensor.shape) * 4 + 3
+    data_offset = 12 + len(tensor.shape) * 4 + 4
     file.write(struct.pack('i', data_offset))
     file.write(struct.pack('i', len(tensor.shape)))
     for s in tensor.shape:
         file.write(struct.pack('i', s))
     file.write(struct.pack("B",0))
     file.write(struct.pack("B",32))
+    file.write(struct.pack("B",0))
+    file.write(struct.pack("B",0))
     file.write(tensor.flatten())
     file.close()
 

@@ -25,7 +25,7 @@
 namespace nnef
 {
 
-    enum class TensorDtype : uint8_t { Float, Quantized, Signed, Unsigned };
+    enum class TensorDtype : uint8_t { Float, Quantized, Signed, Unsigned, DtypeCount };
 
 
     inline void write_tensor_version( std::ostream& os, const size_t major, const size_t minor )
@@ -130,9 +130,9 @@ namespace nnef
         return (count + 7) / 8;
     }
 
-    inline size_t tensor_header_length( const size_t rank, const std::string& quantization )
+    inline size_t tensor_header_length( const size_t rank, const size_t qlen )
     {
-        return 4 + 4 + (rank + 1) * 4 + 4 + quantization.length();
+        return 4 + 4 + (rank + 1) * 4 + 4 + qlen;
     }
 
     inline void write_header_length( std::ostream& os, size_t length )
@@ -168,7 +168,7 @@ namespace nnef
     inline void write_tensor_header( std::ostream& os, const TensorHeader& header )
     {
         write_tensor_version(os, header.version.major, header.version.minor);
-        write_header_length(os, tensor_header_length(header.shape.rank(), header.quantization));
+        write_header_length(os, tensor_header_length(header.shape.rank(), header.quantization.length()));
         write_tensor_extents(os, header.shape.rank(), header.shape.extents());
         write_tensor_dtype(os, header.bits, header.quantization);
     }
@@ -191,6 +191,15 @@ namespace nnef
             header.shape[i] = 1;
         }
         header.dtype = read_tensor_dtype(is, header.bits, header.quantization);
+        if ( !(header.dtype < TensorDtype::DtypeCount) )
+        {
+            return false;
+        }
+
+        if ( header.length != tensor_header_length(rank, header.quantization.length()) )
+        {
+            return false;
+        }
 
         return (bool)is;
     }
