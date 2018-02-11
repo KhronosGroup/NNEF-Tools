@@ -298,7 +298,7 @@ namespace nnef
             Prototype("conv", {
                 Param("input", Tensor),
                 Param("filter", Tensor),
-                Param("bias", Tensor, ScalarOne),
+                Param("bias", Tensor, ScalarZero),
                 Param("border", String, StringConstant),
                 Param("padding", ExtentPairs, EmptyArray),
                 Param("stride", Extents, EmptyArray),
@@ -309,7 +309,7 @@ namespace nnef
             Prototype("deconv", {
                 Param("input", Tensor),
                 Param("filter", Tensor),
-                Param("bias", Tensor, ScalarOne),
+                Param("bias", Tensor, ScalarZero),
                 Param("border", String, StringConstant),
                 Param("padding", ExtentPairs, EmptyArray),
                 Param("stride", Extents, EmptyArray),
