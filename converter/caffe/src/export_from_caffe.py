@@ -49,8 +49,8 @@ def getPadding(self, proto):
     self.padding = [
         0,
         0,
-        pad_h[0],
-        pad_w[0]
+        int(pad_h[0]),
+        int(pad_w[0])
     ]
 
 
@@ -62,7 +62,7 @@ def getPads(operation, bigger, smaller):
     size_h = int(operation.size[-2]) - stride
     pad_right = smaller.data.shape[-1]*stride - bigger.data.shape[-1] + size_w - pad_left
     pad_bottom = smaller.data.shape[-2]*stride - bigger.data.shape[-2] + size_h - pad_top
-    operation.pads = [pad_top, pad_bottom, pad_left, pad_right]
+    operation.pads = [int(pad_top), int(pad_bottom), int(pad_left), int(pad_right)]
 
 
 def getStride(self, stride):
@@ -73,8 +73,8 @@ def getStride(self, stride):
     self.stride = [
         1,
         1,
-        stride,
-        stride
+        int(stride),
+        int(stride)
     ]
 
 
@@ -119,8 +119,8 @@ def createPool(proto, net, n_instance):
     s.size = [
         1,
         1,
-        proto.pooling_param.kernel_size,
-        proto.pooling_param.kernel_size
+        int(proto.pooling_param.kernel_size),
+        int(proto.pooling_param.kernel_size)
     ]
     getStride(s, proto.pooling_param.stride)
     getPadding(s, proto)
@@ -133,7 +133,7 @@ def createPool(proto, net, n_instance):
 def createDeconvInterp(proto, net, n_instance):
     s = InterpOperation()
     getparams(s, proto)
-    s.upsample_stride = proto.convolution_param.stride[0]
+    s.upsample_stride = int(proto.convolution_param.stride[0])
     net.operations.append(s)
 
 
@@ -147,10 +147,10 @@ def createDeconv(proto, net, n_instance, deconv_as_resamp):
     bottomsize = n_instance.blobs[s.bottom[0]].data.shape[1]
     topsize = proto.convolution_param.num_output
     s.size = [
-        topsize,
-        bottomsize,
-        proto.convolution_param.kernel_size[0],
-        proto.convolution_param.kernel_size[0]
+        int(topsize),
+        int(bottomsize),
+        int(proto.convolution_param.kernel_size[0]),
+        int(proto.convolution_param.kernel_size[0])
     ]
     group = proto.convolution_param.group
     if group:
@@ -173,10 +173,10 @@ def createInnerProduct(proto, net, n_instance):
         h = n_instance.blobs[s.bottom[0]].data.shape[2]
     topsize = proto.inner_product_param.num_output
     s.size = [
-        topsize,
-        bottomsize,
-        h,
-        w
+        int(topsize),
+        int(bottomsize),
+        int(h),
+        int(w)
     ]
     s.stride = [1, 1, 1, 1]
     s.padding = [0, 0, 0, 0]
@@ -189,14 +189,14 @@ def createInterp(proto, net, n_instance):
     getparams(s, proto)
     bottom_size = n_instance.blobs[s.bottom[0]].data.shape[-1]
     top_size = n_instance.blobs[s.top[0]].data.shape[-1]
-    s.upsample_stride = top_size/bottom_size
+    s.upsample_stride = int(top_size/bottom_size)
     net.operations.append(s)
 
 
 def createBatchNorm(proto, net, n_instance):
     s = ScaleOperation()
     getparams(s, proto)
-    s.channels = n_instance.params[s.name][0].data.shape[0]
+    s.channels = int(n_instance.params[s.name][0].data.shape[0])
     s.use_bias = True
     s._caffe_batchnorm_convert = True
     net.operations.append(s)
@@ -205,7 +205,7 @@ def createBatchNorm(proto, net, n_instance):
 def createScale(proto, net, n_instance):
     s = ScaleOperation()
     getparams(s, proto)
-    s.channels = n_instance.params[s.name][0].data.shape[0]
+    s.channels = int(n_instance.params[s.name][0].data.shape[0])
     s.use_bias = proto.scale_param.bias_term
     net.operations.append(s)
 
@@ -240,10 +240,10 @@ def createConv(proto, net, n_instance):
         w = proto.convolution_param.kernel_w
     topsize = proto.convolution_param.num_output
     s.size = [
-        topsize,
-        bottomsize,
-        h,
-        w
+        int(topsize),
+        int(bottomsize),
+        int(h),
+        int(w)
     ]
     getStride(s, proto.convolution_param.stride)
     getPadding(s, proto)
@@ -270,7 +270,7 @@ def createReshape(proto, net, n_instance):
     s = ReshapeOperation()
     getparams(s, proto)
     dim = proto.reshape_param.shape.dim
-    s.shape = [np.int32(dim[0]), np.int32(dim[1]), np.int32(dim[2]), np.int32(dim[3])]
+    s.shape = [int(dim[0]), int(dim[1]), int(dim[2]), int(dim[3])]
     net.operations.append(s)
 
 
@@ -292,10 +292,10 @@ def createFlatten(proto, net, n_instance):
     bottomsize = n_instance.blobs[s.bottom[0]].data.shape[1]
     topsize = bottomsize
     s.size = [
-        topsize,
-        bottomsize,
-        net.data[s.bottom[0]][2],
-        net.data[s.bottom[0]][3]
+        int(topsize),
+        int(bottomsize),
+        int(net.data[s.bottom[0]][2]),
+        int(net.data[s.bottom[0]][3])
     ]
     s.stride = [1, 1, 1, 1]
     s.padding = [0, 0, 0, 0]
@@ -316,12 +316,12 @@ def createArgmax(proto, net, n_instance):
     if proto.argmax_param.top_k == 1 and proto.argmax_param.out_max_val == False:
         s = ArgmaxOperation()
         getparams(s, proto)
-        axis = proto.argmax_param.axis
+        axis = int(proto.argmax_param.axis)
         bottomsize = n_instance.blobs[s.bottom[0]].data.shape
         s.size = []
         for i in range(len(bottomsize)):
             if i == axis:
-                s.size.append(bottomsize[i])
+                s.size.append(int(bottomsize[i]))
             else:
                 s.size.append(1)
         net.operations.append(s)
