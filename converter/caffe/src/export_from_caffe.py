@@ -31,6 +31,12 @@ def getparams(self, proto):
     self.name = proto.name
 
 
+def getDilation(self, proto):
+    d = proto.convolution_param.dilation
+    if not d:
+        d = [1]
+    self.dilation = d
+
 def getPadding(self, proto):
     pad_w = proto.convolution_param.pad_w
     pad_h = proto.convolution_param.pad_h
@@ -54,14 +60,21 @@ def getPadding(self, proto):
     ]
 
 
-def getPads(operation, bigger, smaller):
+def getPads(operation, proto, bigger, smaller, with_dilation = False):
+    getPadding(operation, proto)
     pad_left = operation.padding[-1]
     pad_top = operation.padding[-2]
     stride = operation.stride[-1]
     size_w = int(operation.size[-1]) - stride
     size_h = int(operation.size[-2]) - stride
-    pad_right = smaller.data.shape[-1]*stride - bigger.data.shape[-1] + size_w - pad_left
-    pad_bottom = smaller.data.shape[-2]*stride - bigger.data.shape[-2] + size_h - pad_top
+    dilation_extra_w = 0
+    dilation_extra_h = 0
+    if with_dilation:
+        getDilation(operation,proto)
+        dilation_extra_w = (int(operation.size[-1])-1)*(operation.dilation[0]-1)
+        dilation_extra_h = (int(operation.size[-2])-1)*(operation.dilation[0]-1)
+    pad_right = smaller.data.shape[-1]*stride - bigger.data.shape[-1] + size_w - pad_left + dilation_extra_w
+    pad_bottom = smaller.data.shape[-2]*stride - bigger.data.shape[-2] + size_h - pad_top + dilation_extra_h
     operation.pads = [int(pad_top), int(pad_bottom), int(pad_left), int(pad_right)]
 
 
@@ -106,6 +119,13 @@ def createLRN(proto, net, n_instance):
     net.operations.append(s)
 
 
+def createElu(proto, net, n_instance):
+    s = ELUOperation()
+    getparams(s, proto)
+    s.alpha = proto.elu_param.alpha
+    net.operations.append(s)
+
+
 def createRelu(proto, net, n_instance):
     s = ReLUOperation()
     getparams(s, proto)
@@ -123,8 +143,7 @@ def createPool(proto, net, n_instance):
         int(proto.pooling_param.kernel_size)
     ]
     getStride(s, proto.pooling_param.stride)
-    getPadding(s, proto)
-    getPads(s,n_instance.blobs[s.bottom[0]],n_instance.blobs[s.top[0]])
+    getPads(s,proto,n_instance.blobs[s.bottom[0]],n_instance.blobs[s.top[0]])
     pool_types = ["max", "avg"]
     s.pool = pool_types[proto.pooling_param.pool]
     net.operations.append(s)
@@ -156,8 +175,7 @@ def createDeconv(proto, net, n_instance, deconv_as_resamp):
     if group:
         s.groups = int(group)
     getStride(s, proto.convolution_param.stride)
-    getPadding(s, proto)
-    getPads(s,n_instance.blobs[s.top[0]],n_instance.blobs[s.bottom[0]])
+    getPads(s,proto,n_instance.blobs[s.top[0]],n_instance.blobs[s.bottom[0]],True)
     net.operations.append(s)
 
 
@@ -246,8 +264,7 @@ def createConv(proto, net, n_instance):
         int(w)
     ]
     getStride(s, proto.convolution_param.stride)
-    getPadding(s, proto)
-    getPads(s,n_instance.blobs[s.bottom[0]],n_instance.blobs[s.top[0]])
+    getPads(s,proto,n_instance.blobs[s.bottom[0]],n_instance.blobs[s.top[0]],True)
     group = proto.convolution_param.group
     if group:
         s.groups = int(group)
@@ -414,6 +431,8 @@ def buildNet(fname_prototxt, fname_caffemodel, deconv_as_resamp=True, forward=Fa
             createPool(l, net, n_instance)
         elif l.type == "Deconvolution":
             createDeconv(l, net, n_instance, deconv_as_resamp)
+        elif l.type == "ELU":
+            createElu(l, net, n_instance)
         elif l.type == "ReLU":
             createRelu(l, net, n_instance)
         elif l.type == "Concat":

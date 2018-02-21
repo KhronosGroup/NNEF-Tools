@@ -33,11 +33,11 @@ def nnef_variables(self):
 def nnef_variable_signature(name, label, shape):
     return name + " = variable(label = '" + label + "', shape = " + str(shape) + ")"
 
-def nnef_weight_variable_signatures(op_name, filter_shape, bias_shape = None):
-    h = nnef_variable_signature(op_name + "_filter", op_name + "/filter", filter_shape)
-    if bias_shape is not None:
-        h = h + "\r\n" + nnef_variable_signature(op_name + "_bias", op_name + "/bias", bias_shape)
-    return h
+def nnef_weight_variables_signature(op_name, names_shapes_dict):
+    h = ""
+    for key in names_shapes_dict.keys():
+        h = h + nnef_variable_signature(op_name + "_" + key, op_name + "/" + key, names_shapes_dict[key]) + "\r\n"
+    return h[:-2]
 
 def nnef_signature(self, output, variables, variables_to_pretty):
     sig = self.nnef_signature_name() + "("
@@ -88,17 +88,29 @@ def nnef_standard_LrnOperation(self):
 
 def nnef_signature_name_BatchNormOperation(self):
     return "batch_normalization"
+def nnef_variables_BatchNormOperation(self):
+    size = [1,self.weight_data["mean"].shape[0]]
+    d = {
+        "variance": size,
+        "mean": size,
+        "offset": size,
+        "scale": size,
+    }
+    return nnef_weight_variables_signature(self.name, d)
 def nnef_standard_BatchNormOperation(self):
     self.epsilon = 0.00001
     self.scope = self.name
-    header = self.nnef_signature(self.top[0], [self.bottom[0]], ["epsilon","scope"])
+    header = self.nnef_signature(self.top[0], [self.bottom[0], self.name + "_mean", self.name + "_variance", self.name + "_offset", self.name + "_scale"], ["epsilon"])
     return header
 
 def nnef_signature_name_ScaleOperation(self):
     return ""
 def nnef_variables_ScaleOperation(self):
     size = [1,self.channels]
-    return nnef_weight_variable_signatures(self.name, size, size if self.use_bias else None)
+    d = {"filter": size}
+    if self.use_bias:
+        d["bias"] = size
+    return nnef_weight_variables_signature(self.name, d)
 def nnef_standard_ScaleOperation(self):
     self.scope = self.name
     if not self.use_bias:
@@ -129,7 +141,10 @@ def nnef_variables_DeconvOperation(self):
     size = self.size
     size = [size[0],size[1]/self.groups,size[2],size[3]]
     bsize = [1,self.size[0]]
-    return nnef_weight_variable_signatures(self.name, size, bsize if self.use_bias else None)
+    d = {"filter": size}
+    if self.use_bias:
+        d["bias"] = bsize
+    return nnef_weight_variables_signature(self.name, d)
 
 def nnef_signature_name_ConvOperation(self):
     return "conv"
@@ -147,7 +162,10 @@ def nnef_variables_ConvOperation(self):
     size = self.size
     size = [size[0],size[1]/self.groups,size[2],size[3]]
     bsize = [1,self.size[0]]
-    return nnef_weight_variable_signatures(self.name, size, bsize if self.use_bias else None)
+    d = {"filter": size}
+    if self.use_bias:
+        d["bias"] = bsize
+    return nnef_weight_variables_signature(self.name, d)
 
 
 def nnef_signature_name_PoolOperation(self):
@@ -201,12 +219,24 @@ def nnef_standard_SigmoidOperation(self):
     return self.nnef_signature(self.top[0], [self.bottom[0]], [])
 
 def nnef_signature_name_AddOperation(self):
-    return " + "
+    return "add"
 def nnef_standard_AddOperation(self):
-    sig = self.bottom[0]
-    for b in self.bottom[1:]:
-        sig = sig + self.nnef_signature_name() + b
-    return self.top[0] + " = " + sig
+    return self.nnef_signature(self.top[0], self.bottom, [])
+def nnef_variables_AddOperation(self):
+    d = {}
+    for key in self.weight_data:
+        d[key] = [1,self.weight_data[key].shape[0]]
+    return nnef_weight_variables_signature(self.name, d)
+
+def nnef_signature_name_MulOperation(self):
+    return "mul"
+def nnef_standard_MulOperation(self):
+    return self.nnef_signature(self.top[0], self.bottom, [])
+def nnef_variables_MulOperation(self):
+    d = {}
+    for key in self.weight_data:
+        d[key] = [1,self.weight_data[key].shape[0]]
+    return nnef_weight_variables_signature(self.name, d)
 
 def nnef_signature_name_MergeOperation(self):
     return "concat"
@@ -218,32 +248,11 @@ def nnef_standard_MergeOperation(self):
     bottoms = bottoms + self.bottom[-1] + "]"
     return self.nnef_signature(self.top[0], [bottoms], ["axis"])
 
-def nnef_standard_one_operation_line(self, index):
-    op = self.operations[index]
-    if op.in_place():
-        op_copy = op.copy()
-        (new_index, header_to_replace) = self.nnef_standard_one_operation_line(index-1)
-        h = header_to_replace[header_to_replace.index("=")+2:]
-        if h[-1] == ")":
-            h = h[:]
-        if h[-1] == ";":
-            h = h[:-1]
-        if h[-1]!="(":
-            h = "(" + h + ")"
-        op_copy.bottom[0] = h
-        new_op = op_copy
-    else:
-        new_index = index-1
-        new_op = op
-    return (new_index, new_op.nnef_standard())
-def nnef_standard_per_operation(self, index):
-    op = self.operations[index]
-    if index == 0:
-        return op.nnef_standard() + "\r\n"
-    if index < 0:
-        return ""
-    (index, header) = self.nnef_standard_one_operation_line(index)
-    return self.nnef_standard_per_operation(index) + header + "\r\n"
+def nnef_standard_operations(self):
+    header = ""
+    for op in self.operations:
+        header = header + "\r\n" + op.nnef_standard()
+    return header
 def nnef_standard(self, outputs=None):
     op_count = len(self.operations)
     # build ops
@@ -252,7 +261,7 @@ def nnef_standard(self, outputs=None):
         v = f.nnef_variables()
         if len(v) > 3:
             s = s + v + "\r\n"
-    s = s + self.nnef_standard_per_operation(op_count - 1)
+    s = s + self.nnef_standard_operations()
     tops = []
     all_tops = []
     # SEARCH FOR TOPS
@@ -279,7 +288,7 @@ def nnef_standard(self, outputs=None):
             outputstring += ", " + outputs[i+1]
     else:
         outputstring = self.operations[-1].top[0]
-    s = "version 1.0\r\n\r\ngraph "+self.name+"( "+self.operations[0].top[0]+" ) -> ( "+outputstring+" )\r\n{\r\n    "+s[0:-4]+"}"
+    s = "version 1.0\r\n\r\ngraph "+self.name+"( "+self.operations[0].top[0]+" ) -> ( "+outputstring+" )\r\n{\r\n    "+s+"\r\n}"
     return s
 
 def save_nnef_tensor(filename, tensor):
@@ -337,8 +346,8 @@ def dir_to_targz(output_path):
     tar.close()
     shutil.rmtree(output_path)
 
-AbstractNet.nnef_standard_one_operation_line = MethodType(nnef_standard_one_operation_line, None, AbstractNet)
-AbstractNet.nnef_standard_per_operation = MethodType(nnef_standard_per_operation, None, AbstractNet)
+
+AbstractNet.nnef_standard_operations = MethodType(nnef_standard_operations, None, AbstractNet)
 AbstractNet.nnef_standard = MethodType(nnef_standard, None, AbstractNet)
 AbstractNet.save_operation_to_nnef_bin = MethodType(save_operation_to_nnef_bin, None, AbstractNet)
 AbstractNet.save_nnef_bins_weights = MethodType(save_nnef_bins_weights, None, AbstractNet)
@@ -359,6 +368,7 @@ RescaleOperation.nnef_standard = MethodType(nnef_standard_RescaleOperation, None
 RescaleOperation.nnef_signature_name = MethodType(nnef_signature_name_RescaleOperation, None, RescaleOperation)
 LrnOperation.nnef_standard = MethodType(nnef_standard_LrnOperation, None, LrnOperation)
 LrnOperation.nnef_signature_name = MethodType(nnef_signature_name_LrnOperation, None, LrnOperation)
+BatchNormOperation.nnef_variables = MethodType(nnef_variables_BatchNormOperation, None, BatchNormOperation)
 BatchNormOperation.nnef_standard = MethodType(nnef_standard_BatchNormOperation, None, BatchNormOperation)
 BatchNormOperation.nnef_signature_name = MethodType(nnef_signature_name_BatchNormOperation, None, BatchNormOperation)
 ScaleOperation.nnef_variables = MethodType(nnef_variables_ScaleOperation, None, ScaleOperation)
@@ -392,5 +402,9 @@ BNLLOperation.nnef_standard = MethodType(nnef_standard_BNLLOperation, None, BNLL
 BNLLOperation.nnef_signature_name = MethodType(nnef_signature_name_BNLLOperation, None, BNLLOperation)
 AddOperation.nnef_standard = MethodType(nnef_standard_AddOperation, None, AddOperation)
 AddOperation.nnef_signature_name = MethodType(nnef_signature_name_AddOperation, None, AddOperation)
+AddOperation.nnef_variables = MethodType(nnef_variables_AddOperation, None, AddOperation)
+MulOperation.nnef_standard = MethodType(nnef_standard_MulOperation, None, MulOperation)
+MulOperation.nnef_signature_name = MethodType(nnef_signature_name_MulOperation, None, MulOperation)
+MulOperation.nnef_variables = MethodType(nnef_variables_MulOperation, None, MulOperation)
 MergeOperation.nnef_standard = MethodType(nnef_standard_MergeOperation, None, MergeOperation)
 MergeOperation.nnef_signature_name = MethodType(nnef_signature_name_MergeOperation, None, MergeOperation)
