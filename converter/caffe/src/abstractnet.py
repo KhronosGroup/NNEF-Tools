@@ -32,18 +32,29 @@ class AbstractNet:
             result.operations.append(op)
         return result
     def replace_forbidden_characters(self):
+        self.name = self.name.replace(".","_")
         for op in self.operations:
             if hasattr(op,'name'):
                 op.name = op.name.replace('/','_')
+                op.name = op.name.replace('.','_')
             for i in range(0,len(op.bottom)):
                 op.bottom[i] = op.bottom[i].replace('/','_')
+                op.bottom[i] = op.bottom[i].replace('.','_')
             for i in range(0,len(op.top)):
                 op.top[i] = op.top[i].replace('/','_')
+                op.top[i] = op.top[i].replace('.','_')
     def resolve_inplace_operations(self):
         for i in range(len(self.operations)):
             if self.operations[i].in_place():
                 old_name = self.operations[i].top[0]
-                new_name = old_name+"_tmp"
+                new_name = self.operations[i].top[0] + ""
+                conflict = True
+                while conflict:
+                    new_name = new_name + "_tmp"
+                    conflict = False
+                    for o in self.operations:
+                        if new_name in o.bottom or new_name in o.top:
+                            conflict = True
                 self.operations[i].top[0] = new_name
                 for j in range(i+1, len(self.operations)):
                     for k in range(len(self.operations[j].top)):
@@ -52,6 +63,16 @@ class AbstractNet:
                     for k in range(len(self.operations[j].bottom)):
                         if self.operations[j].bottom[k] == old_name:
                             self.operations[j].bottom[k] = new_name
+    def merge_batchnorm_operations(self):
+        for op in self.operations:
+            if isinstance(op, ScaleOperation):
+                op.mergeToBatchNorm(self)
+    def convert_scalebias_to_mul_add(self):
+        for op in self.operations:
+            if isinstance(op, ScaleOperation):
+                op.convertToMulAdd(self)
+
+
 
 class Operation:
     def __init__(self):
@@ -162,6 +183,9 @@ class LrnOperation(Operation):
         return result
 
 class BatchNormOperation(WeightedOperation):
+    def __init__(self):
+        WeightedOperation.__init__(self)
+        self.epsilon = 1e-8
     def copyTo(self, result):
         WeightedOperation.copyTo(self, result)
         return result
@@ -199,6 +223,40 @@ class ScaleOperation(WeightedOperation):
         result = ScaleOperation()
         self.copyTo(result)
         return result
+    def mergeToBatchNorm(self, net):
+        if self._caffe_batchnorm_convert:
+            for i in range(len(net.operations)):
+                op = net.operations[i]
+                if isinstance(op, ScaleOperation) and not op._caffe_batchnorm_convert and self.top[0] == op.bottom[0]:
+                    new_op = BatchNormOperation()
+                    new_op.name = self.name
+                    new_op.bottom = self.bottom
+                    new_op.top = self.top
+                    new_op.weight_data["scale"] = op.weight_data["filter"]
+                    new_op.weight_data["offset"] = op.weight_data["bias"]
+                    new_op.weight_data["mean"] = -1 * self.weight_data["bias"] / self.weight_data["filter"]
+                    new_op.weight_data["variance"] = 1 / self.weight_data["filter"]
+                    net.operations[i] = new_op
+                    net.operations.remove(self)
+                    return
+    def convertToMulAdd(self, net):
+        index = net.operations.index(self)
+        net.operations.remove(self)
+        if self.use_bias:
+            add = AddOperation()
+            add.name = self.name + "_add"
+            add.top.append(self.top[0])
+            add.bottom.append(self.top[0])
+            add.bottom.append(add.name + "_bias")
+            add.weight_data["bias"] = self.weight_data["bias"]
+            net.operations.insert(index,add)
+        mul = MulOperation()
+        mul.name = self.name + "_mul"
+        mul.top.append(self.top[0])
+        mul.bottom.append(self.bottom[0])
+        mul.bottom.append(mul.name + "_filter")
+        mul.weight_data["filter"] = self.weight_data["filter"]
+        net.operations.insert(index,mul)
 
 class ConvOperation(WeightedOperation):
     def __init__(self):
@@ -212,6 +270,7 @@ class ConvOperation(WeightedOperation):
         result.stride = self.stride
         result.padding = self.padding
         result.size = self.size
+        result.dilation = self.dilation
         self.copyTo(result)
         return result
 
@@ -220,6 +279,7 @@ class DeconvOperation(WeightedOperation):
         WeightedOperation.__init__(self)
     def copy(self):
         result = DeconvOperation()
+        result.dilation = self.dilation
         WeightedOperation.copy(self, result)
         return result
 
@@ -240,6 +300,16 @@ class PoolOperation(Operation):
             result.stride.append(s)
         result.pads = self.pads
         result.padding = self.padding
+        return result
+
+class ELUOperation(Operation):
+    def __init__(self):
+        Operation.__init__(self)
+        self.alpha = 1
+    def copy(self):
+        result = ELUOperation()
+        Operation.copyTo(self, result)
+        result.alpha = self.alpha
         return result
 
 class ReLUOperation(Operation):
@@ -314,12 +384,20 @@ class SigmoidOperation(Operation):
         Operation.copyTo(self, result)
         return result
 
-class AddOperation(Operation):
+class AddOperation(WeightedOperation):
     def __init__(self):
-        Operation.__init__(self)
+        WeightedOperation.__init__(self)
     def copy(self):
         result = AddOperation()
-        Operation.copyTo(self, result)
+        WeightedOperation.copyTo(self, result)
+        return result
+
+class MulOperation(WeightedOperation):
+    def __init__(self):
+        WeightedOperation.__init__(self)
+    def copy(self):
+        result = MulOperation()
+        WeightedOperation.copyTo(self, result)
         return result
 
 class MergeOperation(Operation):
