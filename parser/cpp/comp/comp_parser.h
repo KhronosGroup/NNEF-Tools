@@ -31,6 +31,7 @@
 #include "fragment.h"
 #include <cassert>
 #include <sstream>
+#include <cctype>
 
 
 namespace nnef
@@ -1435,7 +1436,7 @@ namespace nnef
                 std::make_pair('^', 60),
             };
             
-            if ( !isascii(token) )
+            if ( !std::isprint(token) )
             {
                 return -1;
             }
