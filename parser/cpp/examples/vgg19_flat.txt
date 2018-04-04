@@ -15,7 +15,7 @@
 
 version 1.0
 
-graph vgg19( input ) -> ( output1 )
+graph vgg19( input ) -> ( output )
 {
 	input = external(shape = [1, 3, 224, 224]);
 	kernel1 = variable(shape = [64, 3, 3, 3], label = 'vgg_19/conv1/conv1_1/kernel');
@@ -97,5 +97,5 @@ graph vgg19( input ) -> ( output1 )
 	relu18 = relu(conv18);
 	kernel19 = variable(shape = [1000, 4096, 1, 1], label = 'vgg_19/fc8/kernel');
 	bias19 = variable(shape = [1, 1000], label = 'vgg_19/fc8/bias');
-	conv19 = conv(relu18, kernel19, bias19, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	output = conv(relu18, kernel19, bias19, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
 }
