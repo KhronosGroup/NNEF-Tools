@@ -41,6 +41,6 @@ How to run
 Example of execution under Linux:
 ````
 $ cd <NNEF parser build directory>
-$ ./bin/nnef-parser ../examples/googlenet_comp.txt --layers
-$ ./bin/nnef-parser ../examples/googlenet_flat.txt
+$ ./bin/nnef-validator ../examples/googlenet_comp.txt --layers
+$ ./bin/nnef-validator ../examples/googlenet_flat.txt
 ````
