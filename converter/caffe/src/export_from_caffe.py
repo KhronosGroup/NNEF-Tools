@@ -13,11 +13,8 @@
 # limitations under the License.
 
 
-import sys
 import os
 from abstractnet import *
-import math
-from types import MethodType
 
 CAFFE_BIN_FOLDER = os.environ['CAFFE_BIN_FOLDER']
 GPU_MODE = False
@@ -35,7 +32,7 @@ def getDilation(self, proto):
     d = proto.convolution_param.dilation
     if not d:
         d = [1]
-    self.dilation = d
+    self.dilation = [int(d[0])]
 
 def getPadding(self, proto):
     pad_w = proto.convolution_param.pad_w
@@ -91,9 +88,9 @@ def getStride(self, stride):
     ]
 
 
-Operation.getparams = MethodType(getparams, None, Operation)
-Operation.getPadding = MethodType(getPadding, None, Operation)
-Operation.getStride = MethodType(getStride, None, Operation)
+Operation.getparams = getparams
+Operation.getPadding = getPadding
+Operation.getStride = getStride
 
 
 def createMerge(proto, net, n_instance):

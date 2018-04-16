@@ -13,10 +13,15 @@
 # limitations under the License.
 
 
-import numpy as np
+import re
+import sys
+
+
+if(sys.version_info[0] > 2):
+    basestring = str
 
 def log(s):
-    print s
+    print(s)
 
 class AbstractNet:
     def __init__(self, name):
@@ -32,17 +37,14 @@ class AbstractNet:
             result.operations.append(op)
         return result
     def replace_forbidden_characters(self):
-        self.name = self.name.replace(".","_")
+        self.name = re.sub(r'\W', '_', self.name)
         for op in self.operations:
             if hasattr(op,'name'):
-                op.name = op.name.replace('/','_')
-                op.name = op.name.replace('.','_')
+                op.name = re.sub(r'\W', '_', op.name)
             for i in range(0,len(op.bottom)):
-                op.bottom[i] = op.bottom[i].replace('/','_')
-                op.bottom[i] = op.bottom[i].replace('.','_')
+                op.bottom[i] = re.sub(r'\W', '_', op.bottom[i])
             for i in range(0,len(op.top)):
-                op.top[i] = op.top[i].replace('/','_')
-                op.top[i] = op.top[i].replace('.','_')
+                op.top[i] = re.sub(r'\W', '_', op.top[i])
     def resolve_inplace_operations(self):
         for i in range(len(self.operations)):
             if self.operations[i].in_place():

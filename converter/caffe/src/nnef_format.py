@@ -14,7 +14,6 @@
 
 
 from export_from_caffe import *
-from types import MethodType, StringType
 import struct
 import tarfile
 import shutil
@@ -36,7 +35,10 @@ def nnef_variable_signature(name, label, shape):
 def nnef_weight_variables_signature(op_name, names_shapes_dict):
     h = ""
     for key in names_shapes_dict.keys():
-        h = h + nnef_variable_signature(op_name + "_" + key, op_name + "/" + key, names_shapes_dict[key]) + "\r\n"
+        l = []
+        for s in names_shapes_dict[key]:
+            l.append(int(s))
+        h = h + nnef_variable_signature(op_name + "_" + key, op_name + "/" + key, l) + "\r\n"
     return h[:-2]
 
 def nnef_signature(self, output, variables, variables_to_pretty):
@@ -254,7 +256,6 @@ def nnef_standard_operations(self):
         header = header + "\r\n" + op.nnef_standard()
     return header
 def nnef_standard(self, outputs=None):
-    op_count = len(self.operations)
     # build ops
     s = ""
     for f in self.operations:
@@ -293,8 +294,8 @@ def nnef_standard(self, outputs=None):
 
 def save_nnef_tensor(filename, tensor):
     file = open(filename, "wb")
-    file.write(struct.pack('c', 'N'))
-    file.write(struct.pack('h', 0xEF)[0]) # MAGIC NUMBER
+    file.write(struct.pack('c', b'N'))
+    file.write(struct.pack('c', b'\xEF')) # MAGIC NUMBER
     file.write(struct.pack("B", 1))
     file.write(struct.pack("B", 0)) # VERSION
     data_offset = 12 + len(tensor.shape) * 4 + 4
@@ -347,64 +348,64 @@ def dir_to_targz(output_path):
     shutil.rmtree(output_path)
 
 
-AbstractNet.nnef_standard_operations = MethodType(nnef_standard_operations, None, AbstractNet)
-AbstractNet.nnef_standard = MethodType(nnef_standard, None, AbstractNet)
-AbstractNet.save_operation_to_nnef_bin = MethodType(save_operation_to_nnef_bin, None, AbstractNet)
-AbstractNet.save_nnef_bins_weights = MethodType(save_nnef_bins_weights, None, AbstractNet)
-AbstractNet.save_nnef_bins_heatmaps = MethodType(save_nnef_bins_heatmaps, None, AbstractNet)
+AbstractNet.nnef_standard_operations = nnef_standard_operations
+AbstractNet.nnef_standard = nnef_standard
+AbstractNet.save_operation_to_nnef_bin = save_operation_to_nnef_bin
+AbstractNet.save_nnef_bins_weights = save_nnef_bins_weights
+AbstractNet.save_nnef_bins_heatmaps = save_nnef_bins_heatmaps
 
 
-Operation.prettyprint = MethodType(prettyprint, None, Operation)
-Operation.nnef_signature = MethodType(nnef_signature, None, Operation)
-Operation.nnef_variables = MethodType(nnef_variables, None, Operation)
-Operation.nnef_signature_name = MethodType(nnef_signature_name, None, Operation)
+Operation.prettyprint = prettyprint
+Operation.nnef_signature = nnef_signature
+Operation.nnef_variables =  nnef_variables
+Operation.nnef_signature_name =  nnef_signature_name
 
-InputOperation.nnef_standard = MethodType(nnef_standard_InputOperation, None, InputOperation)
-SplitOperation.nnef_standard = MethodType(nnef_standard_SplitOperation, None, SplitOperation)
-SplitOperation.nnef_signature_name = MethodType(nnef_signature_name_SplitOperation, None, SplitOperation)
-InterpOperation.nnef_standard = MethodType(nnef_standard_InterpOperation, None, InterpOperation)
-InterpOperation.nnef_signature_name = MethodType(nnef_signature_name_InterpOperation, None, InterpOperation)
-RescaleOperation.nnef_standard = MethodType(nnef_standard_RescaleOperation, None, RescaleOperation)
-RescaleOperation.nnef_signature_name = MethodType(nnef_signature_name_RescaleOperation, None, RescaleOperation)
-LrnOperation.nnef_standard = MethodType(nnef_standard_LrnOperation, None, LrnOperation)
-LrnOperation.nnef_signature_name = MethodType(nnef_signature_name_LrnOperation, None, LrnOperation)
-BatchNormOperation.nnef_variables = MethodType(nnef_variables_BatchNormOperation, None, BatchNormOperation)
-BatchNormOperation.nnef_standard = MethodType(nnef_standard_BatchNormOperation, None, BatchNormOperation)
-BatchNormOperation.nnef_signature_name = MethodType(nnef_signature_name_BatchNormOperation, None, BatchNormOperation)
-ScaleOperation.nnef_variables = MethodType(nnef_variables_ScaleOperation, None, ScaleOperation)
-ScaleOperation.nnef_standard = MethodType(nnef_standard_ScaleOperation, None, ScaleOperation)
-ScaleOperation.nnef_signature_name = MethodType(nnef_signature_name_ScaleOperation, None, ScaleOperation)
-PowerOperation.nnef_standard = MethodType(nnef_standard_PowerOperation, None, PowerOperation)
-PowerOperation.nnef_signature_name = MethodType(nnef_signature_name_PowerOperation, None, PowerOperation)
-ConvOperation.nnef_variables = MethodType(nnef_variables_ConvOperation, None, ConvOperation)
-ConvOperation.nnef_standard = MethodType(nnef_standard_ConvOperation, None, ConvOperation)
-ConvOperation.nnef_signature_name = MethodType(nnef_signature_name_ConvOperation, None, ConvOperation)
-DeconvOperation.nnef_variables = MethodType(nnef_variables_DeconvOperation, None, DeconvOperation)
-DeconvOperation.nnef_standard = MethodType(nnef_standard_DeconvOperation, None, DeconvOperation)
-DeconvOperation.nnef_signature_name = MethodType(nnef_signature_name_DeconvOperation, None, DeconvOperation)
-PoolOperation.nnef_standard = MethodType(nnef_standard_PoolOperation, None, PoolOperation)
-PoolOperation.nnef_signature_name = MethodType(nnef_signature_name_PoolOperation, None, PoolOperation)
-ReLUOperation.nnef_standard = MethodType(nnef_standard_ReLUOperation, None, ReLUOperation)
-ReLUOperation.nnef_signature_name = MethodType(nnef_signature_name_ReLUOperation, None, ReLUOperation)
-SoftmaxOperation.nnef_standard = MethodType(nnef_standard_SoftmaxOperation, None, SoftmaxOperation)
-SoftmaxOperation.nnef_signature_name = MethodType(nnef_signature_name_SoftmaxOperation, None, SoftmaxOperation)
-ArgmaxOperation.nnef_standard = MethodType(nnef_standard_ArgmaxOperation, None, ArgmaxOperation)
-ArgmaxOperation.nnef_signature_name = MethodType(nnef_signature_name_ArgmaxOperation, None, ArgmaxOperation)
-TanhOperation.nnef_standard = MethodType(nnef_standard_TanhOperation, None, TanhOperation)
-TanhOperation.nnef_signature_name = MethodType(nnef_signature_name_TanhOperation, None, TanhOperation)
-AbsOperation.nnef_standard = MethodType(nnef_standard_AbsOperation, None, AbsOperation)
-AbsOperation.nnef_signature_name = MethodType(nnef_signature_name_AbsOperation, None, AbsOperation)
-ReshapeOperation.nnef_standard = MethodType(nnef_standard_ReshapeOperation, None, ReshapeOperation)
-ReshapeOperation.nnef_signature_name = MethodType(nnef_signature_name_ReshapeOperation, None, ReshapeOperation)
-SigmoidOperation.nnef_standard = MethodType(nnef_standard_SigmoidOperation, None, SigmoidOperation)
-SigmoidOperation.nnef_signature_name = MethodType(nnef_signature_name_SigmoidOperation, None, SigmoidOperation)
-BNLLOperation.nnef_standard = MethodType(nnef_standard_BNLLOperation, None, BNLLOperation)
-BNLLOperation.nnef_signature_name = MethodType(nnef_signature_name_BNLLOperation, None, BNLLOperation)
-AddOperation.nnef_standard = MethodType(nnef_standard_AddOperation, None, AddOperation)
-AddOperation.nnef_signature_name = MethodType(nnef_signature_name_AddOperation, None, AddOperation)
-AddOperation.nnef_variables = MethodType(nnef_variables_AddOperation, None, AddOperation)
-MulOperation.nnef_standard = MethodType(nnef_standard_MulOperation, None, MulOperation)
-MulOperation.nnef_signature_name = MethodType(nnef_signature_name_MulOperation, None, MulOperation)
-MulOperation.nnef_variables = MethodType(nnef_variables_MulOperation, None, MulOperation)
-MergeOperation.nnef_standard = MethodType(nnef_standard_MergeOperation, None, MergeOperation)
-MergeOperation.nnef_signature_name = MethodType(nnef_signature_name_MergeOperation, None, MergeOperation)
+InputOperation.nnef_standard =  nnef_standard_InputOperation
+SplitOperation.nnef_standard =  nnef_standard_SplitOperation
+SplitOperation.nnef_signature_name =  nnef_signature_name_SplitOperation
+InterpOperation.nnef_standard =  nnef_standard_InterpOperation
+InterpOperation.nnef_signature_name =  nnef_signature_name_InterpOperation
+RescaleOperation.nnef_standard =  nnef_standard_RescaleOperation
+RescaleOperation.nnef_signature_name =  nnef_signature_name_RescaleOperation
+LrnOperation.nnef_standard =  nnef_standard_LrnOperation
+LrnOperation.nnef_signature_name =  nnef_signature_name_LrnOperation
+BatchNormOperation.nnef_variables =  nnef_variables_BatchNormOperation
+BatchNormOperation.nnef_standard =  nnef_standard_BatchNormOperation
+BatchNormOperation.nnef_signature_name =  nnef_signature_name_BatchNormOperation
+ScaleOperation.nnef_variables =  nnef_variables_ScaleOperation
+ScaleOperation.nnef_standard =  nnef_standard_ScaleOperation
+ScaleOperation.nnef_signature_name =  nnef_signature_name_ScaleOperation
+PowerOperation.nnef_standard =  nnef_standard_PowerOperation
+PowerOperation.nnef_signature_name =  nnef_signature_name_PowerOperation
+ConvOperation.nnef_variables =  nnef_variables_ConvOperation
+ConvOperation.nnef_standard =  nnef_standard_ConvOperation
+ConvOperation.nnef_signature_name =  nnef_signature_name_ConvOperation
+DeconvOperation.nnef_variables =  nnef_variables_DeconvOperation
+DeconvOperation.nnef_standard =  nnef_standard_DeconvOperation
+DeconvOperation.nnef_signature_name =  nnef_signature_name_DeconvOperation
+PoolOperation.nnef_standard =  nnef_standard_PoolOperation
+PoolOperation.nnef_signature_name =  nnef_signature_name_PoolOperation
+ReLUOperation.nnef_standard =  nnef_standard_ReLUOperation
+ReLUOperation.nnef_signature_name =  nnef_signature_name_ReLUOperation
+SoftmaxOperation.nnef_standard =  nnef_standard_SoftmaxOperation
+SoftmaxOperation.nnef_signature_name =  nnef_signature_name_SoftmaxOperation
+ArgmaxOperation.nnef_standard =  nnef_standard_ArgmaxOperation
+ArgmaxOperation.nnef_signature_name =  nnef_signature_name_ArgmaxOperation
+TanhOperation.nnef_standard =  nnef_standard_TanhOperation
+TanhOperation.nnef_signature_name =  nnef_signature_name_TanhOperation
+AbsOperation.nnef_standard =  nnef_standard_AbsOperation
+AbsOperation.nnef_signature_name =  nnef_signature_name_AbsOperation
+ReshapeOperation.nnef_standard =  nnef_standard_ReshapeOperation
+ReshapeOperation.nnef_signature_name =  nnef_signature_name_ReshapeOperation
+SigmoidOperation.nnef_standard =  nnef_standard_SigmoidOperation
+SigmoidOperation.nnef_signature_name =  nnef_signature_name_SigmoidOperation
+BNLLOperation.nnef_standard =  nnef_standard_BNLLOperation
+BNLLOperation.nnef_signature_name =  nnef_signature_name_BNLLOperation
+AddOperation.nnef_standard =  nnef_standard_AddOperation
+AddOperation.nnef_signature_name =  nnef_signature_name_AddOperation
+AddOperation.nnef_variables =  nnef_variables_AddOperation
+MulOperation.nnef_standard =  nnef_standard_MulOperation
+MulOperation.nnef_signature_name =  nnef_signature_name_MulOperation
+MulOperation.nnef_variables =  nnef_variables_MulOperation
+MergeOperation.nnef_standard =  nnef_standard_MergeOperation
+MergeOperation.nnef_signature_name =  nnef_signature_name_MergeOperation
