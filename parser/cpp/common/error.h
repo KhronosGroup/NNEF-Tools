@@ -49,7 +49,7 @@ namespace nnef
         {
         }
         
-        virtual const char* what()
+        virtual const char* what() const noexcept
         {
             return _message.c_str();
         }

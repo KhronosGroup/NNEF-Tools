@@ -50,51 +50,40 @@ namespace nnef
 
     public:
         
-        static Value evaluateLvalue( const Expr& expr, const Type* type, const Dictionary<Value>* values = nullptr )
+        static Value evaluateLvalue( const Expr& expr, const Dictionary<Value>& values, bool fallbackToIds )
         {
             switch ( expr.kind() )
             {
                 case Expr::Identifier:
                 {
-                    if ( !type->isTensor() )
-                    {
-                        return Value::none();
-                    }
-                    
                     auto& identifier = dynamic_cast<const IdentifierExpr&>(expr);
-                    return values ? (*values)[identifier.name()] : Value::tensor({ identifier.name() });
+                    
+                    auto value = values[identifier.name()];
+                    if ( !value && fallbackToIds )
+                    {
+                        value = Value::tensor((Value::tensor_t)identifier.name());
+                    }
+                    return value;
                 }
                 case Expr::Array:
                 {
-                    if ( !type->isArray() )
-                    {
-                        return Value::none();
-                    }
-                    
                     auto& array = dynamic_cast<const ArrayExpr&>(expr);
-                    auto arrayType = dynamic_cast<const ArrayType*>(type);
-                    
+
                     Value::items_t items(array.size());
                     for ( size_t i = 0; i < array.size(); ++i )
                     {
-                        items[i] = evaluateLvalue(array.item(i), arrayType->itemType(), values);
+                        items[i] = evaluateLvalue(array.item(i), values, fallbackToIds);
                     }
                     return Value::array(items);
                 }
                 case Expr::Tuple:
                 {
-                    if ( !type->isTuple() )
-                    {
-                        return Value::none();
-                    }
-                    
                     auto& tuple = dynamic_cast<const TupleExpr&>(expr);
-                    auto tupleType = dynamic_cast<const TupleType*>(type);
                     
                     Value::items_t items(tuple.size());
                     for ( size_t i = 0; i < tuple.size(); ++i )
                     {
-                        items[i] = evaluateLvalue(tuple.item(i), tupleType->itemType(i), values);
+                        items[i] = evaluateLvalue(tuple.item(i), values, fallbackToIds);
                     }
                     return Value::tuple(items);
                 }
@@ -151,14 +140,14 @@ namespace nnef
         }
 
         void evaluateAssign( const Expr& lhs, const Expr& rhs, Dictionary<Value>& values, Dictionary<Shape>& shapes,
-                            Callback& callback, const Value& context )
+                            Callback& callback, bool silent, const Value& context )
         {
-            assign(lhs, evaluate(rhs, values, shapes, callback, context), values);
+            assign(lhs, evaluate(rhs, values, shapes, callback, silent, context), values);
         }
 
     private:
 
-        Value evaluate( const Expr& expr, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback,
+        Value evaluate( const Expr& expr, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback, bool silent,
                        const Value& context = Value::none() )
         {
             switch ( expr.kind() )
@@ -173,39 +162,39 @@ namespace nnef
                 }
                 case Expr::Array:
                 {
-                    return evaluate(dynamic_cast<const ArrayExpr&>(expr), values, shapes, callback);
+                    return evaluate(dynamic_cast<const ArrayExpr&>(expr), values, shapes, callback, silent);
                 }
                 case Expr::Tuple:
                 {
-                    return evaluate(dynamic_cast<const TupleExpr&>(expr), values, shapes, callback);
+                    return evaluate(dynamic_cast<const TupleExpr&>(expr), values, shapes, callback, silent);
                 }
                 case Expr::Subscript:
                 {
-                    return evaluate(dynamic_cast<const SubscriptExpr&>(expr), values, shapes, callback);
+                    return evaluate(dynamic_cast<const SubscriptExpr&>(expr), values, shapes, callback, silent);
                 }
                 case Expr::Unary:
                 {
-                    return evaluate(dynamic_cast<const UnaryExpr&>(expr), values, shapes, callback);
+                    return evaluate(dynamic_cast<const UnaryExpr&>(expr), values, shapes, callback, silent);
                 }
                 case Expr::Binary:
                 {
-                    return evaluate(dynamic_cast<const BinaryExpr&>(expr), values, shapes, callback);
+                    return evaluate(dynamic_cast<const BinaryExpr&>(expr), values, shapes, callback, silent);
                 }
                 case Expr::Select:
                 {
-                    return evaluate(dynamic_cast<const SelectExpr&>(expr), values, shapes, callback);
+                    return evaluate(dynamic_cast<const SelectExpr&>(expr), values, shapes, callback, silent);
                 }
                 case Expr::Comprehension:
                 {
-                    return evaluate(dynamic_cast<const ComprehensionExpr&>(expr), values, shapes, callback);
+                    return evaluate(dynamic_cast<const ComprehensionExpr&>(expr), values, shapes, callback, silent);
                 }
                 case Expr::Builtin:
                 {
-                    return evaluate(dynamic_cast<const BuiltinExpr&>(expr), values, shapes, callback);
+                    return evaluate(dynamic_cast<const BuiltinExpr&>(expr), values, shapes, callback, silent);
                 }
                 case Expr::Invocation:
                 {
-                    return evaluate(dynamic_cast<const InvocationExpr&>(expr), values, shapes, callback, context);
+                    return evaluate(dynamic_cast<const InvocationExpr&>(expr), values, shapes, callback, silent, context);
                 }
                 default:
                 {
@@ -260,48 +249,48 @@ namespace nnef
             return values[identifier.name()];
         }
 
-        Value evaluate( const ArrayExpr& array, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback )
+        Value evaluate( const ArrayExpr& array, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback, bool silent )
         {
             Value::items_t items(array.size());
             for ( size_t i = 0; i < array.size(); ++i )
             {
-                items[i] = evaluate(array.item(i), values, shapes, callback);
+                items[i] = evaluate(array.item(i), values, shapes, callback, silent);
             }
             return Value::array(items);
         }
 
-        Value evaluate( const TupleExpr& tuple, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback )
+        Value evaluate( const TupleExpr& tuple, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback, bool silent )
         {
             Value::items_t items(tuple.size());
             for ( size_t i = 0; i < tuple.size(); ++i )
             {
-                items[i] = evaluate(tuple.item(i), values, shapes, callback);
+                items[i] = evaluate(tuple.item(i), values, shapes, callback, silent);
             }
             return Value::tuple(items);
         }
 
-        Value evaluate( const SubscriptExpr& subscript, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback )
+        Value evaluate( const SubscriptExpr& subscript, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback, bool silent )
         {
-            const Value sequence = evaluate(subscript.sequence(), values, shapes, callback);
+            const Value sequence = evaluate(subscript.sequence(), values, shapes, callback, silent);
 
             if ( subscript.isRange() )
             {
-                Value::integer_t i = subscript.begin() ? evaluate(*subscript.begin(), values, shapes, callback).integer() : (Value::integer_t)0;
+                Value::integer_t i = subscript.begin() ? evaluate(*subscript.begin(), values, shapes, callback, silent).integer() : (Value::integer_t)0;
                 if ( i < 0 )
                 {
                     i += sequence.size();
                 }
-                if ( i < 0 || i > sequence.size() )
+                if ( i < 0 || i > (Value::integer_t)sequence.size() )
                 {
                     throw Error(subscript.position(), "range begin (%d) out of bounds (size = %d)", (int)i, (int)sequence.size());
                 }
 
-                Value::integer_t j = subscript.end() ? evaluate(*subscript.end(), values, shapes, callback).integer() : (Value::integer_t)sequence.size();
+                Value::integer_t j = subscript.end() ? evaluate(*subscript.end(), values, shapes, callback, silent).integer() : (Value::integer_t)sequence.size();
                 if ( j < 0 )
                 {
                     j += sequence.size();
                 }
-                if ( j < 0 || j > sequence.size() )
+                if ( j < 0 || j > (Value::integer_t)sequence.size() )
                 {
                     throw Error(subscript.position(), "range end (%d) out of bounds (size = %d)", (int)j, (int)sequence.size());
                 }
@@ -324,12 +313,12 @@ namespace nnef
             }
             else
             {
-                Value::integer_t index = evaluate(*subscript.begin(), values, shapes, callback).integer();
+                Value::integer_t index = evaluate(*subscript.begin(), values, shapes, callback, silent).integer();
                 if ( index < 0 )
                 {
                     index += sequence.size();
                 }
-                if ( index < 0 || index >= sequence.size() )
+                if ( index < 0 || index >= (Value::integer_t)sequence.size() )
                 {
                     throw Error(subscript.position(), "index (%d) out of bounds (size = %d)", (int)index, (int)sequence.size());
                 }
@@ -345,9 +334,9 @@ namespace nnef
             }
         }
 
-        Value evaluate( const UnaryExpr& unary, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback )
+        Value evaluate( const UnaryExpr& unary, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback, bool silent )
         {
-            const Value right = evaluate(unary.right(), values, shapes, callback);
+            const Value right = evaluate(unary.right(), values, shapes, callback, silent);
 
             if ( unary.op() == '!' )
             {
@@ -376,12 +365,12 @@ namespace nnef
             return Value::none();
         }
 
-        Value evaluate( const BinaryExpr& binary, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback )
+        Value evaluate( const BinaryExpr& binary, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback, bool silent )
         {
             bool lazy = binary.op() == Lexer::And || binary.op() == Lexer::Or;
 
-            const Value left = evaluate(binary.left(), values, shapes, callback);
-            Value right = lazy ? Value::none() : evaluate(binary.right(), values, shapes, callback);
+            const Value left = evaluate(binary.left(), values, shapes, callback, silent);
+            Value right = lazy ? Value::none() : evaluate(binary.right(), values, shapes, callback, silent);
 
             switch ( binary.op() )
             {
@@ -407,7 +396,7 @@ namespace nnef
                     if ( left.kind() == Value::String && right.kind() == Value::Integer )
                     {
                         Value::string_t str;
-                        for ( size_t i = 0; i < right.integer(); ++i )
+                        for ( size_t i = 0; i < (size_t)right.integer(); ++i )
                         {
                             str += left.string();
                         }
@@ -416,7 +405,7 @@ namespace nnef
                     else if ( left.kind() == Value::Array && right.kind() == Value::Integer )
                     {
                         Value::items_t items;
-                        for ( size_t i = 0; i < right.integer(); ++i )
+                        for ( size_t i = 0; i < (size_t)right.integer(); ++i )
                         {
                             items.insert(items.end(), left.array().begin(), left.array().end());
                         }
@@ -465,11 +454,11 @@ namespace nnef
                 }
                 case Lexer::And:
                 {
-                    return !left.logical() ? left : evaluate(binary.right(), values, shapes, callback);
+                    return !left.logical() ? left : evaluate(binary.right(), values, shapes, callback, silent);
                 }
                 case Lexer::Or:
                 {
-                    return left.logical() ? left : evaluate(binary.right(), values, shapes, callback);
+                    return left.logical() ? left : evaluate(binary.right(), values, shapes, callback, silent);
                 }
                 case Lexer::In:
                 {
@@ -487,16 +476,17 @@ namespace nnef
             return Value::none();
         }
 
-        Value evaluate( const SelectExpr& select, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback )
+        Value evaluate( const SelectExpr& select, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback, bool silent )
         {
-            Value condition = evaluate(select.condition(), values, shapes, callback);
-            return condition.logical() ? evaluate(select.trueValue(), values, shapes, callback) : evaluate(select.falseValue(), values, shapes, callback);
+            Value condition = evaluate(select.condition(), values, shapes, callback, silent);
+            return condition.logical() ? evaluate(select.trueValue(), values, shapes, callback, silent) :
+                                         evaluate(select.falseValue(), values, shapes, callback, silent);
         }
 
-        Value evaluate( const ComprehensionExpr& comprehension, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback )
+        Value evaluate( const ComprehensionExpr& comprehension, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback, bool silent )
         {
             const std::string& iterator = dynamic_cast<const IdentifierExpr&>(comprehension.iterator()).name();
-            const Value iterable = evaluate(comprehension.iterable(), values, shapes, callback);
+            const Value iterable = evaluate(comprehension.iterable(), values, shapes, callback, silent);
 
             Value::items_t items(iterable.size());
 
@@ -507,19 +497,19 @@ namespace nnef
 
                 if ( comprehension.condition() )
                 {
-                    const Value condition = evaluate(*comprehension.condition(), ids, shapes, callback);
+                    const Value condition = evaluate(*comprehension.condition(), ids, shapes, callback, silent);
                     if ( !condition.logical() )
                     {
                         continue;
                     }
                 }
 
-                items[i] = evaluate(comprehension.item(), ids, shapes, callback);
+                items[i] = evaluate(comprehension.item(), ids, shapes, callback, silent);
             }
             return Value::array(items);
         }
 
-        Value evaluate( const InvocationExpr& invocation, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback,
+        Value evaluate( const InvocationExpr& invocation, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback, bool silent,
                        const Value& context )
         {
             auto& fragment = *_fragments[invocation.target()];
@@ -530,37 +520,43 @@ namespace nnef
             {
                 auto& param = proto.param(i);
                 auto arg = invocation.arg(param.name());
-                ids[param.name()] = arg ? evaluate(arg->value(), values, shapes, callback) : param.defaultValue();
+                ids[param.name()] = arg ? evaluate(*arg, values, shapes, callback, silent) : param.defaultValue();
             }
-
-            bool atomic = fragment.assignmentCount() == 0 || callback.isAtomic(proto, ids);
 
             for ( size_t i = 0; i < proto.resultCount(); ++i )
             {
-                const Value hint = proto.resultCount() != 1 && context.kind() == Value::Tuple ? context[i] : context;
+                const Value hint = context.kind() == Value::Tuple && context.size() == proto.resultCount() ? context[i] : context;
 
                 auto& result = proto.result(i);
                 if ( result.type()->isArray() )
                 {
                     const size_t length = callback.resultArrayLength(proto, ids, i);
-                    ids[result.name()] = makeResultValue(proto.name(), length, hint);
+                    if ( hint.kind() == Value::Array && hint.size() == length )
+                    {
+                        ids[result.name()] = hint;
+                    }
+                    else if ( hint.kind() == Value::Tensor )
+                    {
+                        ids[result.name()] = makeResultValue(proto.name(), length, hint.tensor());
+                    }
+                    else
+                    {
+                        ids[result.name()] = makeResultValue(proto.name(), length);
+                    }
                 }
                 else
                 {
-                    ids[result.name()] = makeResultValue(proto.name(), hint);
+                    ids[result.name()] = hint.kind() == Value::Tensor ? hint : makeResultValue(proto.name());
                 }
             }
 
+            bool propagated;
             try
             {
-                bool propagated = callback.propagate(proto, ids, shapes);
-                if ( atomic )
+                propagated = callback.propagate(proto, ids, shapes);
+                if ( !propagated && fragment.assignmentCount() == 0 )
                 {
-                    if ( !propagated )
-                    {
-                        throw Error("shape propagation not defined for operation '%s'", proto.name().c_str());
-                    }
-                    callback.operation(proto, ids, shapes);
+                    throw Error("shape propagation not defined for operation '%s'", proto.name().c_str());
                 }
             }
             catch ( Error e )
@@ -568,23 +564,28 @@ namespace nnef
                 throw Error(invocation.position(), e.what());
             }
 
-            if ( !atomic )
+            bool atomic = fragment.assignmentCount() == 0 || callback.isAtomic(proto, ids);
+            if ( !atomic || !propagated )
             {
                 const Dictionary<Value> res = makeResultDict(proto, context);
                 for ( size_t i = 0; i < fragment.assignmentCount(); ++i )
                 {
                     auto& assignment = fragment.assignment(i);
                     
-                    const Value cntxt = evaluateLvalue(assignment.lhs(), assignment.rhs().type(), &res);
+                    const Value ctx = evaluateLvalue(assignment.lhs(), res, silent || atomic);
                     try
                     {
-                        evaluateAssign(assignment.lhs(), assignment.rhs(), ids, shapes, callback, cntxt);
+                        evaluateAssign(assignment.lhs(), assignment.rhs(), ids, shapes, callback, silent || atomic, ctx);
                     }
                     catch ( Error e )
                     {
                         throw Error(chain(e.position(), invocation.position()), e.what());
                     }
                 }
+            }
+            if ( atomic && !silent )
+            {
+                callback.operation(proto, ids, shapes);
             }
 
             if ( proto.resultCount() == 1 )
@@ -599,9 +600,9 @@ namespace nnef
             return Value::tuple(items);
         }
 
-        Value evaluate( const BuiltinExpr& builtin, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback )
+        Value evaluate( const BuiltinExpr& builtin, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Callback& callback, bool silent )
         {
-            const Value arg = evaluate(builtin.arg(), values, shapes, callback);
+            const Value arg = evaluate(builtin.arg(), values, shapes, callback, silent);
 
             switch ( builtin.op() )
             {
@@ -623,7 +624,7 @@ namespace nnef
                 }
                 case Lexer::ShapeOf:
                 {
-                    auto& shape = arg.kind() == Value::Tensor ? shapes[arg.tensor().id] : Shape::singleton();
+                    auto& shape = arg.kind() == Value::Tensor ? shapes[arg.tensor()] : Shape::singleton();
 
                     auto length = std::max(shape.rank(), (size_t)2);
 
@@ -808,7 +809,8 @@ namespace nnef
 
         Position chain( const Position& position, const Position& origin )
         {
-            return (Position){ position.line, position.column, &origin };
+            const Position chained = { position.line, position.column, &origin };
+            return chained;
         }
 
     private:
@@ -831,33 +833,22 @@ namespace nnef
             return id;
         }
 
-        Value makeResultValue( const std::string& op, const Value& hint )
+        Value makeResultValue( const std::string& op )
         {
-            if ( hint )
-            {
-                assert(isReservedId(hint.tensor().id));
-                return hint;
-            }
-            return Value::tensor({ makeTensorId(op) });
+            return Value::tensor((Value::tensor_t)makeTensorId(op));
+        }
+
+        Value makeResultValue( const std::string& op, const size_t size )
+        {
+            return makeResultValue(op, size, makeTensorId(op));
         }
         
-        Value makeResultValue( const std::string& op, const size_t size, const Value& hint )
+        Value makeResultValue( const std::string& op, const size_t size, const std::string& id )
         {
-            const std::string id = hint && hint.kind() == Value::Tensor && !isReservedId(hint.tensor().id, size) ? hint.tensor().id : makeTensorId(op);
-
             Value::items_t items(size);
             for ( size_t i = 0; i < size; ++i )
             {
-                if ( hint && hint.kind() != Value::Tensor )
-                {
-                    assert(isReservedId(hint[i].tensor().id));
-                    items[i] = hint[i];
-                }
-                else
-                {
-                    assert(!hint || isReservedId(id));
-                    items[i] = Value::tensor({ indexedId(id,i+1) });
-                }
+                items[i] = Value::tensor((Value::tensor_t)indexedId(id,i+1));
             }
             return Value::array(items);
         }

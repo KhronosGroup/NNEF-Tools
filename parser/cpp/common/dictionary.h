@@ -17,6 +17,7 @@
 #ifndef _NNEF_DICTIONARY_H_
 #define _NNEF_DICTIONARY_H_
 
+#include <initializer_list>
 #include <string>
 #include <iostream>
 #include <memory>
@@ -30,8 +31,18 @@ namespace nnef
     struct Dictionary : public std::map<std::string,T>
     {
         typedef std::map<std::string,T> map_type;
+        typedef typename map_type::value_type value_type;
 
         using map_type::operator[];
+
+        Dictionary()
+        {
+        }
+
+        Dictionary( std::initializer_list<value_type> items )
+        : map_type(items)
+        {
+        }
 
         const T& operator[]( const std::string& key ) const
         {

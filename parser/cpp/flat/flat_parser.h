@@ -35,7 +35,7 @@ namespace nnef
     class FlatParser : public Parser
     {
         typedef Dictionary<Prototype> Prototypes;
-        typedef Dictionary<const Type*> Types;
+        typedef Dictionary<const Type*> Declarations;
 
     public:
 
@@ -76,7 +76,7 @@ namespace nnef
             
             readToken('{', lexer);
             
-            Types declared;
+            Declarations declared;
             Dictionary<Shape> shapes;
             
             while ( lexer.token() != '}' )
@@ -88,7 +88,7 @@ namespace nnef
             
             readToken('}', lexer);
             
-            callback.endGraph(graph);
+            callback.endGraph(graph, shapes);
         }
         
         template<typename T>
@@ -123,18 +123,18 @@ namespace nnef
                 {
                     if ( target == "external" )
                     {
-                        if ( !graph.param(arg.tensor().id) )
+                        if ( !graph.param(arg.tensor()) )
                         {
                             throw Error(position, "identifier '%s' assigned by operation 'external' must be a graph parameter",
-                                             arg.tensor().id.c_str());
+                                             arg.tensor().c_str());
                         }
                     }
                     else
                     {
-                        if ( graph.param(arg.tensor().id) )
+                        if ( graph.param(arg.tensor()) )
                         {
                             throw Error(position, "graph parameter '%s' can only be assigned by operation 'external'",
-                                             arg.tensor().id.c_str());
+                                             arg.tensor().c_str());
                         }
                     }
                     break;
@@ -155,7 +155,7 @@ namespace nnef
             }
         }
         
-        static void checkGraphParamsAssigned( const Prototype& graph, const Types& declared, const Position& position )
+        static void checkGraphParamsAssigned( const Prototype& graph, const Declarations& declared, const Position& position )
         {
             for ( size_t i = 0; i < graph.paramCount(); ++i )
             {
@@ -179,7 +179,7 @@ namespace nnef
     private:
 
         static void parseAssignment( Lexer& lexer, const Prototype& graph, const Prototypes& prototypes,
-                                    Types& declared, Dictionary<Shape>& shapes, Callback& callback )
+                                    Declarations& declared, Dictionary<Shape>& shapes, Callback& callback )
         {
             auto position = lexer.position();
 
@@ -232,7 +232,7 @@ namespace nnef
             }
         }
 
-        static Dictionary<Value> parseArguments( const Prototype& proto, Lexer& lexer, const Types* decls )
+        static Dictionary<Value> parseArguments( const Prototype& proto, Lexer& lexer, const Declarations* decls )
         {
             bool expectNamed = false;
 
@@ -242,7 +242,7 @@ namespace nnef
             {
                 auto position = lexer.position();
 
-                if ( args.size() > proto.paramCount() )
+                if ( args.size() >= proto.paramCount() )
                 {
                     throw Error(position, "too many positional arguments; definition of '%s' has only %d parameters",
                                 proto.name().c_str(), (int)proto.paramCount());
@@ -326,7 +326,7 @@ namespace nnef
             return args;
         }
 
-        static void declare( const Value& arg, const Type* type, Types& declared, const Position& position )
+        static void declare( const Value& arg, const Type* type, Declarations& declared, const Position& position )
         {
             switch ( arg.kind() )
             {
@@ -336,7 +336,7 @@ namespace nnef
                     {
                         throw Error(position, "cannot assign result of type '%s' to tensor identifier", type->toString().c_str());
                     }
-                    const std::string& id = arg.tensor().id;
+                    const std::string& id = arg.tensor();
                     if ( declared.contains(id) )
                     {
                         throw Error(position, "identifier '%s' already declared", id.c_str());
@@ -379,7 +379,7 @@ namespace nnef
 
     private:
 
-        static Value parseValue( Lexer& lexer, const Types* decls )
+        static Value parseValue( Lexer& lexer, const Declarations* decls )
         {
             switch ( lexer.token() )
             {
@@ -466,23 +466,23 @@ namespace nnef
             return Value::string(value);
         }
 
-        static Value parseIdentifier( Lexer& lexer, const Types* decls )
+        static Value parseIdentifier( Lexer& lexer, const Declarations* decls )
         {
             auto value = makeIdentifier(lexer.string(), lexer.position(), decls);
             lexer.next();
             return value;
         }
 
-        static Value makeIdentifier( const std::string& name, const Position& position, const Types* decls )
+        static Value makeIdentifier( const std::string& name, const Position& position, const Declarations* decls )
         {
             if ( decls && !decls->contains(name) )
             {
                 throw Error(position, "undeclared identifier '%s'", name.c_str());
             }
-            return Value::tensor({ name });
+            return Value::tensor((Value::tensor_t)name);
         }
 
-        static Value parseArray( Lexer& lexer, const Types* decls )
+        static Value parseArray( Lexer& lexer, const Declarations* decls )
         {
             readToken('[', lexer);
 
@@ -503,7 +503,7 @@ namespace nnef
             return Value::array(std::move(items));
         }
 
-        static Value parseTuple( Lexer& lexer, const Types* decls )
+        static Value parseTuple( Lexer& lexer, const Declarations* decls )
         {
             std::vector<Value> items;
 
@@ -535,7 +535,7 @@ namespace nnef
 
     private:
 
-        static bool castable( const Type* type, const Value& value, const Types& declared )
+        static bool castable( const Type* type, const Value& value, const Declarations& declared )
         {
             if ( type->isPrimitive() )
             {
@@ -560,7 +560,7 @@ namespace nnef
                     }
                     case Value::Tensor:
                     {
-                        return primitive == declared[value.tensor().id];
+                        return primitive == declared[value.tensor()];
                     }
                     default:
                     {

@@ -17,12 +17,13 @@
 #ifndef _NNEF_TYPESPEC_H_
 #define _NNEF_TYPESPEC_H_
 
+#include <map>
+#include <memory>
+#include <vector>
 #include <utility>
 #include <iostream>
 #include <algorithm>
-#include <memory>
-#include <vector>
-#include <map>
+#include <initializer_list>
 
 
 namespace nnef

@@ -90,9 +90,9 @@ namespace nnef
             return str;
         }
 
-        extent_type volume() const
+        size_t volume() const
         {
-            return std::accumulate(_items.begin(), _items.end(), (extent_type)1, std::multiplies<extent_type>());
+            return std::accumulate(_items.begin(), _items.end(), (size_t)1, std::multiplies<size_t>());
         }
 
         size_t rank() const

@@ -18,7 +18,8 @@
 #include <fstream>
 #include <cstring>
 #include <memory>
-#include <set>
+#include <regex>
+#include <map>
 #include "flat/flat_parser.h"
 #include "comp/comp_parser.h"
 #include "common/binary.h"
@@ -26,6 +27,13 @@
 
 struct PrintCallback : public nnef::Parser::Callback
 {
+    std::map<std::string,bool> atomics;
+
+    PrintCallback( const std::map<std::string,bool>& atomics )
+    : atomics(atomics)
+    {
+    }
+
     virtual void beginGraph( const nnef::Prototype& proto )
     {
         std::cout << "graph " << proto.name() << "( ";
@@ -57,7 +65,7 @@ struct PrintCallback : public nnef::Parser::Callback
         std::cout << " )" << std::endl << '{' << std::endl;
     }
 
-    virtual void endGraph( const nnef::Prototype& proto )
+    virtual void endGraph( const nnef::Prototype& proto, const nnef::Dictionary<nnef::Shape>& shapes )
     {
         std::cout << '}' << std::endl;
     }
@@ -100,16 +108,38 @@ struct PrintCallback : public nnef::Parser::Callback
     
     virtual bool isAtomic( const nnef::Prototype& proto, const nnef::Dictionary<nnef::Value>& args )
     {
-        static std::set<std::string> atomics =
+        auto it = atomics.find(proto.name());
+        if ( it != atomics.end() )
         {
-            "sqr", "sqrt", "min", "max",
-            "softmax", "relu", "tanh", "sigmoid",
-            "batch_normalization", "max_pool", "avg_pool",
-            "quantize_linear", "quantize_logarithmic"
-        };
-        return atomics.find(proto.name()) != atomics.end();
+            return it->second;
+        }
+        return nnef::Parser::Callback::isAtomic(proto, args);
     }
 };
+
+
+static std::map<std::string,bool> parseAtomics( const char* str )
+{
+    std::map<std::string,bool> atomics;
+
+    std::regex reg("\\s+");
+    std::cregex_token_iterator it(str, str + strlen(str), reg, -1);
+    while ( it != std::cregex_token_iterator() )
+    {
+        auto token = (*it++).str();
+
+        char ch = token[0];
+        if ( ch == '+' || ch == '-' )
+        {
+            atomics.emplace(token.substr(1), ch == '+');
+        }
+        else
+        {
+            std::cout << "atomic op must be marked with '+' or '-' for addition to or removal from the list of standard ops" << std::endl;
+        }
+    }
+    return atomics;
+}
 
 
 int main( int argc, const char * argv[] )
@@ -121,7 +151,10 @@ int main( int argc, const char * argv[] )
         std::cout << "Description of options:" << std::endl;
         std::cout << "--flat: use flat parser instead of compositional" << std::endl;
         std::cout << "--layers: enable predefined layer level fragments" << std::endl;
-        std::cout << "--binary: check binaries for variables defined in the structure" << std::endl;
+        std::cout << "--binary: check binary data files for variables" << std::endl;
+        std::cout << "--atomics: op names to add/remove from atomic ops" << std::endl;
+        std::cout << "           default list includes standard ops" << std::endl;
+        std::cout << "           e.g. +op1 adds op1, -op2 removes op2" << std::endl;
         return 0;
     }
     
@@ -137,6 +170,7 @@ int main( int argc, const char * argv[] )
     bool flat = false;
     bool layers = false;
     bool binary = false;
+    std::map<std::string,bool> atomics;
     for ( int i = 2; i < argc; ++i )
     {
         if ( std::strcmp(argv[i], "--flat") == 0 )
@@ -151,13 +185,17 @@ int main( int argc, const char * argv[] )
         {
             binary = true;
         }
+        else if ( std::strcmp(argv[i], "--atomics") == 0 )
+        {
+            atomics = parseAtomics(argv[++i]);
+        }
         else
         {
             std::cerr << "unrecognized option: " << argv[i] << std::endl;
         }
     }
 
-    PrintCallback callback;
+    PrintCallback callback(atomics);
     std::unique_ptr<nnef::Parser> parser(flat ? (nnef::Parser*)new nnef::FlatParser() : (nnef::Parser*)new nnef::CompParser(layers));
     
     try

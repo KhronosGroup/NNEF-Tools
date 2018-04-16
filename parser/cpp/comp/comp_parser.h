@@ -46,7 +46,7 @@ namespace nnef
     private:
 
         typedef Dictionary<Shared<Fragment>> Fragments;
-        typedef Dictionary<const Type*> Types;
+        typedef Dictionary<const Type*> Declarations;
         
     public:
 
@@ -72,7 +72,7 @@ namespace nnef
 
             while ( lexer.token() == Lexer::Fragment )
             {
-                parseFragment(lexer, fragments, false, false);
+                parseFragment(lexer, fragments, false, true);
             }
 
             auto graph = parseFragment(lexer, fragments, true, false);
@@ -94,11 +94,11 @@ namespace nnef
                     checkGraphParam(assignment.lhs(), graph->prototype(), proto.name());
                 }
 
-                const Value context = evaluation.evaluateLvalue(assignment.lhs(), assignment.rhs().type());
-                evaluation.evaluateAssign(assignment.lhs(), assignment.rhs(), values, shapes, callback, context);
+                const Value context = evaluation.evaluateLvalue(assignment.lhs(), Dictionary<Value>(), true);
+                evaluation.evaluateAssign(assignment.lhs(), assignment.rhs(), values, shapes, callback, false, context);
             }
 
-            callback.endGraph(graph->prototype());
+            callback.endGraph(graph->prototype(), shapes);
         }
 
     private:
@@ -142,7 +142,7 @@ namespace nnef
 
             readToken('(', lexer);
 
-            const Types emptyTypes = Types();
+            const Declarations emptyTypes = Declarations();
 
             do
             {
@@ -233,7 +233,7 @@ namespace nnef
                 return primitive;
             }
 
-            Types decls;
+            Declarations decls;
             if ( !graph )
             {
                 for ( size_t i = 0; i < proto->paramCount(); ++i )
@@ -416,7 +416,7 @@ namespace nnef
         
     private:
         
-        static Shared<Expr> parseExpression( Lexer& lexer, const Fragments* fragments, const Types* decls, bool enableIf = true )
+        static Shared<Expr> parseExpression( Lexer& lexer, const Fragments* fragments, const Declarations* decls, bool enableIf = true )
         {
             auto expr = parsePrimary(lexer, fragments, decls);
             if ( expr->kind() != Expr::Literal )
@@ -431,7 +431,7 @@ namespace nnef
             return expr;
         }
         
-        static Shared<Expr> parsePrimary( Lexer& lexer, const Fragments* fragments, const Types* decls )
+        static Shared<Expr> parsePrimary( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
         {
             switch ( lexer.token() )
             {
@@ -526,7 +526,7 @@ namespace nnef
             return std::make_shared<StringExpr>(position, value, primitiveType(Typename::String));
         }
         
-        static Shared<Expr> parseIdentifier( Lexer& lexer, const Fragments* fragments, const Types* decls )
+        static Shared<Expr> parseIdentifier( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
         {
             auto position = lexer.position();
             auto string = lexer.string();
@@ -546,7 +546,7 @@ namespace nnef
             }
         }
         
-        static Shared<Expr> makeIdentifier( const Position& position, const std::string& name, const Types* decls )
+        static Shared<Expr> makeIdentifier( const Position& position, const std::string& name, const Declarations* decls )
         {
             const Type* type = nullptr;
             if ( decls )
@@ -560,7 +560,7 @@ namespace nnef
             return std::make_shared<IdentifierExpr>(position, name, type);
         }
         
-        static Shared<Expr> parseArray( Lexer& lexer, const Fragments* fragments, const Types* decls )
+        static Shared<Expr> parseArray( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
         {
             auto position = lexer.position();
             lexer.next();
@@ -602,7 +602,7 @@ namespace nnef
             return std::make_shared<ArrayExpr>(position, items, arrayType(type));
         }
         
-        static Shared<Expr> parseTuple( Lexer& lexer, const Fragments* fragments, const Types* decls )
+        static Shared<Expr> parseTuple( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
         {
             auto position = lexer.position();
             
@@ -638,7 +638,7 @@ namespace nnef
             return items.empty() ? first : std::make_shared<TupleExpr>(position, items, tupleType(types));
         }
         
-        static Shared<Expr> parseInvocation( Lexer& lexer, const Fragments* fragments, const Types* decls,
+        static Shared<Expr> parseInvocation( Lexer& lexer, const Fragments* fragments, const Declarations* decls,
                                             const Position& position, const std::string& target )
         {
             readToken('(', lexer);
@@ -650,8 +650,8 @@ namespace nnef
             }
 
             const Prototype& proto = fragment->prototype();
-            
-            std::vector<Argument> args;
+
+            Dictionary<Shared<Expr>> args;
             
             bool expectNamed = false;
             
@@ -659,7 +659,7 @@ namespace nnef
             {
                 auto position = lexer.position();
                 
-                if ( args.size() > proto.paramCount() )
+                if ( args.size() >= proto.paramCount() )
                 {
                     throw Error(position, "too many positional arguments; definition of '%s' has only %d parameters",
                                 proto.name().c_str(), (int)proto.paramCount());
@@ -727,24 +727,23 @@ namespace nnef
                     throw Error(position, "expected named argument");
                 }
 
-                auto it = std::find_if(args.begin(), args.end(), [&]( const Argument& arg ){ return arg.name() == param->name(); });
-                if ( it != args.end() )
+                auto contained = args[param->name()];
+                if ( contained )
                 {
-                    auto& pos = it->value().position();
+                    auto& pos = contained->position();
                     throw Error(position, "duplicate arguments: parameter '%s' already assigned (%u,%u)",
                                 param->name().c_str(), pos.line, pos.column);
                 }
 
-                args.push_back(Argument(param->name(), arg));
+                args[param->name()] = arg;
             }
             while ( readIfToken(',', lexer) );
             
             for ( size_t i = 0; i < proto.paramCount(); ++i )
             {
                 auto& param = proto.param(i);
-                
-                auto it = std::find_if(args.begin(), args.end(), [&]( const Argument& arg ){ return arg.name() == param.name(); });
-                if ( it == args.end() && !param.defaultValue() )
+
+                if ( !args.contains(param.name()) && !param.defaultValue() )
                 {
                     throw Error(lexer.position(), "missing argument for fragment '%s'; parameter '%s' not assigned",
                                     proto.name().c_str(), param.name().c_str());
@@ -752,11 +751,17 @@ namespace nnef
             }
             
             readToken(')', lexer);
-            
-            return std::make_shared<InvocationExpr>(position, target, args, resultType(proto));
+
+            const Type* type = resultType(proto);
+
+            if ( target == "select" )
+            {
+                return makeSelectExpr(position, args, type);
+            }
+            return std::make_shared<InvocationExpr>(position, target, args, type);
         }
         
-        static Shared<Expr> parseUnary( Lexer& lexer, const Fragments* fragments, const Types* decls )
+        static Shared<Expr> parseUnary( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
         {
             auto position = lexer.position();
             int op = lexer.token();
@@ -783,7 +788,7 @@ namespace nnef
             }
         }
         
-        static Shared<Expr> parseBinary( Lexer& lexer, const Fragments* fragments, const Types* decls, Shared<Expr> lhs, int exprPrec = 0 )
+        static Shared<Expr> parseBinary( Lexer& lexer, const Fragments* fragments, const Declarations* decls, Shared<Expr> lhs, int exprPrec = 0 )
         {
             auto position = lhs->position();
 
@@ -828,7 +833,7 @@ namespace nnef
             }
         }
         
-        static Shared<Expr> parseBuiltin( Lexer& lexer, const Fragments* fragments, const Types* decls )
+        static Shared<Expr> parseBuiltin( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
         {
             auto position = lexer.position();
             int op = lexer.token();
@@ -882,7 +887,7 @@ namespace nnef
             return std::make_shared<BuiltinExpr>(position, arg, op, type);
         }
 
-        static Shared<Expr> parseSubscript( Lexer& lexer, const Fragments* fragments, const Types* decls, const Shared<Expr> sequence )
+        static Shared<Expr> parseSubscript( Lexer& lexer, const Fragments* fragments, const Declarations* decls, const Shared<Expr> sequence )
         {
             lexer.next();
 
@@ -952,7 +957,7 @@ namespace nnef
             return std::make_shared<SubscriptExpr>(sequence->position(), sequence, beg, end, type);
         }
 
-        static Shared<Expr> parseSubscripts( Lexer& lexer, const Fragments* fragments, const Types* decls, Shared<Expr> sequence )
+        static Shared<Expr> parseSubscripts( Lexer& lexer, const Fragments* fragments, const Declarations* decls, Shared<Expr> sequence )
         {
             while ( lexer.token() == '[' )
             {
@@ -961,7 +966,7 @@ namespace nnef
             return sequence;
         }
 
-        static Shared<Expr> parseSelect( Lexer& lexer, const Fragments* fragments, const Types* decls, Shared<Expr> trueValue )
+        static Shared<Expr> parseSelect( Lexer& lexer, const Fragments* fragments, const Declarations* decls, Shared<Expr> trueValue )
         {
             readToken(Lexer::If, lexer);
 
@@ -1006,7 +1011,7 @@ namespace nnef
             }
         }
 
-        static Shared<Expr> parseComprehension( Lexer& lexer, const Fragments* fragments, const Types* decls,
+        static Shared<Expr> parseComprehension( Lexer& lexer, const Fragments* fragments, const Declarations* decls,
                                                const Position& position, const Shared<Expr> item )
         {
             readToken(Lexer::For, lexer);
@@ -1106,7 +1111,7 @@ namespace nnef
             return false;
         }
 
-        static void declare( const Expr& expr, const Type* type, Types& declared )
+        static void declare( const Expr& expr, const Type* type, Declarations& declared )
         {
             switch ( expr.kind() )
             {
@@ -1436,11 +1441,6 @@ namespace nnef
                 std::make_pair('^', 60),
             };
             
-            if ( !std::isprint(token) )
-            {
-                return -1;
-            }
-            
             auto it = precedence.find(token);
             return it != precedence.end() ? it->second : -1;
         }
@@ -1497,31 +1497,47 @@ namespace nnef
             }
         }
         
-        static std::vector<Argument> makeUnaryOpArgs( const Shared<Expr>& right )
+        static Dictionary<Shared<Expr>> makeUnaryOpArgs( const Shared<Expr>& right )
         {
-            return (std::vector<Argument>)
+            const Dictionary<Shared<Expr>> args =
             {
-                Argument("x", right),
+                { "x", right },
             };
+            return args;
         }
         
-        static std::vector<Argument> makeBinaryOpArgs( const Shared<Expr> left, const Shared<Expr> right )
+        static Dictionary<Shared<Expr>> makeBinaryOpArgs( const Shared<Expr> left, const Shared<Expr> right )
         {
-            return (std::vector<Argument>)
+            const Dictionary<Shared<Expr>> args =
             {
-                Argument("x", left),
-                Argument("y", right),
+                { "x", left },
+                { "y", right },
             };
+            return args;
         }
         
-        static std::vector<Argument> makeSelectOpArgs( const Shared<Expr> condition, const Shared<Expr> trueValue, const Shared<Expr> falseValue )
+        static Dictionary<Shared<Expr>> makeSelectOpArgs( const Shared<Expr> condition, const Shared<Expr> trueValue, const Shared<Expr> falseValue )
         {
-            return (std::vector<Argument>)
+            const Dictionary<Shared<Expr>> args =
             {
-                Argument("condition", condition),
-                Argument("true_value", trueValue),
-                Argument("false_value", falseValue),
+                { "condition", condition },
+                { "true_value", trueValue },
+                { "false_value", falseValue },
             };
+            return args;
+        }
+
+        static Shared<Expr> makeSelectExpr( const Position& position, Dictionary<Shared<Expr>>& args, const Type* type )
+        {
+            auto& condition = args["condition"];
+            if ( condition->type()->isTensor() )
+            {
+                return std::make_shared<InvocationExpr>(position, "select", args, type);
+            }
+
+            auto& trueValue = args["true_value"];
+            auto& falseValue = args["false_value"];
+            return std::make_shared<SelectExpr>(position, condition, trueValue, falseValue, type);
         }
 
     private:

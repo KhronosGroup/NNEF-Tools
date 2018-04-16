@@ -30,7 +30,7 @@ namespace nnef
 
     enum class PropagationGroup
     {
-        Unique, Intro, Unary, Binary, Reduce, Conv, Deconv, Pool, UpSample, DownSample, Normalize,
+        Unknown, Intro, Unary, Binary, Reduce, Conv, Deconv, Pool, UpSample, DownSample, Normalize, Unique
     };
 
 
@@ -129,10 +129,22 @@ namespace nnef
             std::make_pair("layer_normalization", PropagationGroup::Normalize),
             std::make_pair("divisive_normalization", PropagationGroup::Normalize),
             std::make_pair("batch_normalization", PropagationGroup::Normalize),
+
+            std::make_pair("reshape", PropagationGroup::Unique),
+            std::make_pair("transpose", PropagationGroup::Unique),
+            std::make_pair("split", PropagationGroup::Unique),
+            std::make_pair("concat", PropagationGroup::Unique),
+            std::make_pair("select", PropagationGroup::Unique),
+            std::make_pair("matmul", PropagationGroup::Unique),
+            std::make_pair("linear", PropagationGroup::Unique),
+            std::make_pair("update", PropagationGroup::Unique),
+            std::make_pair("softmax", PropagationGroup::Unique),
+            std::make_pair("copy_n", PropagationGroup::Unique),
+            std::make_pair("add_n", PropagationGroup::Unique),
         };
 
         auto it = operationGroups.find(name);
-        return it != operationGroups.end() ? it->second : PropagationGroup::Unique;
+        return it != operationGroups.end() ? it->second : PropagationGroup::Unknown;
     }
 
 
@@ -244,9 +256,13 @@ namespace nnef
                     }
                     else
                     {
-                        return false;
+                        assert(false);
                     }
                     break;
+                }
+                case PropagationGroup::Unknown:
+                {
+                    return false;
                 }
             }
             return true;
@@ -342,7 +358,7 @@ namespace nnef
                                            const PropagationGroup group )
         {
             auto& input = args["input"];
-            auto& output = args.contains("output") ? args["output"] : args["index"];
+            auto& output = args["output"];
             auto& size = args["size"];
             auto& filter = args["filter"];
             auto& planeFilter = args["plane_filter"];
@@ -484,17 +500,33 @@ namespace nnef
             }
 
             auto& index = args["index"];
-            if ( index && index.tensor().id != output.tensor().id )
+            if ( index )
             {
-                const Shape& indexShape = getShape(index, shapes);
-                if ( indexShape != inputShape )
+                if ( op == "argmax_pool" || op == "max_pool_with_index" )
                 {
-                    throw Error("index shape %s does not match input shape %s",
-                                     indexShape.toString().c_str(), inputShape.toString().c_str());
+                    setShape(index, shapes, outputShape);
+                }
+                else
+                {
+                    const Shape& indexShape = getShape(index, shapes);
+
+                    if ( op == "sample" && indexShape != outputShape )
+                    {
+                        throw Error("index shape %s does not match output shape %s",
+                                    indexShape.toString().c_str(), outputShape.toString().c_str());
+                    }
+                    else if ( op == "desample" && indexShape != inputShape )
+                    {
+                        throw Error("index shape %s does not match input shape %s",
+                                    indexShape.toString().c_str(), inputShape.toString().c_str());
+                    }
                 }
             }
 
-            setShape(output, shapes, outputShape);
+            if ( output )
+            {
+                setShape(output, shapes, outputShape);
+            }
         }
 
         static void propagateShapesReshape( const Prototype& proto, const Dictionary<Value> args,
@@ -536,7 +568,7 @@ namespace nnef
                 {
                     throw Error("automatic output shape (%s) incompatible with input shape (%s)", (int)outputVolume, (int)inputVolume);
                 }
-                outputShape[autoAxis] = inputVolume / outputVolume;
+                outputShape[autoAxis] = (Shape::extent_type)(inputVolume / outputVolume);
             }
             else if ( inputVolume != outputVolume )
             {
@@ -633,7 +665,7 @@ namespace nnef
 
             checkAxis("axis", axis);
 
-            auto idx = axis.integer();
+            const size_t idx = axis.integer();
 
             Shape outputShape = getShape(values[0], shapes);
 
@@ -884,7 +916,7 @@ namespace nnef
             auto& y = args["y"];
             auto& shape = getShape(x, shapes);
 
-            if ( times.integer() != y.size() )
+            if ( (size_t)times.integer() != y.size() )
             {
                 throw Error("argument times (%d) does not equal length of y", (int)times.integer(), (int)y.size());
             }
@@ -920,7 +952,7 @@ namespace nnef
 
         static const Shape& getShape( const Value& arg, const Dictionary<Shape>& shapes )
         {
-            return arg.kind() == Value::Tensor ? shapes[arg.tensor().id] : Shape::singleton();
+            return arg.kind() == Value::Tensor ? shapes[arg.tensor()] : Shape::singleton();
         }
 
         static void setShape( const Value& arg, Dictionary<Shape>& shapes, const Shape& shape )
@@ -934,7 +966,7 @@ namespace nnef
             }
             else
             {
-                shapes[arg.tensor().id] = shape;
+                shapes[arg.tensor()] = shape;
             }
         }
 

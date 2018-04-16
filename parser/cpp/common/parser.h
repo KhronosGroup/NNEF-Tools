@@ -34,13 +34,13 @@ namespace nnef
             using Propagation::variableShapes;
 
             virtual void beginGraph( const Prototype& proto ) {}
-            virtual void endGraph( const Prototype& proto ) {}
+            virtual void endGraph( const Prototype& proto, const Dictionary<Shape>& shapes ) {}
 
             virtual void operation( const Prototype& proto, const Dictionary<Value>& args, const Dictionary<Shape>& shapes ) {}
 
             virtual bool isAtomic( const Prototype& proto, const Dictionary<Value>& args )
             {
-                return false;
+                return getPropagationGroup(proto.name()) != PropagationGroup::Unknown;
             }
 
             virtual bool propagate( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )

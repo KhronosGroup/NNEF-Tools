@@ -17,6 +17,7 @@
 #ifndef _NNEF_EXPRESSION_H_
 #define _NNEF_EXPRESSION_H_
 
+#include "../common/dictionary.h"
 #include "../common/typespec.h"
 #include "../common/lexer.h"
 #include <functional>
@@ -624,37 +625,11 @@ namespace nnef
     };
 
 
-    class Argument
-    {
-    public:
-
-        Argument( const std::string& name, const Shared<Expr>& value )
-        : _name(name), _value(value)
-        {
-        }
-
-        const std::string& name() const
-        {
-            return _name;
-        }
-
-        const Expr& value() const
-        {
-            return *_value;
-        }
-
-    private:
-
-        const std::string _name;
-        const Shared<Expr> _value;
-    };
-
-
     class InvocationExpr : public Expr
     {
     public:
 
-        InvocationExpr( const Position& position, const std::string& target, std::vector<Argument>& args, const Type* type )
+        InvocationExpr( const Position& position, const std::string& target, Dictionary<Shared<Expr>>& args, const Type* type )
         : Expr(position), _target(target), _args(std::move(args)), _type(type)
         {
         }
@@ -664,26 +639,9 @@ namespace nnef
             return _target;
         }
 
-        size_t argCount() const
+        const Expr* arg( const std::string& name ) const
         {
-            return _args.size();
-        }
-
-        const Argument& arg( const size_t i ) const
-        {
-            return _args[i];
-        }
-
-        const Argument* arg( const std::string& name ) const
-        {
-            for ( size_t i = 0; i < _args.size(); ++i )
-            {
-                if ( _args[i].name() == name )
-                {
-                    return &_args[i];
-                }
-            }
-            return nullptr;
+            return _args[name].get();
         }
 
         virtual Kind kind() const
@@ -699,13 +657,13 @@ namespace nnef
         virtual void print( std::ostream& os ) const
         {
             os << _target << '(';
-            for ( size_t i = 0; i < _args.size(); ++i )
+            for ( auto it = _args.begin(); it != _args.end(); ++it )
             {
-                if ( i )
+                if ( it != _args.begin() )
                 {
                     os << ", ";
                 }
-                os << _args[i].name() << " = " << _args[i].value();
+                os << it->first << " = " << *it->second;
             }
             os << ')';
         }
@@ -713,7 +671,7 @@ namespace nnef
     private:
 
         std::string _target;
-        std::vector<Argument> _args;
+        Dictionary<Shared<Expr>> _args;
         const Type* _type;
     };
 

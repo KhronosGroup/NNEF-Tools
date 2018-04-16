@@ -18,7 +18,6 @@
 #define _NNEF_VALUE_H_
 
 #include <string>
-#include <array>
 
 
 namespace nnef
@@ -33,7 +32,11 @@ namespace nnef
         typedef bool logical_t;
         typedef std::string string_t;
         typedef std::vector<Value> items_t;
-        typedef struct { std::string id; } tensor_t;
+        
+        struct tensor_t : public std::string
+        {
+            explicit tensor_t( const std::string& s ) : std::string(s) {}
+        };
         
         enum Kind { None, Integer, Scalar, Logical, String, Tensor, Array, Tuple };
         
@@ -75,6 +78,11 @@ namespace nnef
         }
         
     public:
+
+        static Value none()
+        {
+            return Value();
+        }
         
         static Value integer( const integer_t& value )
         {
@@ -119,11 +127,6 @@ namespace nnef
         static Value tuple( items_t&& items )
         {
             return Value(Tuple, std::forward<items_t>(items));
-        }
-
-        static Value none()
-        {
-            return Value();
         }
 
         static Value make( const integer_t& value )
@@ -429,7 +432,7 @@ namespace nnef
                 }
                 case Tensor:
                 {
-                    return _tensor.id == other._tensor.id;
+                    return _tensor == other._tensor;
                 }
                 case Integer:
                 {
@@ -500,7 +503,7 @@ namespace nnef
             }
             case Value::Tensor:
             {
-                os << arg.tensor().id;
+                os << arg.tensor();
                 break;
             }
             case Value::Array:

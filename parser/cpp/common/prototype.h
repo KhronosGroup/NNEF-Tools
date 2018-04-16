@@ -21,6 +21,7 @@
 #include "value.h"
 #include <vector>
 #include <string>
+#include <initializer_list>
 
 
 namespace nnef

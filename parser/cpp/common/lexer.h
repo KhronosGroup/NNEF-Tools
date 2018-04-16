@@ -104,7 +104,7 @@ namespace nnef
             };
             
             char ch = (char)token;
-            return token <= Arrow ? strings[token] : std::string(&ch, 1);
+            return token <= Ne ? strings[token] : std::string(&ch, 1);
         }
         
         static bool isType( int token )
