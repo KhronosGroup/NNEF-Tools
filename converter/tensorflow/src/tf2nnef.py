@@ -1054,14 +1054,10 @@ DefaultExporters =\
     tf.maximum: (export_binary, 'max'),
     tf.assign: (export_assign, 'update'),
     tf_ops.add: (export_binary, 'add'),
-    tf_ops._sub: (export_binary, 'sub'),
-    tf_ops._mul: (export_binary, 'mul'),
     tf_ops.div: (export_binary, 'div'),
-    tf_ops._real_div: (export_binary, 'div'),
     tf_ops._pow: (export_binary, 'pow'),
     tf_ops.logical_and: (export_binary, 'and'),
     tf_ops.logical_or: (export_binary, 'or'),
-    tf_ops._neg: (export_unary, 'neg'),
     tf_ops.reciprocal: (export_unary, 'rcp'),
     tf_ops.logical_not: (export_unary, 'not'),
     tf_ops._abs: (export_unary, 'abs'),
@@ -1135,6 +1131,22 @@ if tf_version_greater(1,3):
         tf.cosh: (export_unary, 'cosh')
     })
 
+if tf_version_greater(1,7):
+    DefaultExporters.update(
+    {
+        tf_ops.sub: (export_binary, 'sub'),
+        tf_ops.mul: (export_binary, 'mul'),
+        tf_ops.real_div: (export_binary, 'div'),
+        tf_ops.neg: (export_unary, 'neg')
+    })
+else:
+    DefaultExporters.update(
+    {
+        tf_ops._sub: (export_binary, 'sub'),
+        tf_ops._mul: (export_binary, 'mul'),
+        tf_ops._real_div: (export_binary, 'div'),
+        tf_ops._neg: (export_unary, 'neg')
+    })
 
 def unrolled_rnn(cell, inputs, sequence_length=None, initial_state=None, dtype=tf.float32, scope=None):
     if sequence_length is None:
