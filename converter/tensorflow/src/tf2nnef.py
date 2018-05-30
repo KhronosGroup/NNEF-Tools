@@ -139,15 +139,21 @@ class TF2NNEFConverter:
             args = invocation[1]
             for arg in args.values():
                 if isinstance(arg, (tf.Tensor, tf.Variable)):
+                    if isinstance(arg, tf.Variable):
+                        arg = arg.value()
                     self.consumrs.setdefault(arg, []).append(invocation)
 
     def producer(self, tensor):
         return self.producers.get(tensor)
 
     def consumers(self, tensor):
+        if isinstance(tensor, tf.Variable):
+            tensor = tensor.value()
         return self.consumrs.get(tensor)
 
     def consumer(self, tensor):
+        if isinstance(tensor, tf.Variable):
+            tensor = tensor.value()
         consumers = self.consumrs.get(tensor)
         return consumers[0] if consumers is not None and len(consumers) == 1 else None
 
@@ -1488,3 +1494,4 @@ def export_activations(converter, checkpoint, feed_dict, output_path=None, evalu
             for k, v in values.items():
                 filename = path + '/' + k + '.dat'
                 write_nnef_tensor(filename, v, is_filter=False, is_broadcast=converter.is_broadcast(tensors[k]))
+
