@@ -16,7 +16,6 @@
 import os
 from abstractnet import *
 
-CAFFE_BIN_FOLDER = os.environ['CAFFE_BIN_FOLDER']
 GPU_MODE = False
 
 def getparams(self, proto):
@@ -402,7 +401,9 @@ def buildNet(fname_prototxt, fname_caffemodel, deconv_as_resamp=True, forward=Fa
         n_instance.save(fname+".caffemodel")
     if forward:
         n_instance.forward()
-    upgrade_bin = os.path.join(CAFFE_BIN_FOLDER, "upgrade_net_proto_text.bin")
+    upgrade_bin = "/usr/bin/upgrade_net_proto_text"
+    if not os.path.exists(upgrade_bin):
+        upgrade_bin = os.path.join(os.environ['CAFFE_BIN_FOLDER'], "upgrade_net_proto_text.bin")
     with _NamedTemporaryFile(mode='r', suffix='.prototxt') as tmpfile:
         _subprocess.check_call([upgrade_bin,
                                 fname + ".prototxt",

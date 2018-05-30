@@ -6,6 +6,9 @@ This repository contains Pyhon source code for exporting NNEF from Caffe.
 **Requirements**:
 
 Caffe (and its prerequisites), built with pycaffe enabled. It does not require GPU mode for execution.
+
+If Caffe is built from source and not installed as an apt package:
+
 * CAFFE_BIN_FOLDER environment variable needs to be set (pointing to caffe/build/tools)
 * PYTHONPATH needs to include the Caffe python api (default: caffe/python)
 
