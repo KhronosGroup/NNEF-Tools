@@ -169,6 +169,10 @@ def nnef_variables_ConvOperation(self):
         d["bias"] = bsize
     return nnef_weight_variables_signature(self.name, d)
 
+def nnef_signature_name_ReduceOperation(self):
+    return self.op+"_reduce"
+def nnef_standard_ReduceOperation(self):
+    return self.nnef_signature(self.top[0], [self.bottom[0]], ["axes"])
 
 def nnef_signature_name_PoolOperation(self):
     return self.pool+"_pool"
@@ -383,6 +387,8 @@ ConvOperation.nnef_signature_name =  nnef_signature_name_ConvOperation
 DeconvOperation.nnef_variables =  nnef_variables_DeconvOperation
 DeconvOperation.nnef_standard =  nnef_standard_DeconvOperation
 DeconvOperation.nnef_signature_name =  nnef_signature_name_DeconvOperation
+ReduceOperation.nnef_standard =  nnef_standard_ReduceOperation
+ReduceOperation.nnef_signature_name =  nnef_signature_name_ReduceOperation
 PoolOperation.nnef_standard =  nnef_standard_PoolOperation
 PoolOperation.nnef_signature_name =  nnef_signature_name_PoolOperation
 ReLUOperation.nnef_standard =  nnef_standard_ReLUOperation
