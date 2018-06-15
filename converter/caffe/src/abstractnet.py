@@ -293,12 +293,12 @@ class ReduceOperation(Operation):
     def __init__(self):
         Operation.__init__(self)
         self.op = "mean"
-        self.axes = [2,3]
+        self.axes = []
     def copy(self):
         result = MeanReduceOperation()
         Operation.copyTo(self, result)
         result.op = self.op
-        self.axes = [2,3]
+        result.axes = self.axes
 
 class PoolOperation(Operation):
     def __init__(self):
@@ -326,6 +326,7 @@ class PoolOperation(Operation):
             new_op.name = self.name
             new_op.bottom = self.bottom
             new_op.top = self.top
+            new_op.axes = [2,3]
             if self.pool == "avg":
                 new_op.op = "mean"
             elif self.pool == "max":
