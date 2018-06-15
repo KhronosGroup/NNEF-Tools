@@ -73,6 +73,10 @@ class AbstractNet:
         for op in self.operations:
             if isinstance(op, ScaleOperation):
                 op.convertToMulAdd(self)
+    def convert_global_pooling_to_reduce(self):
+        for op in self.operations:
+            if isinstance(op, PoolOperation):
+                op.convertToReduce(self)
 
 
 
@@ -285,6 +289,17 @@ class DeconvOperation(WeightedOperation):
         WeightedOperation.copy(self, result)
         return result
 
+class ReduceOperation(Operation):
+    def __init__(self):
+        Operation.__init__(self)
+        self.op = "mean"
+        self.axes = []
+    def copy(self):
+        result = MeanReduceOperation()
+        Operation.copyTo(self, result)
+        result.op = self.op
+        result.axes = self.axes
+
 class PoolOperation(Operation):
     def __init__(self):
         Operation.__init__(self)
@@ -292,6 +307,7 @@ class PoolOperation(Operation):
         self.stride = []
         self.padding = []
         self.pads = []
+        self.global_receptive_field = False
     def copy(self):
         result = PoolOperation()
         Operation.copyTo(self, result)
@@ -302,7 +318,21 @@ class PoolOperation(Operation):
             result.stride.append(s)
         result.pads = self.pads
         result.padding = self.padding
+        result.global_receptive_field = self.global_receptive_field
         return result
+    def convertToReduce(self, net):
+        if self.global_receptive_field:
+            new_op = ReduceOperation()
+            new_op.name = self.name
+            new_op.bottom = self.bottom
+            new_op.top = self.top
+            new_op.axes = [2,3]
+            if self.pool == "avg":
+                new_op.op = "mean"
+            elif self.pool == "max":
+                new_op.op = "max"
+            index = net.operations.index(self)
+            net.operations[index] = new_op
 
 class ELUOperation(Operation):
     def __init__(self):
@@ -386,12 +416,12 @@ class SigmoidOperation(Operation):
         Operation.copyTo(self, result)
         return result
 
-class AddOperation(WeightedOperation):
+class AddOperation(Operation):
     def __init__(self):
-        WeightedOperation.__init__(self)
+        Operation.__init__(self)
     def copy(self):
         result = AddOperation()
-        WeightedOperation.copyTo(self, result)
+        Operation.copyTo(self, result)
         return result
 
 class MulOperation(WeightedOperation):

@@ -142,6 +142,7 @@ def createPool(proto, net, n_instance):
     getPads(s,proto,n_instance.blobs[s.bottom[0]],n_instance.blobs[s.top[0]])
     pool_types = ["max", "avg"]
     s.pool = pool_types[proto.pooling_param.pool]
+    s.global_receptive_field = proto.pooling_param.global_pooling
     net.operations.append(s)
 
 

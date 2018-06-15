@@ -48,6 +48,7 @@ if __name__=="__main__":
     net.replace_forbidden_characters()
     net.merge_batchnorm_operations()
     net.convert_scalebias_to_mul_add()
+    net.convert_global_pooling_to_reduce()
     net.resolve_inplace_operations()
     export_nnef_format(net, args.outputs, args.compress)
     log("Success")
