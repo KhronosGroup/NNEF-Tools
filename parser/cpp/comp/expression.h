@@ -130,7 +130,7 @@ namespace nnef
 
 
     typedef LiteralExpr<float> ScalarExpr;
-    typedef LiteralExpr<int> ExtentExpr;
+    typedef LiteralExpr<int> IntegerExpr;
     typedef LiteralExpr<bool> LogicalExpr;
     typedef LiteralExpr<std::string> StringExpr;
 
@@ -348,30 +348,35 @@ namespace nnef
     {
     public:
 
-        ComprehensionExpr( const Position& position, const Shared<Expr>& item, const Shared<Expr>& iterator, const Shared<Expr>& iterable,
-                          const Shared<Expr>& condition, const Type* type )
-        : Expr(position), _item(item), _iterator(iterator), _iterable(iterable), _condition(condition), _type(type)
+        ComprehensionExpr( const Position& position, std::vector<Shared<Expr>>& iterators, std::vector<Shared<Expr>>& iterables,
+                          const Shared<Expr>& condition, const Shared<Expr>& item, const Type* type )
+        : Expr(position), _iterators(std::move(iterators)), _iterables(std::move(iterables)), _condition(condition), _item(item), _type(type)
         {
         }
-
-        const Expr& item() const
+        
+        const size_t iteratorCount() const
         {
-            return *_item;
+            return _iterators.size();
         }
 
-        const Expr& iterator() const
+        const Expr& iterator( const size_t i ) const
         {
-            return *_iterator;
+            return *_iterators[i];
         }
 
-        const Expr& iterable() const
+        const Expr& iterable( const size_t i ) const
         {
-            return *_iterable;
+            return *_iterables[i];
         }
 
         const Expr* condition() const
         {
             return _condition.get();
+        }
+        
+        const Expr& item() const
+        {
+            return *_item;
         }
 
         virtual Kind kind() const
@@ -387,25 +392,33 @@ namespace nnef
         virtual void print( std::ostream& os ) const
         {
             os << '[';
-            _item->print(os);
-            os << " for ";
-            _iterator->print(os);
-            os << " in ";
-            _iterable->print(os);
+            os << "for ";
+            for ( size_t i = 0; i < _iterators.size(); ++i )
+            {
+                if ( i )
+                {
+                    os << ", ";
+                }
+                _iterators[i]->print(os);
+                os << " in ";
+                _iterables[i]->print(os);
+            }
             if ( _condition )
             {
                 os << " if ";
                 _condition->print(os);
             }
+            os << " yield ";
+            _item->print(os);
             os << ']';
         }
 
     private:
 
-        const Shared<Expr> _item;
-        const Shared<Expr> _iterator;
-        const Shared<Expr> _iterable;
+        const std::vector<Shared<Expr>> _iterators;
+        const std::vector<Shared<Expr>> _iterables;
         const Shared<Expr> _condition;
+        const Shared<Expr> _item;
         const Type* _type;
     };
 
@@ -629,14 +642,20 @@ namespace nnef
     {
     public:
 
-        InvocationExpr( const Position& position, const std::string& target, Dictionary<Shared<Expr>>& args, const Type* type )
-        : Expr(position), _target(target), _args(std::move(args)), _type(type)
+        InvocationExpr( const Position& position, const std::string& target, Dictionary<Shared<Expr>>& args, const Type* type,
+                       const PrimitiveType* dataType = nullptr )
+        : Expr(position), _target(target), _dataType(dataType), _args(std::move(args)), _type(type)
         {
         }
 
         const std::string& target() const
         {
             return _target;
+        }
+        
+        const PrimitiveType* dataType() const
+        {
+            return _dataType;
         }
 
         const Expr* arg( const std::string& name ) const
@@ -656,7 +675,12 @@ namespace nnef
 
         virtual void print( std::ostream& os ) const
         {
-            os << _target << '(';
+            os << _target;
+            if ( _dataType )
+            {
+                os << '<' << _dataType->toString() << '>';
+            }
+            os << '(';
             for ( auto it = _args.begin(); it != _args.end(); ++it )
             {
                 if ( it != _args.begin() )
@@ -671,6 +695,7 @@ namespace nnef
     private:
 
         std::string _target;
+        const PrimitiveType* _dataType;
         Dictionary<Shared<Expr>> _args;
         const Type* _type;
     };

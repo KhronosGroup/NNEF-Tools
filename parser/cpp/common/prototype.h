@@ -78,21 +78,39 @@ namespace nnef
 
     class Prototype
     {
+    private:
+
+        void initGeneric()
+        {
+            auto isGeneric = []( const Typed& typed ){ return typed.type()->isGeneric(); };
+            _hasGenericParams = std::any_of(_params.begin(), _params.end(), isGeneric);
+            _hasGenericResults = std::any_of(_results.begin(), _results.end(), isGeneric);
+        }
+
     public:
 
-        Prototype( const std::string& name, std::initializer_list<Param> params, std::initializer_list<Result> results )
-        : _name(name), _params(params), _results(results)
+        Prototype( const std::string& name, std::initializer_list<Param> params, std::initializer_list<Result> results,
+                  const PrimitiveType* genericParamDefault = nullptr )
+        : _name(name), _params(params), _results(results), _genericParamDefault(genericParamDefault)
         {
+            initGeneric();
         }
         
-        Prototype( const std::string& name, std::vector<Param>& params, std::vector<Result>& results )
-        : _name(name), _params(std::move(params)), _results(std::move(results))
+        Prototype( const std::string& name, std::vector<Param>& params, std::vector<Result>& results,
+                  const PrimitiveType* genericParamDefault = nullptr )
+        : _name(name), _params(std::move(params)), _results(std::move(results)), _genericParamDefault(genericParamDefault)
         {
+            initGeneric();
         }
 
         const std::string& name() const
         {
             return _name;
+        }
+        
+        const PrimitiveType* genericParamDefault() const
+        {
+            return _genericParamDefault;
         }
 
         size_t paramCount() const
@@ -107,11 +125,11 @@ namespace nnef
 
         const Param* param( const std::string& name ) const
         {
-            for ( size_t i = 0; i < _params.size(); ++i )
+            for ( auto& param : _params )
             {
-                if ( _params[i].name() == name )
+                if ( param.name() == name )
                 {
-                    return &_params[i];
+                    return &param;
                 }
             }
             return nullptr;
@@ -129,14 +147,29 @@ namespace nnef
 
         const Result* result( const std::string& name ) const
         {
-            for ( size_t i = 0; i < _results.size(); ++i )
+            for ( auto& result : _results )
             {
-                if ( _results[i].name() == name )
+                if ( result.name() == name )
                 {
-                    return &_results[i];
+                    return &result;
                 }
             }
             return nullptr;
+        }
+
+        bool hasGenericParams() const
+        {
+            return _hasGenericParams;
+        }
+
+        bool hasGenericResults() const
+        {
+            return _hasGenericResults;
+        }
+
+        bool isGeneric() const
+        {
+            return _hasGenericParams || _hasGenericResults;
         }
 
     private:
@@ -144,6 +177,10 @@ namespace nnef
         std::string _name;
         std::vector<Param> _params;
         std::vector<Result> _results;
+
+        bool _hasGenericParams;
+        bool _hasGenericResults;
+        const PrimitiveType* _genericParamDefault;
     };
     
     
@@ -157,6 +194,16 @@ namespace nnef
     inline std::ostream& operator<<( std::ostream& os, const Prototype& proto )
     {
         os << proto.name();
+        
+        if ( proto.isGeneric() )
+        {
+            os << "<?";
+            if ( proto.genericParamDefault() )
+            {
+                os << " = " << proto.genericParamDefault()->toString();
+            }
+            os << ">";
+        }
         
         os << "( ";
         for ( size_t i = 0; i < proto.paramCount(); ++i )

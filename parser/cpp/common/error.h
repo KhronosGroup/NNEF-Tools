@@ -19,6 +19,7 @@
 
 #include <exception>
 #include <cstdarg>
+#include <string>
 
 
 namespace nnef
@@ -32,6 +33,7 @@ namespace nnef
         {
             unsigned line;
             unsigned column;
+            const char* filename;
             const Position* origin;
         };
         

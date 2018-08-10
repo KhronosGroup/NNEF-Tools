@@ -23,6 +23,8 @@
 #include "dictionary.h"
 #include <algorithm>
 #include <cassert>
+#include <string>
+#include <cctype>
 
 
 namespace nnef
@@ -30,7 +32,7 @@ namespace nnef
 
     enum class PropagationGroup
     {
-        Unknown, Intro, Unary, Binary, Reduce, Conv, Deconv, Pool, UpSample, DownSample, Normalize, Unique
+        Unknown, Intro, Unary, Binary, Reduce, Conv, Deconv, Pool, UpSample, DownSample, Normalize, Roi, Unique
     };
 
 
@@ -60,7 +62,7 @@ namespace nnef
             std::make_pair("min",  PropagationGroup::Binary),
             std::make_pair("max",  PropagationGroup::Binary),
 
-            std::make_pair("idn", PropagationGroup::Unary),
+            std::make_pair("copy", PropagationGroup::Unary),
             std::make_pair("neg", PropagationGroup::Unary),
             std::make_pair("rcp", PropagationGroup::Unary),
             std::make_pair("exp", PropagationGroup::Unary),
@@ -85,6 +87,7 @@ namespace nnef
             std::make_pair("softmax", PropagationGroup::Unary),
             std::make_pair("softplus", PropagationGroup::Unary),
             std::make_pair("leaky_relu", PropagationGroup::Unary),
+            std::make_pair("prelu", PropagationGroup::Unary),
 
             std::make_pair("linear_quantize", PropagationGroup::Unary),
             std::make_pair("logarithmic_quantize", PropagationGroup::Unary),
@@ -95,13 +98,11 @@ namespace nnef
             std::make_pair("box", PropagationGroup::Conv),
             std::make_pair("sample", PropagationGroup::Conv),
             std::make_pair("separable_conv", PropagationGroup::Conv),
-            std::make_pair("planewise_conv", PropagationGroup::Conv),
 
             std::make_pair("deconv", PropagationGroup::Deconv),
             std::make_pair("debox", PropagationGroup::Deconv),
             std::make_pair("desample", PropagationGroup::Deconv),
             std::make_pair("separable_deconv", PropagationGroup::Deconv),
-            std::make_pair("planewise_deconv", PropagationGroup::Deconv),
 
             std::make_pair("max_pool", PropagationGroup::Pool),
             std::make_pair("argmax_pool", PropagationGroup::Pool),
@@ -113,6 +114,7 @@ namespace nnef
             std::make_pair("min_reduce", PropagationGroup::Reduce),
             std::make_pair("max_reduce", PropagationGroup::Reduce),
             std::make_pair("mean_reduce", PropagationGroup::Reduce),
+            std::make_pair("argmax_reduce", PropagationGroup::Reduce),
             std::make_pair("moments", PropagationGroup::Reduce),
 
             std::make_pair("nearest_downsample", PropagationGroup::DownSample),
@@ -126,14 +128,23 @@ namespace nnef
             std::make_pair("local_contrast_normalization", PropagationGroup::Normalize),
             std::make_pair("l1_normalization", PropagationGroup::Normalize),
             std::make_pair("l2_normalization", PropagationGroup::Normalize),
-            std::make_pair("layer_normalization", PropagationGroup::Normalize),
-            std::make_pair("divisive_normalization", PropagationGroup::Normalize),
             std::make_pair("batch_normalization", PropagationGroup::Normalize),
+
+            std::make_pair("avg_roi_pool", PropagationGroup::Roi),
+            std::make_pair("max_roi_pool", PropagationGroup::Roi),
+            std::make_pair("avg_roi_align", PropagationGroup::Roi),
+            std::make_pair("max_roi_align", PropagationGroup::Roi),
+            std::make_pair("roi_resample", PropagationGroup::Roi),
 
             std::make_pair("reshape", PropagationGroup::Unique),
             std::make_pair("transpose", PropagationGroup::Unique),
             std::make_pair("split", PropagationGroup::Unique),
             std::make_pair("concat", PropagationGroup::Unique),
+            std::make_pair("slice", PropagationGroup::Unique),
+            std::make_pair("stack", PropagationGroup::Unique),
+            std::make_pair("unstack", PropagationGroup::Unique),
+            std::make_pair("squeeze", PropagationGroup::Unique),
+            std::make_pair("unsqueeze", PropagationGroup::Unique),
             std::make_pair("select", PropagationGroup::Unique),
             std::make_pair("matmul", PropagationGroup::Unique),
             std::make_pair("linear", PropagationGroup::Unique),
@@ -152,11 +163,17 @@ namespace nnef
     {
     public:
 
-        enum { MaxRank = Shape::MaxRank };
+        Propagation( const size_t maxRank )
+        : _maxRank(maxRank)
+        {
+        }
 
-    public:
+        void reset()
+        {
+            _variableShapes.clear();
+        }
 
-        bool propagateShapes( const Prototype& proto, const Dictionary<Value> args, Dictionary<Shape>& shapes )
+        virtual void propagateShapes( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             const std::string& op = proto.name();
             const PropagationGroup group = getPropagationGroup(op);
@@ -165,10 +182,6 @@ namespace nnef
                 case PropagationGroup::Intro:
                 {
                     propagateShapesIntro(proto, args, shapes);
-                    if ( op == "variable" )
-                    {
-                        checkSharedVariableShapes(args);
-                    }
                     break;
                 }
                 case PropagationGroup::Unary:
@@ -208,6 +221,11 @@ namespace nnef
                     propagateShapesNormalize(proto, args, shapes);
                     break;
                 }
+                case PropagationGroup::Roi:
+                {
+                    propagateShapesRoi(proto, args, shapes);
+                    break;
+                }
                 case PropagationGroup::Unique:
                 {
                     if ( op == "reshape" )
@@ -225,6 +243,26 @@ namespace nnef
                     else if ( op == "concat" )
                     {
                         propagateShapesConcat(proto, args, shapes);
+                    }
+                    else if ( op == "slice" )
+                    {
+                        propagateShapesSlice(proto, args, shapes);
+                    }
+                    else if ( op == "stack" )
+                    {
+                        propagateShapesStack(proto, args, shapes);
+                    }
+                    else if ( op == "unstack" )
+                    {
+                        propagateShapesUnstack(proto, args, shapes);
+                    }
+                    else if ( op == "squeeze" )
+                    {
+                        propagateShapesSqueeze(proto, args, shapes);
+                    }
+                    else if ( op == "unsqueeze" )
+                    {
+                        propagateShapesUnsqueeze(proto, args, shapes);
                     }
                     else if ( op == "select" )
                     {
@@ -262,35 +300,49 @@ namespace nnef
                 }
                 case PropagationGroup::Unknown:
                 {
-                    return false;
+                    throw Error("shape propagation not defined for operation '%s'", proto.name().c_str());
                 }
             }
-            return true;
         }
         
-        static size_t resultArrayLength( const Prototype& proto, const Dictionary<Value>& args, const size_t idx )
+        virtual size_t resultArrayLength( const Prototype& proto, const std::string& result, const Dictionary<Value>& args, const Dictionary<Shape>& shapes )
         {
-            if ( proto.name() == "split" && idx == 0 )
+            if ( proto.name() == "split" && result == "values" )
             {
                 return args["ratios"].size();
             }
-            else if ( proto.name() == "copy_n" && idx == 0 )
+            else if ( proto.name() == "unstack" && result == "values" )
+            {
+                auto& shape = getShape(args["input"], shapes);
+                return shape[args["axis"].integer()];
+            }
+            else if ( proto.name() == "copy_n" && result == "y" )
             {
                 return args["times"].integer();
             }
             return 0;
         }
 
-    private:
+        virtual bool shouldDeferShapeOf( const Prototype& proto, const std::string& param ) const
+        {
+            return false;
+        }
 
-        static void propagateShapesIntro( const Prototype& proto, const Dictionary<Value> args, Dictionary<Shape>& shapes )
+    public:
+
+        void propagateShapesIntro( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& shape = args["shape"];
             auto& output = args["output"];
 
-            checkRange("shape", shape, proto.name() == "external" ? 0 : 1);
+            if ( shape.kind() != Value::ShapeOf )
+            {
+                checkRange("shape", shape, 1);
+            }
 
-            auto outputShape = makeShape(shape);
+            auto outputShape = shape.kind() == Value::ShapeOf ? getShape(shape, shapes) : makeShape(shape);
+
+            checkMaxRank("output", outputShape);
 
             auto& value = args["value"];
             if ( value && value.size() != outputShape.volume() && value.size() != 1 )
@@ -298,10 +350,23 @@ namespace nnef
                 throw Error("shape volume (%d) does not match number of values (%d)", (int)outputShape.volume(), (int)value.size());
             }
 
+            auto& label = args["label"];
+            if ( label )
+            {
+                auto& str = label.string();
+                auto cit = std::find_if_not(str.begin(), str.end(), isLabelChar);
+                if ( cit != str.end() )
+                {
+                    throw Error("labels must only contain alphanumeric ascii characters, and the characters '/\\-_.'; found '%c'", *cit);
+                }
+
+                checkSharedVariableShapes(str, outputShape);
+            }
+
             setShape(output, shapes, outputShape);
         }
 
-        static void propagateShapesUnary( const Prototype& proto, const Dictionary<Value> args, Dictionary<Shape>& shapes )
+        void propagateShapesUnary( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& x = args["x"];
             auto& y = args["y"];
@@ -309,7 +374,7 @@ namespace nnef
             setShape(y, shapes, getShape(x, shapes));
         }
 
-        static void propagateShapesBinary( const Prototype& proto, const Dictionary<Value> args, Dictionary<Shape>& shapes )
+        void propagateShapesBinary( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& x = args["x"];
             auto& y = args["y"];
@@ -321,21 +386,21 @@ namespace nnef
             if ( !isBroadcastCompatible(xShape, yShape) )
             {
                 throw Error("incompatible tensor shapes in binary operation (%s vs %s)",
-                                 xShape.toString().c_str(), yShape.toString().c_str());
+                            xShape.toString().c_str(), yShape.toString().c_str());
             }
 
             setShape(z, shapes, broadcastShape(xShape, yShape));
         }
 
-        static void propagateShapesReduce( const Prototype& proto, const Dictionary<Value> args, Dictionary<Shape>& shapes )
+        void propagateShapesReduce( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& input = args["input"];
             auto& output = args["output"];
             auto& axes = args["axes"];
 
-            checkAxes("axes", axes);
-
             Shape outputShape = getShape(input, shapes);
+
+            checkAxes("axes", axes, outputShape.rank());
 
             for ( size_t i = 0; i < axes.size(); ++i )
             {
@@ -354,35 +419,46 @@ namespace nnef
             }
         }
 
-        static void propagateShapesSliding( const Prototype& proto, const Dictionary<Value> args, Dictionary<Shape>& shapes,
-                                           const PropagationGroup group )
+        void propagateShapesSliding( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes, const PropagationGroup group )
         {
             auto& input = args["input"];
             auto& output = args["output"];
             auto& size = args["size"];
             auto& filter = args["filter"];
-            auto& planeFilter = args["plane_filter"];
-            auto& pointFilter = args["point_filter"];
+            auto& plane_filter = args["plane_filter"];
+            auto& point_filter = args["point_filter"];
             auto& padding = args["padding"];
             auto& stride = args["stride"];
             auto& dilation = args["dilation"];
+            auto& output_shape = args["output_shape"];
 
             const std::string& op = proto.name();
             bool convolutional = op.length() >= 4 && op.substr(op.length() - 4) == "conv";
-            bool separable = pointFilter && planeFilter;
+            bool separable = point_filter && plane_filter;
             const size_t offset = convolutional ? 2 : 0;
+
+            auto& inputShape = getShape(input, shapes);
+            const size_t rank = inputShape.rank();
 
             if ( size )
             {
-                checkRank("size", size, MaxRank - offset);
+                checkRank("size", size, rank - offset);
                 checkRange("size", size, 0);
             }
 
-            checkRank("padding", padding, MaxRank - offset);
-            checkRank("stride", stride, MaxRank - offset);
-            checkRank("dilation", dilation, MaxRank - offset);
+            if ( padding.size() )
+            {
+                checkRank("padding", padding, rank - offset);
+            }
+            if ( stride.size() )
+            {
+                checkRank("stride", stride, rank - offset);
+            }
+            if ( dilation.size() )
+            {
+                checkRank("dilation", dilation, rank - offset);
+            }
 
-            checkRange("padding", stride, 0);
             checkRange("stride", stride, 1);
             checkRange("dilation", dilation, 1);
 
@@ -391,11 +467,11 @@ namespace nnef
             {
                 checkRange("groups", groups, 0);
             }
+            const auto groupCount = groups && groups.integer() != 0 ? groups.integer() : inputShape[1];
 
-            auto& inputShape = getShape(input, shapes);
-            auto strideShape = makeShape(stride, offset);
-            auto dilationShape = makeShape(dilation, offset);
-            auto paddingShapes = makePadding(padding, offset);
+            auto strideShape = makeShape(stride, stride.size() ? offset : rank);
+            auto dilationShape = makeShape(dilation, dilation.size() ? offset : rank);
+            auto paddingShapes = makePadding(padding, padding.size() ? offset : rank);
 
             Shape kernelShape;
             if ( size )
@@ -408,8 +484,8 @@ namespace nnef
             }
             else if ( separable )
             {
-                auto& planeShape = getShape(planeFilter, shapes);
-                auto& pointShape = getShape(pointFilter, shapes);
+                auto& planeShape = getShape(plane_filter, shapes);
+                auto& pointShape = getShape(point_filter, shapes);
                 kernelShape = makeSeparableFilterShape(planeShape, pointShape, inputShape[1]);
             }
             else
@@ -417,64 +493,114 @@ namespace nnef
                 throw Error("kernel shape is not defined for operation '%s'", op.c_str());
             }
 
-            Shape outputShape;
+            if ( kernelShape.rank() != inputShape.rank() )
+            {
+                throw Error("kernel rank incompatible with input rank (%d vs %d)", (int)kernelShape.rank(), (int)inputShape.rank());
+            }
+
+            Shape outputShape(inputShape.rank());
+            bool outputShapeSupplied = false;
+
+            if ( output_shape )
+            {
+                outputShapeSupplied = true;
+
+                if ( output_shape.kind() == Value::ShapeOf )
+                {
+                    outputShape = getShape(output_shape, shapes);
+
+                    if ( outputShape.rank() != inputShape.rank() )
+                    {
+                        throw Error("rank of supplied output shape (%d) does not match that of input shape (%d)",
+                                    (int)outputShape.rank(), (int)inputShape.rank());
+                    }
+                }
+                else if ( output_shape.size() )
+                {
+                    checkRank("output_shape", output_shape, rank);
+                    checkRange("output_shape", output_shape, 1);
+
+                    outputShape = makeShape(output_shape);
+                }
+                else
+                {
+                    outputShapeSupplied = false;
+                }
+            }
 
             if ( group == PropagationGroup::Conv || group == PropagationGroup::Pool )
             {
-                makeDownscalePadding(inputShape, kernelShape, strideShape, dilationShape, offset + padding.size(), paddingShapes);
-
+                if ( !padding.size() )
+                {
+                    makeDownscalePadding(inputShape, kernelShape, strideShape, dilationShape, offset, paddingShapes);
+                }
                 if ( offset )
                 {
-                    if ( inputShape[1] )
+                    if ( inputShape[1] != kernelShape[1] * groupCount )
                     {
-                        const auto group_count = groups && groups.integer() != 0 ? groups.integer() : inputShape[1];
-                        if ( inputShape[1] != kernelShape[1] * group_count )
-                        {
-                            throw Error("filter channels (%d) does not match input channels (%d)", (int)kernelShape[1], (int)inputShape[1]);
-                        }
-                        if ( kernelShape[0] % group_count )
-                        {
-                            throw Error("filter batch (%d) must be divisible by groups (%d)", (int)kernelShape[0], (int)group_count);
-                        }
+                        throw Error("filter channels (%d) does not match input channels (%d)", (int)kernelShape[1], (int)inputShape[1]);
                     }
+                    if ( kernelShape[0] % groupCount )
+                    {
+                        throw Error("filter batch (%d) must be divisible by groups (%d)", (int)kernelShape[0], (int)groupCount);
+                    }
+
                     outputShape[0] = inputShape[0];
                     outputShape[1] = kernelShape[0];
                 }
 
-                for ( size_t i = offset; i < MaxRank; ++i )
+                for ( size_t i = offset; i < rank; ++i )
                 {
-                    if ( inputShape[i] )
-                    {
-                        outputShape[i] = convExtent(inputShape[i], kernelShape[i], paddingShapes.first[i], paddingShapes.second[i],
-                                                    strideShape[i], dilationShape[i]);
-                    }
+                    outputShape[i] = convExtent(inputShape[i], kernelShape[i], paddingShapes.first[i], paddingShapes.second[i],
+                                                strideShape[i], dilationShape[i]);
                 }
             }
             else if ( group == PropagationGroup::Deconv )
             {
-                makeUpscalePadding(inputShape, kernelShape, strideShape, dilationShape, offset + padding.size(), paddingShapes);
-
+                if ( !padding.size() )
+                {
+                    makeUpscalePadding(inputShape, kernelShape, strideShape, dilationShape, offset, paddingShapes);
+                }
                 if ( offset )
                 {
-                    const auto group_count = groups && groups.integer() != 0 ? groups.integer() : inputShape[1];
-                    if ( inputShape[1] )
+                    if ( inputShape[1] != kernelShape[0] )
                     {
-                        if ( inputShape[1] != kernelShape[0] )
-                        {
-                            throw Error("filter batch (%d) does not match input channels (%d)", (int)kernelShape[0], (int)inputShape[1]);
-                        }
-                        if ( kernelShape[0] % group_count )
-                        {
-                            throw Error("filter batch (%d) must be divisible by groups (%d)", (int)kernelShape[0], (int)group_count);
-                        }
+                        throw Error("filter batch (%d) does not match input channels (%d)", (int)kernelShape[0], (int)inputShape[1]);
                     }
-                    outputShape[0] = inputShape[0];
-                    outputShape[1] = kernelShape[1] * group_count;
+                    if ( kernelShape[0] % groupCount )
+                    {
+                        throw Error("filter batch (%d) must be divisible by groups (%d)", (int)kernelShape[0], (int)groupCount);
+                    }
                 }
 
-                for ( size_t i = offset; i < MaxRank; ++i )
+                if ( outputShapeSupplied )
                 {
-                    if ( inputShape[i] )
+                    Shape expectedInputShape(outputShape.rank());
+                    if ( offset )
+                    {
+                        expectedInputShape[0] = outputShape[0];
+                        expectedInputShape[1] = kernelShape[0];
+                    }
+                    for ( size_t i = offset; i < rank; ++i )
+                    {
+                        expectedInputShape[i] = convExtent(outputShape[i], kernelShape[i], paddingShapes.first[i], paddingShapes.second[i],
+                                                            strideShape[i], dilationShape[i]);
+                    }
+
+                    if ( expectedInputShape != inputShape )
+                    {
+                        throw Error("expected input shape %s derived from output shape is incompatible with actual input shape %s",
+                                    expectedInputShape.toString().c_str(), inputShape.toString().c_str());
+                    }
+                }
+                else
+                {
+                    if ( offset )
+                    {
+                        outputShape[0] = inputShape[0];
+                        outputShape[1] = kernelShape[1] * groupCount;
+                    }
+                    for ( size_t i = offset; i < rank; ++i )
                     {
                         outputShape[i] = deconvExtent(inputShape[i], kernelShape[i], paddingShapes.first[i], paddingShapes.second[i],
                                                       strideShape[i], dilationShape[i]);
@@ -486,16 +612,20 @@ namespace nnef
             if ( bias )
             {
                 const Shape& biasShape = getShape(bias, shapes);
-                for ( size_t i = 0; i < MaxRank; ++i )
+                if ( biasShape.rank() != 0 && biasShape.rank() != 2 )
                 {
-                    if ( i != 1 && biasShape[i] && biasShape[i] != 1 )
-                    {
-                        throw Error("bias shape must be singular for non-channel dimensions");
-                    }
+                    throw Error("bias must be of rank 0 or 2");
                 }
-                if ( biasShape[1] != outputShape[1] && biasShape[1] != 1 )
+                if ( biasShape.rank() == 2 )
                 {
-                    throw Error("bias channels (%d) does not match output channels (%d)", (int)biasShape[1], (int)outputShape[1]);
+                    if ( biasShape[0] != 1 )
+                    {
+                        throw Error("bias shape must be singular for the batch dimension");
+                    }
+                    if ( biasShape[1] != outputShape[1] && biasShape[1] != 1 )
+                    {
+                        throw Error("bias channels (%d) does not match output channels (%d)", (int)biasShape[1], (int)outputShape[1]);
+                    }
                 }
             }
 
@@ -529,20 +659,39 @@ namespace nnef
             }
         }
 
-        static void propagateShapesReshape( const Prototype& proto, const Dictionary<Value> args,
-                                           Dictionary<Shape>& shapes )
+        void propagateShapesConv( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
+        {
+            propagateShapesSliding(proto, args, shapes, PropagationGroup::Conv);
+        }
+
+        void propagateShapesDeconv( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
+        {
+            propagateShapesSliding(proto, args, shapes, PropagationGroup::Deconv);
+        }
+
+        void propagateShapesPool( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
+        {
+            propagateShapesSliding(proto, args, shapes, PropagationGroup::Pool);
+        }
+
+        void propagateShapesReshape( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& input = args["input"];
             auto& output = args["output"];
             auto& shape = args["shape"];
 
+            if ( shape.kind() != Value::ShapeOf )
+            {
+                checkRange("shape", shape, -1);
+            }
+
             auto& inputShape = getShape(input, shapes);
-            Shape outputShape = makeShape(shape);
+            Shape outputShape = shape.kind() == Value::ShapeOf ? getShape(shape, shapes) : makeShape(shape);
 
-            checkRange("shape", shape, -1);
+            checkMaxRank("output", outputShape);
 
-            size_t autoAxis = MaxRank;
-            for ( size_t i = 0; i < MaxRank; ++i )
+            size_t autoAxis = std::numeric_limits<size_t>::max();
+            for ( size_t i = 0; i < outputShape.rank(); ++i )
             {
                 if ( outputShape[i] == 0 )
                 {
@@ -550,7 +699,7 @@ namespace nnef
                 }
                 else if ( outputShape[i] == -1 )
                 {
-                    if ( autoAxis != MaxRank )
+                    if ( autoAxis != std::numeric_limits<size_t>::max() )
                     {
                         throw Error("shape may only contain at most one -1 value");
                     }
@@ -562,7 +711,7 @@ namespace nnef
             auto inputVolume = inputShape.volume();
             auto outputVolume = outputShape.volume();
 
-            if ( autoAxis != MaxRank )
+            if ( autoAxis != std::numeric_limits<size_t>::max() )
             {
                 if ( inputVolume % outputVolume )
                 {
@@ -578,54 +727,50 @@ namespace nnef
             setShape(output, shapes, outputShape);
         }
 
-        static void propagateShapesTranspose( const Prototype& proto, const Dictionary<Value> args,
-                                             Dictionary<Shape>& shapes )
+        void propagateShapesTranspose( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& input = args["input"];
             auto& output = args["output"];
-            auto& perm = args["perm"];
+            auto& axes = args["axes"];
 
             auto& inputShape = getShape(input, shapes);
             Shape outputShape = inputShape;
 
-            auto rank = perm.size();
-
-            size_t axes[MaxRank];
-            for ( size_t i = 0; i < rank; ++i )
+            std::vector<size_t> perm(axes.size());
+            for ( size_t i = 0; i < axes.size(); ++i )
             {
-                axes[i] = perm[i].integer();
+                perm[i] = axes[i].integer();
             }
 
-            std::sort(axes, axes + rank);
-            for ( size_t i = 0; i < rank; ++i )
+            std::sort(perm.begin(), perm.end());
+            for ( size_t i = 0; i < perm.size(); ++i )
             {
-                if ( axes[i] != i )
+                if ( perm[i] != i )
                 {
-                    throw Error("'perm' array must contain a permutation of dimensions from 0 to %d", (int)rank);
+                    throw Error("'axes' array must contain a permutation of dimensions from 0 to %d", (int)perm.size());
                 }
             }
 
-            for ( size_t i = 0; i < rank; ++i )
+            for ( size_t i = 0; i < axes.size(); ++i )
             {
-                auto j = perm[i].integer();
+                auto j = axes[i].integer();
                 outputShape[i] = inputShape[j];
             }
 
             setShape(output, shapes, outputShape);
         }
 
-        static void propagateShapesSplit( const Prototype& proto, const Dictionary<Value> args,
-                                         Dictionary<Shape>& shapes )
+        void propagateShapesSplit( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& value = args["value"];
             auto& values = args["values"];
             auto& axis = args["axis"];
             auto& ratios = args["ratios"];
 
-            checkAxis("axis", axis);
-            checkRange("ratios", ratios, 1);
-
             auto& wholeShape = getShape(value, shapes);
+
+            checkAxis("axis", axis, wholeShape.rank());
+            checkRange("ratios", ratios, 1);
 
             auto idx = axis.integer();
 
@@ -656,25 +801,30 @@ namespace nnef
             }
         }
 
-        static void propagateShapesConcat( const Prototype& proto, const Dictionary<Value> args,
-                                          Dictionary<Shape>& shapes )
+        void propagateShapesConcat( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& values = args["values"];
             auto& value = args["value"];
             auto& axis = args["axis"];
 
-            checkAxis("axis", axis);
+            Shape outputShape = getShape(values[0], shapes);
+
+            checkAxis("axis", axis, outputShape.rank());
 
             const size_t idx = axis.integer();
-
-            Shape outputShape = getShape(values[0], shapes);
 
             bool compatibleShape = true;
             for ( size_t i = 1; i < values.size(); ++i )
             {
                 auto& partShape = getShape(values[i], shapes);
 
-                for ( size_t i = 0; i < MaxRank; ++i )
+                if ( partShape.rank() != outputShape.rank() )
+                {
+                    compatibleShape = false;
+                    break;
+                }
+
+                for ( size_t i = 0; i < outputShape.rank(); ++i )
                 {
                     if ( i == idx )
                     {
@@ -695,8 +845,193 @@ namespace nnef
             setShape(value, shapes, outputShape);
         }
 
-        static void propagateShapesUpsample( const Prototype& proto, const Dictionary<Value> args,
-                                            Dictionary<Shape>& shapes )
+        void propagateShapesSlice( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
+        {
+            auto& input = args["input"];
+            auto& output = args["output"];
+            auto& axes = args["axes"];
+            auto& begin = args["begin"];
+            auto& end = args["end"];
+
+            if ( begin.size() != axes.size() || end.size() != axes.size() )
+            {
+                throw Error("'axes', 'begin' and 'end' arrays must have the same length");
+            }
+
+            Shape outputShape = getShape(input, shapes);
+
+            checkAxes("axes", axes, outputShape.rank());
+
+            for ( size_t i = 0; i < axes.size(); ++i )
+            {
+                auto axis = axes[i].integer();
+                auto extent = outputShape[axis];
+
+                auto first = begin[i].integer();
+                if ( first < 0 )
+                {
+                    first += extent;
+                }
+
+                auto last = end[i].integer();
+                if ( last <= 0 )
+                {
+                    last += extent;
+                }
+
+                if ( last <= first )
+                {
+                    throw Error("slice range (%d,%d) is empty for axis %d", (int)first, (int)last, (int)axis);
+                }
+
+                if ( first < 0 || last > extent )
+                {
+                    throw Error("slice range (%d,%d) is out of tensor shape for axis %d", (int)first, (int)last, (int)axis);
+                }
+
+                outputShape[axis] = last - first;
+            }
+
+            setShape(output, shapes, outputShape);
+        }
+
+        void propagateShapesStack( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
+        {
+            auto& values = args["values"];
+            auto& value = args["value"];
+            auto& axis = args["axis"];
+
+            auto& inputShape = getShape(values[0], shapes);
+
+            bool compatibleShape = true;
+            for ( size_t i = 1; i < values.size(); ++i )
+            {
+                auto& partShape = getShape(values[i], shapes);
+
+                if ( partShape.rank() != inputShape.rank() )
+                {
+                    compatibleShape = false;
+                    break;
+                }
+
+                for ( size_t i = 0; i < inputShape.rank(); ++i )
+                {
+                    compatibleShape &= inputShape[i] == partShape[i];
+                }
+            }
+
+            if ( !compatibleShape )
+            {
+                throw Error("incompatible tensor shapes in input array");
+            }
+
+            Shape outputShape(inputShape.rank() + 1);
+
+            checkAxis("axis", axis, outputShape.rank());
+
+            const size_t idx = axis.integer();
+            for ( size_t i = 0; i < idx; ++i )
+            {
+                outputShape[i] = inputShape[i];
+            }
+            outputShape[idx] = (Shape::extent_type)values.size();
+            for ( size_t i = idx + 1; i < outputShape.rank(); ++i )
+            {
+                outputShape[i] = inputShape[i-1];
+            }
+
+            checkMaxRank("value", outputShape);
+
+            setShape(value, shapes, outputShape);
+        }
+
+        void propagateShapesUnstack( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
+        {
+            auto& values = args["values"];
+            auto& value = args["value"];
+            auto& axis = args["axis"];
+
+            Shape inputShape = getShape(value, shapes);
+
+            checkAxis("axis", axis, inputShape.rank());
+
+            const size_t idx = axis.integer();
+
+            Shape outputShape(inputShape.rank() - 1);
+            for ( size_t i = 0; i < idx; ++i )
+            {
+                outputShape[i] = inputShape[i];
+            }
+            for ( size_t i = idx; i < outputShape.rank(); ++i )
+            {
+                outputShape[i] = inputShape[i+1];
+            }
+
+            const size_t count = inputShape[idx];
+            if ( values.size() != count )
+            {
+                throw Error("length of values (%d) does not match shape of value along axis (%d)", (int)values.size(), (int)count);
+            }
+            for ( size_t i = 0; i < count; ++i )
+            {
+                setShape(values[i], shapes, outputShape);
+            }
+        }
+
+        void propagateShapesSqueeze( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
+        {
+            auto& input = args["input"];
+            auto& output = args["output"];
+            auto& axes = args["axes"];
+
+            auto& inputShape = getShape(input, shapes);
+
+            checkAxes("axes", axes, inputShape.rank());
+
+            for ( size_t i = 0; i < axes.size(); ++i )
+            {
+                auto axis = axes[i].integer();
+                if ( inputShape[axis] != 1 )
+                {
+                    throw Error("squeezed dimension is not singleton (has extent %d)", (int)inputShape[axis]);
+                }
+            }
+
+            Shape outputShape(inputShape.rank() - axes.size());
+            for ( size_t i = 0, k = 0; i < inputShape.rank(); ++i )
+            {
+                if ( !containsAxis(axes, i) )
+                {
+                    outputShape[k++] = inputShape[i];
+                }
+            }
+
+            setShape(output, shapes, outputShape);
+        }
+
+        void propagateShapesUnsqueeze( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
+        {
+            auto& input = args["input"];
+            auto& output = args["output"];
+            auto& axes = args["axes"];
+
+            auto& inputShape = getShape(input, shapes);
+
+            Shape outputShape(inputShape.rank() + axes.size());
+
+            checkAxes("axes", axes, outputShape.rank());
+
+            for ( size_t i = 0, k = 0; i < outputShape.rank(); ++i )
+            {
+                outputShape[i] = containsAxis(axes, i) ? (Shape::extent_type)1 : inputShape[k++];
+            }
+
+            checkMaxRank("output", outputShape);
+
+            setShape(output, shapes, outputShape);
+        }
+
+        void propagateShapesUpsample( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& input = args["input"];
             auto& output = args["output"];
@@ -712,8 +1047,7 @@ namespace nnef
             setShape(output, shapes, outputShape);
         }
 
-        static void propagateShapesDownsample( const Prototype& proto, const Dictionary<Value> args,
-                                              Dictionary<Shape>& shapes )
+        void propagateShapesDownsample( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& input = args["input"];
             auto& output = args["output"];
@@ -734,131 +1068,159 @@ namespace nnef
             setShape(output, shapes, outputShape);
         }
 
-        static void propagateShapesNormalize( const Prototype& proto, const Dictionary<Value> args,
-                                             Dictionary<Shape>& shapes )
+        void propagateShapesNormalize( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& input = args["input"];
             auto& output = args["output"];
 
+            auto& inputShape = getShape(input, shapes);
+
             auto& axes = args["axes"];
             if ( axes )
             {
-                checkAxes("name", axes);
+                checkAxes("name", axes, inputShape.rank());
             }
 
             auto& size = args["size"];
             if ( size )
             {
-                checkRank("size", size);
+                checkRank("size", size, inputShape.rank());
                 checkRange("size", size, 1);
             }
 
-            setShape(output, shapes, getShape(input, shapes));
+            setShape(output, shapes, inputShape);
         }
 
-        static void propagateShapesSelect( const Prototype& proto, const Dictionary<Value> args,
-                                          Dictionary<Shape>& shapes )
+        void propagateShapesRoi( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
+        {
+            auto& input = args["input"];
+            auto& output = args["output"];
+            auto& rois = args["rois"];
+            auto& index = args["batch_index"];
+            auto& size = args["output_size"];
+            auto& rate = args["sampling_rate"];
+
+            auto& inputShape = getShape(input, shapes);
+            auto& roisShape = getShape(rois, shapes);
+            auto& indexShape = getShape(index, shapes);
+
+            checkRank("pooled_size", size, inputShape.rank() - 2);
+            checkRange("pooled_size", size, 1);
+
+            if ( rate )
+            {
+                checkRank("sampling_rate", rate, inputShape.rank() - 2);
+                checkRange("sampling_rate", rate, 1);
+            }
+
+            if ( roisShape.rank() != 2 )
+            {
+                throw Error("'rois' must be a rank-2 tensor");
+            }
+            if ( indexShape.rank() != 1 )
+            {
+                throw Error("'batch_index' must be a rank-1 tensor");
+            }
+
+            if ( roisShape[1] != 4 )
+            {
+                throw Error("rois must be of extent 4 along dimension 1 (found %d)", (int)roisShape[1]);
+            }
+            if ( indexShape[0] != roisShape[0] )
+            {
+                throw Error("'batch_index' must be of same length as dimension 0 of rois; found (%d vs %d)", (int)indexShape[0], (int)roisShape[0]);
+            }
+
+            Shape outputShape(inputShape.rank());
+            outputShape[0] = roisShape[0];
+            outputShape[1] = inputShape[1];
+            for ( size_t i = 0; i < size.size(); ++i )
+            {
+                outputShape[i+2] = (Shape::extent_type)size[i].integer();
+            }
+            setShape(output, shapes, outputShape);
+        }
+
+        void propagateShapesSelect( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& condition = args["condition"];
             auto& trueValue = args["true_value"];
             auto& falseValue = args["false_value"];
             auto& output = args["output"];
 
-            Shape valueShape;
-            if ( trueValue.kind() == Value::Tensor && falseValue.kind() == Value::Tensor )
-            {
-                auto& trueShape = getShape(trueValue, shapes);
-                auto& falseShape = getShape(falseValue, shapes);
-
-                for ( size_t i = 0; i < MaxRank; ++i )
-                {
-                    if ( trueShape[i] && falseShape[i] )
-                    {
-                        if ( trueShape[i] != falseShape[i] )
-                        {
-                            throw Error("incompatible result shapes in select operation (%s vs %s)",
-                                  trueShape.toString().c_str(), falseShape.toString().c_str());
-                        }
-                        else
-                        {
-                            valueShape[i] = trueShape[i];
-                        }
-                    }
-                }
-            }
-            else if ( trueValue.kind() == Value::Tensor && falseValue.kind() != Value::Tensor )
-            {
-                valueShape = getShape(trueValue, shapes);
-            }
-            else if ( trueValue.kind() != Value::Tensor && falseValue.kind() == Value::Tensor )
-            {
-                valueShape = getShape(falseValue, shapes);
-            }
-            else
-            {
-                valueShape = Shape::singleton();
-            }
-
             auto& conditionShape = getShape(condition, shapes);
+            auto& trueShape = getShape(trueValue, shapes);
+            auto& falseShape = getShape(falseValue, shapes);
 
-            Shape outputShape;
+            if ( !isBroadcastCompatible(trueShape, falseShape) )
+            {
+                throw Error("incompatible tensor shapes in select operation (%s vs %s)",
+                            trueShape.toString().c_str(), falseShape.toString().c_str());
+            }
 
-            bool compatible = true;
-            for ( size_t i = 0; i < MaxRank; ++i )
+            Shape valueShape = broadcastShape(trueShape, falseShape);
+
+            if ( !isBroadcastCompatible(conditionShape, valueShape) )
             {
-                if ( conditionShape[i] && valueShape[i] )
-                {
-                    compatible &= (conditionShape[i] == valueShape[i] || conditionShape[i] == 1 || valueShape[i] == 1);
-                    outputShape[i] = std::max(conditionShape[i], valueShape[i]);
-                }
+                throw Error("condition shape incompatible with result shape in select operation (%s vs %s)",
+                            conditionShape.toString().c_str(), valueShape.toString().c_str());
             }
-            if ( !compatible )
-            {
-                throw Error("condition shape incompatible with result shape in select operation");
-            }
+
+            Shape outputShape = broadcastShape(conditionShape, valueShape);
 
             setShape(output, shapes, outputShape);
         }
 
-        static void propagateShapesMatmul( const Prototype& proto, const Dictionary<Value> args,
-                                          Dictionary<Shape>& shapes )
+        void propagateShapesMatmul( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& A = args["A"];
             auto& B = args["B"];
             auto& C = args["C"];
-            auto& trA = args["trA"];
-            auto& trB = args["trB"];
+            auto& trA = args["transposeA"];
+            auto& trB = args["transposeB"];
 
             auto& aShape = getShape(A, shapes);
             auto& bShape = getShape(B, shapes);
 
-            auto m = trA.logical() ? aShape[1] : aShape[0];
-            auto n = trB.logical() ? bShape[0] : bShape[1];
-            auto kA = trA.logical() ? aShape[0] : aShape[1];
-            auto kB = trB.logical() ? bShape[1] : bShape[0];
+            if ( aShape.rank() != bShape.rank() )
+            {
+                throw Error("rank mismatch for A and B (%d vs %d)", (int)aShape.rank(), (int)bShape.rank());
+            }
+
+            auto rank = aShape.rank();
+            if ( rank < 2 )
+            {
+                throw Error("rank of A and B must be at least 2");
+            }
+
+            auto batch_dims = rank - 2;
+
+            if ( !isBroadcastCompatible(aShape, bShape, batch_dims) )
+            {
+                throw Error("shape of A and B must be broadcast compatible for batch dimensions");
+            }
+
+            auto i0 = batch_dims + 0;
+            auto i1 = batch_dims + 1;
+
+            auto m = trA.logical() ? aShape[i1] : aShape[i0];
+            auto n = trB.logical() ? bShape[i0] : bShape[i1];
+            auto kA = trA.logical() ? aShape[i0] : aShape[i1];
+            auto kB = trB.logical() ? bShape[i1] : bShape[i0];
 
             if ( kA != kB )
             {
                 throw Error("inner dimensions must agree (%d vs %d)", (int)kA, (int)kB);
             }
 
-            for ( size_t i = 2; i < MaxRank; ++i )
-            {
-                if ( aShape[i] != 1 || bShape[i] != 1 )
-                {
-                    throw Error("argument shapes must be singleton for dimension > 2");
-                }
-            }
-
-            Shape cShape = Shape::singleton();
-            cShape[0] = m;
-            cShape[1] = n;
+            Shape cShape = broadcastShape(aShape, bShape, batch_dims);
+            cShape[i0] = m;
+            cShape[i1] = n;
 
             setShape(C, shapes, cShape);
         }
 
-        static void propagateShapesLinear( const Prototype& proto, const Dictionary<Value> args,
-                                          Dictionary<Shape>& shapes )
+        void propagateShapesLinear( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& input = args["input"];
             auto& output = args["output"];
@@ -867,20 +1229,28 @@ namespace nnef
             auto& inputShape = getShape(input, shapes);
             auto& filterShape = getShape(filter, shapes);
 
+            if ( inputShape.rank() != 2 )
+            {
+                throw Error("input shape must be of rank 2 (found %d)", (int)inputShape.rank());
+            }
+            if ( filterShape.rank() != 2 )
+            {
+                throw Error("filter shape must be of rank 2 (found %d)", (int)filterShape.rank());
+            }
+
             if ( inputShape[1] != filterShape[1] )
             {
                 throw Error("inner dimensions must agree (%d vs %d)", (int)inputShape[1], (int)filterShape[1]);
             }
 
-            Shape outputShape = Shape::singleton();
+            Shape outputShape(2);
             outputShape[0] = inputShape[0];
             outputShape[1] = filterShape[0];
 
             setShape(output, shapes, outputShape);
         }
 
-        static void propagateShapesUpdate( const Prototype& proto, const Dictionary<Value> args,
-                                          Dictionary<Shape>& shapes )
+        void propagateShapesUpdate( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& variable = args["variable"];
             auto& result = args["result"];
@@ -897,17 +1267,18 @@ namespace nnef
             setShape(result, shapes, varShape);
         }
 
-        static void propagateShapesSoftmax( const Prototype& proto, const Dictionary<Value> args,
-                                           Dictionary<Shape>& shapes )
+        void propagateShapesSoftmax( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             propagateShapesUnary(proto, args, shapes);
+
+            auto& input = args["input"];
+            auto& inputShape = shapes[input.identifier()];
             
             auto& axes = args["axes"];
-            checkAxes("axes", axes);
+            checkAxes("axes", axes, inputShape.rank());
         }
 
-        static void propagateShapesCopyN( const Prototype& proto, const Dictionary<Value> args,
-                                         Dictionary<Shape>& shapes )
+        void propagateShapesCopyN( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& times = args["times"];
             checkRange("times", times, 1);
@@ -924,8 +1295,7 @@ namespace nnef
             setShape(y, shapes, shape);
         }
 
-        static void propagateShapesAddN( const Prototype& proto, const Dictionary<Value> args,
-                                        Dictionary<Shape>& shapes )
+        void propagateShapesAddN( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
         {
             auto& x = args["x"];
             auto& y = args["y"];
@@ -952,7 +1322,21 @@ namespace nnef
 
         static const Shape& getShape( const Value& arg, const Dictionary<Shape>& shapes )
         {
-            return arg.kind() == Value::Tensor ? shapes[arg.tensor()] : Shape::singleton();
+            if ( arg.kind() == Value::Identifier )
+            {
+                assert(shapes.contains(arg.identifier()));
+                return shapes[arg.identifier()];
+            }
+            else if ( arg.kind() == Value::ShapeOf )
+            {
+                assert(shapes.contains(arg.shape_of().id));
+                return shapes[arg.shape_of().id];
+            }
+            else
+            {
+                static Shape singleton;
+                return singleton;
+            }
         }
 
         static void setShape( const Value& arg, Dictionary<Shape>& shapes, const Shape& shape )
@@ -966,14 +1350,18 @@ namespace nnef
             }
             else
             {
-                shapes[arg.tensor()] = shape;
+                shapes[arg.identifier()] = shape;
             }
         }
 
         static Shape makeShape( const Value& arg, const size_t offset = 0 )
         {
-            Shape shape = Shape(1);
+            Shape shape = Shape(offset + arg.size());
 
+            for ( size_t i = 0; i < offset; ++i )
+            {
+                shape[i] = 1;
+            }
             for ( size_t i = 0; i < arg.size(); ++i )
             {
                 shape[i + offset] = arg[i].integer();
@@ -983,7 +1371,8 @@ namespace nnef
 
         static std::pair<Shape,Shape> makePadding( const Value& arg, const size_t offset = 0 )
         {
-            std::pair<Shape,Shape> padding = std::make_pair(Shape(0), Shape(0));
+            const size_t rank = offset + arg.size();
+            std::pair<Shape,Shape> padding = std::make_pair(Shape(rank), Shape(rank));
 
             for ( size_t i = 0; i < arg.size(); ++i )
             {
@@ -998,7 +1387,7 @@ namespace nnef
                                          const Shape& strideShape, const Shape& dilationShape,
                                          const size_t offset, std::pair<Shape,Shape>& paddingShape )
         {
-            for ( size_t i = offset; i < MaxRank; ++i )
+            for ( size_t i = offset; i < inputShape.rank(); ++i )
             {
                 auto outputSize = ceildiv(inputShape[i], strideShape[i]);
                 auto window = (kernelShape[i] - 1) * dilationShape[i] + 1;
@@ -1013,7 +1402,7 @@ namespace nnef
                                        const Shape& strideShape, const Shape& dilationShape,
                                        const size_t offset, std::pair<Shape,Shape>& paddingShape )
         {
-            for ( size_t i = offset; i < MaxRank; ++i )
+            for ( size_t i = offset; i < inputShape.rank(); ++i )
             {
                 auto window = (kernelShape[i] - 1) * dilationShape[i] + 1;
                 auto total = window - strideShape[i];
@@ -1025,7 +1414,7 @@ namespace nnef
 
         static Shape makeSeparableFilterShape( const Shape& planeShape, const Shape& pointShape, const int channels )
         {
-            for ( size_t i = 2; i < MaxRank; ++i )
+            for ( size_t i = 2; i < pointShape.rank(); ++i )
             {
                 if ( pointShape[i] != 1 )
                 {
@@ -1051,9 +1440,17 @@ namespace nnef
 
         static bool isBroadcastCompatible( const Shape& xShape, const Shape& yShape )
         {
-            for ( size_t i = 0; i < MaxRank; ++i )
+            const size_t rank = std::max(xShape.rank(), yShape.rank());
+            return isBroadcastCompatible(xShape, yShape, rank);
+        }
+
+        static bool isBroadcastCompatible( const Shape& xShape, const Shape& yShape, const size_t count )
+        {
+            for ( size_t i = 0; i < count; ++i )
             {
-                if ( !(xShape[i] == yShape[i] || xShape[i] == 1 || yShape[i] == 1) )
+                auto xi = i < xShape.rank() ? xShape[i] : 1;
+                auto yi = i < yShape.rank() ? yShape[i] : 1;
+                if ( !(xi == yi || xi == 1 || yi == 1) )
                 {
                     return false;
                 }
@@ -1063,40 +1460,64 @@ namespace nnef
 
         static Shape broadcastShape( const Shape& xShape, const Shape& yShape )
         {
-            Shape zShape;
-            for ( size_t i = 0; i < MaxRank; ++i )
+            const size_t rank = std::max(xShape.rank(), yShape.rank());
+            return broadcastShape(xShape, yShape, rank);
+        }
+
+        static Shape broadcastShape( const Shape& xShape, const Shape& yShape, const size_t count )
+        {
+            const size_t rank = std::max(xShape.rank(), yShape.rank());
+            Shape zShape(rank);
+
+            for ( size_t i = 0; i < count; ++i )
             {
-                zShape[i] = xShape[i] && yShape[i] ? std::max(xShape[i], yShape[i]) : 0;
+                auto xi = i < xShape.rank() ? xShape[i] : 1;
+                auto yi = i < yShape.rank() ? yShape[i] : 1;
+                zShape[i] = std::max(xi, yi);
             }
             return zShape;
         }
 
-        static void checkAxis( const char* name, const Value& value )
+        void checkAxis( const char* name, const Value& value, const size_t rank )
         {
             auto axis = value.integer();
-            if ( axis < 0 || axis >= MaxRank )
+            if ( axis < 0 )
             {
-                throw Error("'%s' must be in range [0,%d)", name, (int)MaxRank);
+                throw Error("'%s' must be non-negative", name);
+            }
+            if ( axis >= (Value::integer_t)rank )
+            {
+                throw Error("'%s' must be less than the tensor rank (%d)", name, (int)rank);
             }
         }
 
-        static void checkAxes( const char* name, const Value& value )
+        void checkAxes( const char* name, const Value& value, const size_t rank )
         {
-            bool seen[MaxRank];
-            std::fill_n(seen, (size_t)MaxRank, false);
+            auto& items = value.items();
 
             for ( size_t i = 0; i < value.size(); ++i )
             {
                 auto& item = value[i];
-                checkAxis(name, item);
+                checkAxis(name, item, rank);
 
-                auto axis = item.integer();
-                if ( seen[axis] )
+                auto last = items.begin() + i;
+                if ( std::find(items.begin(), last, item) != last )
                 {
-                    throw Error("duplicate item '%d' in array '%s'", (int)axis, name);
+                    throw Error("duplicate item '%d' in array '%s'", (int)item.integer(), name);
                 }
-                seen[axis] = true;
             }
+        }
+
+        static bool containsAxis( const Value& axes, const size_t axis )
+        {
+            for ( size_t i = 0; i < axes.size(); ++i )
+            {
+                if ( axes[i].integer() == (Value::integer_t)axis )
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         static void checkRange( const char* name, const Value& value, const int min )
@@ -1117,11 +1538,19 @@ namespace nnef
             }
         }
 
-        static void checkRank( const char* name, const Value& value, const size_t maxRank = MaxRank )
+        static void checkRank( const char* name, const Value& value, const size_t rank )
         {
-            if ( value.size() > maxRank )
+            if ( value.size() != rank )
             {
-                throw Error("length of array '%s' must be <= maximum supported tensor dimensions (%d)", name, (int)maxRank);
+                throw Error("length of array '%s' must be %d to match rank of operation (found %d)", name, (int)rank, (int)value.size());
+            }
+        }
+
+        void checkMaxRank( const char* name, const Shape& shape )
+        {
+            if ( shape.rank() > _maxRank )
+            {
+                throw Error("rank %d of '%s' exceeds maximum supported dimensions (%d)", (int)shape.rank(), name, (int)_maxRank);
             }
         }
 
@@ -1147,26 +1576,29 @@ namespace nnef
 
     private:
 
-        void checkSharedVariableShapes( const Dictionary<Value> args )
+        void checkSharedVariableShapes( const std::string& label, const Shape& shape )
         {
-            auto& label = args["label"];
-            auto& shape = args["shape"];
+            std::string lowercase = label;
+            std::transform(label.begin(), label.end(), lowercase.begin(), []( unsigned char ch ){ return std::tolower(ch); });
 
-            const Shape variableShape = makeShape(shape);
-
-            auto it = _variableShapes.find(label.string());
+            auto it = _variableShapes.find(lowercase);
             if ( it != _variableShapes.end() )
             {
-                if ( it->second != variableShape )
+                if ( it->second != shape )
                 {
                     throw Error("variable shape %s does not match previously defined shape %s for label '%s'",
-                                variableShape.toString().c_str(), it->second.toString().c_str(), label.string().c_str());
+                                shape.toString().c_str(), it->second.toString().c_str(), label.c_str());
                 }
             }
             else
             {
-                _variableShapes.emplace(label.string(), variableShape);
+                _variableShapes.emplace(lowercase, shape);
             }
+        }
+
+        static bool isLabelChar( unsigned char ch )
+        {
+            return std::isalnum(ch) || ch == '/' || ch == '\\' || ch == '-' || ch == '_' || ch == '.';
         }
 
     public:
@@ -1179,6 +1611,7 @@ namespace nnef
     private:
 
         Dictionary<Shape> _variableShapes;
+        const size_t _maxRank;
     };
 
 }   // namespace nnef

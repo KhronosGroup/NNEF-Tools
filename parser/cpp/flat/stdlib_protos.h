@@ -28,19 +28,23 @@ namespace nnef
 
     static std::vector<Prototype> stdlibPrototypes()
     {
-        static const Type* Scalar = new PrimitiveType(Typename::Scalar, false);
-        static const Type* Extent = new PrimitiveType(Typename::Extent, false);
-        static const Type* Logical = new PrimitiveType(Typename::Logical, false);
-        static const Type* String = new PrimitiveType(Typename::String, false);
-        static const Type* Tensor = new PrimitiveType(Typename::Scalar, true);
-        static const Type* ExtentTensor = new PrimitiveType(Typename::Extent, true);
-        static const Type* LogicalTensor = new PrimitiveType(Typename::Logical, true);
+        static const PrimitiveType* Scalar = primitiveType(Typename::Scalar);
+        static const PrimitiveType* Integer = primitiveType(Typename::Integer);
+        static const PrimitiveType* Logical = primitiveType(Typename::Logical);
+        static const PrimitiveType* String = primitiveType(Typename::String);
+        static const PrimitiveType* Generic = primitiveType(Typename::Generic);
         
-        static const Type* Scalars = new ArrayType(Scalar);
-        static const Type* Extents = new ArrayType(Extent);
-        static const Type* Tensors = new ArrayType(Tensor);
-        static const Type* ExtentPair = new TupleType({ Extent, Extent });
-        static const Type* ExtentPairs = new ArrayType(ExtentPair);
+        static const Type* ScalarTensor = tensorType(Typename::Scalar);
+        static const Type* IntegerTensor = tensorType(Typename::Integer);
+        static const Type* LogicalTensor = tensorType(Typename::Logical);
+        static const Type* GenericTensor = tensorType(Typename::Generic);
+
+        static const Type* Integers = arrayType(Integer);
+        static const Type* Generics = arrayType(Generic);
+        static const Type* Tensors = arrayType(ScalarTensor);
+        static const Type* GenericTensors = arrayType(GenericTensor);
+        static const Type* IntegerPair = tupleType({ Integer, Integer });
+        static const Type* IntegerPairs = arrayType(IntegerPair);
 
         static const Value ScalarZero = Value::scalar(0.0);
         static const Value ScalarOne = Value::scalar(1.0);
@@ -63,110 +67,137 @@ namespace nnef
         static const std::vector<Prototype> prototypes =
         {
             Prototype("external", {
-                Param("shape", Extents),
-            }, { Result("output", Tensor) }),
-
+                Param("shape", Integers),
+            }, { Result("output", GenericTensor) }, Scalar),
+            
             Prototype("constant", {
-                Param("shape", Extents),
-                Param("value", Scalars),
-            }, { Result("output", Tensor) }),
+                Param("shape", Integers),
+                Param("value", Generics),
+            }, { Result("output", GenericTensor) }, Scalar),
 
             Prototype("variable", {
-                Param("shape", Extents),
+                Param("shape", Integers),
                 Param("label", String),
-            }, { Result("output", Tensor) }),
+            }, { Result("output", GenericTensor) }, Scalar),
 
             Prototype("update", {
-                Param("variable", Tensor),
-                Param("value", Tensor),
-            }, { Result("result", Tensor) }),
+                Param("variable", GenericTensor),
+                Param("value", GenericTensor),
+            }, { Result("result", GenericTensor) }),
 
 
             Prototype("reshape", {
-                Param("input", Tensor),
-                Param("shape", Extents),
-            }, { Result("output", Tensor) }),
+                Param("input", GenericTensor),
+                Param("shape", Integers),
+            }, { Result("output", GenericTensor) }),
 
             Prototype("transpose", {
-                Param("input", Tensor),
-                Param("perm", Extents),
-            }, { Result("output", Tensor) }),
+                Param("input", GenericTensor),
+                Param("axes", Integers),
+            }, { Result("output", GenericTensor) }),
 
             Prototype("concat", {
-                Param("values", Tensors),
-                Param("axis", Extent),
-            }, { Result("value", Tensor) }),
+                Param("values", GenericTensors),
+                Param("axis", Integer),
+            }, { Result("value", GenericTensor) }),
 
             Prototype("split", {
-                Param("value", Tensor),
-                Param("axis", Extent),
-                Param("ratios", Extents),
-            }, { Result("values", Tensors) }),
+                Param("value", GenericTensor),
+                Param("axis", Integer),
+                Param("ratios", Integers),
+            }, { Result("values", GenericTensors) }),
+
+            Prototype("slice", {
+                Param("input", GenericTensor),
+                Param("axes", Integers),
+                Param("begin", Integers),
+                Param("end", Integers),
+            }, { Result("output", GenericTensor) }),
+
+            Prototype("stack", {
+                Param("values", GenericTensors),
+                Param("axis", Integer),
+            }, { Result("value", GenericTensor) }),
+
+            Prototype("unstack", {
+                Param("value", GenericTensor),
+                Param("axis", Integer),
+            }, { Result("values", GenericTensors) }),
+
+            Prototype("squeeze", {
+                Param("input", GenericTensor),
+                Param("axes", Integers),
+            }, { Result("output", GenericTensor) }),
+
+            Prototype("unsqueeze", {
+                Param("input", GenericTensor),
+                Param("axes", Integers),
+            }, { Result("output", GenericTensor) }),
 
 
             Prototype("add", {
-                Param("x", Tensor),
-                Param("y", Tensor)
-            }, { Result("z", Tensor) }),
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
+            }, { Result("z", ScalarTensor) }),
 
             Prototype("sub", {
-                Param("x", Tensor),
-                Param("y", Tensor)
-            }, { Result("z", Tensor) }),
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
+            }, { Result("z", ScalarTensor) }),
 
             Prototype("mul", {
-                Param("x", Tensor),
-                Param("y", Tensor)
-            }, { Result("z", Tensor) }),
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
+            }, { Result("z", ScalarTensor) }),
 
             Prototype("div", {
-                Param("x", Tensor),
-                Param("y", Tensor)
-            }, { Result("z", Tensor) }),
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
+            }, { Result("z", ScalarTensor) }),
 
             Prototype("pow", {
-                Param("x", Tensor),
-                Param("y", Tensor)
-            }, { Result("z", Tensor) }),
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
+            }, { Result("z", ScalarTensor) }),
             
             Prototype("min", {
-                Param("x", Tensor),
-                Param("y", Tensor)
-            }, { Result("z", Tensor) }),
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
+            }, { Result("z", ScalarTensor) }),
             
             Prototype("max", {
-                Param("x", Tensor),
-                Param("y", Tensor)
-            }, { Result("z", Tensor) }),
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
+            }, { Result("z", ScalarTensor) }),
             
             Prototype("lt", {
-                Param("x", Tensor),
-                Param("y", Tensor)
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
             }, { Result("z", LogicalTensor) }),
             
             Prototype("le", {
-                Param("x", Tensor),
-                Param("y", Tensor)
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
             }, { Result("z", LogicalTensor) }),
             
             Prototype("gt", {
-                Param("x", Tensor),
-                Param("y", Tensor)
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
             }, { Result("z", LogicalTensor) }),
             
             Prototype("ge", {
-                Param("x", Tensor),
-                Param("y", Tensor)
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
             }, { Result("z", LogicalTensor) }),
             
             Prototype("eq", {
-                Param("x", Tensor),
-                Param("y", Tensor)
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
             }, { Result("z", LogicalTensor) }),
             
             Prototype("ne", {
-                Param("x", Tensor),
-                Param("y", Tensor)
+                Param("x", ScalarTensor),
+                Param("y", ScalarTensor)
             }, { Result("z", LogicalTensor) }),
             
             Prototype("and", {
@@ -182,77 +213,77 @@ namespace nnef
             
             Prototype("select", {
                 Param("condition", LogicalTensor),
-                Param("true_value", Tensor),
-                Param("false_value", Tensor),
-            }, { Result("output", Tensors) }),
+                Param("true_value", GenericTensor),
+                Param("false_value", GenericTensor),
+            }, { Result("output", GenericTensor) }),
             
             
             Prototype("clamp", {
-                Param("x", Tensor),
-                Param("a", Tensor),
-                Param("b", Tensor),
-            }, { Result("y", Tensors) }),
+                Param("x", ScalarTensor),
+                Param("a", ScalarTensor),
+                Param("b", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             
-            Prototype("idn", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+            Prototype("copy", {
+                Param("x", GenericTensor),
+            }, { Result("y", GenericTensor) }),
             
             Prototype("neg", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("rcp", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("exp", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("log", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("abs", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("sign", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("floor", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("ceil", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("round", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("sqr", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("sqrt", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("rsqr", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("rsqrt", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("log2", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("not", {
                 Param("x", LogicalTensor),
@@ -260,339 +291,366 @@ namespace nnef
             
             
             Prototype("relu", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("sigmoid", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("tanh", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("elu", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
-            
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+
+            Prototype("prelu", {
+                Param("x", ScalarTensor),
+                Param("alpha", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+
             Prototype("leaky_relu", {
-                Param("x", Tensor),
+                Param("x", ScalarTensor),
                 Param("alpha", Scalar),
-            }, { Result("y", Tensor) }),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("softabs", {
-                Param("x", Tensor),
+                Param("x", ScalarTensor),
                 Param("epsilon", Scalar),
-            }, { Result("y", Tensor) }),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("softplus", {
-                Param("x", Tensor),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("softmax", {
-                Param("x", Tensor),
-                Param("axes", Extents, IntegersOne),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+                Param("axes", Integers, IntegersOne),
+            }, { Result("y", ScalarTensor) }),
 
 
             Prototype("conv", {
-                Param("input", Tensor),
-                Param("filter", Tensor),
-                Param("bias", Tensor, ScalarZero),
+                Param("input", ScalarTensor),
+                Param("filter", ScalarTensor),
+                Param("bias", ScalarTensor, ScalarZero),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-                Param("groups", Extent, IntegerOne),
-            }, { Result("output", Tensor) }),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+                Param("groups", Integer, IntegerOne),
+            }, { Result("output", ScalarTensor) }),
 
             Prototype("deconv", {
-                Param("input", Tensor),
-                Param("filter", Tensor),
-                Param("bias", Tensor, ScalarZero),
+                Param("input", ScalarTensor),
+                Param("filter", ScalarTensor),
+                Param("bias", ScalarTensor, ScalarZero),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-                Param("groups", Extent, IntegerOne),
-            }, { Result("output", Tensor) }),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+                Param("output_shape", Integers, EmptyArray),
+                Param("groups", Integer, IntegerOne),
+            }, { Result("output", ScalarTensor) }),
 
             Prototype("box", {
-                Param("input", Tensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("size", Integers),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
                 Param("normalize", Logical, LogicalFalse),
-            }, { Result("output", Tensor) }),
+            }, { Result("output", ScalarTensor) }),
 
             Prototype("debox", {
-                Param("input", Tensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("size", Integers),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+                Param("output_shape", Integers, EmptyArray),
                 Param("normalize", Logical, LogicalFalse),
-            }, { Result("output", Tensor) }),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("sample", {
-                Param("input", Tensor),
-                Param("index", ExtentTensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("index", IntegerTensor),
+                Param("size", Integers),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-            }, { Result("output", Tensor) }),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("desample", {
-                Param("input", Tensor),
-                Param("index", ExtentTensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("index", IntegerTensor),
+                Param("size", Integers),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-            }, { Result("output", Tensor) }),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+                Param("output_shape", Integers, EmptyArray),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("max_pool", {
-                Param("input", Tensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("size", Integers),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-            }, { Result("output", Tensor) }),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("argmax_pool", {
-                Param("input", Tensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("size", Integers),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-            }, { Result("index", ExtentTensor) }),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+            }, { Result("index", IntegerTensor) }),
             
             Prototype("max_pool_with_index", {
-                Param("input", Tensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("size", Integers),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-            }, { Result("output", Tensor), Result("index", ExtentTensor) }),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+            }, { Result("output", ScalarTensor), Result("index", IntegerTensor) }),
             
             Prototype("avg_pool", {
-                Param("input", Tensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("size", Integers),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-            }, { Result("output", Tensor) }),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("rms_pool", {
-                Param("input", Tensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("size", Integers),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-            }, { Result("output", Tensor) }),
-            
-            
-            Prototype("planewise_conv", {
-                Param("input", Tensor),
-                Param("filter", Tensor),
-                Param("bias", Tensor, ScalarZero),
-                Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-            }, { Result("output", Tensor) }),
-            
-            Prototype("planewise_deconv", {
-                Param("input", Tensor),
-                Param("filter", Tensor),
-                Param("bias", Tensor, ScalarZero),
-                Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-            }, { Result("output", Tensor) }),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+            }, { Result("output", ScalarTensor) }),
+
             
             Prototype("separable_conv", {
-                Param("input", Tensor),
-                Param("plane_filter", Tensor),
-                Param("point_filter", Tensor),
-                Param("bias", Tensor, ScalarZero),
+                Param("input", ScalarTensor),
+                Param("plane_filter", ScalarTensor),
+                Param("point_filter", ScalarTensor),
+                Param("bias", ScalarTensor, ScalarZero),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-                Param("groups", Extent, IntegerOne),
-            }, { Result("output", Tensor) }),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+                Param("groups", Integer, IntegerOne),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("separable_deconv", {
-                Param("input", Tensor),
-                Param("plane_filter", Tensor),
-                Param("point_filter", Tensor),
-                Param("bias", Tensor, ScalarZero),
+                Param("input", ScalarTensor),
+                Param("plane_filter", ScalarTensor),
+                Param("point_filter", ScalarTensor),
+                Param("bias", ScalarTensor, ScalarZero),
                 Param("border", String, StringConstant),
-                Param("padding", ExtentPairs, EmptyArray),
-                Param("stride", Extents, EmptyArray),
-                Param("dilation", Extents, EmptyArray),
-                Param("groups", Extent, IntegerOne),
-            }, { Result("output", Tensor) }),
+                Param("padding", IntegerPairs, EmptyArray),
+                Param("stride", Integers, EmptyArray),
+                Param("dilation", Integers, EmptyArray),
+                Param("output_shape", Integers, EmptyArray),
+                Param("groups", Integer, IntegerOne),
+            }, { Result("output", ScalarTensor) }),
             
             
             Prototype("nearest_downsample", {
-                Param("input", Tensor),
-                Param("factor", Extents),
-            }, { Result("output", Tensor) }),
+                Param("input", ScalarTensor),
+                Param("factor", Integers),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("nearest_upsample", {
-                Param("input", Tensor),
-                Param("factor", Extents),
-            }, { Result("output", Tensor) }),
+                Param("input", ScalarTensor),
+                Param("factor", Integers),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("area_downsample", {
-                Param("input", Tensor),
-                Param("factor", Extents),
-            }, { Result("output", Tensor) }),
+                Param("input", ScalarTensor),
+                Param("factor", Integers),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("multilinear_upsample", {
-                Param("input", Tensor),
-                Param("factor", Extents),
+                Param("input", ScalarTensor),
+                Param("factor", Integers),
                 Param("method", String, StringSymmetric),
                 Param("border", String, StringReplicate),
-            }, { Result("output", Tensor) }),
+            }, { Result("output", ScalarTensor) }),
             
             
             Prototype("local_response_normalization", {
-                Param("input", Tensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("size", Integers),
                 Param("alpha", Scalar, ScalarOne),
                 Param("beta", Scalar, ScalarHalf),
                 Param("bias", Scalar, ScalarOne),
-            }, { Result("output", Tensor) }),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("local_mean_normalization", {
-                Param("input", Tensor),
-                Param("size", Extents),
-            }, { Result("output", Tensor) }),
+                Param("input", ScalarTensor),
+                Param("size", Integers),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("local_variance_normalization", {
-                Param("input", Tensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("size", Integers),
                 Param("bias", Scalar, ScalarZero),
-            }, { Result("output", Tensor) }),
+                Param("epsilon", Scalar, ScalarZero),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("local_contrast_normalization", {
-                Param("input", Tensor),
-                Param("size", Extents),
+                Param("input", ScalarTensor),
+                Param("size", Integers),
                 Param("bias", Scalar, ScalarZero),
-            }, { Result("output", Tensor) }),
+                Param("epsilon", Scalar, ScalarZero),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("l1_normalization", {
-                Param("input", Tensor),
-                Param("axes", Extents),
+                Param("input", ScalarTensor),
+                Param("axes", Integers),
                 Param("bias", Scalar, ScalarZero),
-            }, { Result("output", Tensor) }),
+                Param("epsilon", Scalar, ScalarZero),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("l2_normalization", {
-                Param("input", Tensor),
-                Param("axes", Extents),
+                Param("input", ScalarTensor),
+                Param("axes", Integers),
                 Param("bias", Scalar, ScalarZero),
-            }, { Result("output", Tensor) }),
-            
-            Prototype("layer_normalization", {
-                Param("input", Tensor),
-                Param("axes", Extents),
-                Param("bias", Scalar, ScalarZero),
-            }, { Result("output", Tensor) }),
-            
-            Prototype("divisive_normalization", {
-                Param("input", Tensor),
-                Param("axes", Extents),
-                Param("bias", Scalar, ScalarZero),
-            }, { Result("output", Tensor) }),
+                Param("epsilon", Scalar, ScalarZero),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("batch_normalization", {
-                Param("input", Tensor),
-                Param("mean", Tensor),
-                Param("variance", Tensor),
-                Param("offset", Tensor, ScalarZero),
-                Param("scale", Tensor, ScalarOne),
+                Param("input", ScalarTensor),
+                Param("mean", ScalarTensor),
+                Param("variance", ScalarTensor),
+                Param("offset", ScalarTensor, ScalarZero),
+                Param("scale", ScalarTensor, ScalarOne),
                 Param("epsilon", Scalar, ScalarZero),
-            }, { Result("output", Tensor) }),
+            }, { Result("output", ScalarTensor) }),
             
             
             Prototype("sum_reduce", {
-                Param("input", Tensor),
-                Param("axes", Extents),
+                Param("input", ScalarTensor),
+                Param("axes", Integers),
                 Param("normalize", Logical, LogicalFalse),
-            }, { Result("output", Tensor) }),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("min_reduce", {
-                Param("input", Tensor),
-                Param("axes", Extents),
-            }, { Result("output", Tensor) }),
+                Param("input", ScalarTensor),
+                Param("axes", Integers),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("max_reduce", {
-                Param("input", Tensor),
-                Param("axes", Extents),
-            }, { Result("output", Tensor) }),
+                Param("input", ScalarTensor),
+                Param("axes", Integers),
+            }, { Result("output", ScalarTensor) }),
             
             Prototype("mean_reduce", {
-                Param("input", Tensor),
-                Param("axes", Extents),
-            }, { Result("output", Tensor) }),
+                Param("input", ScalarTensor),
+                Param("axes", Integers),
+            }, { Result("output", ScalarTensor) }),
+
+            Prototype("argmax_reduce", {
+                Param("input", ScalarTensor),
+                Param("axes", Integers),
+            }, { Result("output", IntegerTensor) }),
             
             Prototype("moments", {
-                Param("input", Tensor),
-                Param("axes", Extents),
-            }, { Result("mean", Tensor), Result("variance", Tensor) }),
+                Param("input", ScalarTensor),
+                Param("axes", Integers),
+            }, { Result("mean", ScalarTensor), Result("variance", ScalarTensor) }),
+
+
+            Prototype("max_roi_pool", {
+                Param("input", ScalarTensor),
+                Param("rois", ScalarTensor),
+                Param("batch_index", IntegerTensor),
+                Param("output_size", Integers),
+            }, { Result("output", ScalarTensor) }),
+
+            Prototype("avg_roi_pool", {
+                Param("input", ScalarTensor),
+                Param("rois", ScalarTensor),
+                Param("batch_index", IntegerTensor),
+                Param("output_size", Integers),
+            }, { Result("output", ScalarTensor) }),
+
+            Prototype("roi_resample", {
+                Param("input", ScalarTensor),
+                Param("rois", ScalarTensor),
+                Param("batch_index", IntegerTensor),
+                Param("output_size", Integers),
+                Param("method", String, StringSymmetric),
+            }, { Result("output", ScalarTensor) }),
+
+            Prototype("max_roi_align", {
+                Param("input", ScalarTensor),
+                Param("rois", ScalarTensor),
+                Param("batch_index", IntegerTensor),
+                Param("output_size", Integers),
+                Param("sampling_rate", Integers),
+                Param("resize_method", String, StringSymmetric),
+            }, { Result("output", ScalarTensor) }),
+
+            Prototype("avg_roi_align", {
+                Param("input", ScalarTensor),
+                Param("rois", ScalarTensor),
+                Param("batch_index", IntegerTensor),
+                Param("output_size", Integers),
+                Param("sampling_rate", Integers),
+                Param("resize_method", String, StringSymmetric),
+            }, { Result("output", ScalarTensor) }),
             
             
             Prototype("matmul", {
-                Param("A", Tensor),
-                Param("B", Tensor),
-                Param("trA", Logical, LogicalFalse),
-                Param("trB", Logical, LogicalFalse),
-            }, { Result("C", Tensor) }),
+                Param("A", ScalarTensor),
+                Param("B", ScalarTensor),
+                Param("transposeA", Logical, LogicalFalse),
+                Param("transposeB", Logical, LogicalFalse),
+            }, { Result("C", ScalarTensor) }),
             
             Prototype("linear", {
-                Param("input", Tensor),
-                Param("filter", Tensor),
-                Param("bias", Tensor, ScalarZero),
-            }, { Result("output", Tensor) }),
+                Param("input", ScalarTensor),
+                Param("filter", ScalarTensor),
+                Param("bias", ScalarTensor, ScalarZero),
+            }, { Result("output", ScalarTensor) }),
             
             
             Prototype("add_n", {
                 Param("x", Tensors),
-            }, { Result("y", Tensor) }),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("copy_n", {
-                Param("x", Tensor),
-                Param("times", Extent),
-            }, { Result("y", Tensors) }),
+                Param("x", GenericTensor),
+                Param("times", Integer),
+            }, { Result("y", GenericTensors) }),
             
             
             Prototype("linear_quantize", {
-                Param("x", Tensor),
-                Param("min", Tensor),
-                Param("max", Tensor),
-                Param("bits", Extent),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+                Param("min", ScalarTensor),
+                Param("max", ScalarTensor),
+                Param("bits", Integer),
+            }, { Result("y", ScalarTensor) }),
             
             Prototype("logarithmic_quantize", {
-                Param("x", Tensor),
-                Param("max", Tensor),
-                Param("bits", Extent),
-            }, { Result("y", Tensor) }),
+                Param("x", ScalarTensor),
+                Param("max", ScalarTensor),
+                Param("bits", Integer),
+            }, { Result("y", ScalarTensor) }),
         };
 
         return prototypes;

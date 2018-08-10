@@ -13,263 +13,263 @@
 # limitations under the License.
 
 
-version 1.0
+version 1.0;
 
 graph googlenet( input ) -> ( output )
 {
-	input = external(shape = [1, 3, 224, 224])
-	kernel1 = variable(shape = [64, 3, 7, 7], label = 'InceptionV1/Conv2d_1a_7x7/kernel')
-	bias1 = variable(shape = [1, 64], label = 'InceptionV1/Conv2d_1a_7x7/bias')
-	conv1 = conv(input, kernel1, bias1, padding = [], border = 'constant', stride = [2, 2], dilation = [1, 1])
-	relu1 = relu(conv1)
-	pool1 = max_pool(relu1, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 2, 2])
-	kernel2 = variable(shape = [64, 64, 1, 1], label = 'InceptionV1/Conv2d_2b_1x1/kernel')
-	bias2 = variable(shape = [1, 64], label = 'InceptionV1/Conv2d_2b_1x1/bias')
-	conv2 = conv(pool1, kernel2, bias2, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu2 = relu(conv2)
-	kernel3 = variable(shape = [192, 64, 3, 3], label = 'InceptionV1/Conv2d_2c_3x3/kernel')
-	bias3 = variable(shape = [1, 192], label = 'InceptionV1/Conv2d_2c_3x3/bias')
-	conv3 = conv(relu2, kernel3, bias3, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu3 = relu(conv3)
-	pool2 = max_pool(relu3, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 2, 2])
-	kernel4 = variable(shape = [64, 192, 1, 1], label = 'InceptionV1/Mixed_3b/Branch_0/Conv2d_0a_1x1/kernel')
-	bias4 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_3b/Branch_0/Conv2d_0a_1x1/bias')
-	conv4 = conv(pool2, kernel4, bias4, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu4 = relu(conv4)
-	kernel5 = variable(shape = [96, 192, 1, 1], label = 'InceptionV1/Mixed_3b/Branch_1/Conv2d_0a_1x1/kernel')
-	bias5 = variable(shape = [1, 96], label = 'InceptionV1/Mixed_3b/Branch_1/Conv2d_0a_1x1/bias')
-	conv5 = conv(pool2, kernel5, bias5, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu5 = relu(conv5)
-	kernel6 = variable(shape = [128, 96, 3, 3], label = 'InceptionV1/Mixed_3b/Branch_1/Conv2d_0b_3x3/kernel')
-	bias6 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_3b/Branch_1/Conv2d_0b_3x3/bias')
-	conv6 = conv(relu5, kernel6, bias6, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu6 = relu(conv6)
-	kernel7 = variable(shape = [16, 192, 1, 1], label = 'InceptionV1/Mixed_3b/Branch_2/Conv2d_0a_1x1/kernel')
-	bias7 = variable(shape = [1, 16], label = 'InceptionV1/Mixed_3b/Branch_2/Conv2d_0a_1x1/bias')
-	conv7 = conv(pool2, kernel7, bias7, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu7 = relu(conv7)
-	kernel8 = variable(shape = [32, 16, 3, 3], label = 'InceptionV1/Mixed_3b/Branch_2/Conv2d_0b_3x3/kernel')
-	bias8 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_3b/Branch_2/Conv2d_0b_3x3/bias')
-	conv8 = conv(relu7, kernel8, bias8, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu8 = relu(conv8)
-	pool3 = max_pool(pool2, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1])
-	kernel9 = variable(shape = [32, 192, 1, 1], label = 'InceptionV1/Mixed_3b/Branch_3/Conv2d_0b_1x1/kernel')
-	bias9 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_3b/Branch_3/Conv2d_0b_1x1/bias')
-	conv9 = conv(pool3, kernel9, bias9, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu9 = relu(conv9)
-	concat1 = concat([relu4,relu6,relu8,relu9], axis = 1)
-	kernel10 = variable(shape = [128, 256, 1, 1], label = 'InceptionV1/Mixed_3c/Branch_0/Conv2d_0a_1x1/kernel')
-	bias10 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_3c/Branch_0/Conv2d_0a_1x1/bias')
-	conv10 = conv(concat1, kernel10, bias10, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu10 = relu(conv10)
-	kernel11 = variable(shape = [128, 256, 1, 1], label = 'InceptionV1/Mixed_3c/Branch_1/Conv2d_0a_1x1/kernel')
-	bias11 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_3c/Branch_1/Conv2d_0a_1x1/bias')
-	conv11 = conv(concat1, kernel11, bias11, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu11 = relu(conv11)
-	kernel12 = variable(shape = [192, 128, 3, 3], label = 'InceptionV1/Mixed_3c/Branch_1/Conv2d_0b_3x3/kernel')
-	bias12 = variable(shape = [1, 192], label = 'InceptionV1/Mixed_3c/Branch_1/Conv2d_0b_3x3/bias')
-	conv12 = conv(relu11, kernel12, bias12, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu12 = relu(conv12)
-	kernel13 = variable(shape = [32, 256, 1, 1], label = 'InceptionV1/Mixed_3c/Branch_2/Conv2d_0a_1x1/kernel')
-	bias13 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_3c/Branch_2/Conv2d_0a_1x1/bias')
-	conv13 = conv(concat1, kernel13, bias13, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu13 = relu(conv13)
-	kernel14 = variable(shape = [96, 32, 3, 3], label = 'InceptionV1/Mixed_3c/Branch_2/Conv2d_0b_3x3/kernel')
-	bias14 = variable(shape = [1, 96], label = 'InceptionV1/Mixed_3c/Branch_2/Conv2d_0b_3x3/bias')
-	conv14 = conv(relu13, kernel14, bias14, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu14 = relu(conv14)
-	pool4 = max_pool(concat1, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1])
-	kernel15 = variable(shape = [64, 256, 1, 1], label = 'InceptionV1/Mixed_3c/Branch_3/Conv2d_0b_1x1/kernel')
-	bias15 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_3c/Branch_3/Conv2d_0b_1x1/bias')
-	conv15 = conv(pool4, kernel15, bias15, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu15 = relu(conv15)
-	concat2 = concat([relu10,relu12,relu14,relu15], axis = 1)
-	pool5 = max_pool(concat2, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 2, 2])
-	kernel16 = variable(shape = [192, 480, 1, 1], label = 'InceptionV1/Mixed_4b/Branch_0/Conv2d_0a_1x1/kernel')
-	bias16 = variable(shape = [1, 192], label = 'InceptionV1/Mixed_4b/Branch_0/Conv2d_0a_1x1/bias')
-	conv16 = conv(pool5, kernel16, bias16, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu16 = relu(conv16)
-	kernel17 = variable(shape = [96, 480, 1, 1], label = 'InceptionV1/Mixed_4b/Branch_1/Conv2d_0a_1x1/kernel')
-	bias17 = variable(shape = [1, 96], label = 'InceptionV1/Mixed_4b/Branch_1/Conv2d_0a_1x1/bias')
-	conv17 = conv(pool5, kernel17, bias17, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu17 = relu(conv17)
-	kernel18 = variable(shape = [208, 96, 3, 3], label = 'InceptionV1/Mixed_4b/Branch_1/Conv2d_0b_3x3/kernel')
-	bias18 = variable(shape = [1, 208], label = 'InceptionV1/Mixed_4b/Branch_1/Conv2d_0b_3x3/bias')
-	conv18 = conv(relu17, kernel18, bias18, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu18 = relu(conv18)
-	kernel19 = variable(shape = [16, 480, 1, 1], label = 'InceptionV1/Mixed_4b/Branch_2/Conv2d_0a_1x1/kernel')
-	bias19 = variable(shape = [1, 16], label = 'InceptionV1/Mixed_4b/Branch_2/Conv2d_0a_1x1/bias')
-	conv19 = conv(pool5, kernel19, bias19, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu19 = relu(conv19)
-	kernel20 = variable(shape = [48, 16, 3, 3], label = 'InceptionV1/Mixed_4b/Branch_2/Conv2d_0b_3x3/kernel')
-	bias20 = variable(shape = [1, 48], label = 'InceptionV1/Mixed_4b/Branch_2/Conv2d_0b_3x3/bias')
-	conv20 = conv(relu19, kernel20, bias20, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu20 = relu(conv20)
-	pool6 = max_pool(pool5, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1])
-	kernel21 = variable(shape = [64, 480, 1, 1], label = 'InceptionV1/Mixed_4b/Branch_3/Conv2d_0b_1x1/kernel')
-	bias21 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4b/Branch_3/Conv2d_0b_1x1/bias')
-	conv21 = conv(pool6, kernel21, bias21, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu21 = relu(conv21)
-	concat3 = concat([relu16,relu18,relu20,relu21], axis = 1)
-	kernel22 = variable(shape = [160, 512, 1, 1], label = 'InceptionV1/Mixed_4c/Branch_0/Conv2d_0a_1x1/kernel')
-	bias22 = variable(shape = [1, 160], label = 'InceptionV1/Mixed_4c/Branch_0/Conv2d_0a_1x1/bias')
-	conv22 = conv(concat3, kernel22, bias22, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu22 = relu(conv22)
-	kernel23 = variable(shape = [112, 512, 1, 1], label = 'InceptionV1/Mixed_4c/Branch_1/Conv2d_0a_1x1/kernel')
-	bias23 = variable(shape = [1, 112], label = 'InceptionV1/Mixed_4c/Branch_1/Conv2d_0a_1x1/bias')
-	conv23 = conv(concat3, kernel23, bias23, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu23 = relu(conv23)
-	kernel24 = variable(shape = [224, 112, 3, 3], label = 'InceptionV1/Mixed_4c/Branch_1/Conv2d_0b_3x3/kernel')
-	bias24 = variable(shape = [1, 224], label = 'InceptionV1/Mixed_4c/Branch_1/Conv2d_0b_3x3/bias')
-	conv24 = conv(relu23, kernel24, bias24, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu24 = relu(conv24)
-	kernel25 = variable(shape = [24, 512, 1, 1], label = 'InceptionV1/Mixed_4c/Branch_2/Conv2d_0a_1x1/kernel')
-	bias25 = variable(shape = [1, 24], label = 'InceptionV1/Mixed_4c/Branch_2/Conv2d_0a_1x1/bias')
-	conv25 = conv(concat3, kernel25, bias25, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu25 = relu(conv25)
-	kernel26 = variable(shape = [64, 24, 3, 3], label = 'InceptionV1/Mixed_4c/Branch_2/Conv2d_0b_3x3/kernel')
-	bias26 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4c/Branch_2/Conv2d_0b_3x3/bias')
-	conv26 = conv(relu25, kernel26, bias26, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu26 = relu(conv26)
-	pool7 = max_pool(concat3, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1])
-	kernel27 = variable(shape = [64, 512, 1, 1], label = 'InceptionV1/Mixed_4c/Branch_3/Conv2d_0b_1x1/kernel')
-	bias27 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4c/Branch_3/Conv2d_0b_1x1/bias')
-	conv27 = conv(pool7, kernel27, bias27, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu27 = relu(conv27)
-	concat4 = concat([relu22,relu24,relu26,relu27], axis = 1)
-	kernel28 = variable(shape = [128, 512, 1, 1], label = 'InceptionV1/Mixed_4d/Branch_0/Conv2d_0a_1x1/kernel')
-	bias28 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_4d/Branch_0/Conv2d_0a_1x1/bias')
-	conv28 = conv(concat4, kernel28, bias28, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu28 = relu(conv28)
-	kernel29 = variable(shape = [128, 512, 1, 1], label = 'InceptionV1/Mixed_4d/Branch_1/Conv2d_0a_1x1/kernel')
-	bias29 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_4d/Branch_1/Conv2d_0a_1x1/bias')
-	conv29 = conv(concat4, kernel29, bias29, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu29 = relu(conv29)
-	kernel30 = variable(shape = [256, 128, 3, 3], label = 'InceptionV1/Mixed_4d/Branch_1/Conv2d_0b_3x3/kernel')
-	bias30 = variable(shape = [1, 256], label = 'InceptionV1/Mixed_4d/Branch_1/Conv2d_0b_3x3/bias')
-	conv30 = conv(relu29, kernel30, bias30, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu30 = relu(conv30)
-	kernel31 = variable(shape = [24, 512, 1, 1], label = 'InceptionV1/Mixed_4d/Branch_2/Conv2d_0a_1x1/kernel')
-	bias31 = variable(shape = [1, 24], label = 'InceptionV1/Mixed_4d/Branch_2/Conv2d_0a_1x1/bias')
-	conv31 = conv(concat4, kernel31, bias31, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu31 = relu(conv31)
-	kernel32 = variable(shape = [64, 24, 3, 3], label = 'InceptionV1/Mixed_4d/Branch_2/Conv2d_0b_3x3/kernel')
-	bias32 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4d/Branch_2/Conv2d_0b_3x3/bias')
-	conv32 = conv(relu31, kernel32, bias32, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu32 = relu(conv32)
-	pool8 = max_pool(concat4, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1])
-	kernel33 = variable(shape = [64, 512, 1, 1], label = 'InceptionV1/Mixed_4d/Branch_3/Conv2d_0b_1x1/kernel')
-	bias33 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4d/Branch_3/Conv2d_0b_1x1/bias')
-	conv33 = conv(pool8, kernel33, bias33, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu33 = relu(conv33)
-	concat5 = concat([relu28,relu30,relu32,relu33], axis = 1)
-	kernel34 = variable(shape = [112, 512, 1, 1], label = 'InceptionV1/Mixed_4e/Branch_0/Conv2d_0a_1x1/kernel')
-	bias34 = variable(shape = [1, 112], label = 'InceptionV1/Mixed_4e/Branch_0/Conv2d_0a_1x1/bias')
-	conv34 = conv(concat5, kernel34, bias34, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu34 = relu(conv34)
-	kernel35 = variable(shape = [144, 512, 1, 1], label = 'InceptionV1/Mixed_4e/Branch_1/Conv2d_0a_1x1/kernel')
-	bias35 = variable(shape = [1, 144], label = 'InceptionV1/Mixed_4e/Branch_1/Conv2d_0a_1x1/bias')
-	conv35 = conv(concat5, kernel35, bias35, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu35 = relu(conv35)
-	kernel36 = variable(shape = [288, 144, 3, 3], label = 'InceptionV1/Mixed_4e/Branch_1/Conv2d_0b_3x3/kernel')
-	bias36 = variable(shape = [1, 288], label = 'InceptionV1/Mixed_4e/Branch_1/Conv2d_0b_3x3/bias')
-	conv36 = conv(relu35, kernel36, bias36, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu36 = relu(conv36)
-	kernel37 = variable(shape = [32, 512, 1, 1], label = 'InceptionV1/Mixed_4e/Branch_2/Conv2d_0a_1x1/kernel')
-	bias37 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_4e/Branch_2/Conv2d_0a_1x1/bias')
-	conv37 = conv(concat5, kernel37, bias37, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu37 = relu(conv37)
-	kernel38 = variable(shape = [64, 32, 3, 3], label = 'InceptionV1/Mixed_4e/Branch_2/Conv2d_0b_3x3/kernel')
-	bias38 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4e/Branch_2/Conv2d_0b_3x3/bias')
-	conv38 = conv(relu37, kernel38, bias38, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu38 = relu(conv38)
-	pool9 = max_pool(concat5, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1])
-	kernel39 = variable(shape = [64, 512, 1, 1], label = 'InceptionV1/Mixed_4e/Branch_3/Conv2d_0b_1x1/kernel')
-	bias39 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4e/Branch_3/Conv2d_0b_1x1/bias')
-	conv39 = conv(pool9, kernel39, bias39, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu39 = relu(conv39)
-	concat6 = concat([relu34,relu36,relu38,relu39], axis = 1)
-	kernel40 = variable(shape = [256, 528, 1, 1], label = 'InceptionV1/Mixed_4f/Branch_0/Conv2d_0a_1x1/kernel')
-	bias40 = variable(shape = [1, 256], label = 'InceptionV1/Mixed_4f/Branch_0/Conv2d_0a_1x1/bias')
-	conv40 = conv(concat6, kernel40, bias40, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu40 = relu(conv40)
-	kernel41 = variable(shape = [160, 528, 1, 1], label = 'InceptionV1/Mixed_4f/Branch_1/Conv2d_0a_1x1/kernel')
-	bias41 = variable(shape = [1, 160], label = 'InceptionV1/Mixed_4f/Branch_1/Conv2d_0a_1x1/bias')
-	conv41 = conv(concat6, kernel41, bias41, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu41 = relu(conv41)
-	kernel42 = variable(shape = [320, 160, 3, 3], label = 'InceptionV1/Mixed_4f/Branch_1/Conv2d_0b_3x3/kernel')
-	bias42 = variable(shape = [1, 320], label = 'InceptionV1/Mixed_4f/Branch_1/Conv2d_0b_3x3/bias')
-	conv42 = conv(relu41, kernel42, bias42, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu42 = relu(conv42)
-	kernel43 = variable(shape = [32, 528, 1, 1], label = 'InceptionV1/Mixed_4f/Branch_2/Conv2d_0a_1x1/kernel')
-	bias43 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_4f/Branch_2/Conv2d_0a_1x1/bias')
-	conv43 = conv(concat6, kernel43, bias43, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu43 = relu(conv43)
-	kernel44 = variable(shape = [128, 32, 3, 3], label = 'InceptionV1/Mixed_4f/Branch_2/Conv2d_0b_3x3/kernel')
-	bias44 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_4f/Branch_2/Conv2d_0b_3x3/bias')
-	conv44 = conv(relu43, kernel44, bias44, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu44 = relu(conv44)
-	pool10 = max_pool(concat6, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1])
-	kernel45 = variable(shape = [128, 528, 1, 1], label = 'InceptionV1/Mixed_4f/Branch_3/Conv2d_0b_1x1/kernel')
-	bias45 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_4f/Branch_3/Conv2d_0b_1x1/bias')
-	conv45 = conv(pool10, kernel45, bias45, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu45 = relu(conv45)
-	concat7 = concat([relu40,relu42,relu44,relu45], axis = 1)
-	pool11 = max_pool(concat7, size = [1, 1, 2, 2], padding = [], border = 'ignore', stride = [1, 1, 2, 2])
-	kernel46 = variable(shape = [256, 832, 1, 1], label = 'InceptionV1/Mixed_5b/Branch_0/Conv2d_0a_1x1/kernel')
-	bias46 = variable(shape = [1, 256], label = 'InceptionV1/Mixed_5b/Branch_0/Conv2d_0a_1x1/bias')
-	conv46 = conv(pool11, kernel46, bias46, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu46 = relu(conv46)
-	kernel47 = variable(shape = [160, 832, 1, 1], label = 'InceptionV1/Mixed_5b/Branch_1/Conv2d_0a_1x1/kernel')
-	bias47 = variable(shape = [1, 160], label = 'InceptionV1/Mixed_5b/Branch_1/Conv2d_0a_1x1/bias')
-	conv47 = conv(pool11, kernel47, bias47, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu47 = relu(conv47)
-	kernel48 = variable(shape = [320, 160, 3, 3], label = 'InceptionV1/Mixed_5b/Branch_1/Conv2d_0b_3x3/kernel')
-	bias48 = variable(shape = [1, 320], label = 'InceptionV1/Mixed_5b/Branch_1/Conv2d_0b_3x3/bias')
-	conv48 = conv(relu47, kernel48, bias48, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu48 = relu(conv48)
-	kernel49 = variable(shape = [32, 832, 1, 1], label = 'InceptionV1/Mixed_5b/Branch_2/Conv2d_0a_1x1/kernel')
-	bias49 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_5b/Branch_2/Conv2d_0a_1x1/bias')
-	conv49 = conv(pool11, kernel49, bias49, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu49 = relu(conv49)
-	kernel50 = variable(shape = [128, 32, 3, 3], label = 'InceptionV1/Mixed_5b/Branch_2/Conv2d_0a_3x3/kernel')
-	bias50 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_5b/Branch_2/Conv2d_0a_3x3/bias')
-	conv50 = conv(relu49, kernel50, bias50, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu50 = relu(conv50)
-	pool12 = max_pool(pool11, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1])
-	kernel51 = variable(shape = [128, 832, 1, 1], label = 'InceptionV1/Mixed_5b/Branch_3/Conv2d_0b_1x1/kernel')
-	bias51 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_5b/Branch_3/Conv2d_0b_1x1/bias')
-	conv51 = conv(pool12, kernel51, bias51, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu51 = relu(conv51)
-	concat8 = concat([relu46,relu48,relu50,relu51], axis = 1)
-	kernel52 = variable(shape = [384, 832, 1, 1], label = 'InceptionV1/Mixed_5c/Branch_0/Conv2d_0a_1x1/kernel')
-	bias52 = variable(shape = [1, 384], label = 'InceptionV1/Mixed_5c/Branch_0/Conv2d_0a_1x1/bias')
-	conv52 = conv(concat8, kernel52, bias52, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu52 = relu(conv52)
-	kernel53 = variable(shape = [192, 832, 1, 1], label = 'InceptionV1/Mixed_5c/Branch_1/Conv2d_0a_1x1/kernel')
-	bias53 = variable(shape = [1, 192], label = 'InceptionV1/Mixed_5c/Branch_1/Conv2d_0a_1x1/bias')
-	conv53 = conv(concat8, kernel53, bias53, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu53 = relu(conv53)
-	kernel54 = variable(shape = [384, 192, 3, 3], label = 'InceptionV1/Mixed_5c/Branch_1/Conv2d_0b_3x3/kernel')
-	bias54 = variable(shape = [1, 384], label = 'InceptionV1/Mixed_5c/Branch_1/Conv2d_0b_3x3/bias')
-	conv54 = conv(relu53, kernel54, bias54, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu54 = relu(conv54)
-	kernel55 = variable(shape = [48, 832, 1, 1], label = 'InceptionV1/Mixed_5c/Branch_2/Conv2d_0a_1x1/kernel')
-	bias55 = variable(shape = [1, 48], label = 'InceptionV1/Mixed_5c/Branch_2/Conv2d_0a_1x1/bias')
-	conv55 = conv(concat8, kernel55, bias55, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu55 = relu(conv55)
-	kernel56 = variable(shape = [128, 48, 3, 3], label = 'InceptionV1/Mixed_5c/Branch_2/Conv2d_0b_3x3/kernel')
-	bias56 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_5c/Branch_2/Conv2d_0b_3x3/bias')
-	conv56 = conv(relu55, kernel56, bias56, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu56 = relu(conv56)
-	pool13 = max_pool(concat8, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1])
-	kernel57 = variable(shape = [128, 832, 1, 1], label = 'InceptionV1/Mixed_5c/Branch_3/Conv2d_0b_1x1/kernel')
-	bias57 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_5c/Branch_3/Conv2d_0b_1x1/bias')
-	conv57 = conv(pool13, kernel57, bias57, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
-	relu57 = relu(conv57)
-	concat9 = concat([relu52,relu54,relu56,relu57], axis = 1)
-	pool14 = avg_pool(concat9, size = [1, 1, 7, 7], padding = [(0, 0), (0, 0), (0, 0), (0, 0)], border = 'ignore', stride = [1, 1, 1, 1])
-	kernel58 = variable(shape = [1000, 1024, 1, 1], label = 'InceptionV1/Logits/Conv2d_0c_1x1/kernel')
-	bias58 = variable(shape = [1, 1000], label = 'InceptionV1/Logits/Conv2d_0c_1x1/bias')
-	output = conv(pool14, kernel58, bias58, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1])
+	input = external(shape = [1, 3, 224, 224]);
+	kernel1 = variable(shape = [64, 3, 7, 7], label = 'InceptionV1/Conv2d_1a_7x7/kernel');
+	bias1 = variable(shape = [1, 64], label = 'InceptionV1/Conv2d_1a_7x7/bias');
+	conv1 = conv(input, kernel1, bias1, padding = [], border = 'constant', stride = [2, 2], dilation = [1, 1]);
+	relu1 = relu(conv1);
+	pool1 = max_pool(relu1, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 2, 2]);
+	kernel2 = variable(shape = [64, 64, 1, 1], label = 'InceptionV1/Conv2d_2b_1x1/kernel');
+	bias2 = variable(shape = [1, 64], label = 'InceptionV1/Conv2d_2b_1x1/bias');
+	conv2 = conv(pool1, kernel2, bias2, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu2 = relu(conv2);
+	kernel3 = variable(shape = [192, 64, 3, 3], label = 'InceptionV1/Conv2d_2c_3x3/kernel');
+	bias3 = variable(shape = [1, 192], label = 'InceptionV1/Conv2d_2c_3x3/bias');
+	conv3 = conv(relu2, kernel3, bias3, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu3 = relu(conv3);
+	pool2 = max_pool(relu3, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 2, 2]);
+	kernel4 = variable(shape = [64, 192, 1, 1], label = 'InceptionV1/Mixed_3b/Branch_0/Conv2d_0a_1x1/kernel');
+	bias4 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_3b/Branch_0/Conv2d_0a_1x1/bias');
+	conv4 = conv(pool2, kernel4, bias4, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu4 = relu(conv4);
+	kernel5 = variable(shape = [96, 192, 1, 1], label = 'InceptionV1/Mixed_3b/Branch_1/Conv2d_0a_1x1/kernel');
+	bias5 = variable(shape = [1, 96], label = 'InceptionV1/Mixed_3b/Branch_1/Conv2d_0a_1x1/bias');
+	conv5 = conv(pool2, kernel5, bias5, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu5 = relu(conv5);
+	kernel6 = variable(shape = [128, 96, 3, 3], label = 'InceptionV1/Mixed_3b/Branch_1/Conv2d_0b_3x3/kernel');
+	bias6 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_3b/Branch_1/Conv2d_0b_3x3/bias');
+	conv6 = conv(relu5, kernel6, bias6, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu6 = relu(conv6);
+	kernel7 = variable(shape = [16, 192, 1, 1], label = 'InceptionV1/Mixed_3b/Branch_2/Conv2d_0a_1x1/kernel');
+	bias7 = variable(shape = [1, 16], label = 'InceptionV1/Mixed_3b/Branch_2/Conv2d_0a_1x1/bias');
+	conv7 = conv(pool2, kernel7, bias7, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu7 = relu(conv7);
+	kernel8 = variable(shape = [32, 16, 3, 3], label = 'InceptionV1/Mixed_3b/Branch_2/Conv2d_0b_3x3/kernel');
+	bias8 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_3b/Branch_2/Conv2d_0b_3x3/bias');
+	conv8 = conv(relu7, kernel8, bias8, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu8 = relu(conv8);
+	pool3 = max_pool(pool2, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1]);
+	kernel9 = variable(shape = [32, 192, 1, 1], label = 'InceptionV1/Mixed_3b/Branch_3/Conv2d_0b_1x1/kernel');
+	bias9 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_3b/Branch_3/Conv2d_0b_1x1/bias');
+	conv9 = conv(pool3, kernel9, bias9, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu9 = relu(conv9);
+	concat1 = concat([relu4,relu6,relu8,relu9], axis = 1);
+	kernel10 = variable(shape = [128, 256, 1, 1], label = 'InceptionV1/Mixed_3c/Branch_0/Conv2d_0a_1x1/kernel');
+	bias10 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_3c/Branch_0/Conv2d_0a_1x1/bias');
+	conv10 = conv(concat1, kernel10, bias10, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu10 = relu(conv10);
+	kernel11 = variable(shape = [128, 256, 1, 1], label = 'InceptionV1/Mixed_3c/Branch_1/Conv2d_0a_1x1/kernel');
+	bias11 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_3c/Branch_1/Conv2d_0a_1x1/bias');
+	conv11 = conv(concat1, kernel11, bias11, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu11 = relu(conv11);
+	kernel12 = variable(shape = [192, 128, 3, 3], label = 'InceptionV1/Mixed_3c/Branch_1/Conv2d_0b_3x3/kernel');
+	bias12 = variable(shape = [1, 192], label = 'InceptionV1/Mixed_3c/Branch_1/Conv2d_0b_3x3/bias');
+	conv12 = conv(relu11, kernel12, bias12, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu12 = relu(conv12);
+	kernel13 = variable(shape = [32, 256, 1, 1], label = 'InceptionV1/Mixed_3c/Branch_2/Conv2d_0a_1x1/kernel');
+	bias13 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_3c/Branch_2/Conv2d_0a_1x1/bias');
+	conv13 = conv(concat1, kernel13, bias13, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu13 = relu(conv13);
+	kernel14 = variable(shape = [96, 32, 3, 3], label = 'InceptionV1/Mixed_3c/Branch_2/Conv2d_0b_3x3/kernel');
+	bias14 = variable(shape = [1, 96], label = 'InceptionV1/Mixed_3c/Branch_2/Conv2d_0b_3x3/bias');
+	conv14 = conv(relu13, kernel14, bias14, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu14 = relu(conv14);
+	pool4 = max_pool(concat1, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1]);
+	kernel15 = variable(shape = [64, 256, 1, 1], label = 'InceptionV1/Mixed_3c/Branch_3/Conv2d_0b_1x1/kernel');
+	bias15 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_3c/Branch_3/Conv2d_0b_1x1/bias');
+	conv15 = conv(pool4, kernel15, bias15, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu15 = relu(conv15);
+	concat2 = concat([relu10,relu12,relu14,relu15], axis = 1);
+	pool5 = max_pool(concat2, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 2, 2]);
+	kernel16 = variable(shape = [192, 480, 1, 1], label = 'InceptionV1/Mixed_4b/Branch_0/Conv2d_0a_1x1/kernel');
+	bias16 = variable(shape = [1, 192], label = 'InceptionV1/Mixed_4b/Branch_0/Conv2d_0a_1x1/bias');
+	conv16 = conv(pool5, kernel16, bias16, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu16 = relu(conv16);
+	kernel17 = variable(shape = [96, 480, 1, 1], label = 'InceptionV1/Mixed_4b/Branch_1/Conv2d_0a_1x1/kernel');
+	bias17 = variable(shape = [1, 96], label = 'InceptionV1/Mixed_4b/Branch_1/Conv2d_0a_1x1/bias');
+	conv17 = conv(pool5, kernel17, bias17, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu17 = relu(conv17);
+	kernel18 = variable(shape = [208, 96, 3, 3], label = 'InceptionV1/Mixed_4b/Branch_1/Conv2d_0b_3x3/kernel');
+	bias18 = variable(shape = [1, 208], label = 'InceptionV1/Mixed_4b/Branch_1/Conv2d_0b_3x3/bias');
+	conv18 = conv(relu17, kernel18, bias18, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu18 = relu(conv18);
+	kernel19 = variable(shape = [16, 480, 1, 1], label = 'InceptionV1/Mixed_4b/Branch_2/Conv2d_0a_1x1/kernel');
+	bias19 = variable(shape = [1, 16], label = 'InceptionV1/Mixed_4b/Branch_2/Conv2d_0a_1x1/bias');
+	conv19 = conv(pool5, kernel19, bias19, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu19 = relu(conv19);
+	kernel20 = variable(shape = [48, 16, 3, 3], label = 'InceptionV1/Mixed_4b/Branch_2/Conv2d_0b_3x3/kernel');
+	bias20 = variable(shape = [1, 48], label = 'InceptionV1/Mixed_4b/Branch_2/Conv2d_0b_3x3/bias');
+	conv20 = conv(relu19, kernel20, bias20, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu20 = relu(conv20);
+	pool6 = max_pool(pool5, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1]);
+	kernel21 = variable(shape = [64, 480, 1, 1], label = 'InceptionV1/Mixed_4b/Branch_3/Conv2d_0b_1x1/kernel');
+	bias21 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4b/Branch_3/Conv2d_0b_1x1/bias');
+	conv21 = conv(pool6, kernel21, bias21, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu21 = relu(conv21);
+	concat3 = concat([relu16,relu18,relu20,relu21], axis = 1);
+	kernel22 = variable(shape = [160, 512, 1, 1], label = 'InceptionV1/Mixed_4c/Branch_0/Conv2d_0a_1x1/kernel');
+	bias22 = variable(shape = [1, 160], label = 'InceptionV1/Mixed_4c/Branch_0/Conv2d_0a_1x1/bias');
+	conv22 = conv(concat3, kernel22, bias22, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu22 = relu(conv22);
+	kernel23 = variable(shape = [112, 512, 1, 1], label = 'InceptionV1/Mixed_4c/Branch_1/Conv2d_0a_1x1/kernel');
+	bias23 = variable(shape = [1, 112], label = 'InceptionV1/Mixed_4c/Branch_1/Conv2d_0a_1x1/bias');
+	conv23 = conv(concat3, kernel23, bias23, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu23 = relu(conv23);
+	kernel24 = variable(shape = [224, 112, 3, 3], label = 'InceptionV1/Mixed_4c/Branch_1/Conv2d_0b_3x3/kernel');
+	bias24 = variable(shape = [1, 224], label = 'InceptionV1/Mixed_4c/Branch_1/Conv2d_0b_3x3/bias');
+	conv24 = conv(relu23, kernel24, bias24, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu24 = relu(conv24);
+	kernel25 = variable(shape = [24, 512, 1, 1], label = 'InceptionV1/Mixed_4c/Branch_2/Conv2d_0a_1x1/kernel');
+	bias25 = variable(shape = [1, 24], label = 'InceptionV1/Mixed_4c/Branch_2/Conv2d_0a_1x1/bias');
+	conv25 = conv(concat3, kernel25, bias25, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu25 = relu(conv25);
+	kernel26 = variable(shape = [64, 24, 3, 3], label = 'InceptionV1/Mixed_4c/Branch_2/Conv2d_0b_3x3/kernel');
+	bias26 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4c/Branch_2/Conv2d_0b_3x3/bias');
+	conv26 = conv(relu25, kernel26, bias26, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu26 = relu(conv26);
+	pool7 = max_pool(concat3, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1]);
+	kernel27 = variable(shape = [64, 512, 1, 1], label = 'InceptionV1/Mixed_4c/Branch_3/Conv2d_0b_1x1/kernel');
+	bias27 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4c/Branch_3/Conv2d_0b_1x1/bias');
+	conv27 = conv(pool7, kernel27, bias27, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu27 = relu(conv27);
+	concat4 = concat([relu22,relu24,relu26,relu27], axis = 1);
+	kernel28 = variable(shape = [128, 512, 1, 1], label = 'InceptionV1/Mixed_4d/Branch_0/Conv2d_0a_1x1/kernel');
+	bias28 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_4d/Branch_0/Conv2d_0a_1x1/bias');
+	conv28 = conv(concat4, kernel28, bias28, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu28 = relu(conv28);
+	kernel29 = variable(shape = [128, 512, 1, 1], label = 'InceptionV1/Mixed_4d/Branch_1/Conv2d_0a_1x1/kernel');
+	bias29 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_4d/Branch_1/Conv2d_0a_1x1/bias');
+	conv29 = conv(concat4, kernel29, bias29, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu29 = relu(conv29);
+	kernel30 = variable(shape = [256, 128, 3, 3], label = 'InceptionV1/Mixed_4d/Branch_1/Conv2d_0b_3x3/kernel');
+	bias30 = variable(shape = [1, 256], label = 'InceptionV1/Mixed_4d/Branch_1/Conv2d_0b_3x3/bias');
+	conv30 = conv(relu29, kernel30, bias30, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu30 = relu(conv30);
+	kernel31 = variable(shape = [24, 512, 1, 1], label = 'InceptionV1/Mixed_4d/Branch_2/Conv2d_0a_1x1/kernel');
+	bias31 = variable(shape = [1, 24], label = 'InceptionV1/Mixed_4d/Branch_2/Conv2d_0a_1x1/bias');
+	conv31 = conv(concat4, kernel31, bias31, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu31 = relu(conv31);
+	kernel32 = variable(shape = [64, 24, 3, 3], label = 'InceptionV1/Mixed_4d/Branch_2/Conv2d_0b_3x3/kernel');
+	bias32 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4d/Branch_2/Conv2d_0b_3x3/bias');
+	conv32 = conv(relu31, kernel32, bias32, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu32 = relu(conv32);
+	pool8 = max_pool(concat4, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1]);
+	kernel33 = variable(shape = [64, 512, 1, 1], label = 'InceptionV1/Mixed_4d/Branch_3/Conv2d_0b_1x1/kernel');
+	bias33 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4d/Branch_3/Conv2d_0b_1x1/bias');
+	conv33 = conv(pool8, kernel33, bias33, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu33 = relu(conv33);
+	concat5 = concat([relu28,relu30,relu32,relu33], axis = 1);
+	kernel34 = variable(shape = [112, 512, 1, 1], label = 'InceptionV1/Mixed_4e/Branch_0/Conv2d_0a_1x1/kernel');
+	bias34 = variable(shape = [1, 112], label = 'InceptionV1/Mixed_4e/Branch_0/Conv2d_0a_1x1/bias');
+	conv34 = conv(concat5, kernel34, bias34, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu34 = relu(conv34);
+	kernel35 = variable(shape = [144, 512, 1, 1], label = 'InceptionV1/Mixed_4e/Branch_1/Conv2d_0a_1x1/kernel');
+	bias35 = variable(shape = [1, 144], label = 'InceptionV1/Mixed_4e/Branch_1/Conv2d_0a_1x1/bias');
+	conv35 = conv(concat5, kernel35, bias35, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu35 = relu(conv35);
+	kernel36 = variable(shape = [288, 144, 3, 3], label = 'InceptionV1/Mixed_4e/Branch_1/Conv2d_0b_3x3/kernel');
+	bias36 = variable(shape = [1, 288], label = 'InceptionV1/Mixed_4e/Branch_1/Conv2d_0b_3x3/bias');
+	conv36 = conv(relu35, kernel36, bias36, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu36 = relu(conv36);
+	kernel37 = variable(shape = [32, 512, 1, 1], label = 'InceptionV1/Mixed_4e/Branch_2/Conv2d_0a_1x1/kernel');
+	bias37 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_4e/Branch_2/Conv2d_0a_1x1/bias');
+	conv37 = conv(concat5, kernel37, bias37, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu37 = relu(conv37);
+	kernel38 = variable(shape = [64, 32, 3, 3], label = 'InceptionV1/Mixed_4e/Branch_2/Conv2d_0b_3x3/kernel');
+	bias38 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4e/Branch_2/Conv2d_0b_3x3/bias');
+	conv38 = conv(relu37, kernel38, bias38, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu38 = relu(conv38);
+	pool9 = max_pool(concat5, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1]);
+	kernel39 = variable(shape = [64, 512, 1, 1], label = 'InceptionV1/Mixed_4e/Branch_3/Conv2d_0b_1x1/kernel');
+	bias39 = variable(shape = [1, 64], label = 'InceptionV1/Mixed_4e/Branch_3/Conv2d_0b_1x1/bias');
+	conv39 = conv(pool9, kernel39, bias39, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu39 = relu(conv39);
+	concat6 = concat([relu34,relu36,relu38,relu39], axis = 1);
+	kernel40 = variable(shape = [256, 528, 1, 1], label = 'InceptionV1/Mixed_4f/Branch_0/Conv2d_0a_1x1/kernel');
+	bias40 = variable(shape = [1, 256], label = 'InceptionV1/Mixed_4f/Branch_0/Conv2d_0a_1x1/bias');
+	conv40 = conv(concat6, kernel40, bias40, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu40 = relu(conv40);
+	kernel41 = variable(shape = [160, 528, 1, 1], label = 'InceptionV1/Mixed_4f/Branch_1/Conv2d_0a_1x1/kernel');
+	bias41 = variable(shape = [1, 160], label = 'InceptionV1/Mixed_4f/Branch_1/Conv2d_0a_1x1/bias');
+	conv41 = conv(concat6, kernel41, bias41, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu41 = relu(conv41);
+	kernel42 = variable(shape = [320, 160, 3, 3], label = 'InceptionV1/Mixed_4f/Branch_1/Conv2d_0b_3x3/kernel');
+	bias42 = variable(shape = [1, 320], label = 'InceptionV1/Mixed_4f/Branch_1/Conv2d_0b_3x3/bias');
+	conv42 = conv(relu41, kernel42, bias42, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu42 = relu(conv42);
+	kernel43 = variable(shape = [32, 528, 1, 1], label = 'InceptionV1/Mixed_4f/Branch_2/Conv2d_0a_1x1/kernel');
+	bias43 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_4f/Branch_2/Conv2d_0a_1x1/bias');
+	conv43 = conv(concat6, kernel43, bias43, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu43 = relu(conv43);
+	kernel44 = variable(shape = [128, 32, 3, 3], label = 'InceptionV1/Mixed_4f/Branch_2/Conv2d_0b_3x3/kernel');
+	bias44 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_4f/Branch_2/Conv2d_0b_3x3/bias');
+	conv44 = conv(relu43, kernel44, bias44, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu44 = relu(conv44);
+	pool10 = max_pool(concat6, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1]);
+	kernel45 = variable(shape = [128, 528, 1, 1], label = 'InceptionV1/Mixed_4f/Branch_3/Conv2d_0b_1x1/kernel');
+	bias45 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_4f/Branch_3/Conv2d_0b_1x1/bias');
+	conv45 = conv(pool10, kernel45, bias45, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu45 = relu(conv45);
+	concat7 = concat([relu40,relu42,relu44,relu45], axis = 1);
+	pool11 = max_pool(concat7, size = [1, 1, 2, 2], padding = [], border = 'ignore', stride = [1, 1, 2, 2]);
+	kernel46 = variable(shape = [256, 832, 1, 1], label = 'InceptionV1/Mixed_5b/Branch_0/Conv2d_0a_1x1/kernel');
+	bias46 = variable(shape = [1, 256], label = 'InceptionV1/Mixed_5b/Branch_0/Conv2d_0a_1x1/bias');
+	conv46 = conv(pool11, kernel46, bias46, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu46 = relu(conv46);
+	kernel47 = variable(shape = [160, 832, 1, 1], label = 'InceptionV1/Mixed_5b/Branch_1/Conv2d_0a_1x1/kernel');
+	bias47 = variable(shape = [1, 160], label = 'InceptionV1/Mixed_5b/Branch_1/Conv2d_0a_1x1/bias');
+	conv47 = conv(pool11, kernel47, bias47, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu47 = relu(conv47);
+	kernel48 = variable(shape = [320, 160, 3, 3], label = 'InceptionV1/Mixed_5b/Branch_1/Conv2d_0b_3x3/kernel');
+	bias48 = variable(shape = [1, 320], label = 'InceptionV1/Mixed_5b/Branch_1/Conv2d_0b_3x3/bias');
+	conv48 = conv(relu47, kernel48, bias48, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu48 = relu(conv48);
+	kernel49 = variable(shape = [32, 832, 1, 1], label = 'InceptionV1/Mixed_5b/Branch_2/Conv2d_0a_1x1/kernel');
+	bias49 = variable(shape = [1, 32], label = 'InceptionV1/Mixed_5b/Branch_2/Conv2d_0a_1x1/bias');
+	conv49 = conv(pool11, kernel49, bias49, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu49 = relu(conv49);
+	kernel50 = variable(shape = [128, 32, 3, 3], label = 'InceptionV1/Mixed_5b/Branch_2/Conv2d_0a_3x3/kernel');
+	bias50 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_5b/Branch_2/Conv2d_0a_3x3/bias');
+	conv50 = conv(relu49, kernel50, bias50, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu50 = relu(conv50);
+	pool12 = max_pool(pool11, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1]);
+	kernel51 = variable(shape = [128, 832, 1, 1], label = 'InceptionV1/Mixed_5b/Branch_3/Conv2d_0b_1x1/kernel');
+	bias51 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_5b/Branch_3/Conv2d_0b_1x1/bias');
+	conv51 = conv(pool12, kernel51, bias51, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu51 = relu(conv51);
+	concat8 = concat([relu46,relu48,relu50,relu51], axis = 1);
+	kernel52 = variable(shape = [384, 832, 1, 1], label = 'InceptionV1/Mixed_5c/Branch_0/Conv2d_0a_1x1/kernel');
+	bias52 = variable(shape = [1, 384], label = 'InceptionV1/Mixed_5c/Branch_0/Conv2d_0a_1x1/bias');
+	conv52 = conv(concat8, kernel52, bias52, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu52 = relu(conv52);
+	kernel53 = variable(shape = [192, 832, 1, 1], label = 'InceptionV1/Mixed_5c/Branch_1/Conv2d_0a_1x1/kernel');
+	bias53 = variable(shape = [1, 192], label = 'InceptionV1/Mixed_5c/Branch_1/Conv2d_0a_1x1/bias');
+	conv53 = conv(concat8, kernel53, bias53, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu53 = relu(conv53);
+	kernel54 = variable(shape = [384, 192, 3, 3], label = 'InceptionV1/Mixed_5c/Branch_1/Conv2d_0b_3x3/kernel');
+	bias54 = variable(shape = [1, 384], label = 'InceptionV1/Mixed_5c/Branch_1/Conv2d_0b_3x3/bias');
+	conv54 = conv(relu53, kernel54, bias54, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu54 = relu(conv54);
+	kernel55 = variable(shape = [48, 832, 1, 1], label = 'InceptionV1/Mixed_5c/Branch_2/Conv2d_0a_1x1/kernel');
+	bias55 = variable(shape = [1, 48], label = 'InceptionV1/Mixed_5c/Branch_2/Conv2d_0a_1x1/bias');
+	conv55 = conv(concat8, kernel55, bias55, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu55 = relu(conv55);
+	kernel56 = variable(shape = [128, 48, 3, 3], label = 'InceptionV1/Mixed_5c/Branch_2/Conv2d_0b_3x3/kernel');
+	bias56 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_5c/Branch_2/Conv2d_0b_3x3/bias');
+	conv56 = conv(relu55, kernel56, bias56, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu56 = relu(conv56);
+	pool13 = max_pool(concat8, size = [1, 1, 3, 3], padding = [], border = 'ignore', stride = [1, 1, 1, 1]);
+	kernel57 = variable(shape = [128, 832, 1, 1], label = 'InceptionV1/Mixed_5c/Branch_3/Conv2d_0b_1x1/kernel');
+	bias57 = variable(shape = [1, 128], label = 'InceptionV1/Mixed_5c/Branch_3/Conv2d_0b_1x1/bias');
+	conv57 = conv(pool13, kernel57, bias57, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu57 = relu(conv57);
+	concat9 = concat([relu52,relu54,relu56,relu57], axis = 1);
+	pool14 = avg_pool(concat9, size = [1, 1, 7, 7], padding = [(0, 0), (0, 0), (0, 0), (0, 0)], border = 'ignore', stride = [1, 1, 1, 1]);
+	kernel58 = variable(shape = [1000, 1024, 1, 1], label = 'InceptionV1/Logits/Conv2d_0c_1x1/kernel');
+	bias58 = variable(shape = [1, 1000], label = 'InceptionV1/Logits/Conv2d_0c_1x1/bias');
+	output = conv(pool14, kernel58, bias58, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
 }

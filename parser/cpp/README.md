@@ -18,7 +18,9 @@ optionally flattened version of it. The arguments required to the tool are as fo
 * --flat: whether to use a flat parser (by default a compositional parser is used)
 * --layers: whether to include layer level fragments (as described in the specification appendix)
 * --binary: whether to check info in binary files. The binaries should be in the same folder as the graph file
-* --atomics: op names to add/remove from atomic ops (e.g. +op1 adds op1, -op2 removes op2); default list includes standard ops
+* --quant: whether to check info in quantization files. The quantization file should be in the same folder as the graph file and should have the same name with .quant extension
+* --atomic <op-names>: list of ops to treat as atomic; default list includes standard ops
+* --no-atomic <op-names>: list of ops to treat as non-atomic
 
 If the tool encounters an invalid document, it prints the first error and stops parsing.
 
@@ -64,17 +66,20 @@ In the python interpreter, type
 
 ````
 import nnef
-attribs, ops, shapes = nnef.parse_file('example.nnef', 
-                                       flat=False, 
-                                       layers=True, 
-                                       atomics=['relu', 'softmax'])
+attribs, ops = nnef.parse_file(input = 'example.nnef',
+                               quantization = 'example.quant',
+                               atomics=['relu', 'softmax'])
 ````
 
-The argument `flat` controls whether a flat parser is used, argument `layers` controls
-whether layer fragments are accepted by the compositional parser, and the argument
-`atomics` contains a list of op names that are not flattened by the compositional parser. 
-By default, `atomics = nnef.StandardOperations`, which is a list that contains all standard operations.
+Optional quantization info can be supplied with the `quantization` argument. The argument `atomics` contains a 
+list of op names that are not flattened by the compositional parser. By default, `atomics = nnef.StandardOperations`, 
+which is a list that contains all standard operations.
 
-After invocation, `attribs` is a dictionary containing the name, inputs and outputs of the graph,
-`ops` is a list of operations (list of tuples containing the name and argument/result dictionaries of the op), and
-`shapes` is a dictionary that contains the shapes of the tensors. See `python/sample.py` for more details.
+To enable layer level fragments (described in the spec but not officially part of the standard) to be accepted by the parser, issue the command
+
+`nnef._register_layer_ops()`
+
+After invocation, `attribs` is a dictionary containing the name, inputs and outputs of the graph, 
+the shapes, data-types and quantization information of tensors (in nested dictionaries).
+`ops` is a list of operations (list of tuples containing the name and argument/result dictionaries of the op). 
+See `python/sample.py` for more details.

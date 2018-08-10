@@ -18,10 +18,16 @@
 #define _NNEF_VALUE_H_
 
 #include <string>
+#include <sstream>
 
 
 namespace nnef
 {
+
+    class Value;
+
+    std::ostream& operator<<( std::ostream& os, const Value& arg );
+
     
     class Value
     {
@@ -33,12 +39,19 @@ namespace nnef
         typedef std::string string_t;
         typedef std::vector<Value> items_t;
         
-        struct tensor_t : public std::string
+        struct identifier_t : public std::string
         {
-            explicit tensor_t( const std::string& s ) : std::string(s) {}
+            explicit identifier_t( const std::string& s ) : std::string(s) {}
+        };
+
+        struct shape_of_t
+        {
+            const std::string id;
+
+            explicit shape_of_t( const std::string& s ) : id(s) {}
         };
         
-        enum Kind { None, Integer, Scalar, Logical, String, Tensor, Array, Tuple };
+        enum Kind { None, Integer, Scalar, Logical, String, Identifier, Array, Tuple, ShapeOf };
         
     private:
         
@@ -62,8 +75,13 @@ namespace nnef
         {
         }
 
-        Value( const Kind kind, const tensor_t& value )
-        : _kind(kind), _tensor(value)
+        Value( const Kind kind, const identifier_t& value )
+        : _kind(kind), _identifier(value)
+        {
+        }
+
+        Value( const Kind kind, const shape_of_t& value )
+        : _kind(kind), _shape_of(value)
         {
         }
 
@@ -104,9 +122,9 @@ namespace nnef
             return Value(String, value);
         }
         
-        static Value tensor( const tensor_t& value )
+        static Value identifier( const std::string& value )
         {
-            return Value(Tensor, value);
+            return Value(Identifier, (identifier_t)value);
         }
 
         static Value array( const items_t& value )
@@ -129,6 +147,11 @@ namespace nnef
             return Value(Tuple, std::forward<items_t>(items));
         }
 
+        static Value shape_of( const std::string& value )
+        {
+            return Value(ShapeOf, shape_of_t(value));
+        }
+
         static Value make( const integer_t& value )
         {
             return Value(Integer, value);
@@ -149,9 +172,14 @@ namespace nnef
             return Value(String, value);
         }
 
-        static Value make( const tensor_t& value )
+        static Value make( const identifier_t& value )
         {
-            return Value(Tensor, value);
+            return Value(Identifier, value);
+        }
+
+        static Value make( const shape_of_t& value )
+        {
+            return Value(ShapeOf, value);
         }
         
     public:
@@ -202,7 +230,7 @@ namespace nnef
             return *this;
         }
         
-        operator bool() const
+        explicit operator bool() const
         {
             return _kind != None;
         }
@@ -236,10 +264,10 @@ namespace nnef
             return _string;
         }
         
-        const tensor_t& tensor() const
+        const identifier_t& identifier() const
         {
-            checkKind(Tensor);
-            return _tensor;
+            checkKind(Identifier);
+            return _identifier;
         }
 
         const items_t& array() const
@@ -252,6 +280,12 @@ namespace nnef
         {
             checkKind(Tuple);
             return _items;
+        }
+
+        const shape_of_t& shape_of() const
+        {
+            checkKind(ShapeOf);
+            return _shape_of;
         }
 
         const items_t& items() const
@@ -280,6 +314,13 @@ namespace nnef
         bool operator!=( const Value& other ) const
         {
             return !equals(other);
+        }
+
+        std::string toString() const
+        {
+            std::stringstream ss;
+            ss << *this;
+            return ss.str();
         }
         
     private:
@@ -316,9 +357,14 @@ namespace nnef
                     new(&_string) string_t(std::move(other._string));
                     break;
                 }
-                case Tensor:
+                case Identifier:
                 {
-                    new(&_tensor) tensor_t(std::move(other._tensor));
+                    new(&_identifier) identifier_t(std::move(other._identifier));
+                    break;
+                }
+                case ShapeOf:
+                {
+                    new(&_shape_of) shape_of_t(std::move(other._shape_of));
                     break;
                 }
                 case Integer:
@@ -359,9 +405,14 @@ namespace nnef
                     new(&_string) string_t(other._string);
                     break;
                 }
-                case Tensor:
+                case Identifier:
                 {
-                    new(&_tensor) tensor_t(other._tensor);
+                    new(&_identifier) identifier_t(other._identifier);
+                    break;
+                }
+                case ShapeOf:
+                {
+                    new(&_shape_of) shape_of_t(other._shape_of);
                     break;
                 }
                 case Integer:
@@ -401,9 +452,14 @@ namespace nnef
                     _string.~string_t();
                     break;
                 }
-                case Tensor:
+                case Identifier:
                 {
-                    _tensor.~tensor_t();
+                    _identifier.~identifier_t();
+                    break;
+                }
+                case ShapeOf:
+                {
+                    _shape_of.~shape_of_t();
                     break;
                 }
                 default:
@@ -430,9 +486,9 @@ namespace nnef
                 {
                     return _string == other._string;
                 }
-                case Tensor:
+                case Identifier:
                 {
-                    return _tensor == other._tensor;
+                    return _identifier == other._identifier;
                 }
                 case Integer:
                 {
@@ -445,6 +501,10 @@ namespace nnef
                 case Logical:
                 {
                     return _logical == other._logical;
+                }
+                case ShapeOf:
+                {
+                    return _shape_of.id == other._shape_of.id;
                 }
                 case None:
                 {
@@ -462,8 +522,9 @@ namespace nnef
             scalar_t _scalar;
             logical_t _logical;
             string_t _string;
-            tensor_t _tensor;
+            identifier_t _identifier;
             items_t _items;
+            shape_of_t _shape_of;
         };
     };
     
@@ -501,9 +562,9 @@ namespace nnef
                 os << '\'' << arg.string() << '\'';
                 break;
             }
-            case Value::Tensor:
+            case Value::Identifier:
             {
-                os << arg.tensor();
+                os << arg.identifier();
                 break;
             }
             case Value::Array:
@@ -532,6 +593,11 @@ namespace nnef
                     os << arg[i];
                 }
                 os << ')';
+                break;
+            }
+            case Value::ShapeOf:
+            {
+                os << "shape_of" << '(' << arg.shape_of().id << ')';
                 break;
             }
         }

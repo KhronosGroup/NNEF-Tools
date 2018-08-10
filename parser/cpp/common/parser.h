@@ -19,43 +19,130 @@
 
 #include "value.h"
 #include "shape.h"
+#include "lexer.h"
 #include "prototype.h"
 #include "dictionary.h"
-#include "propagation.h"
 
 
 namespace nnef
 {
 
-    struct Parser
+    class Parser
     {
-        struct Callback : private Propagation
+    public:
+
+        typedef std::pair<int,int> version_t;
+        typedef std::vector<std::string> extensions_t;
+
+        enum Flags { KHR_ENABLE_FRAGMENT_DEFINITIONS = 0x1, KHR_ENABLE_OPERATOR_EXPRESSIONS = 0x2 };
+
+    public:
+
+        struct Callback
         {
-            using Propagation::variableShapes;
+            virtual void beginDocument( const std::string& filename, const version_t& version ) {}
+            virtual void endDocument( const std::string& filename ) {}
 
-            virtual void beginGraph( const Prototype& proto ) {}
-            virtual void endGraph( const Prototype& proto, const Dictionary<Shape>& shapes ) {}
+            virtual bool handleExtension( const std::string& extension ) { return false; }
 
-            virtual void operation( const Prototype& proto, const Dictionary<Value>& args, const Dictionary<Shape>& shapes ) {}
+            virtual void beginGraph( const Prototype& proto, const Dictionary<Prototype>& fragments ) {}
+            virtual void endGraph( const Prototype& proto, const Dictionary<Typename>& dtypes, const Dictionary<Shape>& shapes ) {}
 
-            virtual bool isAtomic( const Prototype& proto, const Dictionary<Value>& args )
-            {
-                return getPropagationGroup(proto.name()) != PropagationGroup::Unknown;
-            }
+            virtual void operation( const Prototype& proto, const Dictionary<Value>& args, const Dictionary<Typename>& dtypes,
+                                   const Dictionary<Shape>& shapes ) = 0;
 
-            virtual bool propagate( const Prototype& proto, const Dictionary<Value>& args, Dictionary<Shape>& shapes )
-            {
-                return Propagation::propagateShapes(proto, args, shapes);
-            }
-
-            virtual size_t resultArrayLength( const Prototype& proto, const Dictionary<Value>& args, const size_t idx )
-            {
-                return Propagation::resultArrayLength(proto, args, idx);
-            }
+            virtual bool isAtomic( const Prototype& proto, const Dictionary<Value>& args ) { return false; }
         };
 
+    public:
 
-        virtual void parse( std::istream& is, Callback& callback ) = 0;
+        virtual void parse( std::istream& is, const char* filename, Callback& callback ) = 0;
+
+    protected:
+
+        static Typename getTypename( Lexer& lexer )
+        {
+            switch ( lexer.token() )
+            {
+                case Lexer::Integer:
+                    return Typename::Integer;
+                case Lexer::Scalar:
+                    return Typename::Scalar;
+                case Lexer::Logical:
+                    return Typename::Logical;
+                case Lexer::String:
+                    return Typename::String;
+                case '?':
+                    return Typename::Generic;
+                default:
+                    throw Error(lexer.position(), "expected type name, found '%s'", Lexer::tokenString(lexer.token()).c_str());
+            }
+        }
+
+        static version_t readVersion( Lexer& lexer )
+        {
+            lexer.readToken(Lexer::Version);
+
+            if ( lexer.token() != Lexer::Fractional )
+            {
+                throw Error(lexer.position(), "expected version number");
+            }
+
+            auto str = lexer.string();
+
+            const size_t dots = std::count(str.begin(), str.end(), '.');
+            bool isdigits = std::all_of(str.begin(), str.end(), []( char ch ){ return std::isdigit(ch) || ch == '.'; });
+
+            if ( !isdigits || dots != 1 )
+            {
+                throw Error(lexer.position(), "invalid version number format: %s", str.c_str());
+            }
+
+            lexer.next();
+
+            auto dot = str.find('.');
+            auto major = std::atoi(str.substr(0,dot).c_str());
+            auto minor = std::atoi(str.substr(dot+1).c_str());
+
+            static const version_t MaxSupportedVersion(1,0);
+
+            auto version = version_t(major,minor);
+            if ( version > MaxSupportedVersion )
+            {
+                throw Error(lexer.position(), "unsupported version %d.%d; maximum supported version is %d.%d",
+                            (int)major, (int)minor, (int)MaxSupportedVersion.first, (int)MaxSupportedVersion.second);
+            }
+
+            lexer.readToken(';');
+
+            return version;
+        }
+
+        static extensions_t readExtensions( Lexer& lexer, std::function<bool( const std::string& )> handler )
+        {
+            extensions_t extensions;
+
+            while ( lexer.readIfToken(Lexer::Extension) )
+            {
+                do
+                {
+                    auto position = lexer.position();
+
+                    extensions.push_back(lexer.string());
+                    lexer.readToken(Lexer::Identifier);
+
+                    if ( !handler(extensions.back()) )
+                    {
+                        throw Error(position, "could not handle extension '%s'", extensions.back().c_str());
+                    }
+                }
+                while ( lexer.readIfToken(',') );
+
+                lexer.readToken(';');
+            }
+
+            return extensions;
+        }
     };
 
 }   // namespace nnef
