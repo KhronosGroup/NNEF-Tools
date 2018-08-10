@@ -20,641 +20,579 @@
 
 namespace nnef {
 
-    template<typename T> struct stdlib_source { static const char* text; };
-    template<typename T> const char* stdlib_source<T>::text = R"STDLIB(
+    template<typename T> struct _stdlib_source { static const char* text; };
+    template<typename T> const char* _stdlib_source<T>::text = R"STDLIB(
 
 
     # tensor declaration operations
 
-    fragment external( shape: extent[] ) -> ( output: tensor )
-    fragment variable( shape: extent[], label: string ) -> ( output: tensor )
-    fragment constant( shape: extent[], value: scalar[] ) ->  ( output: tensor )
+    fragment external<? = scalar>( shape: integer[] ) -> ( output: tensor<?> );
+    fragment variable<? = scalar>( shape: integer[], label: string ) -> ( output: tensor<?> );
+    fragment constant<? = scalar>( shape: integer[], value: ?[] ) ->  ( output: tensor<?> );
 
-    fragment update( variable: tensor, value: tensor ) -> ( result: tensor )
+    fragment update<?>( variable: tensor<?>, value: tensor<?> ) -> ( result: tensor<?> );
 
 
     # tensor shape operations
 
-    fragment reshape( input: tensor, shape: extent[] ) -> ( output: tensor )
-    fragment transpose( input: tensor, perm: extent[] ) -> ( output: tensor )
-    fragment concat( values: tensor[], axis: extent ) -> ( value: tensor )
-    fragment split( value: tensor, axis: extent, ratios: extent[] ) -> ( values: tensor[] )
+    fragment reshape<?>( input: tensor<?>, shape: integer[] ) -> ( output: tensor<?> );
+    fragment transpose<?>( input: tensor<?>, axes: integer[] ) -> ( output: tensor<?> );
+    fragment concat<?>( values: tensor<?>[], axis: integer ) -> ( value: tensor<?> );
+    fragment split<?>( value: tensor<?>, axis: integer, ratios: integer[] ) -> ( values: tensor<?>[] );
+    fragment slice<?>( input: tensor<?>, axes: integer[], begin: integer[], end: integer[] ) -> ( output: tensor<?> );
+
+    fragment squeeze<?>( input: tensor<?>, axes: integer[] ) -> ( output: tensor<?> )
+    {
+        input_shape = shape_of(input);
+        output_shape = [for i in range_of(input_shape) if !(i in axes) yield input_shape[i]];
+        output = reshape(input, shape = output_shape);
+    }
+
+    fragment _unsqueeze_shape( shape: integer[], axes: integer[] ) -> ( unsqueezed: integer[] )
+    {
+        unsqueezed = _unsqueeze_shape(shape = shape[:axes[0]] + [1] + shape[axes[0]:]
+                                      if axes[0] <= length_of(shape) else shape, axes = axes[1:])
+                     if length_of(axes) > 0 else shape;
+    }
+
+    fragment unsqueeze<?>( input: tensor<?>, axes: integer[] ) -> ( output: tensor<?> )
+    {
+        output_shape = _unsqueeze_shape(shape = shape_of(input), axes = axes);
+        output = reshape(input, shape = output_shape);
+    }
+
+    fragment stack<?>( values: tensor<?>[], axis: integer ) -> ( value: tensor<?> )
+    {
+        value = concat([for v in values yield unsqueeze(v, axes = [axis])], axis = axis);
+    }
+
+    fragment unstack<?>( value: tensor<?>, axis: integer ) -> ( values: tensor<?>[] )
+    {
+        count = shape_of(value)[axis];
+        values = [for v in split(value, axis = axis, ratios = [1] * count) yield squeeze(v, axes = [axis])];
+    }
 
 
     # element-wise arithmetic operations
 
-    fragment add( x: tensor, y: tensor ) -> ( z: tensor )
-    fragment sub( x: tensor, y: tensor ) -> ( z: tensor )
-    fragment mul( x: tensor, y: tensor ) -> ( z: tensor )
-    fragment div( x: tensor, y: tensor ) -> ( z: tensor )
-    fragment pow( x: tensor, y: tensor ) -> ( z: tensor )
+    fragment add( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<scalar> );
+    fragment sub( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<scalar> );
+    fragment mul( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<scalar> );
+    fragment div( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<scalar> );
+    fragment pow( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<scalar> );
 
-    fragment exp( x: tensor ) -> ( y: tensor )
-    fragment log( x: tensor ) -> ( y: tensor )
-    fragment abs( x: tensor ) -> ( y: tensor )
-    fragment sign( x: tensor ) -> ( y: tensor )
-    fragment rcp( x: tensor ) -> ( y: tensor )
-    fragment neg( x: tensor ) -> ( y: tensor )
+    fragment exp( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment log( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment abs( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment sign( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment rcp( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment neg( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment copy<?>( x: tensor<?> ) -> ( y: tensor<?> );
 
     # element-wise comparison operations
 
-    fragment lt( x: tensor, y: tensor ) -> ( z: tensor<logical> )
-    fragment gt( x: tensor, y: tensor ) -> ( z: tensor<logical> )
-    fragment le( x: tensor, y: tensor ) -> ( z: tensor<logical> )
-    fragment ge( x: tensor, y: tensor ) -> ( z: tensor<logical> )
-    fragment eq( x: tensor, y: tensor ) -> ( z: tensor<logical> )
-    fragment ne( x: tensor, y: tensor ) -> ( z: tensor<logical> )
+    fragment lt( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<logical> );
+    fragment gt( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<logical> );
+    fragment le( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<logical> );
+    fragment ge( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<logical> );
+    fragment eq( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<logical> );
+    fragment ne( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<logical> );
 
     # element-wise logical operations
 
-    fragment and( x: tensor<logical>, y: tensor<logical> ) -> ( z: tensor<logical> )
-    fragment or( x: tensor<logical>, y: tensor<logical> ) -> ( z: tensor<logical> )
-    fragment not( x: tensor<logical> ) -> ( y: tensor<logical> )
+    fragment and( x: tensor<logical>, y: tensor<logical> ) -> ( z: tensor<logical> );
+    fragment or( x: tensor<logical>, y: tensor<logical> ) -> ( z: tensor<logical> );
+    fragment not( x: tensor<logical> ) -> ( y: tensor<logical> );
 
     # element-wise rounding operations
 
-    fragment floor( x: tensor ) -> ( y: tensor )
-    fragment ceil( x: tensor ) -> ( y: tensor )
-    fragment round( x: tensor ) -> ( y: tensor )
+    fragment floor( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment ceil( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment round( x: tensor<scalar> ) -> ( y: tensor<scalar> );
 
     # element-wise select operation
 
-    fragment select( condition: tensor<logical>, true_value: tensor, false_value: tensor ) -> ( output: tensor )
+    fragment select<?>( condition: tensor<logical>, true_value: tensor<?>, false_value: tensor<?> ) -> ( output: tensor<?> );
 
     # simplifier operations
 
-    fragment sqr( x: tensor ) -> ( y: tensor )
+    fragment sqr( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = x ^ 2.0
+        y = x ^ 2.0;
     }
     
-    fragment sqrt( x: tensor ) -> ( y: tensor )
+    fragment sqrt( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = x ^ 0.5
+        y = x ^ 0.5;
     }
     
-    fragment rsqr( x: tensor ) -> ( y: tensor )
+    fragment rsqr( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = x ^ -2.0
+        y = x ^ -2.0;
     }
     
-    fragment rsqrt( x: tensor ) -> ( y: tensor )
+    fragment rsqrt( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = x ^ -0.5
+        y = x ^ -0.5;
     }
     
-    fragment log2( x: tensor ) -> ( y: tensor )
+    fragment log2( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = log(x) / log(2.0)
+        y = log(x) / log(2.0);
     }
 
-    fragment min( x: tensor, y: tensor ) -> ( z: tensor )
+    fragment min( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<scalar> )
     {
-        z = select(x < y, x, y)
+        z = select(x < y, x, y);
     }
     
-    fragment max( x: tensor, y: tensor ) -> ( z: tensor )
+    fragment max( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<scalar> )
     {
-        z = select(x > y, x, y)
+        z = select(x > y, x, y);
     }
 
-    fragment clamp( x: tensor, a: tensor, b: tensor ) -> ( y: tensor )
+    fragment clamp( x: tensor<scalar>, a: tensor<scalar>, b: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = max(min(x, b), a)
+        y = max(min(x, b), a);
     }
 
 
     # matrix multiplication
 
-    fragment matmul( A: tensor, B: tensor, trA: logical = false, trB: logical = false ) -> ( C: tensor )
+    fragment matmul( A: tensor<scalar>, B: tensor<scalar>, transposeA: logical = false, transposeB: logical = false ) -> ( C: tensor<scalar> );
 
 
     # sliding-window operations
 
     fragment conv(
-        input: tensor,
-        filter: tensor,
-        bias: tensor = 0.0,
+        input: tensor<scalar>,
+        filter: tensor<scalar>,
+        bias: tensor<scalar> = 0.0,
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [],
-        groups: extent = 1 )
-    -> ( output: tensor )
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [],
+        groups: integer = 1 )
+    -> ( output: tensor<scalar> );
 
     fragment deconv(
-        input: tensor,
-        filter: tensor,
-        bias: tensor = 0.0,
+        input: tensor<scalar>,
+        filter: tensor<scalar>,
+        bias: tensor<scalar> = 0.0,
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [],
-        groups: extent = 1 )
-    -> ( output: tensor )
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [],
+        output_shape: integer[] = [],
+        groups: integer = 1 )
+    -> ( output: tensor<scalar> );
 
 
     fragment box(
-        input: tensor,
-        size: extent[],
+        input: tensor<scalar>,
+        size: integer[],
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [],
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [],
         normalize: logical = false )
-    -> ( output: tensor )
+    -> ( output: tensor<scalar> );
 
     fragment debox(
-        input: tensor,
-        size: extent[],
+        input: tensor<scalar>,
+        size: integer[],
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [],
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [],
+        output_shape: integer[] = [],
         normalize: logical = false )
-    -> ( output: tensor )
+    -> ( output: tensor<scalar> );
 
 
     fragment argmax_pool(
-        input: tensor,
-        size: extent[],
+        input: tensor<scalar>,
+        size: integer[],
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [] )
-    -> ( index: tensor<extent> )
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [] )
+    -> ( index: tensor<integer> );
 
 
     fragment sample(
-        input: tensor,
-        index: tensor<extent>,
-        size: extent[],
+        input: tensor<scalar>,
+        index: tensor<integer>,
+        size: integer[],
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [] )
-    -> ( output: tensor )
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [] )
+    -> ( output: tensor<scalar> );
 
     fragment desample(
-        input: tensor,
-        index: tensor<extent>,
-        size: extent[],
+        input: tensor<scalar>,
+        index: tensor<integer>,
+        size: integer[],
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [] )
-    -> ( output: tensor )
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [],
+        output_shape: integer[] = [] )
+    -> ( output: tensor<scalar> );
+
+
+    )STDLIB" /* Breaking literal into two here because Visual C++ has a 16KB limit for a single string literal */ R"STDLIB(
 
 
     # up/down-sampling operations
 
-    fragment nearest_downsample( input: tensor, factor: extent[] ) -> ( output: tensor )
+    fragment nearest_downsample( input: tensor<scalar>, factor: integer[] ) -> ( output: tensor<scalar> )
     {
-        output = box(input, size = [1], stride = [1,1] + factor, padding = [(0,0)] * (length_of(factor) + 2))
+        dims = length_of(shape_of(input));
+        output = box(input, size = [1] * dims, stride = [1,1] + factor, padding = [(0,0)] * dims);
     }
 
-    fragment area_downsample( input: tensor, factor: extent[] ) -> ( output: tensor )
+    fragment area_downsample( input: tensor<scalar>, factor: integer[] ) -> ( output: tensor<scalar> )
     {
-        output = box(input, size = [1,1] + factor, stride = [1,1] + factor, padding = [(0,0)] * (length_of(factor) + 2), normalize = true)
+        dims = length_of(shape_of(input));
+        output = box(input, size = [1,1] + factor, stride = [1,1] + factor, padding = [(0,0)] * dims, normalize = true);
     }
 
-    fragment nearest_upsample( input: tensor, factor: extent[] ) -> ( output: tensor )
+    fragment nearest_upsample( input: tensor<scalar>, factor: integer[] ) -> ( output: tensor<scalar> )
     {
-        output = debox(input, size = [1,1] + factor, stride = [1,1] + factor, padding = [(0,0)] * (length_of(factor) + 2))
+        dims = length_of(shape_of(input));
+        output = debox(input, size = [1,1] + factor, stride = [1,1] + factor, padding = [(0,0)] * dims);
     }
 
-    fragment multilinear_upsample( input: tensor, factor: extent[], method: string = 'symmetric', border: string = 'replicate' ) -> ( output: tensor )
+    fragment multilinear_upsample( input: tensor<scalar>, factor: integer[], method: string = 'symmetric', border: string = 'replicate' )
+    -> ( output: tensor<scalar> );
 
 
     # reduce operations
 
-    fragment sum_reduce( input: tensor, axes: extent[], normalize: logical = false ) -> ( output: tensor )
-    fragment min_reduce( input: tensor, axes: extent[] ) -> ( output: tensor )
-    fragment max_reduce( input: tensor, axes: extent[] ) -> ( output: tensor )
+    fragment sum_reduce( input: tensor<scalar>, axes: integer[], normalize: logical = false ) -> ( output: tensor<scalar> );
+    fragment max_reduce( input: tensor<scalar>, axes: integer[] ) -> ( output: tensor<scalar> );
+    fragment min_reduce( input: tensor<scalar>, axes: integer[] ) -> ( output: tensor<scalar> );
+    fragment argmax_reduce( input: tensor<scalar>, axes: integer[] ) -> ( output: tensor<integer> );
+    fragment argmin_reduce( input: tensor<scalar>, axes: integer[] ) -> ( output: tensor<integer> );
 
-    fragment mean_reduce( input: tensor, axes: extent[] ) -> ( output: tensor )
+    fragment mean_reduce( input: tensor<scalar>, axes: integer[] ) -> ( output: tensor<scalar> )
     {
-        output = sum_reduce(input, axes = axes, normalize = true)
+        output = sum_reduce(input, axes = axes, normalize = true);
     }
 
-    fragment moments( input: tensor, axes: extent[] ) -> ( mean: tensor, variance: tensor )
+    fragment moments( input: tensor<scalar>, axes: integer[] ) -> ( mean: tensor<scalar>, variance: tensor<scalar> )
     {
-        mean = mean_reduce(input, axes = axes)
-        variance = mean_reduce(sqr(input - mean), axes = axes)
+        mean = mean_reduce(input, axes = axes);
+        variance = mean_reduce(sqr(input - mean), axes = axes);
     }
 
 
     # activation functions
 
-    fragment relu( x: tensor ) -> ( y: tensor )
+    fragment relu( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = max(x, 0.0)
+        y = max(x, 0.0);
     }
 
-    fragment sigmoid( x: tensor ) -> ( y: tensor )
+    fragment sigmoid( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = 1.0 / (1.0 + exp(-x))
+        y = 1.0 / (1.0 + exp(-x));
     }
 
-    fragment sinh( x: tensor ) -> ( y: tensor )
+    fragment sinh( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = 0.5 * (exp(x) - exp(-x))
+        y = 0.5 * (exp(x) - exp(-x));
     }
 
-    fragment cosh( x: tensor ) -> ( y: tensor )
+    fragment cosh( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = 0.5 * (exp(x) + exp(-x))
+        y = 0.5 * (exp(x) + exp(-x));
     }
 
-    fragment tanh( x: tensor ) -> ( y: tensor )
+    fragment tanh( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = sinh(x) / cosh(x)
+        y = sinh(x) / cosh(x);
     }
 
-    fragment softabs( x: tensor, epsilon: scalar ) -> ( y: tensor )
+    fragment softabs( x: tensor<scalar>, epsilon: scalar ) -> ( y: tensor<scalar> )
     {
-        y = sqrt(sqr(x) + epsilon)
+        y = sqrt(sqr(x) + epsilon);
     }
 
-    fragment softmax( x: tensor, axes: extent[] = [1] ) -> ( y: tensor )
+    fragment softmax( x: tensor<scalar>, axes: integer[] = [1] ) -> ( y: tensor<scalar> )
     {
-        m = max_reduce(x, axes = axes)
-        e = exp(x - m)
-        y = e / sum_reduce(e, axes = axes)
+        m = max_reduce(x, axes = axes);
+        e = exp(x - m);
+        y = e / sum_reduce(e, axes = axes);
     }
 
-    fragment softplus( x: tensor ) -> ( y: tensor )
+    fragment softplus( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = log(exp(x) + 1.0)
+        y = log(exp(x) + 1.0);
     }
 
-    fragment elu( x: tensor ) -> ( y: tensor )
+    fragment elu( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = select(x < 0.0, exp(x) - 1.0, x)
+        y = select(x < 0.0, exp(x) - 1.0, x);
     }
 
-    fragment leaky_relu( x: tensor, alpha: scalar ) -> ( y: tensor )
+    fragment prelu( x: tensor<scalar>, alpha: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = select(x < 0.0, alpha * x, x)
+        y = select(x < 0.0, alpha * x, x);
+    }
+
+    fragment leaky_relu( x: tensor<scalar>, alpha: scalar ) -> ( y: tensor<scalar> )
+    {
+        y = prelu(x, alpha = alpha);
     }
 
 
     # pooling operations
 
     fragment max_pool_with_index(
-        input: tensor,
-        size: extent[],
+        input: tensor<scalar>,
+        size: integer[],
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [] )
-    -> ( output: tensor, index: tensor<extent> )
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [] )
+    -> ( output: tensor<scalar>, index: tensor<integer> )
     {
-        index = argmax_pool(input, size = size, border = border, padding = padding, stride = stride, dilation = dilation)
-        output = sample(input, index, size = size, border = border, padding = padding, stride = stride, dilation = dilation)
+        index = argmax_pool(input, size = size, border = border, padding = padding, stride = stride, dilation = dilation);
+        output = sample(input, index, size = size, border = border, padding = padding, stride = stride, dilation = dilation);
     }
 
     fragment max_pool(
-        input: tensor,
-        size: extent[],
+        input: tensor<scalar>,
+        size: integer[],
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [] )
-    -> ( output: tensor )
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [] )
+    -> ( output: tensor<scalar> )
     {
-        output, index = max_pool_with_index(input, size = size, border = border, padding = padding, stride = stride, dilation = dilation)
+        output, index = max_pool_with_index(input, size = size, border = border, padding = padding, stride = stride, dilation = dilation);
     }
 
     fragment avg_pool(
-        input: tensor,
-        size: extent[],
+        input: tensor<scalar>,
+        size: integer[],
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [] )
-    -> ( output: tensor )
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [] )
+    -> ( output: tensor<scalar> )
     {
-        output = box(input, size = size, border = border, padding = padding, stride = stride, dilation = dilation, normalize = true)
+        output = box(input, size = size, border = border, padding = padding, stride = stride, dilation = dilation, normalize = true);
     }
 
     fragment rms_pool(
-        input: tensor,
-        size: extent[],
+        input: tensor<scalar>,
+        size: integer[],
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [] )
-    -> ( output: tensor )
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [] )
+    -> ( output: tensor<scalar> )
     {
-        output = sqrt(avg_pool(sqr(input), size = size, border = border, padding = padding, stride = stride, dilation = dilation))
+        output = sqrt(avg_pool(sqr(input), size = size, border = border, padding = padding, stride = stride, dilation = dilation));
     }
 
 
     # linear operations
 
     fragment linear(
-        input: tensor,
-        filter: tensor,
-        bias: tensor = 0.0 )
-    -> ( output: tensor )
+        input: tensor<scalar>,
+        filter: tensor<scalar>,
+        bias: tensor<scalar> = 0.0 )
+    -> ( output: tensor<scalar> )
     {
-        output = matmul(input, filter, trB = true) + bias
-    }
-
-    fragment planewise_conv(
-        input: tensor,
-        filter: tensor,
-        bias: tensor = 0.0,
-        border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [] )
-    -> ( output: tensor )
-    {
-        output = conv(input, filter, bias, border = border, padding = padding, stride = stride, dilation = dilation, groups = 0)
-    }
-
-    fragment planewise_deconv(
-        input: tensor,
-        filter: tensor,
-        bias: tensor = 0.0,
-        border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [] )
-    -> ( output: tensor )
-    {
-        output = deconv(input, filter, bias, border = border, padding = padding, stride = stride, dilation = dilation, groups = 0)
+        output = matmul(input, filter, transposeB = true) + bias;
     }
 
     fragment separable_conv(
-        input: tensor,
-        plane_filter: tensor,
-        point_filter: tensor,
-        bias: tensor = 0.0,
+        input: tensor<scalar>,
+        plane_filter: tensor<scalar>,
+        point_filter: tensor<scalar>,
+        bias: tensor<scalar> = 0.0,
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [],
-        groups: extent = 1 )
-    -> ( output: tensor )
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [],
+        groups: integer = 1 )
+    -> ( output: tensor<scalar> )
     {
-        filtered = planewise_conv(input, plane_filter, border = border, padding = padding, stride = stride, dilation = dilation)
-        output = conv(filtered, point_filter, bias, groups = groups)
+        filtered = conv(input, plane_filter, border = border, padding = padding,
+                        stride = stride, dilation = dilation, groups = 0);
+        output = conv(filtered, point_filter, bias, groups = groups);
     }
 
     fragment separable_deconv(
-        input: tensor,
-        plane_filter: tensor,
-        point_filter: tensor,
-        bias: tensor = 0.0,
+        input: tensor<scalar>,
+        plane_filter: tensor<scalar>,
+        point_filter: tensor<scalar>,
+        bias: tensor<scalar> = 0.0,
         border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [],
-        groups: extent = 1 )
-    -> ( output: tensor )
+        padding: (integer,integer)[] = [],
+        stride: integer[] = [],
+        dilation: integer[] = [],
+        output_shape: integer[] = [],
+        groups: integer = 1 )
+    -> ( output: tensor<scalar> )
     {
-        filtered = deconv(input, point_filter, groups = groups)
-        output = planewise_deconv(filtered, plane_filter, bias, border = border, padding = padding, stride = stride, dilation = dilation)
+        filtered = deconv(input, point_filter, groups = groups);
+        output = deconv(filtered, plane_filter, bias, border = border, padding = padding,
+                        stride = stride, dilation = dilation, output_shape = output_shape, groups = 0);
     }
 
 
     # normalization operations
 
     fragment local_response_normalization(
-        input: tensor,
-        size: extent[],
+        input: tensor<scalar>,
+        size: integer[],
         alpha: scalar = 1.0,
         beta: scalar = 0.5,
         bias: scalar = 1.0 )
-    -> ( output: tensor )
+    -> ( output: tensor<scalar> )
     {
-        sigma = bias + alpha * box(sqr(input), size = size, normalize = true)
-        output = input / (sigma ^ beta)
+        sigma = bias + alpha * box(sqr(input), size = size, normalize = true);
+        output = input / (sigma ^ beta);
     }
 
-    fragment local_mean_normalization( input: tensor, size: extent[] ) -> ( output: tensor )
+    fragment local_mean_normalization( input: tensor<scalar>, size: integer[] ) -> ( output: tensor<scalar> )
     {
-        mean = box(input, size = size, normalize = true)
-        output = sub(input, mean)
+        mean = box(input, size = size, normalize = true);
+        output = sub(input, mean);
     }
 
-    fragment local_variance_normalization( input: tensor, size: extent[], bias: scalar = 0.0 ) -> ( output: tensor )
+    fragment local_variance_normalization( input: tensor<scalar>, size: integer[], bias: scalar = 0.0, epsilon: scalar = 0.0 ) -> ( output: tensor<scalar> )
     {
-        sigma = box(sqr(input), size = size, normalize = true)
-        output = input / sqrt(sigma + bias)
+        sigma = sqrt(box(sqr(input), size = size, normalize = true));
+        output = input / max(sigma + bias, epsilon);
     }
 
-    fragment local_contrast_normalization( input: tensor, size: extent[], bias: scalar = 0.0 ) -> ( output: tensor )
+    fragment local_contrast_normalization( input: tensor<scalar>, size: integer[], bias: scalar = 0.0, epsilon: scalar = 0.0 ) -> ( output: tensor<scalar> )
     {
-        centered = local_mean_normalization(input, size = size)
-        output = local_variance_normalization(centered, size = size, bias = bias)
+        centered = local_mean_normalization(input, size = size);
+        output = local_variance_normalization(centered, size = size, bias = bias, epsilon = epsilon);
     }
 
-    fragment l1_normalization( input: tensor, axes: extent[], bias: scalar = 0.0 ) -> ( output: tensor )
+    fragment l1_normalization( input: tensor<scalar>, axes: integer[], bias: scalar = 0.0, epsilon: scalar = 0.0 ) -> ( output: tensor<scalar> )
     {
-        sigma = sum_reduce(abs(input), axes = axes)
-        output = input / (sigma + bias)
+        sigma = sum_reduce(abs(input), axes = axes);
+        output = input / max(sigma + bias, epsilon);
     }
 
-    fragment l2_normalization( input: tensor, axes: extent[], bias: scalar = 0.0 ) -> ( output: tensor )
+    fragment l2_normalization( input: tensor<scalar>, axes: integer[], bias: scalar = 0.0, epsilon: scalar = 0.0 ) -> ( output: tensor<scalar> )
     {
-        sigma = sum_reduce(sqr(input), axes = axes)
-        output = input / sqrt(sigma + bias)
+        sigma = sqrt(sum_reduce(sqr(input), axes = axes));
+        output = input / max(sigma + bias, epsilon);
     }
 
-    fragment layer_normalization( input: tensor, axes: extent[], bias: scalar = 0.0 ) -> ( output: tensor )
+    fragment batch_normalization( input: tensor<scalar>, mean: tensor<scalar>, variance: tensor<scalar>, offset: tensor<scalar>, scale: tensor<scalar>, epsilon: scalar )
+    -> ( output: tensor<scalar> )
     {
-        mean, variance = moments(input, axes = axes)
-        output = (input - mean) / (sqrt(variance + bias))
+        output = offset + scale * (input - mean) / sqrt(variance + epsilon);
     }
 
-    fragment divisive_normalization( input: tensor, size: extent[], bias: scalar = 0.0 ) -> ( output: tensor )
+
+    # roi operations
+
+    fragment avg_roi_pool(
+        input: tensor<scalar>,
+        rois: tensor<scalar>,
+        batch_index: tensor<integer>,
+        output_size: integer[] )
+    -> ( output: tensor<scalar> );
+
+    fragment max_roi_pool(
+        input: tensor<scalar>,
+        rois: tensor<scalar>,
+        batch_index: tensor<integer>,
+        output_size: integer[] )
+    -> ( output: tensor<scalar> );
+
+    fragment roi_resample(
+        input: tensor<scalar>,
+        rois: tensor<scalar>,
+        batch_index: tensor<integer>,
+        output_size: integer[],
+        method: string = 'symmetric' )
+    -> ( output: tensor<scalar> );
+
+    fragment avg_roi_align(
+        input: tensor<scalar>,
+        rois: tensor<scalar>,
+        batch_index: tensor<integer>,
+        output_size: integer[],
+        sampling_rate: integer[],
+        resize_method: string = 'symmetric' )
+    -> ( output: tensor<scalar> )
     {
-        mean = mean_reduce(avg_pool(input, size = [1,1] + size), axes = [1])
-        centered = input - mean
-        sigma = mean_reduce(avg_pool(sqr(centered), size = [1,1] + size), axes = [1])
-        output = centered / sqrt(sigma + bias)
+        size = [for i in range_of(output_size) yield output_size[i] * sampling_rate[i]];
+        resized = roi_resample(input, rois, batch_index, output_size = size,
+                             method = resize_method);
+        output = avg_pool(resized, size = sampling_rate, stride = sampling_rate);
     }
 
-    fragment batch_normalization( input: tensor, mean: tensor, variance: tensor, offset: tensor, scale: tensor, epsilon: scalar )
-    -> ( output: tensor )
+    fragment max_roi_align(
+        input: tensor<scalar>,
+        rois: tensor<scalar>,
+        batch_index: tensor<integer>,
+        output_size: integer[],
+        sampling_rate: integer[],
+        resize_method: string = 'symmetric' )
+    -> ( output: tensor<scalar> )
     {
-        output = offset + scale * (input - mean) / sqrt(variance + epsilon)
+        size = [for i in range_of(output_size) yield output_size[i] * sampling_rate[i]];
+        resized = roi_resample(input, rois, batch_index, output_size = size,
+                             method = resize_method);
+        output = max_pool(resized, size = sampling_rate, stride = sampling_rate);
     }
 
 
     # quantization operations
 
-    fragment linear_quantize( x: tensor, min: tensor, max: tensor, bits: extent ) -> ( y: tensor )
+    fragment linear_quantize( x: tensor<scalar>, min: tensor<scalar>, max: tensor<scalar>, bits: integer ) -> ( y: tensor<scalar> )
     {
-        z = clamp(x, min, max)
-        r = scalar(2 ^ bits - 1) / (max - min)
-        y = round((z - min) * r) / r + min
+        r = scalar(2 ^ bits - 1);
+        z = clamp(x, min, max);
+        q = round((z - min) / (max - min) * r);
+        y = q / r * (max - min) + min;
     }
 
-    fragment logarithmic_quantize( x: tensor, max: tensor, bits: extent ) -> ( y: tensor )
+    fragment logarithmic_quantize( x: tensor<scalar>, max: tensor<scalar>, bits: integer ) -> ( y: tensor<scalar> )
     {
-        amax = 2.0 ^ (ceil(log2(max)))
-        amin = 2.0 ^ (log2(amax) - scalar(bits))
-        z = clamp(x, amin, amax)
-        y = 2.0 ^ round(log2(z / amin))
-    }
-
-    fragment binary_quantize(
-        x: tensor,
-        threshold: tensor = 0.0,
-        negative_value: tensor = -1.0,
-        positive_value: tensor = 1.0 )
-    -> ( y: tensor )
-    {
-        y = select(x < threshold, negative_value, positive_value)
-    }
-
-    fragment ternary_quantize(
-        x: tensor,
-        low_threshold: tensor,
-        high_threshold: tensor,
-        negative_value: tensor = -1.0,
-        positive_value: tensor = 1.0,
-        zero_value: tensor = 0.0 )
-    -> ( y: tensor )
-    {
-        y = select(x < low_threshold, negative_value, select(x > high_threshold, positive_value, zero_value))
+        m = ceil(log2(max));
+        r = scalar(2 ^ bits - 1);
+        q = round(clamp(log2(abs(x)), m - r, m));
+        y = sign(x) * 2.0 ^ q;
     }
 
 
     # misc operations
 
-    fragment copy_n( x: tensor, times: extent ) -> ( y: tensor[] )
+    fragment copy_n<?>( x: tensor<?>, times: integer ) -> ( y: tensor<?>[] )
     {
-        y = [x] * times
+        y = [x] * times;
     }
 
-    fragment add_n( x: tensor[] ) -> ( y: tensor )
+    fragment add_n( x: tensor<scalar>[] ) -> ( y: tensor<scalar> )
     {
-        y = x[0] + add_n(x[1:]) if length_of(x) > 0 else 0.0
+        y = x[0] + add_n(x[1:]) if length_of(x) > 0 else constant(shape = [1], value = [0.0]);
     }
 
 
     )STDLIB";
 
 
-    template<typename T> struct stdlib_layers { static const char* text; };
-    template<typename T> const char* stdlib_layers<T>::text = R"LAYERS(
-
-
-    # linear_layer layers
-
-    fragment linear_layer(
-        input: tensor,
-        channels: extent,
-        use_bias: logical = true,
-        scope: string )
-    -> ( output: tensor )
+    inline const char* stdlib_source()
     {
-        filter = variable(label = scope + '/filter', shape = [channels, shape_of(input)[1]])
-        bias = variable(label = scope + '/bias', shape = [1, channels]) if use_bias else 0.0
-
-        output = linear(input, filter, bias)
+        return _stdlib_source<void>::text;
     }
-
-    fragment conv_layer(
-        input: tensor,
-        channels: extent,
-        size: extent[],
-        border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [],
-        groups: extent = 1,
-        use_bias: logical = true,
-        scope: string )
-    -> ( output: tensor )
-    {
-        filter = variable(label = scope + '/filter', shape = [channels, shape_of(input)[1] / groups] + size)
-        bias = variable(label = scope + '/bias', shape = [1, channels]) if use_bias else 0.0
-
-        output = conv(input, filter, bias, border = border, padding = padding, stride = stride, dilation = dilation, groups = groups)
-    }
-
-    fragment deconv_layer(
-        input: tensor,
-        channels: extent,
-        size: extent[],
-        border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [],
-        groups: extent = 1,
-        use_bias: logical = true,
-        scope: string )
-    -> ( output: tensor )
-    {
-        filter = variable(label = scope + '/filter', shape = [channels, shape_of(input)[1] / groups] + size)
-        bias = variable(label = scope + '/bias', shape = [1, channels]) if use_bias else 0.0
-
-        output = deconv(input, filter, bias, border = border, padding = padding, stride = stride, dilation = dilation, groups = groups)
-    }
-
-
-    # pooling layers
-
-    fragment max_pool_layer(
-        input: tensor,
-        size: extent[],
-        border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [] )
-    -> ( output: tensor )
-    {
-        output = max_pool(input, size = [1,1] + size,
-                          border = border, padding = [(0,0), (0,0)] + padding,
-                          stride = [1,1] + stride, dilation = [1,1] + dilation)
-    }
-
-    fragment avg_pool_layer(
-        input: tensor,
-        size: extent[],
-        border: string = 'constant',
-        padding: (extent,extent)[] = [],
-        stride: extent[] = [],
-        dilation: extent[] = [] )
-    -> ( output: tensor )
-    {
-        output = avg_pool(input, size = [1,1] + size,
-                          border = border, padding = [(0,0), (0,0)] + padding,
-                          stride = [1,1] + stride, dilation = [1,1] + dilation)
-    }
-
-
-    # normalization layers
-
-    fragment batch_normalization_layer(
-        input: tensor,
-        center: logical = true,
-        scale: logical = true,
-        epsilon: scalar,
-        scope: string )
-    -> ( output: tensor )
-    {
-        shape = [1, shape_of(input)[1]]
-
-        gamma = variable(label = scope + '/gamma', shape = shape) if scale else 1.0
-        beta = variable(label = scope + '/beta', shape = shape) if center else 0.0
-
-        mean = variable(label = scope + '/mean', shape = shape)
-        variance = variable(label = scope + '/variance', shape = shape)
-
-        output = batch_normalization(input, mean, variance, beta, gamma,
-                                     epsilon = epsilon)
-    }
-
-
-    )LAYERS";
 
 }   // namespace nnef
 

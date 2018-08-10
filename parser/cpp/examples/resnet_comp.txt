@@ -13,75 +13,81 @@
 # limitations under the License.
 
 
-version 1.0
+version 1.0;
+extension KHR_enable_fragment_definitions, KHR_enable_operator_expressions;
 
 fragment resnet_v1_conv_layer(
-    input: tensor,
-    channels: extent,
-    size: extent[],
-    stride: extent[] = [],
+    input: tensor<scalar>,
+    channels: integer,
+    size: integer[],
+    stride: integer[] = [],
     activation: logical = true,
     normalization: logical = true,
     scope: string )
--> ( activated: tensor )
+-> ( activated: tensor<scalar> )
 {
-    output = conv_layer(input, channels = channels, size = size, stride = stride, scope = scope)
-    normalized = batch_normalization_layer(output, epsilon = 1e-3, scope = scope + '/norm') if normalization else output
-    activated = relu(normalized) if activation else normalized
+    output = conv_layer(input, channels = channels, size = size, stride = stride, scope = scope);
+    normalized = batch_normalization_layer(output, epsilon = 1e-3, scope = scope + '/norm') if normalization else output;
+    activated = relu(normalized) if activation else normalized;
 }
 
-fragment resnet_v1_unit( input: tensor, channels: extent, bottleneck: extent, stride: extent[], scope: string ) -> ( output: tensor )
+fragment resnet_v1_unit( input: tensor<scalar>, channels: integer, bottleneck: integer, stride: integer[], scope: string ) -> ( output: tensor<scalar> )
 {
-    shortcut = resnet_v1_conv_layer(input, channels = channels, size = [1,1], stride = stride, scope = scope + '/shortcut', activation = false)
-    conv1 = resnet_v1_conv_layer(input, channels = bottleneck, size = [1,1], scope = scope + '/conv1')
-    conv2 = resnet_v1_conv_layer(conv1, channels = bottleneck, size = [3,3], stride = stride, scope = scope + '/conv2')
-    conv3 = resnet_v1_conv_layer(conv2, channels = channels, size = [1,1], scope = scope + '/conv3', activation = false)
-    output = relu(shortcut + conv3)
+    shortcut = resnet_v1_conv_layer(input, channels = channels, size = [1,1], stride = stride, scope = scope + '/shortcut', activation = false);
+    conv1 = resnet_v1_conv_layer(input, channels = bottleneck, size = [1,1], scope = scope + '/conv1');
+    conv2 = resnet_v1_conv_layer(conv1, channels = bottleneck, size = [3,3], stride = stride, scope = scope + '/conv2');
+    conv3 = resnet_v1_conv_layer(conv2, channels = channels, size = [1,1], scope = scope + '/conv3', activation = false);
+    output = relu(shortcut + conv3);
 }
 
-fragment _resnet_v1_block( input: tensor, params: (extent,extent,extent)[], _scope: string, index: extent ) -> ( output: tensor )
+fragment _resnet_v1_block( input: tensor<scalar>, params: (integer,integer,integer)[], _scope: string, index: integer ) -> ( output: tensor<scalar> )
 {
-    channels, bottleneck, stride = params[0]
+    channels, bottleneck, stride = params[0];
     unit = resnet_v1_unit(input, channels = channels, bottleneck = bottleneck, stride = [stride] * 2,
-                          scope = _scope + '/unit' + string(index))
-    output = _resnet_v1_block(unit, params = params[1:], _scope = _scope, index = index + 1) if length_of(params) > 1 else unit
+                          scope = _scope + '/unit' + string(index));
+    output = _resnet_v1_block(unit, params = params[1:], _scope = _scope, index = index + 1) if length_of(params) > 1 else unit;
 }
 
-fragment resnet_v1_block( input: tensor, params: (extent,extent,extent)[], scope: string ) -> ( output: tensor )
+fragment resnet_v1_block( input: tensor<scalar>, params: (integer,integer,integer)[], scope: string ) -> ( output: tensor<scalar> )
 {
-    output = _resnet_v1_block(input, params = params, _scope = scope, index = 1)
+    output = _resnet_v1_block(input, params = params, _scope = scope, index = 1);
 }
 
-fragment resnet_v1( input: tensor, classes: extent, blocks: (extent,extent,extent)[][], scope: string = '' ) -> ( output: tensor )
+fragment resnet_v1_blocks( block0: tensor<scalar>, blocks: (integer,integer,integer)[][] ) -> ( block4: tensor<scalar> )
 {
-    conv1 = resnet_v1_conv_layer(input, channels = 64, size = [7,7], stride = [2,2], scope = 'conv1')
-    pool1 = max_pool_layer(conv1, size = [3,3], stride = [2,2], padding = [(0,1), (0,1)])
-    block1 = resnet_v1_block(pool1, scope = 'block1', params = blocks[0])
-    block2 = resnet_v1_block(block1, scope = 'block2', params = blocks[1])
-    block3 = resnet_v1_block(block2, scope = 'block3', params = blocks[2])
-    block4 = resnet_v1_block(block3, scope = 'block4', params = blocks[3])
-    pooled = mean_reduce(block4, axes = [2,3])
-    output = softmax(resnet_v1_conv_layer(pooled, channels = classes, size = [1,1], scope = 'logits', activation = false, normalization = false))
+    block1 = resnet_v1_block(block0, scope = 'block1', params = blocks[0]);
+    block2 = resnet_v1_block(block1, scope = 'block2', params = blocks[1]);
+    block3 = resnet_v1_block(block2, scope = 'block3', params = blocks[2]);
+    block4 = resnet_v1_block(block3, scope = 'block4', params = blocks[3]);
 }
 
-graph ResNet101( input ) -> ( output )
+fragment resnet_v1_blocks_101( input: tensor<scalar> ) -> ( output: tensor<scalar> )
 {
-    input = external(shape = [1,3,224,224])
-    output = resnet_v1(input, classes = 1000, blocks = [
+    output = resnet_v1_blocks(input, blocks = [
         [(256, 64, 1)] * 2 + [(256, 64, 2)],
         [(512, 128, 1)] * 3 + [(512, 128, 2)],
         [(1024, 256, 1)] * 22 + [(1024, 256, 2)],
         [(2048, 512, 1)] * 3
-    ])
+    ]);
 }
 
-graph ResNet200( input ) -> ( output )
+fragment resnet_v1_blocks_200( input: tensor<scalar> ) -> ( output: tensor<scalar> )
 {
-    input = external(shape = [1,3,224,224])
-    output = resnet_v1(input, classes = 1000, blocks = [
+    output = resnet_v1_blocks(input, blocks = [
         [(256, 64, 1)] * 2 + [(256, 64, 2)],
         [(512, 128, 1)] * 23 + [(512, 128, 2)],
         [(1024, 256, 1)] * 35 + [(1024, 256, 2)],
         [(2048, 512, 1)] * 3
-    ])
+    ]);
+}
+
+graph ResNet( input ) -> ( output )
+{
+    input = external(shape = [1,3,224,224]);
+    conv1 = resnet_v1_conv_layer(input, channels = 64, size = [7,7], stride = [2,2], scope = 'conv1');
+    pool1 = max_pool_layer(conv1, size = [3,3], stride = [2,2], padding = [(0,1), (0,1)]);
+    blocks = resnet_v1_blocks_101(pool1);
+    pooled = mean_reduce(blocks, axes = [2,3]);
+    logits = resnet_v1_conv_layer(pooled, channels = 1000, size = [1,1], scope = 'logits', activation = false, normalization = false);
+    output = softmax(logits);
 }

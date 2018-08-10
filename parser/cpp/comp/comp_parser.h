@@ -17,9 +17,10 @@
 #ifndef _NNEF_COMP_PARSER_H_
 #define _NNEF_COMP_PARSER_H_
 
+#include "../common/propagation.h"
 #include "../common/dictionary.h"
-#include "../common/typespec.h"
 #include "../common/prototype.h"
+#include "../common/typeutils.h"
 #include "../common/parser.h"
 #include "../common/value.h"
 #include "../common/lexer.h"
@@ -29,6 +30,7 @@
 #include "expression.h"
 #include "evaluation.h"
 #include "fragment.h"
+#include <exception>
 #include <cassert>
 #include <sstream>
 #include <cctype>
@@ -45,125 +47,225 @@ namespace nnef
 
     private:
 
-        typedef Dictionary<Shared<Fragment>> Fragments;
+        typedef Dictionary<Fragment> Fragments;
+        typedef Dictionary<Prototype> Prototypes;
         typedef Dictionary<const Type*> Declarations;
         
     public:
 
-        CompParser( bool includeLayers = false )
-        : _includeLayers(includeLayers)
+        CompParser( Propagation& propagation )
+        : _propagation(propagation), _flags(0)
         {
         }
         
-        virtual void parse( std::istream& is, Callback& callback )
+        virtual void parse( std::istream& is, const char* filename, Callback& callback )
         {
-            Lexer lexer(is);
+            _propagation.reset();
+
+            Lexer lexer(is, filename);
             lexer.next();
 
-            static const Fragments stdlibFragments = parseStdlib();
+            auto version = readVersion(lexer);
 
-            Fragments fragments = stdlibFragments;
-            if ( _includeLayers )
+            callback.beginDocument(filename, version);
+
+            _flags = 0;
+            auto extensions = readExtensions(lexer, [&]( const std::string& ext )
             {
-                parseFragments(stdlib_layers<void>::text, fragments);
+                return callback.handleExtension(ext) || handleExtension(ext);
+            });
+
+            Prototypes prototypes;
+            Fragments fragments;
+
+            parseFragments(stdlib_source(), "stdlib", prototypes, fragments);
+            for ( auto& import : _imports )
+            {
+                parseFragments(import.second, import.first.c_str(), prototypes, fragments);
             }
 
-            parseVersion(lexer);
-
-            while ( lexer.token() == Lexer::Fragment )
+            if ( _flags & KHR_ENABLE_FRAGMENT_DEFINITIONS )
             {
-                parseFragment(lexer, fragments, false, true);
+                while ( lexer.token() == Lexer::Fragment )
+                {
+                    auto fragment = parseFragment(lexer, prototypes, false, _flags & KHR_ENABLE_OPERATOR_EXPRESSIONS);
+                    fragments.emplace(fragment.prototype().name(), std::move(fragment));
+                }
             }
 
-            auto graph = parseFragment(lexer, fragments, true, false);
+            lexer.readToken(Lexer::Graph);
 
-            callback.beginGraph(graph->prototype());
+            auto graph = parsePrototype(lexer, prototypes, false, true);
+            auto assignments = parseAssignments(lexer, graph, prototypes, _flags & KHR_ENABLE_OPERATOR_EXPRESSIONS, true);
+            
+            callback.beginGraph(graph, prototypes);
 
             Dictionary<Value> values;
             Dictionary<Shape> shapes;
+            Dictionary<Typename> dtypes;
 
-            Evaluation evaluation(*graph, fragments);
-            for ( size_t i = 0; i < graph->assignmentCount(); ++i )
+            Evaluation evaluation(assignments, fragments, _propagation, true);
+            for ( auto& assignment : assignments )
             {
-                auto& assignment = graph->assignment(i);
-
                 if ( assignment.rhs().kind() == Expr::Invocation )
                 {
                     auto& target = dynamic_cast<const InvocationExpr&>(assignment.rhs()).target();
-                    auto& proto = fragments[target]->prototype();
-                    checkGraphParam(assignment.lhs(), graph->prototype(), proto.name());
+                    checkGraphParam(assignment.lhs(), graph, fragments.at(target).prototype().name());
                 }
 
                 const Value context = evaluation.evaluateLvalue(assignment.lhs(), Dictionary<Value>(), true);
-                evaluation.evaluateAssign(assignment.lhs(), assignment.rhs(), values, shapes, callback, false, context);
+                evaluation.evaluateAssign(assignment.lhs(), assignment.rhs(), values, shapes, dtypes, callback, nullptr, false, context);
             }
 
-            callback.endGraph(graph->prototype(), shapes);
+            callback.endGraph(graph, dtypes, shapes);
+            callback.endDocument(filename);
+
+            lexer.readToken(Lexer::Eof);
+        }
+
+        void import( const char* filename, const std::string& text )
+        {
+            _imports.emplace(filename, text);
+        }
+
+        bool unimport( const char* filename )
+        {
+            return _imports.erase(filename) != 0;
         }
 
     private:
 
-        static Fragments parseStdlib()
+        bool handleExtension( const std::string& ext )
         {
-            Fragments fragments;
-            parseFragments(stdlib_source<void>::text, fragments);
-            return fragments;
+            if ( ext == "KHR_enable_fragment_definitions" )
+            {
+                _flags |= KHR_ENABLE_FRAGMENT_DEFINITIONS;
+                return true;
+            }
+            else if ( ext == "KHR_enable_operator_expressions" )
+            {
+                _flags |= KHR_ENABLE_OPERATOR_EXPRESSIONS;
+                return true;
+            }
+            return false;
         }
 
-        static void parseFragments( const char* text, Fragments& fragments )
+        static void parseFragments( const std::string& text, const char* filename, Prototypes& prototypes, Fragments& fragments )
         {
             std::stringstream ss(text);
-            Lexer lexer(ss);
+            Lexer lexer(ss, filename);
             lexer.next();
 
-            while ( lexer.token() == Lexer::Fragment )
+            while ( lexer.token() != Lexer::Eof )
             {
-                parseFragment(lexer, fragments, false, true);
+                auto fragment = parseFragment(lexer, prototypes, true, true);
+                fragments.emplace(fragment.prototype().name(), std::move(fragment));
             }
         }
 
-        static Shared<Prototype> parsePrototype( Lexer& lexer, bool allowTypespec )
+        static Prototype parsePrototype( Lexer& lexer, const Prototypes& prototypes, bool allowTypespec, bool graph )
         {
+            auto position = lexer.position();
+
             const std::string name = lexer.string();
-            readToken(Lexer::Identifier, lexer);
+            lexer.readToken(Lexer::Identifier);
 
-            std::vector<Param> params = parseParams(lexer, allowTypespec);
+            if ( prototypes.contains(name) )
+            {
+                throw Error(position, "operation '%s' already defined", name.c_str());
+            }
 
-            readToken(Lexer::Arrow, lexer);
+            bool isGenericDecl = false;
+            const PrimitiveType* genericParamDefault = nullptr;
+            if ( !graph && lexer.readIfToken('<') )
+            {
+                isGenericDecl = true;
 
-            std::vector<Result> results = parseResults(lexer, allowTypespec);
+                lexer.readToken('?');
+                if ( lexer.readIfToken('=') )
+                {
+                    genericParamDefault = primitiveType(getTypename(lexer));
+                    lexer.next();
+                }
+                
+                lexer.readToken('>');
+            }
 
-            return std::make_shared<Prototype>(name, params, results);
+            std::vector<Param> params = parseParams(lexer, name, allowTypespec, graph);
+
+            lexer.readToken(Lexer::Arrow);
+
+            std::vector<Result> results = parseResults(lexer, name, allowTypespec, !graph);
+
+            for ( auto& result : results )
+            {
+                if ( std::find_if(params.begin(), params.end(), [&]( const Param& param ){ return param.name() == result.name(); }) != params.end() )
+                {
+                    throw Error(position, "invalid definition of operation '%s'; '%s' is defined both as parameter and as result",
+                                name.c_str(), result.name().c_str());
+                }
+            }
+
+            bool attribute = results.front().type()->isAttribute();
+            for ( size_t i = 1; i < results.size(); ++i )
+            {
+                if ( results[i].type()->isAttribute() != attribute )
+                {
+                    throw Error(position, "result types of fragment must be all tensor types or all attribute types");
+                }
+            }
+
+            auto isGenericTyped = []( const Typed& typed ){ return typed.type()->isGeneric(); };
+            bool hasGenericParams = std::any_of(params.begin(), params.end(), isGenericTyped);
+            bool hasGenericResults = std::any_of(results.begin(), results.end(), isGenericTyped);
+            if ( (hasGenericParams || hasGenericResults) && !isGenericDecl )
+            {
+                throw Error("fragment with generic parameter or result types must be declared generic using <?>");
+            }
+            else if ( isGenericDecl && !hasGenericParams && !hasGenericResults )
+            {
+                throw Error("fragment declared as generic must have at least one generic parameter or result type");
+            }
+
+            return Prototype(name, params, results, genericParamDefault);
         }
 
-        static std::vector<Param> parseParams( Lexer& lexer, bool allowTypespec )
+        static std::vector<Param> parseParams( Lexer& lexer, const std::string& op, bool allowTypespec, bool forceDefaults )
         {
             std::vector<Param> params;
 
-            readToken('(', lexer);
+            lexer.readToken('(');
 
-            const Declarations emptyTypes = Declarations();
-
+            bool expectAttribute = false;
             do
             {
-                auto name = lexer.string();
-                readToken(Lexer::Identifier, lexer);
+                auto position = lexer.position();
 
-                const Type* type = tensorType(Typename::Scalar);
+                auto name = lexer.string();
+                lexer.readToken(Lexer::Identifier);
+
+                const Type* type = tensorType();
                 if ( allowTypespec )
                 {
-                    readToken(':', lexer);
-                    type = parseTypespec(lexer);
+                    lexer.readToken(':');
+                    type = parseTypespec(lexer, true);
                 }
+
+                if ( expectAttribute && !type->isAttribute() )
+                {
+                    throw Error(position, "expected attribute, found parameter of type '%s'", type->toString().c_str());
+                }
+
+                expectAttribute |= type->isAttribute();
 
                 auto defaultValue = Value::none();
                 if ( lexer.token() == '=' )
                 {
                     lexer.next();
 
-                    auto expr = fixEmptyArray(parseExpression(lexer, nullptr, &emptyTypes), type);
+                    auto expr = parseExpression(lexer, nullptr, nullptr, true, false, false, false);
 
-                    if ( !castable(expr->type(), type) )
+                    if ( !isCastable(expr->type(), type) )
                     {
                         throw Error(expr->position(), "default value type '%s' cannot be cast to parameter type '%s'",
                                     expr->type()->toString().c_str(), type->toString().c_str());
@@ -171,91 +273,107 @@ namespace nnef
 
                     defaultValue = Evaluation::evaluateRvalue(*expr);
                 }
+                else if ( forceDefaults && type->isAttribute() )
+                {
+                    throw Error(position, "expected default value for parameter '%s'", name.c_str());
+                }
+
+                if ( std::find_if(params.begin(), params.end(), [&]( const Param& param ){ return param.name() == name; }) != params.end() )
+                {
+                    throw Error(position, "duplicate parameter definition for fragment '%s'; parameter '%s' is already defined",
+                                op.c_str(), name.c_str());
+                }
 
                 params.emplace_back(name, type, defaultValue);
             }
-            while ( readIfToken(',', lexer) );
+            while ( lexer.readIfToken(',') );
 
-            readToken(')', lexer);
+            lexer.readToken(')');
 
             return params;
         }
 
-        static std::vector<Result> parseResults( Lexer& lexer, bool allowTypespec )
+        static std::vector<Result> parseResults( Lexer& lexer, const std::string& op, bool allowTypespec, bool allowAttribute )
         {
             std::vector<Result> results;
 
-            readToken('(', lexer);
+            lexer.readToken('(');
 
             do
             {
-                auto name = lexer.string();
-                readToken(Lexer::Identifier, lexer);
+                auto position = lexer.position();
 
-                const Type* type = tensorType(Typename::Scalar);
+                auto name = lexer.string();
+                lexer.readToken(Lexer::Identifier);
+
+                const Type* type = tensorType();
                 if ( allowTypespec )
                 {
-                    readToken(':', lexer);
-                    type = parseTypespec(lexer);
+                    lexer.readToken(':');
+                    type = parseTypespec(lexer, false);
+
+                    if ( !allowAttribute && type->isAttribute() )
+                    {
+                        throw Error(position, "non-tensor type not allowed in this context");
+                    }
+                }
+
+                if ( std::find_if(results.begin(), results.end(), [&]( const Result& result ){ return result.name() == name; }) != results.end() )
+                {
+                    throw Error(position, "duplicate result definition for operation '%s'; result '%s' is already defined",
+                                op.c_str(), name.c_str());
                 }
 
                 results.emplace_back(name, type);
             }
-            while ( readIfToken(',', lexer) );
+            while ( lexer.readIfToken(',') );
 
-            readToken(')', lexer);
+            lexer.readToken(')');
 
             return results;
         }
 
-        static Shared<Fragment> parseFragment( Lexer& lexer, Fragments& fragments, bool graph, bool allowPrimitive )
+        static Fragment parseFragment( Lexer& lexer, Prototypes& prototypes, bool allowPrimitive, bool allowOperator )
         {
-            readToken(graph ? Lexer::Graph : Lexer::Fragment, lexer);
+            lexer.readToken(Lexer::Fragment);
 
-            auto position = lexer.position();
+            auto prototype = parsePrototype(lexer, prototypes, true, false);
+            auto& proto = prototypes.emplace(prototype.name(), prototype).first->second;
 
-            auto proto = parsePrototype(lexer, !graph);
-            if ( fragments.contains(proto->name()) )
+            std::vector<Assignment> assignments;
+            if ( !allowPrimitive || !lexer.readIfToken(';') )
             {
-                throw Error(position, "operation '%s' already defined", proto->name().c_str());
+                assignments = parseAssignments(lexer, proto, prototypes, allowOperator, false);
             }
 
-            checkPrototype(*proto, position);
+            return Fragment(proto, assignments);
+        }
 
-            auto primitive = std::make_shared<Fragment>(proto);
-            if ( !graph )
-            {
-                fragments[proto->name()] = primitive;
-            }
-            
-            if ( allowPrimitive && lexer.token() != '{' )
-            {
-                return primitive;
-            }
-
+        static std::vector<Assignment> parseAssignments( Lexer& lexer, const Prototype& proto, const Prototypes& prototypes, bool allowOperator, bool graph )
+        {
             Declarations decls;
-            if ( !graph )
+            for ( size_t i = 0; i < proto.paramCount(); ++i )
             {
-                for ( size_t i = 0; i < proto->paramCount(); ++i )
+                auto& param = proto.param(i);
+                if ( !graph || param.type()->isAttribute() )
                 {
-                    auto& param = proto->param(i);
                     decls[param.name()] = param.type();
                 }
             }
 
             std::vector<Assignment> assignments;
 
-            readToken('{', lexer);
+            lexer.readToken('{');
 
             do
             {
-                auto lhs = parseTuple(lexer, nullptr, nullptr);
+                auto lhs = parseTuple(lexer, nullptr, nullptr, false, true, false);
 
-                readToken('=', lexer);
+                lexer.readToken('=');
 
-                auto rhs = parseExpression(lexer, &fragments, &decls);
+                auto rhs = allowOperator ? parseExpression(lexer, &prototypes, &decls, true, true, true) : parseInvocation(lexer, &prototypes, &decls);
 
-                readIfToken(';', lexer);
+                lexer.readToken(';');
 
                 declare(*lhs, rhs->type(), decls);
 
@@ -263,43 +381,37 @@ namespace nnef
             }
             while ( lexer.token() != '}' );
 
-            readToken('}', lexer);
-
             if ( graph )
             {
-                for ( size_t i = 0; i < proto->paramCount(); ++i )
+                for ( size_t i = 0; i < proto.paramCount(); ++i )
                 {
-                    auto& param = proto->param(i);
+                    auto& param = proto.param(i);
                     if ( !decls.contains(param.name()) )
                     {
-                        throw Error(lexer.position(), "graph parameter '%s' is not assigned",
-                                    param.name().c_str());
+                        throw Error(lexer.position(), "graph parameter '%s' is not assigned", param.name().c_str());
                     }
                 }
             }
 
-            for ( size_t i = 0; i < proto->resultCount(); ++i )
+            for ( size_t i = 0; i < proto.resultCount(); ++i )
             {
-                auto& result = proto->result(i);
+                auto& result = proto.result(i);
                 auto decl = decls[result.name()];
                 if ( !decl )
                 {
                     throw Error(lexer.position(), "result '%s' of operation '%s' is not assigned",
-                                result.name().c_str(), proto->name().c_str());
+                                result.name().c_str(), proto.name().c_str());
                 }
-                else if ( !castable(decl, result.type()) )
+                else if ( !isCastable(decl, result.type(), true) )
                 {
-                    throw Error(position, "result '%s' of operation '%s' is declared as '%s' but assignment has incompatible type '%s'",
-                                result.name().c_str(), proto->name().c_str(), result.type()->toString().c_str(), decl->toString().c_str());
+                    throw Error(lexer.position(), "result '%s' of operation '%s' is declared as '%s' but assignment has incompatible type '%s'",
+                                result.name().c_str(), proto.name().c_str(), result.type()->toString().c_str(), decl->toString().c_str());
                 }
             }
 
-            auto fragment = std::make_shared<Fragment>(proto, assignments);
-            if ( !graph )
-            {
-                fragments[proto->name()] = fragment;
-            }
-            return fragment;
+            lexer.readToken('}');
+
+            return assignments;
         }
 
         static bool checkGraphParam( const Expr& expr, const Prototype& graph, const std::string& target )
@@ -350,11 +462,9 @@ namespace nnef
 
         static const Type* parseArrayTypespec( Lexer& lexer, const Type* type )
         {
-            while ( lexer.token() == '[' )
+            while ( lexer.readIfToken('[') )
             {
-                lexer.next();
-
-                readToken(']', lexer);
+                lexer.readToken(']');
 
                 type = arrayType(type);
             }
@@ -362,46 +472,58 @@ namespace nnef
             return type;
         }
 
-        static const Type* parseTupleTypespec( Lexer& lexer )
+        static const Type* parseTupleTypespec( Lexer& lexer, bool allowUnboundTensor )
         {
+            auto position = lexer.position();
+
             lexer.next();
 
             std::vector<const Type*> items;
             do
             {
-                items.push_back(parseTypespec(lexer));
+                items.push_back(parseTypespec(lexer, allowUnboundTensor));
             }
-            while ( readIfToken(',', lexer) );
+            while ( lexer.readIfToken(',') );
 
-            readToken(')', lexer);
+            lexer.readToken(')');
+
+            bool attribute = items.front()->isAttribute();
+            for ( size_t i = 1; i < items.size(); ++i )
+            {
+                if ( items[i]->isAttribute() != attribute )
+                {
+                    throw Error(position, "item types in tuple type must be all attribute types or all tensor types");
+                }
+            }
 
             return parseArrayTypespec(lexer, tupleType(items));
         }
 
-        static const Type* parseTypespec( Lexer& lexer )
+        static const Type* parseTypespec( Lexer& lexer, bool allowUnboundTensor )
         {
             if ( lexer.token() == '(' )
             {
-                return parseTupleTypespec(lexer);
+                return parseTupleTypespec(lexer, allowUnboundTensor);
             }
 
             const Type* type = nullptr;
-            if ( lexer.token() == Lexer::Tensor )
+            if ( lexer.readIfToken(Lexer::Tensor) )
             {
-                lexer.next();
+                lexer.readToken('<');
 
-                Typename dtype = Typename::Scalar;
-                if ( lexer.token() == '<' )
+                type = tensorType();
+
+                if ( lexer.token() != '>' )
                 {
+                    type = tensorType(getTypename(lexer));
                     lexer.next();
-
-                    dtype = getTypename(lexer);
-                    lexer.next();
-
-                    readToken('>', lexer);
+                }
+                else if ( !allowUnboundTensor )
+                {
+                    throw Error(lexer.position(), "unbound tensor not allowed in this context");
                 }
 
-                type = tensorType(dtype);
+                lexer.readToken('>');
             }
             else
             {
@@ -416,84 +538,122 @@ namespace nnef
         
     private:
         
-        static Shared<Expr> parseExpression( Lexer& lexer, const Fragments* fragments, const Declarations* decls, bool enableIf = true )
+        static Shared<Expr> parseExpression( Lexer& lexer, const Prototypes* prototypes, Declarations* decls,
+                                            bool allowLiteral, bool allowIdentifier, bool allowOperator,
+                                            bool allowSelect = true )
         {
-            auto expr = parsePrimary(lexer, fragments, decls);
-            if ( expr->kind() != Expr::Literal )
+            auto expr = parsePrimary(lexer, prototypes, decls, allowLiteral, allowIdentifier, allowOperator);
+            if ( expr->kind() != Expr::Literal && allowOperator )
             {
-                expr = parseSubscripts(lexer, fragments, decls, expr);
+                expr = parseSubscripts(lexer, prototypes, decls, expr);
             }
-            expr = parseBinary(lexer, fragments, decls, expr);
-            if ( lexer.token() == Lexer::If && enableIf )
+            if ( allowOperator )
             {
-                expr = parseSelect(lexer, fragments, decls, expr);
+                expr = parseBinary(lexer, prototypes, decls, expr);
+                if ( lexer.token() == Lexer::If && allowSelect )
+                {
+                    expr = parseSelect(lexer, prototypes, decls, expr);
+                }
             }
             return expr;
         }
         
-        static Shared<Expr> parsePrimary( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
+        static Shared<Expr> parsePrimary( Lexer& lexer, const Prototypes* prototypes, Declarations* decls,
+                                         bool allowLiteral, bool allowIdentifier, bool allowOperator )
         {
             switch ( lexer.token() )
             {
                 case Lexer::True:
                 case Lexer::False:
                 {
-                    return parseLogical(lexer);
+                    if ( allowLiteral )
+                    {
+                        return parseLogical(lexer);
+                    }
+                    break;
                 }
-                case Lexer::Real:
+                case Lexer::Fractional:
                 {
-                    return parseScalar(lexer);
+                    if ( allowLiteral )
+                    {
+                        return parseScalar(lexer);
+                    }
+                    break;
                 }
-                case Lexer::Integer:
+                case Lexer::Decimal:
                 {
-                    return parseExtent(lexer);
+                    if ( allowLiteral )
+                    {
+                        return parseInteger(lexer);
+                    }
+                    break;
                 }
                 case Lexer::Characters:
                 {
-                    return parseString(lexer);
+                    if ( allowLiteral )
+                    {
+                        return parseString(lexer);
+                    }
+                    break;
                 }
                 case Lexer::Identifier:
                 {
-                    return parseIdentifier(lexer, fragments, decls);
+                    if ( allowIdentifier )
+                    {
+                        return parseIdentifier(lexer, prototypes, decls, allowLiteral, allowIdentifier, allowOperator);
+                    }
+                    break;
                 }
                 case '[':
                 {
-                    return parseArray(lexer, fragments, decls);
+                    return parseArray(lexer, prototypes, decls, allowLiteral, allowIdentifier, allowOperator);
                 }
                 case '(':
                 {
-                    return parseTuple(lexer, fragments, decls);
+                    return parseTuple(lexer, prototypes, decls, allowLiteral, allowIdentifier, allowOperator);
                 }
                 case '-':
+                {
+                    return parseUnary(lexer, prototypes, decls);
+                }
                 case '!':
                 {
-                    return parseUnary(lexer, fragments, decls);
+                    if ( allowOperator )
+                    {
+                        return parseUnary(lexer, prototypes, decls);
+                    }
+                    break;
                 }
-                case Lexer::LengthOf:
                 case Lexer::ShapeOf:
+                case Lexer::LengthOf:
                 case Lexer::RangeOf:
-                case Lexer::Extent:
+                case Lexer::Integer:
                 case Lexer::Scalar:
                 case Lexer::Logical:
                 case Lexer::String:
                 {
-                    return parseBuiltin(lexer, fragments, decls);
+                    if ( allowOperator )
+                    {
+                        return parseBuiltin(lexer, prototypes, decls);
+                    }
+                    break;
                 }
                 default:
                 {
                     throw Error(lexer.position(), "unexpected token '%s'", Lexer::tokenString(lexer.token()).c_str());
                 }
             }
+            throw Error(lexer.position(), "token '%s' not allowed in this context", Lexer::tokenString(lexer.token()).c_str());
         }
         
-        static Shared<Expr> parseExtent( Lexer& lexer )
+        static Shared<Expr> parseInteger( Lexer& lexer )
         {
             auto position = lexer.position();
             
             auto value = getIntegerValue(lexer);
             lexer.next();
             
-            return std::make_shared<ExtentExpr>(position, value, primitiveType(Typename::Extent));
+            return std::make_shared<IntegerExpr>(position, value, primitiveType(Typename::Integer));
         }
         
         static Shared<Expr> parseScalar( Lexer& lexer )
@@ -526,19 +686,17 @@ namespace nnef
             return std::make_shared<StringExpr>(position, value, primitiveType(Typename::String));
         }
         
-        static Shared<Expr> parseIdentifier( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
+        static Shared<Expr> parseIdentifier( Lexer& lexer, const Prototypes* prototypes, Declarations* decls,
+                                            bool allowLiteral, bool allowIdentifier, bool allowOperator )
         {
             auto position = lexer.position();
             auto string = lexer.string();
-            lexer.next();
+
+            lexer.readToken(Lexer::Identifier);
             
-            if ( lexer.token() == '(' )
+            if ( lexer.token() == '(' || (lexer.token() == '<' && prototypes && prototypes->contains(string)) )
             {
-                if ( !fragments )
-                {
-                    throw Error(lexer.position(), "identifier not allowed in this context");
-                }
-                return parseInvocation(lexer, fragments, decls, position, string);
+                return parseInvocation(lexer, prototypes, decls, position, string, allowLiteral, allowIdentifier, allowOperator);
             }
             else
             {
@@ -546,7 +704,7 @@ namespace nnef
             }
         }
         
-        static Shared<Expr> makeIdentifier( const Position& position, const std::string& name, const Declarations* decls )
+        static Shared<Expr> makeIdentifier( const Position& position, const std::string& name, Declarations* decls )
         {
             const Type* type = nullptr;
             if ( decls )
@@ -560,7 +718,8 @@ namespace nnef
             return std::make_shared<IdentifierExpr>(position, name, type);
         }
         
-        static Shared<Expr> parseArray( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
+        static Shared<Expr> parseArray( Lexer& lexer, const Prototypes* prototypes, Declarations* decls,
+                                       bool allowLiteral, bool allowIdentifier, bool allowOperator )
         {
             auto position = lexer.position();
             lexer.next();
@@ -571,23 +730,23 @@ namespace nnef
             
             if ( lexer.token() != ']' )
             {
-                auto first = parseExpression(lexer, fragments, decls);
                 if ( lexer.token() == Lexer::For )
                 {
-                    return parseComprehension(lexer, fragments, decls, position, first);
+                    return parseComprehension(lexer, prototypes, decls, position);
                 }
 
+                auto first = parseExpression(lexer, prototypes, decls, allowLiteral, allowIdentifier, allowOperator);
                 items = { first };
                 type = first->type();
 
-                while ( readIfToken(',', lexer) )
+                while ( lexer.readIfToken(',') )
                 {
-                    auto item = parseExpression(lexer, fragments, decls);
+                    auto item = parseExpression(lexer, prototypes, decls, allowLiteral, allowIdentifier, allowOperator);
                     items.push_back(item);
 
-                    if ( type )
+                    if ( decls )
                     {
-                        type = commonType(type, item->type());
+                        type = commonType(type, item->type(), true);
                         if ( !type )
                         {
                             throw Error(position, "incompatible item types (%s vs %s) in array",
@@ -597,12 +756,13 @@ namespace nnef
                 }
             }
             
-            readToken(']', lexer);
+            lexer.readToken(']');
             
             return std::make_shared<ArrayExpr>(position, items, arrayType(type));
         }
         
-        static Shared<Expr> parseTuple( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
+        static Shared<Expr> parseTuple( Lexer& lexer, const Prototypes* prototypes, Declarations* decls,
+                                       bool allowLiteral, bool allowIdentifier, bool allowOperator )
         {
             auto position = lexer.position();
             
@@ -615,16 +775,16 @@ namespace nnef
             std::vector<Shared<Expr>> items;
             std::vector<const Type*> types;
 
-            auto first = parseExpression(lexer, fragments, decls);
+            auto first = parseExpression(lexer, prototypes, decls, allowLiteral, allowIdentifier, allowOperator);
 
             if ( lexer.token() == ',' )
             {
                 items = { first };
                 types = { first->type() };
 
-                while ( readIfToken(',', lexer) )
+                while ( lexer.readIfToken(',') )
                 {
-                    auto item = parseExpression(lexer, fragments, decls);
+                    auto item = parseExpression(lexer, prototypes, decls, allowLiteral, allowIdentifier, allowOperator);
                     items.push_back(item);
                     types.push_back(item->type());
                 }
@@ -632,24 +792,49 @@ namespace nnef
             
             if ( parenthesized )
             {
-                readToken(')', lexer);
+                lexer.readToken(')');
             }
 
             return items.empty() ? first : std::make_shared<TupleExpr>(position, items, tupleType(types));
         }
-        
-        static Shared<Expr> parseInvocation( Lexer& lexer, const Fragments* fragments, const Declarations* decls,
-                                            const Position& position, const std::string& target )
+
+        static Shared<Expr> parseInvocation( Lexer& lexer, const Prototypes* prototypes, Declarations* decls )
         {
-            readToken('(', lexer);
-            
-            auto& fragment = (*fragments)[target];
-            if ( !fragment )
+            auto position = lexer.position();
+            auto string = lexer.string();
+
+            lexer.readToken(Lexer::Identifier);
+
+            if ( lexer.token() != '(' && lexer.token() != '<' )
+            {
+                throw Error(position, "expected operation invocation");
+            }
+
+            return parseInvocation(lexer, prototypes, decls, position, string, true, true, false);
+        }
+        
+        static Shared<Expr> parseInvocation( Lexer& lexer, const Prototypes* prototypes, Declarations* decls,
+                                            const Position& position, const std::string& target,
+                                            bool allowLiteral, bool allowIdentifier, bool allowOperator )
+        {
+            auto it = prototypes->find(target);
+            if ( it == prototypes->end() )
             {
                 throw Error(position, "undefined operation '%s'", target.c_str());
             }
 
-            const Prototype& proto = fragment->prototype();
+            const Prototype& proto = it->second;
+            
+            const PrimitiveType* dataType = proto.genericParamDefault();
+            if ( lexer.readIfToken('<') )
+            {
+                dataType = primitiveType(getTypename(lexer));
+                lexer.next();
+                
+                lexer.readToken('>');
+            }
+
+            lexer.readToken('(');
 
             Dictionary<Shared<Expr>> args;
             
@@ -674,10 +859,8 @@ namespace nnef
                     auto string = lexer.string();
                     lexer.next();
                     
-                    if ( lexer.token() == '=' )
+                    if ( lexer.readIfToken('=') )
                     {
-                        lexer.next();
-                        
                         param = proto.param(string);
                         if ( !param )
                         {
@@ -685,7 +868,7 @@ namespace nnef
                                         proto.name().c_str(), string.c_str());
                         }
                         
-                        arg = parseExpression(lexer, fragments, decls);
+                        arg = parseExpression(lexer, prototypes, decls, allowLiteral, allowIdentifier, allowOperator);
                         named = true;
                     }
                     else
@@ -693,35 +876,34 @@ namespace nnef
                         param = &proto.param(args.size());
                         if ( lexer.token() == '(' )
                         {
-                            arg = parseInvocation(lexer, fragments, decls, position, string);
+                            arg = parseInvocation(lexer, prototypes, decls, position, string, allowLiteral, allowIdentifier, allowOperator);
                         }
                         else
                         {
                             arg = makeIdentifier(position, string, decls);
                         }
-                        arg = parseSubscripts(lexer, fragments, decls, arg);
-                        arg = parseBinary(lexer, fragments, decls, arg);
+                        arg = parseSubscripts(lexer, prototypes, decls, arg);
+                        arg = parseBinary(lexer, prototypes, decls, arg);
                         if ( lexer.token() == Lexer::If )
                         {
-                            arg = parseSelect(lexer, fragments, decls, arg);
+                            arg = parseSelect(lexer, prototypes, decls, arg);
                         }
                     }
                 }
                 else
                 {
                     param = &proto.param(args.size());
-                    arg = parseExpression(lexer, fragments, decls);
+                    arg = parseExpression(lexer, prototypes, decls, allowLiteral, allowIdentifier, allowOperator);
                 }
 
-                arg = fixEmptyArray(arg, param->type());
-
-                if ( !castable(arg->type(), param->type()) )
+                auto paramType = dataType ? bindDataType(param->type(), dataType) : param->type();
+                if ( !isCastable(arg->type(), paramType) )
                 {
-                    throw Error(position, "argument of type '%s' cannot be cast to parameter type '%s'",
-                                arg->type()->toString().c_str(), param->type()->toString().c_str());
+                    throw Error(position, "argument of type '%s' cannot be cast to type '%s' for parameter '%s'",
+                                arg->type()->toString().c_str(), paramType->toString().c_str(), param->name().c_str());
                 }
                 
-                expectNamed |= named || !param->type()->isTensor();
+                expectNamed |= named || paramType->isAttribute();
                 if ( expectNamed && !named )
                 {
                     throw Error(position, "expected named argument");
@@ -737,7 +919,7 @@ namespace nnef
 
                 args[param->name()] = arg;
             }
-            while ( readIfToken(',', lexer) );
+            while ( lexer.readIfToken(',') );
             
             for ( size_t i = 0; i < proto.paramCount(); ++i )
             {
@@ -750,24 +932,25 @@ namespace nnef
                 }
             }
             
-            readToken(')', lexer);
-
-            const Type* type = resultType(proto);
-
-            if ( target == "select" )
+            lexer.readToken(')');
+            
+            if ( proto.isGeneric() && !deduceDataType(proto, args, dataType, position) )
             {
-                return makeSelectExpr(position, args, type);
+                throw Error(position, "could not deduce generic data-type");
             }
-            return std::make_shared<InvocationExpr>(position, target, args, type);
+            
+            const Type* type = resultType(proto, dataType);
+
+            return std::make_shared<InvocationExpr>(position, target, args, type, dataType);
         }
         
-        static Shared<Expr> parseUnary( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
+        static Shared<Expr> parseUnary( Lexer& lexer, const Prototypes* prototypes, Declarations* decls )
         {
             auto position = lexer.position();
             int op = lexer.token();
             lexer.next();
             
-            auto rhs = parseExpression(lexer, fragments, decls);
+            auto rhs = parseExpression(lexer, prototypes, decls, true, true, true);
             
             auto type = unaryResultType(rhs->type(), op);
             if ( !type )
@@ -776,7 +959,7 @@ namespace nnef
                             rhs->type()->toString().c_str(), Lexer::tokenString(op).c_str());
             }
             
-            if ( type->isPrimitive() && type->isTensor() )
+            if ( type->kind() == Type::Tensor )
             {
                 auto target = unaryOpName(op);
                 auto args = makeUnaryOpArgs(rhs);
@@ -788,7 +971,7 @@ namespace nnef
             }
         }
         
-        static Shared<Expr> parseBinary( Lexer& lexer, const Fragments* fragments, const Declarations* decls, Shared<Expr> lhs, int exprPrec = 0 )
+        static Shared<Expr> parseBinary( Lexer& lexer, const Prototypes* prototypes, Declarations* decls, Shared<Expr> lhs, int exprPrec = 0 )
         {
             auto position = lhs->position();
 
@@ -803,13 +986,13 @@ namespace nnef
                 int op = lexer.token();
                 lexer.next();
                 
-                auto rhs = parsePrimary(lexer, fragments, decls);
-                rhs = parseSubscripts(lexer, fragments, decls, rhs);
+                auto rhs = parsePrimary(lexer, prototypes, decls, true, true, true);
+                rhs = parseSubscripts(lexer, prototypes, decls, rhs);
                 
                 int nextPrec = tokenPrecedence(lexer.token());
                 if ( tokPrec < nextPrec )
                 {
-                    rhs = parseBinary(lexer, fragments, decls, rhs, tokPrec + 1);
+                    rhs = parseBinary(lexer, prototypes, decls, rhs, tokPrec + 1);
                 }
                 
                 auto type = binaryResultType(lhs->type(), rhs->type(), op);
@@ -820,7 +1003,7 @@ namespace nnef
                                 Lexer::tokenString(op).c_str());
                 }
                 
-                if ( type->isPrimitive() && type->isTensor() )
+                if ( type->kind() == Type::Tensor )
                 {
                     auto target = binaryOpName(op);
                     auto args = makeBinaryOpArgs(lhs, rhs);
@@ -833,15 +1016,15 @@ namespace nnef
             }
         }
         
-        static Shared<Expr> parseBuiltin( Lexer& lexer, const Fragments* fragments, const Declarations* decls )
+        static Shared<Expr> parseBuiltin( Lexer& lexer, const Prototypes* prototypes, Declarations* decls )
         {
             auto position = lexer.position();
             int op = lexer.token();
             lexer.next();
             
-            readToken('(', lexer);
+            lexer.readToken('(');
             
-            auto arg = parseExpression(lexer, fragments, decls);
+            auto arg = parseExpression(lexer, prototypes, decls, true, true, true);
             
             auto type = builtinResultType(op);
             if ( !type )
@@ -850,36 +1033,36 @@ namespace nnef
                             arg->type()->toString().c_str(), Lexer::tokenString(op).c_str());
             }
             
-            readToken(')', lexer);
+            lexer.readToken(')');
 
             if ( op == Lexer::LengthOf )
             {
-                if ( !arg->type()->isArray() && arg->type() != primitiveType(Typename::String) )
+                if ( arg->type()->kind() != Type::Array && arg->type() != primitiveType(Typename::String) )
                 {
                     throw Error(position, "argument of length_of() must be an array or string (found %s)", arg->type()->toString().c_str());
                 }
             }
             if ( op == Lexer::ShapeOf )
             {
-                if ( !arg->type()->isPrimitive() )
+                if ( arg->type()->kind() != Type::Tensor && arg->type()->kind() != Type::Primitive )
                 {
-                    throw Error(position, "argument of shape_of() must be of primitive type (found %s)",
+                    throw Error(position, "argument of shape_of() must be of tensor or primitive type (found %s)",
                                 arg->type()->toString().c_str());
                 }
             }
             else if ( op == Lexer::RangeOf && arg->type() != primitiveType(Typename::String) )
             {
-                if ( !arg->type()->isArray() )
+                if ( arg->type()->kind() != Type::Array )
                 {
                     throw Error(position, "argument of range_of() must be an array or string (found %s)",
                                 arg->type()->toString().c_str());
                 }
             }
-            else if ( op == Lexer::Extent || op == Lexer::Scalar || op == Lexer::Logical || op == Lexer::String )
+            else if ( op == Lexer::Integer || op == Lexer::Scalar || op == Lexer::Logical || op == Lexer::String )
             {
-                if ( !arg->type()->isPrimitive() || arg->type()->isTensor() )
+                if ( arg->type()->kind() != Type::Primitive )
                 {
-                    throw Error(position, "argument of %s() must be of primitive type except tensor (found %s)",
+                    throw Error(position, "argument of %s() must be of non-tensor primitive type (found %s)",
                                 Lexer::tokenString(op).c_str(), arg->type()->toString().c_str());
                 }
             }
@@ -887,47 +1070,46 @@ namespace nnef
             return std::make_shared<BuiltinExpr>(position, arg, op, type);
         }
 
-        static Shared<Expr> parseSubscript( Lexer& lexer, const Fragments* fragments, const Declarations* decls, const Shared<Expr> sequence )
+        static Shared<Expr> parseSubscript( Lexer& lexer, const Prototypes* prototypes, Declarations* decls, const Shared<Expr> sequence )
         {
             lexer.next();
 
             Shared<Expr> beg, end;
             const Type* type = nullptr;
 
-            if ( sequence->type()->isTuple() )
+            if ( sequence->type()->kind() == Type::Tuple )
             {
-                beg = parseExpression(lexer, fragments, decls);
-                if ( beg->kind() != Expr::Literal || beg->type() != primitiveType(Typename::Extent) )
+                beg = parseExpression(lexer, prototypes, decls, true, true, true);
+                if ( beg->kind() != Expr::Literal || beg->type() != primitiveType(Typename::Integer) )
                 {
-                    throw Error(beg->position(), "tuple index must be an extent literal");
+                    throw Error(beg->position(), "tuple index must be an integer literal");
                 }
 
-                auto idx = dynamic_cast<const ExtentExpr&>(*beg).value();
+                auto idx = dynamic_cast<const IntegerExpr&>(*beg).value();
 
                 type = dynamic_cast<const TupleType*>(sequence->type())->itemType(idx);
             }
-            else if ( sequence->type()->isArray() || sequence->type() == primitiveType(Typename::String) )
+            else if ( sequence->type()->kind() == Type::Array || sequence->type() == primitiveType(Typename::String) )
             {
                 if ( lexer.token() != ':' )
                 {
-                    beg = parseExpression(lexer, fragments, decls);
-                    if ( beg->type() != primitiveType(Typename::Extent) )
+                    beg = parseExpression(lexer, prototypes, decls, true, true, true);
+                    if ( beg->type() != primitiveType(Typename::Integer) )
                     {
-                        throw Error(beg->position(), "array index must be of type extent, found '%s'", beg->type()->toString().c_str());
+                        throw Error(beg->position(), "array index must be of type integer, found '%s'", beg->type()->toString().c_str());
                     }
                 }
                 bool range = false;
-                if ( lexer.token() == ':' )
+                if ( lexer.readIfToken(':') )
                 {
-                    lexer.next();
                     range = true;
 
                     if ( lexer.token() != ']' )
                     {
-                        end = parseExpression(lexer, fragments, decls);
-                        if ( end->type() != primitiveType(Typename::Extent) )
+                        end = parseExpression(lexer, prototypes, decls, true, true, true);
+                        if ( end->type() != primitiveType(Typename::Integer) )
                         {
-                            throw Error(end->position(), "array index must be of type extent, found '%s'", end->type()->toString().c_str());
+                            throw Error(end->position(), "array index must be of type integer, found '%s'", end->type()->toString().c_str());
                         }
                     }
                 }
@@ -936,9 +1118,9 @@ namespace nnef
                     end = beg;
                 }
 
-                readToken(']', lexer);
+                lexer.readToken(']');
 
-                if ( sequence->type()->isArray() )
+                if ( sequence->type()->kind() == Type::Array )
                 {
                     auto arrayType = dynamic_cast<const ArrayType*>(sequence->type());
                     type = range ? arrayType : arrayType->itemType();
@@ -957,159 +1139,135 @@ namespace nnef
             return std::make_shared<SubscriptExpr>(sequence->position(), sequence, beg, end, type);
         }
 
-        static Shared<Expr> parseSubscripts( Lexer& lexer, const Fragments* fragments, const Declarations* decls, Shared<Expr> sequence )
+        static Shared<Expr> parseSubscripts( Lexer& lexer, const Prototypes* prototypes, Declarations* decls, Shared<Expr> sequence )
         {
             while ( lexer.token() == '[' )
             {
-                sequence = parseSubscript(lexer, fragments, decls, sequence);
+                sequence = parseSubscript(lexer, prototypes, decls, sequence);
             }
             return sequence;
         }
 
-        static Shared<Expr> parseSelect( Lexer& lexer, const Fragments* fragments, const Declarations* decls, Shared<Expr> trueValue )
+        static Shared<Expr> parseSelect( Lexer& lexer, const Prototypes* prototypes, Declarations* decls, Shared<Expr> trueValue )
         {
-            readToken(Lexer::If, lexer);
+            lexer.readToken(Lexer::If);
 
-            auto condition = parseExpression(lexer, fragments, decls);
-            if ( condition->type() != primitiveType(Typename::Logical) && condition->type() != tensorType(Typename::Logical) )
+            auto condition = parseExpression(lexer, prototypes, decls, true, true, true);
+            if ( condition->type() != primitiveType(Typename::Logical) )
             {
-                throw Error(condition->position(), "condition must be a logical value or a logical tensor");
+                throw Error(condition->position(), "condition must be a logical value");
             }
 
-            readToken(Lexer::Else, lexer);
+            lexer.readToken(Lexer::Else);
 
-            auto falseValue = parseExpression(lexer, fragments, decls);
+            auto falseValue = parseExpression(lexer, prototypes, decls, true, true, true);
 
-            if ( isEmptyArray(trueValue) && isEmptyArray(falseValue) )
-            {
-                return trueValue;
-            }
-            else if ( isEmptyArray(trueValue) )
-            {
-                trueValue = fixEmptyArray(trueValue, falseValue->type());
-            }
-            else if ( isEmptyArray(falseValue) )
-            {
-                falseValue = fixEmptyArray(falseValue, trueValue->type());
-            }
-
-            const Type* type = commonType(trueValue->type(), falseValue->type());
+            const Type* type = commonType(trueValue->type(), falseValue->type(), true);
             if ( !type )
             {
                 throw Error(trueValue->position(), "incompatible types in if-else expression (%s vs %s)",
                             trueValue->type()->toString().c_str(), falseValue->type()->toString().c_str());
             }
 
-            if ( condition->type() == tensorType(Typename::Logical) )
-            {
-                auto args = makeSelectOpArgs(condition, trueValue, falseValue);
-                return std::make_shared<InvocationExpr>(trueValue->position(), "select", args, type);
-            }
-            else
-            {
-                return std::make_shared<SelectExpr>(trueValue->position(), condition, trueValue, falseValue, type);
-            }
+            return std::make_shared<SelectExpr>(trueValue->position(), condition, trueValue, falseValue, type);
         }
 
-        static Shared<Expr> parseComprehension( Lexer& lexer, const Fragments* fragments, const Declarations* decls,
-                                               const Position& position, const Shared<Expr> item )
+        static Shared<Expr> parseComprehension( Lexer& lexer, const Prototypes* prototypes, Declarations* decls,
+                                               const Position& position )
         {
-            readToken(Lexer::For, lexer);
+            lexer.readToken(Lexer::For);
 
-            auto iterator = std::make_shared<IdentifierExpr>(lexer.position(), lexer.string(), nullptr);
-            if ( decls && decls->find(iterator->name()) != decls->end() )
+            std::vector<Shared<Expr>> iterators, iterables;
+            
+            do
             {
-                throw Error(iterator->position(), "iterator '%s' hides declared identifier", iterator->name().c_str());
-            }
+                auto iterator = parseIterator(lexer, decls);
+                
+                lexer.readToken(Lexer::In);
 
-            readToken(Lexer::Identifier, lexer);
-            readToken(Lexer::In, lexer);
-
-            auto iterable = parseExpression(lexer, fragments, decls, false);
-            if ( !iterable->type()->isArray() )
-            {
-                throw Error(iterable->position(), "expression not iterable");
+                auto iterable = parseExpression(lexer, prototypes, decls, true, true, true, false);
+                if ( iterable->type()->kind() != Type::Array )
+                {
+                    throw Error(iterable->position(), "expression not iterable");
+                }
+                
+                iterators.push_back(iterator);
+                iterables.push_back(iterable);
+                
+                auto itemType = dynamic_cast<const ArrayType*>(iterable->type())->itemType();
+                declare(*iterator, itemType, *decls);
             }
+            while ( lexer.readIfToken(',') );
 
             Shared<Expr> condition = nullptr;
-            if ( lexer.token() == Lexer::If )
+            if ( lexer.readIfToken(Lexer::If) )
             {
-                lexer.next();
-
-                condition = parseExpression(lexer, fragments, decls);
+                condition = parseExpression(lexer, prototypes, decls, true, true, true);
                 if ( condition->type() != primitiveType(Typename::Logical) )
                 {
                     throw Error(condition->position(), "condition in comprehension expression must be a logical expression");
                 }
             }
 
+            lexer.readToken(Lexer::Yield);
+
+            auto item = parseExpression(lexer, prototypes, decls, true, true, true);
             const Type* type = arrayType(item->type());
 
-            return std::make_shared<ComprehensionExpr>(position, item, iterator, iterable, condition, type);
+            for ( size_t i = 0; i < iterators.size(); ++i )
+            {
+                undeclare(*iterators[i], *decls);
+            }
+
+            lexer.readToken(']');
+
+            return std::make_shared<ComprehensionExpr>(position, iterators, iterables, condition, item, type);
         }
         
     private:
-
-        static bool isEmptyArray( const Shared<Expr>& expr )
+        
+        static Shared<Expr> parseIterator( Lexer& lexer, const Declarations* decls )
         {
-            return expr->kind() == Expr::Array && dynamic_cast<const ArrayExpr&>(*expr).size() == 0;
-        }
-
-        static Shared<Expr> fixEmptyArray( const Shared<Expr>& expr, const Type* type )
-        {
-            if ( isEmptyArray(expr) )
+            if ( lexer.token() == Lexer::Identifier )
             {
-                return std::make_shared<ArrayExpr>(expr->position(), type);
+                auto iterator = std::make_shared<IdentifierExpr>(lexer.position(), lexer.string(), nullptr);
+                lexer.readToken(Lexer::Identifier);
+                
+                return iterator;
             }
-            return expr;
-        }
-        
-        static float getScalarValue( Lexer& lexer )
-        {
-            return (float)std::atof(lexer.string().c_str());
-        }
-        
-        static int getIntegerValue( Lexer& lexer )
-        {
-            return std::atoi(lexer.string().c_str());
-        }
-
-        static Typename getTypename( Lexer& lexer )
-        {
-            switch ( lexer.token() )
+            
+            if ( lexer.token() != '(' )
             {
-                case Lexer::Extent:
-                    return Typename::Extent;
-                case Lexer::Scalar:
-                    return Typename::Scalar;
-                case Lexer::Logical:
-                    return Typename::Logical;
-                case Lexer::String:
-                    return Typename::String;
-                default:
-                    throw Error(lexer.position(), "expected type name");
-            }
-        }
-        
-        static void readToken( int token, Lexer& lexer )
-        {
-            if ( lexer.token() != token )
-            {
-                throw Error(lexer.position(), "expected token '%s', found '%s'",
-                            Lexer::tokenString(token).c_str(), Lexer::tokenString(lexer.token()).c_str());
+                throw Error(lexer.position(), "expected tuple or identifier");
             }
             lexer.next();
+            
+            auto position = lexer.position();
+            
+            std::vector<Shared<Expr>> items;
+            std::vector<const Type*> types;
+            
+            auto first = parseIterator(lexer, decls);
+            
+            if ( lexer.token() == ',' )
+            {
+                items = { first };
+                types = { first->type() };
+                
+                while ( lexer.readIfToken(',') )
+                {
+                    auto item = parseIterator(lexer, decls);
+                    items.push_back(item);
+                    types.push_back(item->type());
+                }
+            }
+            
+            lexer.readToken(')');
+            
+            return items.empty() ? first : std::make_shared<TupleExpr>(position, items, tupleType(types));
         }
         
-        static bool readIfToken( int token, Lexer& lexer )
-        {
-            if ( lexer.token() == token )
-            {
-                lexer.next();
-                return true;
-            }
-            return false;
-        }
+    private:
 
         static void declare( const Expr& expr, const Type* type, Declarations& declared )
         {
@@ -1127,7 +1285,7 @@ namespace nnef
                 }
                 case Expr::Array:
                 {
-                    if ( !type->isArray() )
+                    if ( type->kind() != Type::Array )
                     {
                         throw Error(expr.position(), "cannot assign result of type '%s' to array", type->toString().c_str());
                     }
@@ -1141,7 +1299,7 @@ namespace nnef
                 }
                 case Expr::Tuple:
                 {
-                    if ( !type->isTuple() )
+                    if ( type->kind() != Type::Tuple )
                     {
                         throw Error(expr.position(), "cannot assign result of type '%s' to tuple", type->toString().c_str());
                     }
@@ -1164,125 +1322,66 @@ namespace nnef
                 }
             }
         }
-
-        static void checkPrototype( const Prototype& proto, const Position& position )
+        
+        static void undeclare( const Expr& expr, Declarations& declared )
         {
-            for ( size_t i = 0; i < proto.paramCount(); ++i )
+            switch ( expr.kind() )
             {
-                auto& param = proto.param(i);
-
-                if ( proto.param(param.name()) != &param )
+                case Expr::Identifier:
                 {
-                    throw Error(position, "duplicate parameter definition for fragment '%s'; parameter '%s' is already defined",
-                                proto.name().c_str(), param.name().c_str());
+                    auto& identifier = dynamic_cast<const IdentifierExpr&>(expr);
+                    declared.erase(identifier.name());
+                    break;
                 }
-            }
-
-            for ( size_t i = 0; i < proto.resultCount(); ++i )
-            {
-                auto& result = proto.result(i);
-
-                if ( proto.result(result.name()) != &result )
+                case Expr::Array:
+                case Expr::Tuple:
                 {
-                    throw Error(position, "duplicate result definition for operation '%s'; result '%s' is already defined",
-                                proto.name().c_str(), result.name().c_str());
+                    auto& items = dynamic_cast<const ItemExpr&>(expr);
+                    for ( size_t i = 0; i < items.size(); ++i )
+                    {
+                        undeclare(items.item(i), declared);
+                    }
+                    break;
                 }
-                if ( proto.param(result.name()) )
+                default:
                 {
-                    throw Error(position, "invalid result definition for operation '%s'; '%s' is already defined as parameter",
-                                proto.name().c_str(), result.name().c_str());
+                    throw Error(expr.position(), "expression not allowed in this context");
                 }
             }
         }
 
     private:
-        
-        static const Type* primitiveType( const Typename name )
+
+        static bool deduceDataType( const Prototype& proto, const Dictionary<Shared<Expr>>& args, const PrimitiveType*& dataType,
+                                   const Position& position )
         {
-            static const PrimitiveType types[] =
+            Dictionary<const Type*> types;
+            for ( auto& arg : args )
             {
-                PrimitiveType(Typename::Extent, false),
-                PrimitiveType(Typename::Scalar, false),
-                PrimitiveType(Typename::Logical, false),
-                PrimitiveType(Typename::String, false),
-            };
-            return &types[(size_t)name];
+                types[arg.first] = arg.second->type();
+            }
+
+            try
+            {
+                return nnef::deduceDataType(proto, types, dataType);
+            }
+            catch ( std::pair<Typename,Typename> e )
+            {
+                throw Error(position, "could not derive data-type: ambiguous candidates '%s' vs '%s'", toString(e.first), toString(e.second));
+            }
         }
 
-        static const Type* tensorType( const Typename name )
-        {
-            static const PrimitiveType types[] =
-            {
-                PrimitiveType(Typename::Extent, true),
-                PrimitiveType(Typename::Scalar, true),
-                PrimitiveType(Typename::Logical, true),
-                PrimitiveType(Typename::String, true),
-            };
-            return &types[(size_t)name];
-        }
-        
-        static const Type* arrayType( const Type* itemType )
-        {
-            static std::map<const Type*,const Type*> types;
-            
-            auto& type = types[itemType];
-            if ( !type )
-            {
-                type = new ArrayType(itemType);
-            }
-            return type;
-        }
-        
-        static const Type* tupleType( const std::vector<const Type*>& itemTypes )
-        {
-            static std::map<std::vector<const Type*>,const Type*> types;
-            
-            auto& type = types[itemTypes];
-            if ( !type )
-            {
-                type = new TupleType(itemTypes);
-            }
-            return type;
-        }
-
-        static bool castable( const Type* type1, const Type* type2 )
-        {
-            if ( type1->isPrimitive() && type2->isPrimitive() )
-            {
-                auto prim1 = dynamic_cast<const PrimitiveType*>(type1);
-                auto prim2 = dynamic_cast<const PrimitiveType*>(type2);
-                if ( !prim1->isTensor() && prim2->isTensor() )
-                {
-                    return prim1->name() == prim2->name();
-                }
-            }
-            return type1 == type2;
-        }
-
-        static const Type* commonType( const Type* type1, const Type* type2 )
-        {
-            if ( castable(type1, type2) )
-            {
-                return type2;
-            }
-            else if ( castable(type2, type1) )
-            {
-                return type1;
-            }
-            return nullptr;
-        }
-
-        static const Type* resultType( const Prototype& proto )
+        static const Type* resultType( const Prototype& proto, const PrimitiveType* dataType )
         {
             if ( proto.resultCount() == 1 )
             {
-                return proto.result(0).type();
+                return dataType ? bindDataType(proto.result(0).type(), dataType) : proto.result(0).type();
             }
 
             std::vector<const Type*> types(proto.resultCount());
             for ( size_t i = 0; i < proto.resultCount(); ++i )
             {
-                types[i] = proto.result(i).type();
+                types[i] = dataType ? bindDataType(proto.result(i).type(), dataType) : proto.result(i).type();
             }
             return tupleType(types);
         }
@@ -1294,7 +1393,7 @@ namespace nnef
                 case '-':
                 case '+':
                 {
-                    if ( argType == primitiveType(Typename::Extent) ||
+                    if ( argType == primitiveType(Typename::Integer) ||
                         argType == primitiveType(Typename::Scalar) ||
                         argType == tensorType(Typename::Scalar) )
                     {
@@ -1317,27 +1416,27 @@ namespace nnef
         
         static const Type* binaryResultType( const Type* lhsType, const Type* rhsType, int op )
         {
-            if ( op == Lexer::In && rhsType->isArray() )
+            if ( op == Lexer::In && rhsType->kind() == Type::Array )
             {
                 return primitiveType(Typename::Logical);
             }
-            else if ( op == '+' && lhsType->isArray() && rhsType == lhsType )
+            else if ( op == '+' && lhsType->kind() == Type::Array && rhsType == lhsType )
             {
                 return lhsType;
             }
             else if ( op == '*' )
             {
-                if ( lhsType->isArray() && rhsType == primitiveType(Typename::Extent) )
+                if ( lhsType->kind() == Type::Array && rhsType == primitiveType(Typename::Integer) )
                 {
                     return lhsType;
                 }
-                if ( rhsType->isArray() && lhsType == primitiveType(Typename::Extent) )
+                if ( rhsType->kind() == Type::Array && lhsType == primitiveType(Typename::Integer) )
                 {
                     return rhsType;
                 }
             }
             
-            const Type* argType = commonType(lhsType, rhsType);
+            const Type* argType = commonType(lhsType, rhsType, true);
             
             switch ( op )
             {
@@ -1348,7 +1447,7 @@ namespace nnef
                 case Lexer::Eq:
                 case Lexer::Ne:
                 {
-                    return argType == tensorType(Typename::Scalar) ? tensorType(Typename::Logical) : primitiveType(Typename::Logical);
+                    return argType == tensorType(Typename::Scalar) ? (const Type*)tensorType(Typename::Logical) : (const Type*)primitiveType(Typename::Logical);
                 }
                 case '+':
                 case '*':
@@ -1362,7 +1461,7 @@ namespace nnef
                 case '/':
                 case '^':
                 {
-                    if ( argType == primitiveType(Typename::Extent) ||
+                    if ( argType == primitiveType(Typename::Integer) ||
                         argType == primitiveType(Typename::Scalar) ||
                         argType == tensorType(Typename::Scalar) )
                     {
@@ -1390,19 +1489,19 @@ namespace nnef
             {
                 case Lexer::LengthOf:
                 {
-                    return primitiveType(Typename::Extent);
+                    return primitiveType(Typename::Integer);
                 }
                 case Lexer::ShapeOf:
                 {
-                    return arrayType(primitiveType(Typename::Extent));
+                    return arrayType(primitiveType(Typename::Integer));
                 }
                 case Lexer::RangeOf:
                 {
-                    return arrayType(primitiveType(Typename::Extent));
+                    return arrayType(primitiveType(Typename::Integer));
                 }
-                case Lexer::Extent:
+                case Lexer::Integer:
                 {
-                    return primitiveType(Typename::Extent);
+                    return primitiveType(Typename::Integer);
                 }
                 case Lexer::Scalar:
                 {
@@ -1452,7 +1551,7 @@ namespace nnef
             switch (op)
             {
                 case '+':
-                    return "idn";
+                    return "copy";
                 case '-':
                     return "neg";
                 case '!':
@@ -1515,34 +1614,82 @@ namespace nnef
             };
             return args;
         }
-        
-        static Dictionary<Shared<Expr>> makeSelectOpArgs( const Shared<Expr> condition, const Shared<Expr> trueValue, const Shared<Expr> falseValue )
-        {
-            const Dictionary<Shared<Expr>> args =
-            {
-                { "condition", condition },
-                { "true_value", trueValue },
-                { "false_value", falseValue },
-            };
-            return args;
-        }
 
-        static Shared<Expr> makeSelectExpr( const Position& position, Dictionary<Shared<Expr>>& args, const Type* type )
+    private:
+
+        static bool checkGraphParamType( const Value& value, const Type* type )
         {
-            auto& condition = args["condition"];
-            if ( condition->type()->isTensor() )
+            switch ( value.kind() )
             {
-                return std::make_shared<InvocationExpr>(position, "select", args, type);
+                case Value::Integer:
+                {
+                    return type == primitiveType(Typename::Integer);
+                }
+                case Value::Scalar:
+                {
+                    return type == primitiveType(Typename::Scalar);
+                }
+                case Value::Logical:
+                {
+                    return type == primitiveType(Typename::Logical);
+                }
+                case Value::String:
+                {
+                    return type == primitiveType(Typename::String);
+                }
+                case Value::Identifier:
+                {
+                    return type == tensorType();
+                }
+                case Value::Array:
+                {
+                    if ( type->kind() != Type::Array )
+                    {
+                        return false;
+                    }
+                    auto arrayType = dynamic_cast<const ArrayType*>(type);
+                    for ( size_t i = 0; i < value.size(); ++i )
+                    {
+                        if ( !checkGraphParamType(value[i], arrayType->itemType()) )
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+                case Value::Tuple:
+                {
+                    if ( type->kind() != Type::Tuple )
+                    {
+                        return false;
+                    }
+                    auto tupleType = dynamic_cast<const TupleType*>(type);
+                    for ( size_t i = 0; i < value.size(); ++i )
+                    {
+                        if ( !checkGraphParamType(value[i], tupleType->itemType(i)) )
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+                case Value::ShapeOf:
+                {
+                    return false;
+                }
+                case Value::None:
+                {
+                    return false;
+                }
             }
-
-            auto& trueValue = args["true_value"];
-            auto& falseValue = args["false_value"];
-            return std::make_shared<SelectExpr>(position, condition, trueValue, falseValue, type);
         }
 
     private:
 
-        bool _includeLayers;
+        Propagation& _propagation;
+        size_t _flags;
+
+        std::map<std::string,std::string> _imports;
     };
     
 }   // namespace nnef

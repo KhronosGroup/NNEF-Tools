@@ -17,6 +17,14 @@ import shutil
 from setuptools import setup, Extension
 
 
+if os.path.isdir('build'):
+    shutil.rmtree('build')
+if os.path.isdir('dist'):
+    shutil.rmtree('dist')
+if os.path.isdir('nnef.egg-info'):
+    shutil.rmtree('nnef.egg-info')
+
+
 module = Extension('_nnef',
                    sources = ['nnef.cpp'],
                    language='c++',
@@ -31,7 +39,7 @@ if not os.path.isdir(include_path):
         shutil.copytree('../' + subdir, include_path + '/' + subdir)
 
 setup(name = 'nnef',
-	  version = '1.0',
+	  version = '0.2',
 	  description = 'A package for parsing NNEF files',
       url = 'https://github.com/KhronosGroup/NNEF-Tools',
       author = 'Viktor Gyenes',

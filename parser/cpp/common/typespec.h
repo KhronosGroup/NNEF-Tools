@@ -29,13 +29,13 @@
 namespace nnef
 {
     
-    enum class Typename { Extent, Scalar, Logical, String };
+    enum class Typename { Integer, Scalar, Logical, String, Generic };
     
     inline const char* toString( const Typename& name )
     {
         static const char* strings[] =
         {
-            "extent", "scalar", "logical", "string",
+            "integer", "scalar", "logical", "string", "?"
         };
         return strings[(size_t)name];
     }
@@ -46,11 +46,14 @@ namespace nnef
     {
     public:
 
-        virtual bool isPrimitive() const { return false; }
-        virtual bool isArray() const { return false; }
-        virtual bool isTuple() const { return false; }
-        
-        virtual bool isTensor() const = 0;
+        enum Kind { Primitive, Tensor, Array, Tuple };
+
+    public:
+
+        virtual Kind kind() const = 0;
+
+        virtual bool isAttribute() const = 0;
+        virtual bool isGeneric() const = 0;
 
         virtual std::string toString() const = 0;
     };
@@ -60,8 +63,8 @@ namespace nnef
     {
     public:
 
-        PrimitiveType( const Typename name, bool tensor )
-        : _name(name), _tensor(tensor)
+        PrimitiveType( const Typename name )
+        : _name(name)
         {
         }
 
@@ -70,26 +73,69 @@ namespace nnef
             return _name;
         }
 
-        virtual bool isPrimitive() const
+        virtual Kind kind() const
+        {
+            return Primitive;
+        }
+
+        virtual bool isAttribute() const
         {
             return true;
         }
-        
-        virtual bool isTensor() const
+
+        virtual bool isGeneric() const
         {
-            return _tensor;
+            return _name == Typename::Generic;
         }
 
         virtual std::string toString() const
         {
-            const std::string str = nnef::toString(_name);
-            return _tensor ? "tensor<" + str + ">" : str;
+            return nnef::toString(_name);
         }
 
     private:
 
         Typename _name;
-        bool _tensor;
+    };
+
+
+    class TensorType : public Type
+    {
+    public:
+
+        TensorType( const Type* dataType )
+        : _dataType(dataType)
+        {
+        }
+
+        const Type* dataType() const
+        {
+            return _dataType;
+        }
+
+        virtual Kind kind() const
+        {
+            return Tensor;
+        }
+
+        virtual std::string toString() const
+        {
+            return _dataType ? "tensor<" + _dataType->toString() + ">" : "tensor<>";
+        }
+
+        virtual bool isAttribute() const
+        {
+            return false;
+        }
+        
+        virtual bool isGeneric() const
+        {
+            return _dataType && _dataType->isGeneric();
+        }
+
+    private:
+
+        const Type* _dataType;
     };
 
 
@@ -107,19 +153,24 @@ namespace nnef
             return _itemType;
         }
 
-        virtual bool isArray() const
+        virtual Kind kind() const
         {
-            return true;
-        }
-        
-        virtual bool isTensor() const
-        {
-            return _itemType->isTensor();
+            return Array;
         }
 
         virtual std::string toString() const
         {
-            return _itemType->toString() + "[]";
+            return _itemType ? _itemType->toString() + "[]" : "[]";
+        }
+
+        virtual bool isAttribute() const
+        {
+            return _itemType && _itemType->isAttribute();
+        }
+
+        virtual bool isGeneric() const
+        {
+            return _itemType && _itemType->isGeneric();
         }
         
     private:
@@ -152,14 +203,19 @@ namespace nnef
             return _itemTypes[i];
         }
 
-        virtual bool isTuple() const
+        virtual Kind kind() const
         {
-            return true;
+            return Tuple;
         }
-        
-        virtual bool isTensor() const
+
+        virtual bool isAttribute() const
         {
-            return std::all_of(_itemTypes.begin(), _itemTypes.end(), []( const Type* type ){ return type->isTensor(); });
+            return std::all_of(_itemTypes.begin(), _itemTypes.end(), []( const Type* type ){ return type->isAttribute(); });
+        }
+
+        virtual bool isGeneric() const
+        {
+            return std::any_of(_itemTypes.begin(), _itemTypes.end(), []( const Type* type ){ return type->isGeneric(); });
         }
 
         virtual std::string toString() const
@@ -182,6 +238,63 @@ namespace nnef
 
         std::vector<const Type*> _itemTypes;
     };
+
+    
+    inline const PrimitiveType* primitiveType( const Typename name )
+    {
+        static const PrimitiveType types[] =
+        {
+            PrimitiveType(Typename::Integer),
+            PrimitiveType(Typename::Scalar),
+            PrimitiveType(Typename::Logical),
+            PrimitiveType(Typename::String),
+            PrimitiveType(Typename::Generic),
+        };
+        return &types[(size_t)name];
+    }
+
+    inline const TensorType* tensorType( const Typename name )
+    {
+        static const TensorType types[] =
+        {
+            TensorType(primitiveType(Typename::Integer)),
+            TensorType(primitiveType(Typename::Scalar)),
+            TensorType(primitiveType(Typename::Logical)),
+            TensorType(primitiveType(Typename::String)),
+            TensorType(primitiveType(Typename::Generic)),
+        };
+        return &types[(size_t)name];
+    }
+
+    inline const TensorType* tensorType()
+    {
+        static const TensorType type(nullptr);
+        return &type;
+    }
+
+    inline const Type* arrayType( const Type* itemType )
+    {
+        static std::map<const Type*,const Type*> types;
+
+        auto& type = types[itemType];
+        if ( !type )
+        {
+            type = new ArrayType(itemType);
+        }
+        return type;
+    }
+
+    inline const Type* tupleType( const std::vector<const Type*>& itemTypes )
+    {
+        static std::map<std::vector<const Type*>,const Type*> types;
+
+        auto& type = types[itemTypes];
+        if ( !type )
+        {
+            type = new TupleType(itemTypes);
+        }
+        return type;
+    }
     
 }   // namespace nnef
 

@@ -55,19 +55,19 @@ namespace nnef
     {
     public:
 
-        Fragment( const Shared<Prototype>& prototype )
+        Fragment( const Prototype& prototype )
         : _prototype(prototype)
         {
         }
 
-        Fragment( const Shared<Prototype>& prototype, std::vector<Assignment>& assignments )
+        Fragment( const Prototype& prototype, std::vector<Assignment>& assignments )
         : _prototype(prototype), _assignments(std::move(assignments))
         {
         }
         
         const Prototype& prototype() const
         {
-            return *_prototype;
+            return _prototype;
         }
         
         size_t assignmentCount() const
@@ -82,7 +82,7 @@ namespace nnef
         
     private:
         
-        const Shared<Prototype> _prototype;
+        const Prototype& _prototype;
         const std::vector<Assignment> _assignments;
     };
 

@@ -17,9 +17,12 @@
 #ifndef _NNEF_SHAPE_H_
 #define _NNEF_SHAPE_H_
 
-#include <array>
+#include <vector>
+#include <string>
 #include <numeric>
+#include <iostream>
 #include <functional>
+#include <algorithm>
 
 
 namespace nnef
@@ -29,15 +32,29 @@ namespace nnef
     {
     public:
         
-        enum { MaxRank = 8 };
-
         typedef int extent_type;
         
     public:
-        
-        Shape( const extent_type filler = 1 )
+
+        Shape( const size_t rank = 0 )
+        : _items(rank)
         {
-            _items.fill(filler);
+        }
+        
+        template<typename T>
+        Shape( const size_t rank, const T* extents )
+        : _items(extents, extents + rank)
+        {
+        }
+
+        size_t rank() const
+        {
+            return _items.size();
+        }
+
+        size_t volume() const
+        {
+            return std::accumulate(_items.begin(), _items.end(), (size_t)1, std::multiplies<size_t>());
         }
 
         extent_type* extents()
@@ -74,10 +91,8 @@ namespace nnef
         {
             std::string str;
 
-            auto rank = std::max(Shape::rank(), (size_t)2);
-
             str += '[';
-            for ( size_t i = 0; i < rank; ++i )
+            for ( size_t i = 0; i < _items.size(); ++i )
             {
                 if ( i )
                 {
@@ -90,47 +105,16 @@ namespace nnef
             return str;
         }
 
-        size_t volume() const
-        {
-            return std::accumulate(_items.begin(), _items.end(), (size_t)1, std::multiplies<size_t>());
-        }
-
-        size_t rank() const
-        {
-            size_t rank = MaxRank;
-            while ( rank && _items[rank-1] == 1 )
-            {
-                --rank;
-            }
-            return rank;
-        }
-
-    public:
-
-        static const Shape& undefined()
-        {
-            static const Shape shape(0);
-            return shape;
-        }
-        
-        static const Shape& singleton()
-        {
-            static const Shape shape(1);
-            return shape;
-        }
-
     private:
 
-        std::array<extent_type,MaxRank> _items;
+        std::vector<extent_type> _items;
     };
 
 
     inline std::ostream& operator<<( std::ostream& os, const Shape& shape )
     {
-        auto rank = std::max(shape.rank(), (size_t)2);
-
         os << '[';
-        for ( size_t i = 0; i < rank; ++i )
+        for ( size_t i = 0; i < shape.rank(); ++i )
         {
             if ( i )
             {

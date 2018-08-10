@@ -39,14 +39,15 @@ namespace nnef
         {
             Eof,
             Version,
+            Extension,
             Identifier,
             Characters,
-            Integer,
-            Real,
+            Decimal,
+            Fractional,
             Graph,
             Fragment,
             Tensor,
-            Extent,
+            Integer,
             Scalar,
             Logical,
             String,
@@ -56,6 +57,7 @@ namespace nnef
             In,
             If,
             Else,
+            Yield,
             LengthOf,
             ShapeOf,
             RangeOf,
@@ -74,14 +76,15 @@ namespace nnef
             {
                 "eof",
                 "version",
+                "extension",
                 "identifier",
                 "literal",
-                "integer",
-                "real",
+                "decimal",
+                "fractional",
                 "graph",
                 "fragment",
                 "tensor",
-                "extent",
+                "integer",
                 "scalar",
                 "logical",
                 "string",
@@ -91,6 +94,7 @@ namespace nnef
                 "in",
                 "if",
                 "else",
+                "yield",
                 "length_of",
                 "shape_of",
                 "range_of",
@@ -124,8 +128,8 @@ namespace nnef
         
     public:
         
-        Lexer( std::istream& input )
-        : _input(input), _position({1,1,nullptr}), _token(Eof)
+        Lexer( std::istream& input, const char* filename )
+        : _input(input), _position({1,1,filename,nullptr}), _token(Eof)
         {
         }
         
@@ -174,6 +178,25 @@ namespace nnef
         {
             return _position;
         }
+
+        void readToken( int token )
+        {
+            if ( _token != token )
+            {
+                throw Error(_position, "expected token '%s', found '%s'", tokenString(token).c_str(), tokenString(_token).c_str());
+            }
+            next();
+        }
+
+        bool readIfToken( int token )
+        {
+            if ( _token == token )
+            {
+                next();
+                return true;
+            }
+            return false;
+        }
         
     private:
         
@@ -186,7 +209,7 @@ namespace nnef
             }
             if ( _input.peek() == EOF )
             {
-                const Position position = { _position.line, _position.column + (unsigned)_string.length() + 1, nullptr };
+                const Position position = { _position.line, _position.column + (unsigned)_string.length() + 1, _position.filename, nullptr };
                 throw Error(position, "expected %c", delim);
             }
             _input.get();
@@ -198,10 +221,11 @@ namespace nnef
             static const std::map<std::string,Token> keywords =
             {
                 std::make_pair("version", Token::Version),
+                std::make_pair("extension", Token::Extension),
                 std::make_pair("graph", Token::Graph),
                 std::make_pair("fragment", Token::Fragment),
                 std::make_pair("tensor", Token::Tensor),
-                std::make_pair("extent", Token::Extent),
+                std::make_pair("integer", Token::Integer),
                 std::make_pair("scalar", Token::Scalar),
                 std::make_pair("logical", Token::Logical),
                 std::make_pair("string", Token::String),
@@ -211,6 +235,7 @@ namespace nnef
                 std::make_pair("in", Token::In),
                 std::make_pair("if", Token::If),
                 std::make_pair("else", Token::Else),
+                std::make_pair("yield", Token::Yield),
                 std::make_pair("length_of", Token::LengthOf),
                 std::make_pair("shape_of", Token::ShapeOf),
                 std::make_pair("range_of", Token::RangeOf),
@@ -252,7 +277,7 @@ namespace nnef
                 }
                 if ( !std::isdigit(_input.peek()) )
                 {
-                    const Position position = { _position.line, _position.column + (unsigned)_string.length(), nullptr };
+                    const Position position = { _position.line, _position.column + (unsigned)_string.length(), _position.filename, nullptr };
                     throw Error(position, "expected digit");
                 }
                 while ( std::isdigit(_input.peek()) )
@@ -261,7 +286,7 @@ namespace nnef
                 }
             }
             
-            return real ? Token::Real : Token::Integer;
+            return real ? Token::Fractional : Token::Decimal;
         }
         
         int getOperator()
@@ -353,43 +378,14 @@ namespace nnef
     };
 
 
-    inline std::pair<int,int> parseVersion( Lexer& lexer )
+    inline float getScalarValue( Lexer& lexer )
     {
-        if ( lexer.token() != Lexer::Version )
-        {
-            throw Error(lexer.position(), "expected version keyword");
-        }
-        lexer.next();
+        return (float)std::atof(lexer.string().c_str());
+    }
 
-        if ( lexer.token() != Lexer::Real )
-        {
-            throw Error(lexer.position(), "expected version number");
-        }
-
-        auto str = lexer.string();
-
-        const size_t dots = std::count(str.begin(), str.end(), '.');
-        bool isdigits = std::all_of(str.begin(), str.end(), []( char ch ){ return std::isdigit(ch) || ch == '.'; });
-
-        if ( !isdigits || dots != 1 )
-        {
-            throw Error(lexer.position(), "invalid version number format: %s", str.c_str());
-        }
-
-        lexer.next();
-
-        auto version = std::atof(str.c_str());
-
-        auto dot = str.find('.');
-        auto major = std::atoi(str.substr(0,dot).c_str());
-        auto minor = std::atoi(str.substr(dot+1).c_str());
-
-        if ( version > 1.0 )
-        {
-            throw Error(lexer.position(), "unkown version %d.%d", (int)major, (int)minor);
-        }
-
-        return std::make_pair(major,minor);
+    inline int getIntegerValue( Lexer& lexer )
+    {
+        return std::atoi(lexer.string().c_str());
     }
     
 }   // namespace nnef

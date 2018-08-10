@@ -61,14 +61,16 @@ namespace nnef
     template<typename T>
     std::ostream& operator<<( std::ostream& os, const Dictionary<T>& dict )
     {
+        os << '{';
         for ( auto it = dict.begin(); it != dict.end(); ++it )
         {
             if ( it != dict.begin() )
             {
                 os << ", ";
             }
-            os << it->first << " = " << *it->second;
+            os << it->first << ": " << it->second;
         }
+        os << '}';
         return os;
     }
 
