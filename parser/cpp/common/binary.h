@@ -44,9 +44,9 @@ namespace nnef
     };
 
 
-    template<typename T>
+    template<typename T, typename U = float>
     inline void fill_tensor_header( TensorHeader& header, const size_t version[2], const size_t rank, const T* extents, const size_t bits_per_item,
-                                   const TensorHeader::QuantCode quant_code = TensorHeader::Float, const std::vector<float>& quant_params = {} )
+                                   const TensorHeader::QuantCode quant_code = TensorHeader::Float, const std::vector<U>& quant_params = {} )
     {
         const char* magic = "N\xEF";
 
@@ -69,10 +69,14 @@ namespace nnef
         header.rank = (uint32_t)rank;
         header.quant_code = quant_code;
 
-        std::copy_n(header.extents, rank, header.extents);
-        std::fill_n(header.extents + rank, TensorHeader::MaxRank - rank, (uint32_t)0);
+        std::copy_n(extents, rank, header.extents);
 
-        std::copy(quant_params.begin(), quant_params.end(), header.quant_params);
+        if ( sizeof(U) * quant_params.size() > 32 )
+        {
+            throw Error("quantization parameters exceed maximum possible length of 32 bytes (found %d btyes)", (int)(sizeof(U) * quant_params.size()));
+        }
+
+        std::copy(quant_params.begin(), quant_params.end(), (U*)header.quant_params);
     }
 
     inline void validate_tensor_header( const TensorHeader& header )
