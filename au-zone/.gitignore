@@ -1,0 +1,15 @@
+.DS_Store
+.ipynb_checkpoints
+.idea/
+nnef_converter-pb/nnef_convert.log
+__pycache__
+build/
+temp_files
+temp/
+test/temp/
+.pytest_cache
+.mypy_cache/
+.vscode/
+dist
+*.egg-info
+venv*/
