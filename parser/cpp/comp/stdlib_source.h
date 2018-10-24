@@ -301,19 +301,9 @@ namespace nnef {
         y = 1.0 / (1.0 + exp(-x));
     }
 
-    fragment sinh( x: tensor<scalar> ) -> ( y: tensor<scalar> )
-    {
-        y = 0.5 * (exp(x) - exp(-x));
-    }
-
-    fragment cosh( x: tensor<scalar> ) -> ( y: tensor<scalar> )
-    {
-        y = 0.5 * (exp(x) + exp(-x));
-    }
-
     fragment tanh( x: tensor<scalar> ) -> ( y: tensor<scalar> )
     {
-        y = sinh(x) / cosh(x);
+        y = (exp(x) - exp(-x)) / (exp(x) + exp(-x));
     }
 
     fragment softabs( x: tensor<scalar>, epsilon: scalar ) -> ( y: tensor<scalar> )
