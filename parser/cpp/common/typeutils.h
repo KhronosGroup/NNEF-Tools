@@ -216,7 +216,7 @@ namespace nnef
             auto& param = proto.param(i);
             if ( param.type()->isGeneric() )
             {
-                auto& argType = types[param.name()];
+                auto argType = types[param.name()];
                 deduceDataType(param.type(), argType, dataType);
             }
         }

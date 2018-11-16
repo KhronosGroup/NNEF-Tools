@@ -567,6 +567,11 @@ namespace nnef
                 Param("input", ScalarTensor),
                 Param("axes", Integers),
             }, { Result("output", IntegerTensor) }),
+
+            Prototype("argmin_reduce", {
+                Param("input", ScalarTensor),
+                Param("axes", Integers),
+            }, { Result("output", IntegerTensor) }),
             
             Prototype("moments", {
                 Param("input", ScalarTensor),

@@ -925,16 +925,29 @@ namespace nnef
             {
                 auto& param = proto.param(i);
 
-                if ( !args.contains(param.name()) && !param.defaultValue() )
+                if ( !args.contains(param.name()) )
                 {
-                    throw Error(lexer.position(), "missing argument for fragment '%s'; parameter '%s' not assigned",
-                                    proto.name().c_str(), param.name().c_str());
+                    if ( !param.defaultValue() )
+                    {
+                        throw Error(lexer.position(), "missing argument for fragment '%s'; parameter '%s' not assigned",
+                                        proto.name().c_str(), param.name().c_str());
+                    }
+                    else if ( param.type()->isGeneric() )
+                    {
+                        auto valueType = typeOf(param.defaultValue());
+                        auto paramType = dataType ? bindDataType(param.type(), dataType) : param.type();
+                        if ( !isCastable(valueType, paramType) )
+                        {
+                            throw Error(lexer.position(), "default value type '%s' cannot be cast to type '%s' for parameter '%s'",
+                                        valueType->toString().c_str(), paramType->toString().c_str(), param.name().c_str());
+                        }
+                    }
                 }
             }
             
             lexer.readToken(')');
             
-            if ( proto.isGeneric() && !deduceDataType(proto, args, dataType, position) )
+            if ( proto.isGeneric() && !dataType && !deduceDataType(proto, args, dataType, position) )
             {
                 throw Error(position, "could not deduce generic data-type");
             }
@@ -1360,6 +1373,15 @@ namespace nnef
             {
                 types[arg.first] = arg.second->type();
             }
+            for ( size_t i = 0; i < proto.paramCount(); ++i )
+            {
+                auto& param = proto.param(i);
+                if ( !types.contains(param.name()) )
+                {
+                    assert(param.defaultValue());
+                    types[param.name()] = typeOf(param.defaultValue());
+                }
+            }
 
             try
             {
@@ -1367,7 +1389,7 @@ namespace nnef
             }
             catch ( std::pair<Typename,Typename> e )
             {
-                throw Error(position, "could not derive data-type: ambiguous candidates '%s' vs '%s'", toString(e.first), toString(e.second));
+                throw Error(position, "could not deduce data-type: ambiguous candidates '%s' vs '%s'", toString(e.first), toString(e.second));
             }
         }
 
@@ -1518,6 +1540,52 @@ namespace nnef
             }
             
             return nullptr;
+        }
+
+        static const Type* typeOf( const Value& value )
+        {
+            switch ( value.kind() )
+            {
+                case Value::Integer:
+                {
+                    return primitiveType(Typename::Integer);
+                }
+                case Value::Scalar:
+                {
+                    return primitiveType(Typename::Scalar);
+                }
+                case Value::Logical:
+                {
+                    return primitiveType(Typename::Logical);
+                }
+                case Value::String:
+                {
+                    return primitiveType(Typename::String);
+                }
+                case Value::Array:
+                {
+                    auto itemType = value.size() ? typeOf(value[0]) : nullptr;
+                    return arrayType(itemType);
+                }
+                case Value::Tuple:
+                {
+                    std::vector<const Type*> itemTypes(value.size());
+                    for ( size_t i = 0; i < value.size(); ++i )
+                    {
+                        itemTypes[i] = typeOf(value[i]);
+                    }
+                    return tupleType(itemTypes);
+                }
+                case Value::ShapeOf:
+                {
+                    return arrayType(primitiveType(Typename::Integer));
+                }
+                case Value::Identifier:
+                case Value::None:
+                {
+                    return nullptr;
+                }
+            }
         }
         
         static int tokenPrecedence( int token )

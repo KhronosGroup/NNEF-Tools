@@ -243,7 +243,7 @@ namespace nnef
                                  (int)proto.resultCount());
             }
 
-            if ( proto.isGeneric() && !deduceDataType(proto, args, dtypes, dataType, position) )
+            if ( proto.isGeneric() && !dataType && !deduceDataType(proto, args, dtypes, dataType, position) )
             {
                 throw Error(position, "could not deduce generic data-type");
             }
@@ -367,6 +367,16 @@ namespace nnef
                 {
                     if ( param.defaultValue() )
                     {
+                        if ( param.type()->isGeneric() )
+                        {
+                            auto valueType = typeOf(param.defaultValue(), *decls);
+                            auto paramType = dataType ? bindDataType(param.type(), dataType) : param.type();
+                            if ( !isCastable(valueType, paramType) )
+                            {
+                                throw Error(lexer.position(), "default value type '%s' cannot be cast to type '%s' for parameter '%s'",
+                                            valueType->toString().c_str(), paramType->toString().c_str(), param.name().c_str());
+                            }
+                        }
                         args[param.name()] = param.defaultValue();
                     }
                     else
@@ -679,6 +689,15 @@ namespace nnef
             for ( auto& arg : args )
             {
                 types[arg.first] = typeOf(arg.second, declared);
+            }
+            for ( size_t i = 0; i < proto.paramCount(); ++i )
+            {
+                auto& param = proto.param(i);
+                if ( !types.contains(param.name()) )
+                {
+                    assert(param.defaultValue());
+                    types[param.name()] = typeOf(param.defaultValue(), declared);
+                }
             }
 
             try
