@@ -272,7 +272,6 @@ namespace nnef
                 _string += _input.get();
                 if ( _input.peek() == '+' || _input.peek() == '-' )
                 {
-                    real |= _input.peek() == '-';
                     _string += _input.get();
                 }
                 if ( !std::isdigit(_input.peek()) )
@@ -284,6 +283,7 @@ namespace nnef
                 {
                     _string += _input.get();
                 }
+                real = true;
             }
             
             return real ? Token::Fractional : Token::Decimal;
