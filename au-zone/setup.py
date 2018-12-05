@@ -33,7 +33,7 @@ setup (
     description = 'NNEF Converter',
     author = 'Au-Zone Technologies Inc.',
     author_email = 'support@au-zone.com',
-    license = 'PROPRIETARY',
+    license = 'Apache 2.0',
     url = 'http://www.au-zone.com',
     packages = find_packages(),
     install_requires = ['nnef', 'networkx', 'protobuf', 'numpy']
