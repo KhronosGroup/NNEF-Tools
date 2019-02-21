@@ -50,7 +50,7 @@ def _get_random_inputs(net):
 
 
 def prototxt_to_caffedog(prototxt_file_name, caffemodel_file_name=None, with_activations=False, with_variables=True):
-    # type: (str, Optional[str], bool)->CaffeGraph
+    # type: (str, Optional[str], bool, bool)->CaffeGraph
 
     path_without_ext = prototxt_file_name.split(".prototxt")[0]
 
@@ -73,11 +73,23 @@ def prototxt_to_caffedog(prototxt_file_name, caffemodel_file_name=None, with_act
 
     upgrade_bin = "/usr/bin/upgrade_net_proto_text"
     if not os.path.exists(upgrade_bin):
+        upgrade_bin = os.path.join(os.environ['CAFFE_BIN_FOLDER'], "upgrade_net_proto_text")
+    if not os.path.exists(upgrade_bin):
         upgrade_bin = os.path.join(os.environ['CAFFE_BIN_FOLDER'], "upgrade_net_proto_text.bin")
 
-    with NamedTemporaryFile(mode='r', suffix='.prototxt') as tmp_file:
-        subprocess.check_call([upgrade_bin, prototxt_file_name, tmp_file.name])
-        text = tmp_file.read()
+    if os.path.exists(upgrade_bin):
+        try:
+            with NamedTemporaryFile(mode='r', suffix='.prototxt') as tmp_file:
+                subprocess.check_call([upgrade_bin, prototxt_file_name, tmp_file.name])
+                text = tmp_file.read()
+        except Exception as e:
+            print("There was an error when running {}.".format(upgrade_bin))
+            print(e)
+    else:
+        print("Error: upgrade_net_proto_text not found. "
+              "It should be in CAFFE_BIN_FOLDER or in /usr/bin. "
+              "It should have been installed by caffe.")
+        exit(1)
 
     netparam = caffe_pb2.NetParameter()
     protobuf_text_format.Merge(text, netparam)
