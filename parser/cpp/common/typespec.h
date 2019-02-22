@@ -276,26 +276,26 @@ namespace nnef
 
     inline const Type* arrayType( const Type* itemType )
     {
-        static std::map<const Type*, std::unique_ptr<const Type>> types;
-
-        auto& type = types[itemType];
-        if ( !type )
+        static std::map<const Type*,ArrayType> types;
+        
+        auto it = types.lower_bound(itemType);
+        if ( it == types.end() || it->first != itemType )
         {
-            type = std::make_unique<const ArrayType>(itemType);
+            it = types.emplace_hint(it, itemType, itemType);
         }
-        return type.get();
+        return &it->second;
     }
 
     inline const Type* tupleType( const std::vector<const Type*>& itemTypes )
     {
-        static std::map<std::vector<const Type*>, std::unique_ptr<const Type>> types;
+        static std::map<std::vector<const Type*>,TupleType> types;
 
-        auto& type = types[itemTypes];
-        if ( !type )
+        auto it = types.lower_bound(itemTypes);
+        if ( it == types.end() || it->first != itemTypes )
         {
-            type = std::make_unique<const TupleType>(itemTypes);
+            it = types.emplace_hint(it, itemTypes, itemTypes);
         }
-        return type.get();
+        return &it->second;
     }
     
 }   // namespace nnef
