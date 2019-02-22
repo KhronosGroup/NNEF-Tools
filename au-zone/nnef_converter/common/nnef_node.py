@@ -16,7 +16,6 @@
 from __future__ import division
 
 import numpy as np
-from . import nnef_data
 
 
 class Node(object):
@@ -112,6 +111,7 @@ class Node(object):
         self.parameters_ = {}
         self.output_shape = None
         self.tensor_data_file = None
+        self.tensor = None
         self.output_value_ = None
         if not hasattr(self, 'defaults'):
             self.defaults = {}
@@ -1320,24 +1320,16 @@ class Variable(Node):
         assert isinstance(kwargs['label'], str), "NNEF %s node, 'label' value is not of 'str' type"%(self.__class__.__name__)
         assert isinstance(kwargs['shape'], list), "NNEF %s node, 'shape' value is not of 'list' type"%(self.__class__.__name__)
         super(Variable, self).__init__('variable', **kwargs)
-
-        nnef_tensor = nnef_data.NNEFTensor()
+        self.modified = False
 
         if isinstance(kwargs['_np_tensor'], bytes):
-            nnef_tensor.set_array_from_bytes(kwargs['_np_tensor'], kwargs['shape'], kwargs['_np_dtype'])
+            self.tensor = np.frombuffer(kwargs['_np_tensor'], dtype = kwargs['_np_dtype'])
+            self.tensor = np.reshape(self.tensor, kwargs['shape'])
         else:
-            nnef_tensor.set_array(kwargs['_np_tensor'], kwargs['_np_dtype'])
-            nnef_tensor._modified = False
-
-        dat_file = nnef_data.TensorDataFile()
-        dat_file.set_header(nnef_tensor.shape, nnef_data.nnef_float32)
-        dat_file.set_data(nnef_tensor)
-        self.set_tensordatafile(dat_file)
+            self.tensor = kwargs['_np_tensor']
 
         self.output_shape = kwargs['shape']
 
     def run(self, **kwargs):
-        dat_file = nnef_data.TensorDataFile()
-        dat_file.read_from_disk(self.parameters['label']+'.dat')
-        self.output_value_ = np.reshape(dat_file.get_numpy_array(), self.parameters['shape'])
+        self.output_value_ = self.tensor
         return self.output_value_
