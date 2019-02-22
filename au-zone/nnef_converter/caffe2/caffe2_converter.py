@@ -23,7 +23,6 @@ import networkx as nx
 import numpy as np
 
 from ..common.importer_exporter import ImporterExporter
-from ..common.nnef_data import  * #NNEFTensor, TensorDataFile
 from ..common.nnef_converter import *
 from ..common.nnef_graph import *
 from ..common import nnef_node as node
@@ -715,7 +714,7 @@ class Caffe2Importer(Caffe2Logger, ImporterExporter):
                 fd = (sizes[i] - 1) * dilations[i] + 1
                 padding_add = padding[i][0] + padding[i][1]
                 output_shape[i] = math.floor((in_shape[i] + padding_add - fd) / strides[i]) + 1
-                
+
         if legacy_pad and pad_val == 3:
             output_shape = len(in_shape) * [0]
             for i in range(len(in_shape)):
@@ -761,23 +760,23 @@ class Caffe2Importer(Caffe2Logger, ImporterExporter):
                                 _output_shape=output_shape)
 
         return nnef_node, caffe2_inputs, attrs
-    
+
     def import_Conditional(self, caffe2node):
         caffe2_inputs = {'condition': 0, 'true_value': 1, 'false_value': 2}
         attrs = {}
-        
+
         nnef_node_condition = self.get_node_from_pool(caffe2node, caffe2_inputs['condition'])
         nnef_node_true = self.get_node_from_pool(caffe2node, caffe2_inputs['true_value'])
         nnef_node_false = self.get_node_from_pool(caffe2node, caffe2_inputs['false_value'])
-        
+
         output_shape = self.define_elementwise_binary_output_shape(nnef_node_true, nnef_node_false)
-        
+
         nnef_node = node.Select(condition=nnef_node_condition,
                                 true_value=nnef_node_true,
                                 false_value=nnef_node_false,
                                 _uid=self.gen_node_name(caffe2node.output[0]),
                                 _output_shape=output_shape)
-        
+
         return nnef_node, caffe2_inputs, attrs
 
     def import_Conv(self, caffe2node):
@@ -862,7 +861,7 @@ class Caffe2Importer(Caffe2Logger, ImporterExporter):
                 fd = (filter_shape[i] - 1) * dilations[i-2] + 1
                 padding_add = padding[i-2][0] + padding[i-2][1]
                 output_shape[i] = math.floor((in_shape[i] + padding_add - fd) / strides[i-2]) + 1
-                
+
         if legacy_pad and pad_val == 3:
             std_output_shape = output_shape[:]
             for i in range(2,len(in_shape)):
@@ -873,7 +872,7 @@ class Caffe2Importer(Caffe2Logger, ImporterExporter):
                 std_output_shape[i] = int((in_shape[i] + padding[i-2][0] * 2 - filter_shape[i]) / strides[i-2] + 1)
                 pad_tail = padding[i-2][0] + strides[i-2] * (output_shape[i] - std_output_shape[i])
                 padding[i-2] = (padding[i-2][0], int(pad_tail))
-            
+
         nnef_node = node.Conv(input=nnef_node_input,
                               filter=nnef_node_filter,
                               bias=bias,
@@ -900,21 +899,24 @@ class Caffe2Importer(Caffe2Logger, ImporterExporter):
 
         nnef_node_input = self.get_node_from_pool(caffe2node, caffe2_inputs['input'])
         nnef_node_filter = self.get_node_from_pool(caffe2node, caffe2_inputs['filter'])
-        
+
         if nnef_node_filter.op == 'variable':
-            filter_tdf = nnef_node_filter.get_tensordatafile()
-            nnef_tensor = np.transpose(filter_tdf.get_data().get_array()[0], [1, 0, 2, 3])
-            filter_tdf.get_data().set_array(nnef_tensor)
-            new_shape = list(np.shape(filter_tdf.get_data().get_array()[0]))
-            filter_tdf.header.set_tensor_dimensions(new_shape)
-            nnef_node_filter.parameters['shape'] = new_shape
+            if not nnef_node_filter.modified:
+                nnef_tensor = np.transpose(nnef_node_filter.tensor, [1, 0, 2, 3])
+                nnef_node_filter.tensor = nnef_tensor
+                new_shape = list(np.shape(nnef_tensor))
+                nnef_node_filter.parameters['shape'] = new_shape
+                nnef_node_filter.output_shape = new_shape
+                nnef_node_filter.modified = True
+            else:
+                new_shape = nnef_node_filter.parameters['shape']
         elif nnef_node_filter.op == 'reshape':
             current_shape = nnef_node_filter.parameters['shape'][:]
             new_shape = convert_format(current_shape, 'NCHW', 'CNHW')
             nnef_node_filter.parameters['shape'] = new_shape
         else:
             new_shape = [1]*len(nnef_node_input.output_shape)
-            
+
         in_shape = nnef_node_input.output_shape
         filter_shape = nnef_node_filter.output_shape
 
@@ -987,7 +989,7 @@ class Caffe2Importer(Caffe2Logger, ImporterExporter):
                 fd = (filter_shape[i] - 1) * dilations[i-2] + 1
                 padding_add = padding[i-2][0] + padding[i-2][1]
                 output_shape[i] = math.floor((in_shape[i] + padding_add - fd) / strides[i-2]) + 1
-                
+
         if legacy_pad and pad_val == 3:
             std_output_shape = output_shape[:]
             for i in range(2,len(in_shape)):
@@ -1460,7 +1462,7 @@ class Caffe2Importer(Caffe2Logger, ImporterExporter):
                 fd = (sizes[i] - 1) * dilations[i] + 1
                 padding_add = padding[i][0] + padding[i][1]
                 output_shape[i] = math.floor((in_shape[i] + padding_add - fd) / strides[i]) + 1
-                
+
         if legacy_pad and pad_val == 3:
             output_shape = len(in_shape) * [0]
             for i in range(len(in_shape)):
@@ -1472,7 +1474,7 @@ class Caffe2Importer(Caffe2Logger, ImporterExporter):
                 std_output_shape[i] = int((in_shape[i] + padding[i][0] * 2 - sizes[i]) / strides[i] + 1)
                 pad_tail = padding[i][0] + strides[i] * (output_shape[i] - std_output_shape[i])
                 padding[i] = (padding[i][0], int(pad_tail))
-                
+
         nnef_node = node.MaxPool(input=nnef_node_input,
                                  size=sizes,
                                  padding=padding,
@@ -1569,7 +1571,7 @@ class Caffe2Importer(Caffe2Logger, ImporterExporter):
                 fd = (sizes[i] - 1) * dilations[i] + 1
                 padding_add = padding[i][0] + padding[i][1]
                 output_shape[i] = math.floor((in_shape[i] + padding_add - fd) / strides[i]) + 1
-                
+
         if legacy_pad and pad_val == 3:
             output_shape = len(in_shape) * [0]
             for i in range(len(in_shape)):
@@ -2125,7 +2127,7 @@ class Caffe2Exporter(Caffe2Logger, ImporterExporter):
         print("Caffe2 Graphs Completed!")
         print("Caffe2 graphs have %s nodes"%(len(self.predict_graph.op) + len(self.data_graph.op)))
         model_filename, _ = self.chdir_to_modeldir(self.output_model)
-        
+
         self.predict_graph.name = 'caffe2_output'
 
         with open("predict_" + model_filename + 'txt', "w") as f:
@@ -2952,7 +2954,7 @@ class Caffe2Exporter(Caffe2Logger, ImporterExporter):
 
         arg_values = caffe2_pb2.Argument()
         arg_values.name = "values"
-        np_tensor = np.asarray(nnef_node.get_tensordatafile().get_data().get_array()[0], dtype=np.float32)
+        np_tensor = nnef_node.tensor.astype(np.float32)
         np_tensor = np.reshape(np_tensor, [-1])
         for val in np_tensor:
             arg_values.floats.extend([val])

@@ -25,7 +25,6 @@ import networkx as nx
 
 from .importer_exporter import ImporterExporter
 from .nnef_graph import  *
-from .nnef_data import *
 from . import nnef_node as node
 
 class NNEFImporter(ImporterExporter):
@@ -206,24 +205,20 @@ class NNEFImporter(ImporterExporter):
             padding = []
         if 'stride' in operand[1] and operand[1]['stride'] != []:
             stride = operand[1]['stride']
-            stride_values = stride
         else:
-            stride = []
-            stride_values = [1]*len(output_shape)
+            stride = [1]*len(output_shape)
         if 'dilation' in operand[1] and operand[1]['dilation'] != []:
             dilation = operand[1]['dilation']
-            dilation_values = dilation
         else:
-            dilation = []
-            dilation_values = [1]*len(output_shape)
+            dilation = [1]*len(output_shape)
 
         for i in range(len(output_shape)):
             if padding == []:
-                output_shape[i] = math.ceil(output_shape[i]/stride_values[i])
+                output_shape[i] = math.ceil(output_shape[i]/stride[i])
             else:
-                fd = (size[i] - 1)* dilation_values[i] + 1
+                fd = (size[i] - 1)* dilation[i] + 1
                 output_shape[i] = math.floor((output_shape[i] + padding[i][0] +
-                                              padding[i][1] - fd) / stride_values[i]) + 1
+                                              padding[i][1] - fd) / stride[i]) + 1
 
         return node.AvgPool(input=node_input,
                             size=size,
@@ -311,16 +306,12 @@ class NNEFImporter(ImporterExporter):
             padding = []
         if 'stride' in operand[1] and operand[1]['stride'] != []:
             stride = operand[1]['stride']
-            stride_values = stride
         else:
-            stride = []
-            stride_values = [1]*(len(output_shape)-2)
+            stride = [1]*(len(output_shape)-2)
         if 'dilation' in operand[1] and operand[1]['dilation'] != []:
             dilation = operand[1]['dilation']
-            dilation_values = dilation
         else:
-            dilation = []
-            dilation_values = [1]*(len(output_shape)-2)
+            dilation = [1]*(len(output_shape)-2)
         if 'groups' in operand[1]:
             groups = operand[1]['groups']
         else:
@@ -331,11 +322,11 @@ class NNEFImporter(ImporterExporter):
 
         for i in range(2, len(output_shape)):
             if padding == []:
-                output_shape[i] = math.ceil(output_shape[i]/stride_values[i-2])
+                output_shape[i] = math.ceil(output_shape[i]/stride[i-2])
             else:
-                fd = (conv_filter[i] - 1) * dilation_values[i-2] + 1
+                fd = (conv_filter[i] - 1) * dilation[i-2] + 1
                 pad = padding[i-2][0] + padding[i-2][1]
-                output_shape[i] = math.floor((output_shape[i] + pad - fd) / stride_values[i-2]) + 1
+                output_shape[i] = math.floor((output_shape[i] + pad - fd) / stride[i-2]) + 1
 
         return node.Conv(input=node_input,
                          filter=node_filter,
@@ -368,16 +359,12 @@ class NNEFImporter(ImporterExporter):
             padding = []
         if 'stride' in operand[1] and operand[1]['stride'] != []:
             stride = operand[1]['stride']
-            stride_values = stride
         else:
-            stride = []
-            stride_values = [1]*(len(output_shape)-2)
+            stride = [1]*(len(output_shape)-2)
         if 'dilation' in operand[1] and operand[1]['dilation'] != []:
             dilation = operand[1]['dilation']
-            dilation_values = dilation
         else:
-            dilation = []
-            dilation_values = [1]*(len(output_shape)-2)
+            dilation = [1]*(len(output_shape)-2)
         if 'groups' in operand[1]:
             groups = operand[1]['groups']
         else:
@@ -387,12 +374,12 @@ class NNEFImporter(ImporterExporter):
         output_shape[1] = conv_filter[1]
 
         for i in range(2, len(output_shape)):
-            fd = (conv_filter[i] - 1) * dilation_values[i-2] + 1
+            fd = (conv_filter[i] - 1) * dilation[i-2] + 1
             if padding == []:
                 pad = 0
             else:
                 pad = padding[i-2][0] + padding[i-2][1]
-            output_shape[i] = (output_shape[i] - 1) * stride_values[i-2] + fd - pad
+            output_shape[i] = (output_shape[i] - 1) * stride[i-2] + fd - pad
 
         return node.Deconv(input=node_input,
                            filter=node_filter,
@@ -637,24 +624,20 @@ class NNEFImporter(ImporterExporter):
             padding = []
         if 'stride' in operand[1] and operand[1]['stride'] != []:
             stride = operand[1]['stride']
-            stride_values = stride
         else:
-            stride = []
-            stride_values = [1]*len(output_shape)
+            stride = [1]*len(output_shape)
         if 'dilation' in operand[1] and operand[1]['dilation'] != []:
             dilation = operand[1]['dilation']
-            dilation_values = dilation
         else:
-            dilation = []
-            dilation_values = [1]*len(output_shape)
+            dilation = [1]*len(output_shape)
 
         for i in range(len(output_shape)):
             if padding == []:
-                output_shape[i] = math.ceil(output_shape[i]/stride_values[i])
+                output_shape[i] = math.ceil(output_shape[i]/stride[i])
             else:
-                fd = (size[i] - 1)* dilation_values[i] + 1
+                fd = (size[i] - 1)* dilation[i] + 1
                 output_shape[i] = math.floor((output_shape[i] + padding[i][0] +
-                                              padding[i][1] - fd) / stride_values[i]) + 1
+                                              padding[i][1] - fd) / stride[i]) + 1
 
         return node.MaxPool(input=node_input,
                             size=size,
@@ -681,24 +664,20 @@ class NNEFImporter(ImporterExporter):
             padding = []
         if 'stride' in operand[1] and operand[1]['stride'] != []:
             stride = operand[1]['stride']
-            stride_values = stride
         else:
-            stride = []
-            stride_values = [1]*len(output_shape)
+            stride = [1]*len(output_shape)
         if 'dilation' in operand[1] and operand[1]['dilation'] != []:
             dilation = operand[1]['dilation']
-            dilation_values = dilation
         else:
-            dilation = []
-            dilation_values = [1]*len(output_shape)
+            dilation = [1]*len(output_shape)
 
         for i in range(len(output_shape)):
             if padding == []:
-                output_shape[i] = math.ceil(output_shape[i]/stride_values[i])
+                output_shape[i] = math.ceil(output_shape[i]/stride[i])
             else:
-                fd = (size[i] - 1)* dilation_values[i] + 1
+                fd = (size[i] - 1)* dilation[i] + 1
                 output_shape[i] = math.floor((output_shape[i] + padding[i][0] +
-                                              padding[i][1] - fd) / stride_values[i]) + 1
+                                              padding[i][1] - fd) / stride[i]) + 1
 
         base_node = node.MaxPoolWithIndex(input=node_input,
                                           size=size,
@@ -895,27 +874,23 @@ class NNEFImporter(ImporterExporter):
             padding = []
         if 'stride' in operand[1] and operand[1]['stride'] != []:
             stride = operand[1]['stride']
-            stride_values = stride
         else:
-            stride = []
-            stride_values = [1]*(len(output_shape)-2)
+            stride = [1]*(len(output_shape)-2)
         if 'dilation' in operand[1] and operand[1]['dilation'] != []:
             dilation = operand[1]['dilation']
-            dilation_values = dilation
         else:
-            dilation = []
-            dilation_values = [1]*(len(output_shape)-2)
+            dilation = [1]*(len(output_shape)-2)
 
         conv_filter = node_filter.output_shape
         output_shape[1] = conv_filter[0]
 
         for i in range(2, len(output_shape)):
             if padding == []:
-                output_shape[i] = math.ceil(output_shape[i]/stride_values[i-2])
+                output_shape[i] = math.ceil(output_shape[i]/stride[i-2])
             else:
-                fd = (conv_filter[i] - 1) * dilation_values[i-2] + 1
+                fd = (conv_filter[i] - 1) * dilation[i-2] + 1
                 pad = padding[i-2][0] + padding[i-2][1]
-                output_shape[i] = math.floor((output_shape[i] + pad - fd) / stride_values[i-2]) + 1
+                output_shape[i] = math.floor((output_shape[i] + pad - fd) / stride[i-2]) + 1
 
         return node.PlanewiseConv(input=node_input,
                                   filter=node_filter,
@@ -1031,16 +1006,12 @@ class NNEFImporter(ImporterExporter):
             padding = []
         if 'stride' in operand[1] and operand[1]['stride'] != []:
             stride = operand[1]['stride']
-            stride_values = stride
         else:
-            stride = []
-            stride_values = [1]*(len(output_shape)-2)
+            stride = [1]*(len(output_shape)-2)
         if 'dilation' in operand[1] and operand[1]['dilation'] != []:
             dilation = operand[1]['dilation']
-            dilation_values = dilation
         else:
-            dilation = []
-            dilation_values = [1]*(len(output_shape)-2)
+            dilation = [1]*(len(output_shape)-2)
         if 'groups' in operand[1]:
             groups = operand[1]['groups']
         else:
@@ -1051,22 +1022,22 @@ class NNEFImporter(ImporterExporter):
 
         for i in range(2, len(output_shape)):
             if padding == []:
-                output_shape[i] = math.ceil(output_shape[i]/stride_values[i-2])
+                output_shape[i] = math.ceil(output_shape[i]/stride[i-2])
             else:
-                fd = (conv_filter[i] - 1) * dilation_values[i-2] + 1
+                fd = (conv_filter[i] - 1) * dilation[i-2] + 1
                 pad = padding[i-2][0] + padding[i-2][1]
-                output_shape[i] = math.floor((output_shape[i] + pad - fd) / stride_values[i-2]) + 1
+                output_shape[i] = math.floor((output_shape[i] + pad - fd) / stride[i-2]) + 1
 
         conv_filter = node_point_filter.output_shape
         output_shape[1] = conv_filter[0]
 
         for i in range(2, len(output_shape)):
             if padding == []:
-                output_shape[i] = math.ceil(output_shape[i]/stride_values[i-2])
+                output_shape[i] = math.ceil(output_shape[i]/stride[i-2])
             else:
-                fd = (conv_filter[i] - 1) * dilation_values[i-2] + 1
+                fd = (conv_filter[i] - 1) * dilation[i-2] + 1
                 pad = padding[i-2][0] + padding[i-2][1]
-                output_shape[i] = math.floor((output_shape[i] + pad - fd) / stride_values[i-2]) + 1
+                output_shape[i] = math.floor((output_shape[i] + pad - fd) / stride[i-2]) + 1
 
         return node.SeparableConv(input=node_input,
                                   plane_filter=node_plane_filter,
@@ -1317,10 +1288,11 @@ class NNEFImporter(ImporterExporter):
         no_datfile = False
 
         try:
-            tdf = TensorDataFile()
-            tdf.read_from_disk(label + '.dat')
-
-            [nnef_tensor, nnef_type] = tdf.get_data().get_array()
+            tensor, _ = nnef.read_tensor(open(label + '.dat', 'rb'))
+            if tensor.dtype == np.float32:
+                dtype = np.float32
+            elif tensor.dtype == np.int32:
+                dtype = np.int32
 
         except IOError:
             nnef_tensor = np.random.rand(*shape).astype(np.float32)
@@ -1329,8 +1301,8 @@ class NNEFImporter(ImporterExporter):
 
         nnef_node = node.Variable(label=label,
                                   shape=shape,
-                                  _np_dtype=nnef_type,
-                                  _np_tensor=nnef_tensor,
+                                  _np_dtype=dtype,
+                                  _np_tensor=tensor,
                                   _uid=node_name,
                                   _output_shape=shape)
 
@@ -1340,7 +1312,7 @@ class NNEFImporter(ImporterExporter):
         return nnef_node
 
     def import_UNKNOWN(self, op):
-        assert False, "Missing implementation for node op: %s"%op[0]
+        assert False, "Missing implementation for node op: %s" % op[0].name
 
 class NNEFExporter(ImporterExporter):
     def __init__(self, output_model):

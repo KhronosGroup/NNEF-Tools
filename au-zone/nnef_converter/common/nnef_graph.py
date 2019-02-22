@@ -15,6 +15,8 @@
 
 from __future__ import division
 
+import nnef
+
 import networkx as nx
 from .nnef_version import  NNEFVersion
 from .nnef_node import  Node
@@ -235,10 +237,16 @@ class NNEFGraph(object):
                     assert data['node'] is not None, "Node doesn't have NNEF node!"
 
                     nnef_node = data['node']
-                    if nnef_node.get_tensordatafile():
+                    if data['node'].op == 'variable':
                         #print("=> Node %s is saving tensor to disk(%s)" % (
                         #    nnef_node.name, nnef_node.parameters['label']))
-                        nnef_node.get_tensordatafile().write_to_disk('%s.dat' % (nnef_node.parameters['label']))
+                        loc = nnef_node.parameters['label'].rfind('/')
+                        if loc != -1:
+                            if not os.path.isdir(nnef_node.parameters['label'][:loc]):
+                                os.makedirs(nnef_node.parameters['label'][:loc])
+                        dat_file = open(nnef_node.parameters['label'] + '.dat', 'wb')
+                        nnef.write_tensor(dat_file, nnef_node.tensor)
+                        dat_file.close()
                 else:
                     print("===> %s doesn't have node!?" % (node))
             f.write("}")

@@ -27,7 +27,6 @@ import networkx as nx
 import numpy as np
 
 from ..common.importer_exporter import ImporterExporter
-from ..common.nnef_data import  * #NNEFTensor, TensorDataFile
 from ..common.nnef_converter import *
 from ..common.nnef_graph import *
 from ..common import nnef_node as node
@@ -638,11 +637,11 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
             attrs = {'value': value, 'shape':shape}
         else:
             np_tensor, np_dtype, shape = self.get_numpy_from_tf_tensor(tfnode.attr['value'].tensor)
-            
+
             try:
                 if isinstance(tfnode.name, unicode):
                     label = tfnode.name.encode('ascii')
-                else: 
+                else:
                     label = tfnode.name
             except NameError:
                 label = tfnode.name
@@ -730,7 +729,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
 
         output_shape = convert_format(output_shape, 'NCHW', data_format)
         output_shape = [int(v) for v in output_shape]
-        
+
         nnef_node = node.AvgPool(input=nnef_node_input,
                                  size=sizes,
                                  padding=padding,
@@ -829,13 +828,17 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
             nnef_node_input.parameters['shape'] = in_shape
 
         if nnef_node_filter.op == 'variable':
-            filter_tdf = nnef_node_filter.get_tensordatafile()
-            nnef_tensor = np.transpose(filter_tdf.get_data().get_array()[0], [3, 2, 0, 1])
-            filter_tdf.get_data().set_array(nnef_tensor)
-            new_shape = list(np.shape(filter_tdf.get_data().get_array()[0]))
-            filter_tdf.header.set_tensor_dimensions(new_shape)
-            nnef_node_filter.parameters['shape'] = new_shape
-            nnef_node_filter.output_shape = new_shape
+            if not nnef_node_filter.modified:
+                nnef_tensor = np.transpose(nnef_node_filter.tensor, [3, 2, 0, 1])
+                nnef_node_filter.tensor = nnef_tensor
+                new_shape = list(np.shape(nnef_tensor))
+                nnef_node_filter.parameters['shape'] = new_shape
+                nnef_node_filter.output_shape = new_shape
+                nnef_node_filter.modified = True
+            else:
+                new_shape = nnef_node_filter.parameters['shape']
+
+
         elif nnef_node_filter.op == 'reshape':
             current_shape = nnef_node_filter.parameters['shape'][:]
             new_shape = convert_format(current_shape, 'HWNC', 'CNHW')
@@ -906,12 +909,16 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
             nnef_node_input.parameters['shape'] = in_shape
 
         if nnef_node_filter.op == 'variable':
-            filter_tdf = nnef_node_filter.get_tensordatafile()
-            nnef_tensor = np.transpose(filter_tdf.get_data().get_array()[0], [4, 3, 0, 1, 2])
-            filter_tdf.get_data().set_array(nnef_tensor)
-            new_shape = list(np.shape(filter_tdf.get_data().get_array()[0]))
-            filter_tdf.header.set_tensor_dimensions(new_shape)
-            nnef_node_filter.parameters['shape'] = new_shape
+            if not nnef_node_filter.modified:
+                nnef_tensor = np.transpose(nnef_node_filter.tensor, [4, 3, 0, 1, 2])
+                nnef_node_filter.tensor = nnef_tensor
+                new_shape = list(np.shape(nnef_tensor))
+                nnef_node_filter.parameters['shape'] = new_shape
+                nnef_node_filter.output_shape = new_shape
+                nnef_node_filter.modified = True
+            else:
+                new_shape = nnef_node_filter.parameters['shape']
+
         elif nnef_node_filter.op == 'reshape':
             current_shape = nnef_node_filter.parameters['shape'][:]
             new_shape = convert_format(current_shape, 'DHWNC', 'CNDHW')
@@ -980,12 +987,16 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
         if nnef_node_input.op == 'reshape':
             nnef_node_input.parameters['shape'] = in_shape
         if nnef_node_filter.op == 'variable':
-            filter_tdf = nnef_node_filter.get_tensordatafile()
-            nnef_tensor = np.transpose(filter_tdf.get_data().get_array()[0], [3, 2, 0, 1])
-            filter_tdf.get_data().set_array(nnef_tensor)
-            new_shape = list(np.shape(filter_tdf.get_data().get_array()[0]))
-            filter_tdf.header.set_tensor_dimensions(new_shape)
-            nnef_node_filter.parameters['shape'] = new_shape
+            if not nnef_node_filter.modified:
+                nnef_tensor = np.transpose(nnef_node_filter.tensor, [3, 2, 0, 1])
+                nnef_node_filter.tensor = nnef_tensor
+                new_shape = list(np.shape(nnef_tensor))
+                nnef_node_filter.parameters['shape'] = new_shape
+                nnef_node_filter.output_shape = new_shape
+                nnef_node_filter.modified = True
+            else:
+                new_shape = nnef_node_filter.parameters['shape']
+
         elif nnef_node_filter.op == 'reshape':
             current_shape = nnef_node_filter.parameters['shape'][:]
             new_shape = convert_format(current_shape, 'HWNC', 'CNHW')
@@ -1007,7 +1018,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
 
         output_shape = convert_format(output_shape, 'NCHW', data_format)
         output_shape = [int(v) for v in output_shape]
-        
+
         nnef_node = node.Deconv(input=nnef_node_input,
                                 filter=nnef_node_filter,
                                 padding=padding,
@@ -1055,12 +1066,16 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
             nnef_node_input.parameters['shape'] = in_shape
 
         if nnef_node_filter.op == 'variable':
-            filter_tdf = nnef_node_filter.get_tensordatafile()
-            nnef_tensor = np.transpose(filter_tdf.get_data().get_array()[0], [4, 3, 0, 1, 2])
-            filter_tdf.get_data().set_array(nnef_tensor)
-            new_shape = list(np.shape(filter_tdf.get_data().get_array()[0]))
-            filter_tdf.header.set_tensor_dimensions(new_shape)
-            nnef_node_filter.parameters['shape'] = new_shape
+            if not nnef_node_filter.modified:
+                nnef_tensor = np.transpose(nnef_node_filter.tensor, [4, 3, 0, 1, 2])
+                nnef_node_filter.tensor = nnef_tensor
+                new_shape = list(np.shape(nnef_tensor))
+                nnef_node_filter.parameters['shape'] = new_shape
+                nnef_node_filter.output_shape = new_shape
+                nnef_node_filter.modified = True
+            else:
+                new_shape = nnef_node_filter.parameters['shape']
+
         elif nnef_node_filter.op == 'reshape':
             current_shape = nnef_node_filter.parameters['shape'][:]
             new_shape = convert_format(current_shape, 'DHWNC', 'CNDHW')
@@ -1217,16 +1232,18 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
         in_shape = nnef_node_input.output_shape[:]
         in_shape = convert_format(in_shape, data_format, 'NCHW')
         if nnef_node_filter.op == 'variable':
-            filter_tdf = nnef_node_filter.get_tensordatafile()
-            nnef_tensor = filter_tdf.get_data().get_array()[0]
-            shape = list(np.shape(nnef_tensor))
-            nnef_tensor = np.reshape(nnef_tensor, [shape[0], shape[1], shape[2]*shape[3], 1])
-            nnef_tensor = np.transpose(nnef_tensor, [2, 3, 0, 1])
-            filter_tdf.get_data().set_array(nnef_tensor)
-            new_shape = list(np.shape(filter_tdf.get_data().get_array()[0]))
-            filter_tdf.header.set_tensor_dimensions(new_shape)
-            nnef_node_filter.parameters['shape'] = new_shape
-            nnef_node_filter.output_shape = new_shape
+            if not nnef_node_filter.modified:
+                nnef_tensor = nnef_node_filter.tensor
+                shape = list(np.shape(nnef_tensor))
+                nnef_tensor = np.reshape(nnef_tensor, [shape[0], shape[1], shape[2]*shape[3], 1])
+                nnef_tensor = np.transpose(nnef_tensor, [2, 3, 0, 1])
+                nnef_node_filter.tensor = nnef_tensor
+                new_shape = list(np.shape(nnef_tensor))
+                nnef_node_filter.parameters['shape'] = new_shape
+                nnef_node_filter.output_shape = new_shape
+                nnef_node_filter.modified = True
+            else:
+                new_shape = nnef_node_filter.parameters['shape']
         else:
             new_shape = [1]*len(in_shape)
 
@@ -1267,7 +1284,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
         nnef_node = node.Elu(x=nnef_node_x,
                              _uid=self.gen_node_name(tfnode.name),
                              _output_shape=output_shape)
-    
+
         return nnef_node, tf_inputs, attrs
 
     def import_Equal(self, tfnode):
@@ -1551,7 +1568,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
 
         input_shape = nnef_node_input.output_shape[:]
         if nnef_node_axis.op == 'variable':
-            shape = nnef_node_axis.get_tensordatafile().get_data().get_array()[0][0]
+            shape = nnef_node_axis.tensor[0]
         else:
             shape = [int(nnef_node_axis.parameters['value'][0])]
 
@@ -1753,7 +1770,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
 
         input_shape = nnef_node_input.output_shape[:]
         if nnef_node_axis.op == 'variable':
-            shape = nnef_node_axis.get_tensordatafile().get_data().get_array()[0][0]
+            shape = nnef_node_axis.tensor[0]
         else:
             shape = [int(nnef_node_axis.parameters['value'][0])]
 
@@ -1891,7 +1908,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
         nnef_node_pad = self.get_node_from_pool(tfnode, tf_inputs['pads'])
 
         if nnef_node_pad.op == 'variable' and nnef_node_pad.parameters['shape'][0] > 1:
-            padding = nnef_node_pad.get_tensordatafile().get_data().get_array()[0]
+            padding = nnef_node_pad.tensor
             nnef_node = node.Pad(input=nnef_node_input,
                                  padding=padding,
                                  _uid=self.gen_node_name(tfnode.name),
@@ -2009,7 +2026,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
 
         shape = None
         if nnef_node_shape.op == 'variable':
-            shape = list(nnef_node_shape.get_tensordatafile().get_data().get_array()[0][0])
+            shape = list(nnef_node_shape.tensor[0])
             self.remove_node_from_pool(nnef_node_shape)
         elif nnef_node_shape.op == 'shape_of':
             shape = nnef_node_shape.output_shape[:]
@@ -2061,7 +2078,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
         input_shape = nnef_node_input.output_shape[:]
 
         if nnef_node_factor.op == 'variable':
-            output_size = nnef_node_factor.get_tensordatafile().get_data().get_array()[0][0]
+            output_size = nnef_node_factor.tensor[0]
             self.remove_node_from_pool(nnef_node_factor)
         else:
             print(nnef_node_factor.op)
@@ -2095,7 +2112,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
         input_shape = nnef_node_input.output_shape[:]
 
         if nnef_node_factor.op == 'variable':
-            output_size = nnef_node_factor.get_tensordatafile().get_data().get_array()[0][0]
+            output_size = nnef_node_factor.tensor[0]
             self.remove_node_from_pool(nnef_node_factor)
         else:
             print(nnef_node_factor.op)
@@ -2129,7 +2146,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
         input_shape = nnef_node_input.output_shape[:]
 
         if nnef_node_factor.op == 'variable':
-            output_size = nnef_node_factor.get_tensordatafile().get_data().get_array()[0][0]
+            output_size = nnef_node_factor.tensor[0]
             self.remove_node_from_pool(nnef_node_factor)
         else:
             print(nnef_node_factor.op)
@@ -2256,13 +2273,13 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
         nnef_node_end = self.get_node_from_pool(tfnode, tf_inputs['end'])
 
         if nnef_node_begin.op == 'variable':
-            begin = nnef_node_begin.get_tensordatafile().get_data().get_array()[0][0]
+            begin = nnef_node_begin.tensor[0]
         elif nnef_node_begin.op == 'constant':
             begin = np.reshape(np.asarray(nnef_node_begin.parameters['value'], dtype=np.int32), nnef_node_begin.parameters['shape'])
         else:
             begin = nnef_node_begin.get_value()
         if nnef_node_end.op == 'variable':
-            end = nnef_node_end.get_tensordatafile().get_data().get_array()[0][0]
+            end = nnef_node_end.tensor[0]
         elif nnef_node_end == 'constant':
             end = np.reshape(np.asarray(nnef_node_end.parameters['value'], dtype=np.int32), nnef_node_end.parameters['shape'])
         else:
@@ -2437,19 +2454,19 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
         nnef_node_strides = self.get_node_from_pool(tfnode, tf_inputs['strides'])
 
         if nnef_node_begin.op == 'variable':
-            begin = nnef_node_begin.get_tensordatafile().get_data().get_array()[0][0]
+            begin = nnef_node_begin.tensor[0]
         elif nnef_node_begin.op == 'constant':
             begin = np.reshape(np.asarray(nnef_node_begin.parameters['value'], dtype=np.int32), nnef_node_begin.parameters['shape'])
         else:
             begin = nnef_node_begin.get_value()
         if nnef_node_end.op == 'variable':
-            end = nnef_node_end.get_tensordatafile().get_data().get_array()[0][0]
+            end = nnef_node_end.tensor[0]
         elif nnef_node_end.op == 'constant':
             end = np.reshape(np.asarray(nnef_node_end.parameters['value'], dtype=np.int32), nnef_node_end.parameters['shape'])
         else:
             end = nnef_node_end.get_value()
         if nnef_node_strides.op == 'variable':
-            strides = nnef_node_strides.get_tensordatafile().get_data().get_array()[0][0]
+            strides = nnef_node_strides.tensor[0]
         elif nnef_node_strides.op == 'constant':
             strides = np.reshape(np.asarray(nnef_node_strides.parameters['value'], dtype=np.int32), nnef_node_strides.parameters['shape'])
         else:
@@ -2520,7 +2537,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
 
         input_shape = nnef_node_input.output_shape[:]
         if nnef_node_axis.op == 'variable':
-            shape = nnef_node_axis.get_tensordatafile().get_data().get_array()[0][0]
+            shape = nnef_node_axis.tensor[0]
         else:
             shape = [int(nnef_node_axis.parameters['value'][0])]
 
@@ -2584,7 +2601,7 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
         nnef_node_input = self.get_node_from_pool(tfnode, tf_inputs['input'])
         nnef_node_axes = self.get_node_from_pool(tfnode, tf_inputs['axes'])
 
-        axes = list(nnef_node_axes.get_tensordatafile().get_data().get_array()[0][0])
+        axes = list(nnef_node_axes.tensor[0])
         self.remove_node_from_pool(nnef_node_axes)
 
         output_shape = []
@@ -2644,14 +2661,14 @@ class TensorflowExporter(TensorflowLogger, ImporterExporter):
                         if not order:
                             for i in range(0, len(shapes)):
                                 n.attr['value'].tensor.tensor_shape.dim.add().size = shapes[i]
-                            np_array_read = np.asarray(nnef_node_param.get_tensordatafile().get_data().get_array()[0], dtype=np.float32)
+                            np_array_read = nnef_node_param.tensor.astype(np.float32)
                             n.attr['value'].tensor.tensor_content = np_array_read.tobytes()
                         else:
                             new_shape = []
                             for i in range(len(order)):
                                 new_shape.append(shapes[order[i]])
                                 n.attr['value'].tensor.tensor_shape.dim.add().size = new_shape[i]
-                            np_array_read = np.asarray(nnef_node_param.get_tensordatafile().get_data().get_array()[0], dtype=np.float32)
+                            np_array_read = nnef_node_param.tensor.astype(np.float32)
                             np_array_read = np.reshape(np_array_read, shapes)
                             if len(new_shape) < len(shapes):
                                 np_array_read = np.reshape(np_array_read, new_shape)
@@ -3528,14 +3545,14 @@ class TensorflowExporter(TensorflowLogger, ImporterExporter):
         #Converts to Tensorflow format of [height, width, channels in, channel multiplier]
         if nnef_node.parameters['input'].output_shape[1] != nnef_node.parameters['filter'].parameters['shape'][0]:
             filter_node = nnef_node.parameters['filter']
-            np_array_read = filter_node.get_tensordatafile().get_data().get_array()[0]
+            np_array_read = filter_node.tensor.astype(np.float32)
             np_array_read = np.reshape(np_array_read, filter_node.parameters['shape'])
             new_shape = [nnef_node.parameters['input'].output_shape[1]]
             new_shape.append(int(filter_node.output_shape[0]/new_shape[0]))
             new_shape += filter_node.parameters['shape'][2:]
             filter_node.parameters['shape'] = new_shape
             np_array_read = np.reshape(np_array_read, new_shape)
-            filter_node.get_tensordatafile().get_data().set_array(np_array_read, override=True)
+            filter_node.tensor = np_array_read
         self.add_input(tfnode, nnef_node, 'filter', [2, 3, 0, 1])
 
         tfnode.attr['T'].type = 1
@@ -3673,14 +3690,14 @@ class TensorflowExporter(TensorflowLogger, ImporterExporter):
         #Converts to Tensorflow format of [height, width, channels in, channel multiplier]
         if nnef_node.parameters['input'].output_shape[1] != nnef_node.parameters['plane_filter'].parameters['shape'][0]:
             filter_node = nnef_node.parameters['plane_filter']
-            np_array_read = filter_node.get_tensordatafile().get_data().get_array()[0]
+            np_array_read = filter_node.tensor.astype(np.float32)
             np_array_read = np.reshape(np_array_read, filter_node.parameters['shape'])
             new_shape = [nnef_node.parameters['input'].output_shape[1]]
             new_shape.append(int(filter_node.output_shape[0]/new_shape[0]))
             new_shape += filter_node.parameters['shape'][2:]
             filter_node.parameters['shape'] = new_shape
             np_array_read = np.reshape(np_array_read, new_shape)
-            filter_node.get_tensordatafile().get_data().set_array(np_array_read, override=True)
+            filter_node.tensor = np_array_read
         self.add_input(tfnode_depthwise, nnef_node, 'plane_filter', [2, 3, 0, 1])
 
         tfnode_depthwise.attr['T'].type = 1
