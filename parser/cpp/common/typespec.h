@@ -49,6 +49,8 @@ namespace nnef
         enum Kind { Primitive, Tensor, Array, Tuple };
 
     public:
+        
+        virtual ~Type() {}
 
         virtual Kind kind() const = 0;
 
@@ -56,8 +58,6 @@ namespace nnef
         virtual bool isGeneric() const = 0;
 
         virtual std::string toString() const = 0;
-
-        virtual ~Type() {}
     };
 
 
