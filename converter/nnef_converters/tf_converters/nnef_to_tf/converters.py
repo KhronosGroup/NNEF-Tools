@@ -67,11 +67,6 @@ class Converter(object):
         assert tfop not in self.nnefop_by_tfop
         self.nnefop_by_tfop[tfop] = nnefop
 
-    def nnef_shapeof_to_tf(self, nnef_shapeof):
-        name_of_nnefdn = str(nnef_shapeof)
-        nnefdn = self.nnefdog.dn_by_name[name_of_nnefdn]
-        return nnef.ShapeOf(self.get_tfdn_safe(nnefdn).name)
-
     @staticmethod
     def get_shape_safe(tfdn_or_other):
         return dog.get_shape_safe(tfdn_or_other)
@@ -296,12 +291,9 @@ def convert_reshape(nnefop, converter):
         tfop = dog.OperationNode("tf.reshape")
         tfop.add_arg("tensor", converter.get_tfdn_safe(nnefdn_input))
 
-        if isinstance(nnefop.args["shape"], nnef.ShapeOf):
-            tfop.add_arg('shape', converter.nnef_shapeof_to_tf(nnefop.args["shape"]))
-        else:
-            nnef_shape = calculate_nnef_reshape_shape(dog.get_shape_safe(nnefdn_input),
-                                                      nnefop.args["shape"])  # TODO needed?
-            tfop.add_arg("shape", nnef_shape)
+        nnef_shape = calculate_nnef_reshape_shape(dog.get_shape_safe(nnefdn_input),
+                                                  nnefop.args["shape"])  # TODO needed?
+        tfop.add_arg("shape", nnef_shape)
 
         tfop.add_result("result", converter.make_tfdn(nnefop.result))
         converter.add_tfop(tfop, nnefop)
@@ -692,9 +684,6 @@ def partial_convert_deconv_to_conv2d_transpose_or_conv3d_transpose(nnefop, conve
     tfop = dog.OperationNode("tf.nn.conv2d_transpose" if d == 2 else "tf.nn.conv3d_transpose")
     tfop.add_arg("value", converter.get_tfdn_safe(nnefop.args["input"]))
     tfop.add_arg("filter", converter.get_tfdn_safe(nnefop.args["filter"]))
-    # if isinstance(nnefop.args["output_shape"], nnef.ShapeOf):
-    #     tfop.add_arg('output_shape', converter.nnef_shapeof_to_tf(nnefop.args["output_shape"]))
-    # else:
     if nnefop.args["output_shape"]:
         tfop.add_arg("output_shape", nnefop.args["output_shape"])
     tfop.add_arg("strides", spatial_nhwc(nnefop.args["stride"],
@@ -713,9 +702,6 @@ def partial_convert_deconv_to_atrous_conv2d_transpose(nnefop, converter):
     tfop = dog.OperationNode("tf.nn.atrous_conv2d_transpose")
     tfop.add_arg("value", converter.get_tfdn_safe(nnefop.args["input"]))
     tfop.add_arg("filters", converter.get_tfdn_safe(nnefop.args["filter"]))
-    # if isinstance(nnefop.args["output_shape"], nnef.ShapeOf):
-    #     tfop.add_arg('output_shape', converter.nnef_shapeof_to_tf(nnefop.args["output_shape"]))
-    # else:
     tfop.add_arg("output_shape", nnefop.args["output_shape"])
     tfop.add_arg("rate", tfdilation[0])
     tfop.add_arg("padding", calculate_tfpadding_for_deconv(nnefop))
@@ -723,6 +709,25 @@ def partial_convert_deconv_to_atrous_conv2d_transpose(nnefop, converter):
     if utils.has_greater_than_1(nnefop.args["stride"]):
         utils.print_error("Cannot use stride>1 in tf.nn.atrous_conv2d_transpose.")
 
+    tfop.add_result("result", converter.make_tfdn(nnefop.result))
+    converter.add_tfop(tfop)
+
+
+def partial_convert_deconv_to_depthwise_conv2d_native_backprop_input(nnefop, converter):
+    tfop = dog.OperationNode("tf.nn.depthwise_conv2d_native_backprop_input")
+    tfop.add_arg("input_sizes", nnefop.args["output_shape"])
+    tfop.add_arg("filter", converter.get_tfdn_safe(nnefop.args["filter"]))
+    tfop.add_arg("out_backprop", converter.get_tfdn_safe(nnefop.args["input"]))
+    tfop.add_arg("strides", spatial_nhwc(nnefop.args["stride"],
+                                         in_spatial=True, out_spatial=False, empty_value=[1] * 4))
+    tfop.add_arg("padding", calculate_tfpadding_for_deconv(nnefop))
+    if utils.has_greater_than_1(nnefop.args["dilation"]):
+        tfop.add_arg("rate",
+                     spatial_nhwc(nnefop.args["dilation"],
+                                  in_spatial=True, out_spatial=True, empty_value=None))
+    if utils.has_greater_than_1(nnefop.args["stride"]) and utils.has_greater_than_1(nnefop.args["dilation"]):
+        utils.print_error(
+            "Custom stride AND dilation is not supported by tf.nn.depthwise_conv2d_native_backprop_input!")
     tfop.add_result("result", converter.make_tfdn(nnefop.result))
     converter.add_tfop(tfop)
 
@@ -748,7 +753,14 @@ def convert_deconv(nnefop, converter):
             utils.print_error(
                 "{} dimensional{} deconv is not supported by TensorFlow.".format(d, " dilated" if is_dilated else ""))
     else:
-        utils.print_error("Deconv with groups>1 is not supported by TensorFlow.")
+        if groups in [0, nnef_input_shape[-1]] and d == 2:
+            partial_convert_deconv_to_depthwise_conv2d_native_backprop_input(nnefop, converter)
+        else:
+            # TODO consider implementing this
+            utils.print_error(
+                "Grouped deconvolutions are only supported if they can be converted to "
+                + "tf.nn.depthwise_conv2d_native_backprop_input.")
+            return
 
 
 def generic_convert_pooling(nnefop, converter):
@@ -849,6 +861,28 @@ def generic_convert_reduce(nnefop, converter):
     tfop.add_arg(tf_compat.reduce_arg_keepdims, True)
     tfop.add_result("result", converter.make_tfdn(nnefop.result))
     converter.add_tfop(tfop, nnefop)
+
+
+def generic_convert_argminmax_reduce(nnefop, converter):
+    if len(nnefop.args["axes"]) != 1:
+        utils.print_error("argmin/argmax is only supported for exactly one axis")
+    axis = nnefop.args["axes"][0]
+
+    tfinput = converter.get_tfdn_safe(nnefop.args["input"])
+    if isinstance(tfinput, float):  # TF can't reduce a single value
+        tfinput = [tfinput]
+
+    tfop_argmax = dog.OperationNode(nnefopname_to_tf(nnefop.name))
+    tfop_argmax.add_arg("input", tfinput)
+    tfop_argmax.add_arg("axis", axis)
+    tfop_argmax.add_result("result", converter.make_tfdn(nnefop.result, discriminator="squeezed"))
+    converter.add_tfop(tfop_argmax, nnefop)
+
+    tfop_expand_dims = dog.OperationNode("tf.expand_dims")
+    tfop_expand_dims.add_arg("input", tfop_argmax.result)
+    tfop_expand_dims.add_arg("axis", axis)
+    tfop_expand_dims.add_result("result", converter.make_tfdn(nnefop.result))
+    converter.add_tfop(tfop_expand_dims, nnefop)
 
 
 def convert_moments(nnefop, converter):
@@ -1118,6 +1152,8 @@ generic_converters = {
     "min_reduce": (generic_convert_reduce, "tf.reduce_min"),
     "max_reduce": (generic_convert_reduce, "tf.reduce_max"),
     "mean_reduce": (generic_convert_reduce, "tf.reduce_mean"),
+    "argmax_reduce": (generic_convert_argminmax_reduce, "tf.argmax"),
+    "argmin_reduce": (generic_convert_argminmax_reduce, "tf.argmin"),
     "elu": (generic_convert_activation, "tf.nn.elu"),
     "relu": (generic_convert_activation, "tf.nn.relu"),
     "softplus": (generic_convert_activation, "tf.nn.softplus"),

@@ -99,15 +99,15 @@ def convert_variables(nnef_dir_name, variable_labels, caffe_prototxt_file_name, 
 
 
 def convert_internal(nnef_dir_name, caffe_dir_name, with_variables=True, standard_naming=False, verbose=False):
-    # type: (str, str)->None
+    # type: (str, str, bool, bool, bool)->None
     nnef_dir_name = utils.without_slash(nnef_dir_name)
     nnef_file_name = nnef_dir_name + "/graph.nnef"
 
     caffe_dir_name = utils.without_slash(caffe_dir_name)
     utils.ensure_dir(caffe_dir_name)
 
-    nnefgraph = nnef_parser_config.parse_file(nnef_file_name)
-    nnefdog = nnef_to_dog.nnefgraph_to_nnefdog(nnefgraph)
+    nnefgraph = nnef_parser_config.load_model(nnef_file_name)
+    nnefdog = nnef_to_dog.nnefgraph_to_nnefdog(nnefgraph, with_weights=False)
     caffedog = nnefdog_to_caffedog(nnefdog)
     caffesrc = caffedog_to_prototxt(caffedog)
     utils.raise_if_had_error(listing=caffesrc)
@@ -150,13 +150,18 @@ def convert(nnef_path, output_path=".", verbose=False):
         if verbose:
             print("Converting...")
 
-        if nnef_path.endswith(".nnef.tgz"):
+        if os.path.isfile(nnef_path):
+            assert nnef_path.endswith('.tgz') or nnef_path.endswith('.nnef'), \
+                "Please specify a .nnef or a .tgz file or a directory"
+
+        if os.path.isdir(nnef_path):
+            nnef_dir_path = utils.without_slash(nnef_path)
+            export_variables = True
+        elif nnef_path.endswith(".tgz"):
             tmp_dir_name = tempfile.mkdtemp(prefix="nnef_to_tf_")
             utils.tgz_extract(nnef_path, tmp_dir_name)
             nnef_dir_path = tmp_dir_name
-            export_variables = _has_dat_file(nnef_dir_path)
-            if verbose and not export_variables:
-                print("No weights were present in {}".format(nnef_path))
+            export_variables = True
         elif nnef_path.endswith(".nnef"):
             nnef_dir_path = utils.without_file_name(nnef_path)
             export_variables = False
@@ -164,10 +169,7 @@ def convert(nnef_path, output_path=".", verbose=False):
                 print("No weights are exported when an NNEF file is given as input. "
                       "If you need that, try an archive or a directory.")
         else:
-            nnef_dir_path = utils.without_slash(nnef_path)
-            export_variables = _has_dat_file(nnef_dir_path)
-            if verbose and not export_variables:
-                print("No weights were present in {}".format(nnef_path))
+            assert False
 
         convert_internal(nnef_dir_name=nnef_dir_path,
                          caffe_dir_name=output_path,

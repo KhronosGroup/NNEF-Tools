@@ -49,6 +49,8 @@ error_file = sys.stderr
 warning_file = sys.stderr
 info_file = sys.stdout
 
+NNEF_READ_PROVISIONAL = False
+
 
 def had_error():
     return _had_error
@@ -179,6 +181,22 @@ def to_list(x):
         return x.tolist()
     else:
         raise Exception("Cannot convert {} to list".format(x.__class__.__name__))
+
+
+def tuplify(x):
+    if isinstance(x, tuple):
+        return x
+    if isinstance(x, list):
+        return tuple(x)
+    return x,
+
+
+def listify(x):
+    if isinstance(x, tuple):
+        return list(x)
+    if isinstance(x, list):
+        return x
+    return [x]
 
 
 def unique(arr, key=None):
@@ -399,7 +417,11 @@ def read_nnef_tensor(filename):
     import nnef
 
     with open(filename, "rb") as file:
-        return nnef.read_tensor(file)[0]
+        if NNEF_READ_PROVISIONAL:
+            # noinspection PyProtectedMember
+            return nnef._read_tensor_provisional(file)
+        else:
+            return nnef.read_tensor(file)[0]
 
 
 def tf_call_silently(fun, *args):
@@ -516,7 +538,11 @@ def to_id(s):
         if not c.isalnum() and c != "_":
             c = "_"
         cc.append(c)
-    return ''.join(cc)
+    s = ''.join(cc)
+    if s[0] != '_' and not s[0].isalpha():
+        s2 = "id_" + s
+        s = s2
+    return s
 
 
 def to_id_without_number(s):
@@ -530,7 +556,8 @@ def get_short_name(name):
     name = name[:pos] if pos != -1 else name
 
     pos = name.rfind('/')
-    return name[pos + 1:] if pos != -1 else name
+    name = name[pos + 1:] if pos != -1 else name
+    return to_id(name)
 
 
 def normalize_str_upper(str_or_none):
@@ -556,7 +583,8 @@ def tf_with_gradients(net_fun):
         # We can test with other grad_ys too
         # grad_ys = [tf.constant(value=2.0, dtype=tf.float32, shape=o.shape) for o in outputs]
         grad_ys = None
-        ys = [y for y in outputs if y.dtype.name.startswith("float") or y.dtype.name.startswith("int")]
+        ys = [y for y in outputs
+              if y.dtype.name.startswith("float") or y.dtype.name.startswith("int") or y.dtype.name.startswith("uint")]
         gradients = [g for g in tf.gradients(ys=ys, xs=inputs, grad_ys=grad_ys) if g not in outputs]
 
         items = [("output{}".format(i), o) for i, o in enumerate(outputs)]
@@ -713,7 +741,7 @@ def nnef_dilated_filter_size_element(filter_size, dilation):
 
 def nnef_auto_padding_element(upscaled_size, downscaled_size, filter_size, stride, dilation):
     t = (downscaled_size - 1) * stride + nnef_dilated_filter_size_element(filter_size, dilation) - upscaled_size
-    return int(math.floor(t / 2)), int(math.ceil(t / 2))
+    return max(0, int(math.floor(t / 2))), max(0, int(math.ceil(t / 2)))
 
 
 # uses spatial sizes

@@ -21,6 +21,7 @@ import tarfile
 import tempfile
 from collections import OrderedDict
 
+import nnef
 import numpy as np
 import tensorflow as tf
 
@@ -50,7 +51,6 @@ class TF2NNEFConverter(object):
         self.output_path = ""
         self.hooks = {}
         self.add_comments = False
-        self.enable_shape_of = False
         self.trafo_dict = OrderedDict()
         self.nnefdog = None
 
@@ -67,7 +67,6 @@ class TF2NNEFConverter(object):
         self.output_path = ""
         self.hooks = {}
         self.add_comments = False
-        self.enable_shape_of = False
         self.trafo_dict = OrderedDict()
         self.nnefdog = None
 
@@ -82,8 +81,10 @@ class TF2NNEFConverter(object):
             verbose=True,
             hooks=None,
             add_comments=False,
-            enable_shape_of=False
     ):
+        # if utils.tf_version_greater_equal(1, 10):
+        #     override_dynamic_shapes_with_static()
+
         self.reset()
         if custom_converters is None:
             custom_converters = {}
@@ -92,7 +93,6 @@ class TF2NNEFConverter(object):
             self.hooks = hooks
 
         self.add_comments = add_comments
-        self.enable_shape_of = enable_shape_of
 
         self.checkpoint_reader = None
         if checkpoint is not None:
@@ -196,8 +196,6 @@ class TF2NNEFConverter(object):
             nnefops=nnefops,
             is_source_lang=False,
             dg_is_output_nnefdn=lambda nnefdn: nnefdn.source_name and nnefdn.source_name in self.output_name_by_tfname)
-        if self.enable_shape_of:
-            nnefops = trafos.transform_add_shapeofs(nnefops, self)
 
         input_nnefdns = []
         output_nnefdns = [None] * len(self.output_name_by_tfname)
@@ -261,8 +259,7 @@ class TF2NNEFConverter(object):
 
         dog_to_nnef.nnefdog_to_source(self.nnefdog,
                                       file_handle=file_,
-                                      custom_fragments=custom_fragments,
-                                      enable_shape_of=self.enable_shape_of)
+                                      custom_fragments=custom_fragments)
 
         if file_ != sys.stdout:
             file_.close()
@@ -439,7 +436,9 @@ class TF2NNEFConverter(object):
         return nnefdn
 
     def get_nnefdn(self, tfdn_or_other):
-        if isinstance(tfdn_or_other, (float, int)):
+        if isinstance(tfdn_or_other, bool):
+            return tfdn_or_other
+        elif isinstance(tfdn_or_other, (float, int)):
             return float(tfdn_or_other)
         elif isinstance(tfdn_or_other, (list, tuple)) and len(tfdn_or_other) == 1:
             return float(tfdn_or_other[0])
@@ -748,7 +747,6 @@ def export_network(
         verbose=True,
         hooks=None,
         add_comments=False,
-        enable_shape_of=False
 ):
     """Exports a TensorFlow network to NNEF
 
@@ -768,7 +766,6 @@ def export_network(
         verbose,
         hooks,
         add_comments,
-        enable_shape_of
     )
 
     utils.raise_if_had_error()
@@ -777,8 +774,8 @@ def export_network(
 
 def export_activations(converter_or_net_func, checkpoint, feed_dict, custom_converters=None, custom_fragments=None,
                        output_path=None, compress=None, verbose=True,
-                       hooks=None, add_comments=None, enable_shape_of=None,
-                       evaluate_count_per_iter=25, nnefname_by_tf=None):
+                       hooks=None, add_comments=None,
+                       evaluate_count_per_iter=25, nnefname_by_tf=None, input_output_only=False):
     if isinstance(converter_or_net_func, TF2NNEFConverter):
         converter = converter_or_net_func
         message = "If converter is given, its parameters should not be give in export_activations"
@@ -787,7 +784,6 @@ def export_activations(converter_or_net_func, checkpoint, feed_dict, custom_conv
         assert compress is None, message
         assert hooks is None, message
         assert add_comments is None, message
-        assert enable_shape_of is None, message
     else:
         if custom_fragments is None:
             custom_fragments = ""
@@ -795,8 +791,6 @@ def export_activations(converter_or_net_func, checkpoint, feed_dict, custom_conv
             compress = False
         if add_comments is None:
             add_comments = False
-        if enable_shape_of is None:
-            enable_shape_of = False
 
         converter = TF2NNEFConverter()
         converter.export_network(
@@ -809,7 +803,6 @@ def export_activations(converter_or_net_func, checkpoint, feed_dict, custom_conv
             verbose=verbose,
             hooks=hooks,
             add_comments=add_comments,
-            enable_shape_of=enable_shape_of
         )
 
     path = output_path if output_path is not None else os.path.splitext(checkpoint)[0] + '-activations'
@@ -833,8 +826,16 @@ def export_activations(converter_or_net_func, checkpoint, feed_dict, custom_conv
         )
 
         for nnefdn in converter.nnefdog.dn_by_name.values()
-        if nnefdn.source_name and get_nnef_name(nnefdn.name, nnefdn.source_name)
+        if nnefdn.source_name and get_nnef_name(nnefdn.name, nnefdn.source_name) and nnefdn.producer.name != "variable"
     ]
+
+    if input_output_only:
+        input_and_output_names = set(converter.nnefdog.input_dn_names + converter.nnefdog.output_dn_names)
+        tensors_names_nnefdns = [
+            (t, n, dn)
+            for t, n, dn in tensors_names_nnefdns
+            if dn.name in input_and_output_names
+        ]
 
     nnefdn_by_name = {name: nnefdn for _tensor, name, nnefdn in tensors_names_nnefdns}
 
@@ -892,7 +893,6 @@ def convert(network_function,  # type: Callable[(), Dict[str, tf.Tensor]]
             verbose=False,  # type: bool
             _compress=True,  # type: bool
             _print_trafos=True,  # type: bool
-            _enable_shape_of=False,  # type: bool
             ):
     # type: (...)->TF2NNEFConverter
 
@@ -909,8 +909,7 @@ def convert(network_function,  # type: Callable[(), Dict[str, tf.Tensor]]
                                  checkpoint=checkpoint_path,
                                  output_path=tmp_dir_name if _compress else output_path,
                                  verbose=verbose,
-                                 add_comments=verbose,
-                                 enable_shape_of=_enable_shape_of)
+                                 add_comments=verbose)
 
         if _print_trafos:
             converter.print_trafos(["input", "output"])
@@ -933,3 +932,56 @@ def convert(network_function,  # type: Callable[(), Dict[str, tf.Tensor]]
     finally:
         if tmp_dir_name:
             shutil.rmtree(tmp_dir_name)
+
+
+def override_dynamic_shapes_with_static():
+    import tensorflow as tf
+    from tensorflow.python.ops import gen_array_ops
+
+    def rank(input, name=None):
+        return len(input.shape)
+
+    def shape(input, out_type=tf.int32, name=None):
+        return input.shape
+
+    def shape_n(input, out_type=tf.int32, name=None):
+        return [t.shape for t in input]
+
+    gen_array_ops.rank = rank
+    gen_array_ops.shape = shape
+    gen_array_ops.shape_n = shape_n
+
+
+def _nnef_get_shape(args, shapes, arg_name):
+    return shapes[args[arg_name]] if isinstance(args[arg_name], nnef.Identifier) else []
+
+
+def _nnef_broadcasted_shape(shape1, shape2):
+    rank_diff = len(shape2) - len(shape1)
+
+    if rank_diff > 0:
+        shape1 += [1] * rank_diff
+    else:
+        shape2 += [1] * -rank_diff
+
+    shape = [1] * len(shape1)
+
+    assert len(shape) == len(shape1) == len(shape2)
+
+    for i, (s, t) in enumerate(zip(shape1, shape2)):
+        assert s == t or s == 1 or t == 1, \
+            "Broadcast can only happen when the corresponding dimesions are either equal or one of them is 1"
+        if s != 1:
+            shape[i] = s
+        elif t != 1:
+            shape[i] = t
+
+    return shape
+
+
+def propagate_shape_unary(proto, args, shapes):
+    shapes[args["y"]] = _nnef_get_shape(args, shapes, "x")
+
+
+def propagate_shape_binary(proto, args, shapes):
+    args["z"] = _nnef_broadcasted_shape(_nnef_get_shape(args, shapes, "x"), _nnef_get_shape(args, shapes, "y"))

@@ -105,7 +105,10 @@ def convert_constant(tfop, converter):
     if not isinstance(value, np.ndarray):
         value = np.array(value, dtype=converter.numpy_dtype(tfop.result.dtype))
 
-    inlining_enabled = all([consumer.name != get_qualified_name(tf.where) for consumer in tfop.result.consumers])
+    # TODO do inline only for unary and binary
+    inlining_enabled = False
+    # inlining_enabled = (all([consumer.name != get_qualified_name(tf.where) for consumer in tfop.result.consumers])
+    #                     and tfop.result.name not in converter.output_name_by_tfname)
 
     if inlining_enabled and len(tfop.result.shape) == 0:
         converter.make_constant(tfop.result, float(value.item()))
@@ -116,6 +119,33 @@ def convert_constant(tfop, converter):
     nnefop.add_arg("value", value.flatten().tolist())
     nnefop.add_result('output', converter.make_nnefdn(tfop.result, 'const'))
     nnefop.result.dtype = converter.nnef_dtype(tfop.result.dtype)
+
+    converter.add_nnefop(nnefop, tfop)
+
+
+def convert_tile_to_add(tfop, converter):
+    input_ = tfop.args["input"]
+    input_shape = dog.get_shape_safe(input_)
+    multiples = tfop.args["multiples"]
+    assert len(input_shape) == len(multiples)
+
+    broadcasts = [m if s == 1 and m != 1 else 1 for m, s in zip(multiples, input_shape)]
+    concats = [m if s != 1 and m != 1 else 1 for m, s in zip(multiples, input_shape)]
+
+    assert sum(c != 1 for c in concats) == 0, "Tile emulation with concat is not yet implemented"
+
+    nnefop_const = dog.OperationNode('constant')
+    nnefop_const.add_arg('shape', broadcasts)
+    nnefop_const.add_arg('value', [0.0])
+    tfdn_const_result = dog.DataNode()
+    nnefop_const.add_result('z', converter.make_nnefdn(tfdn_const_result, nnefop_const.name))
+
+    converter.add_nnefop(nnefop_const, tfop)
+
+    nnefop = dog.OperationNode("add")
+    nnefop.add_arg('x', converter.get_nnefdn(input_))
+    nnefop.add_arg('y', nnefop_const.result)
+    nnefop.add_result('z', converter.make_nnefdn(tfop.result, nnefop.name))
 
     converter.add_nnefop(nnefop, tfop)
 
@@ -204,9 +234,6 @@ def convert_conv(tfop, converter):
     if "depthwise" in tfop.name:
         nnefop.add_arg('groups', 0)
 
-    if converter.enable_shape_of and "_output_shape_source" in tfop.args:
-        nnefop.extra["_output_shape_source"] = converter.get_nnefdn(tfop.args["_output_shape_source"])
-
     if tf_output_shape:
         nnefop.add_arg("output_shape", utils.shape_nhwc_to_nchw(tf_output_shape) if is_nhwc else tf_output_shape)
 
@@ -251,19 +278,34 @@ def convert_conv_backprop_input(tfop, converter):
     else:
         nnefdn_filter = converter.add_transpose_to_filter_hwcn(tfop, tfdn_filter)
 
-    nnefop = dog.OperationNode(converter.nnef_op(tfop.name))
-    nnefop.add_arg('orig_filter', nnefdn_filter)
-    nnefop.add_arg('output_grad', converter.add_transpose_to_input_if_nhwc(tfop, tfdn_output_grad))
-    nnefop.add_arg('orig_input_shape',
-                   utils.shape_nhwc_to_nchw(tf_orig_input_shape) if is_nhwc else tf_orig_input_shape)
-    nnefop.add_arg('padding', nnefpadding)
-    if utils.has_not_equal_1(spatial_strides):
+    use_conv_grad_input = False
+    if use_conv_grad_input:
+        nnefop = dog.OperationNode(converter.nnef_op("conv_grad_input"))
+        nnefop.add_arg('orig_filter', nnefdn_filter)
+        nnefop.add_arg('output_grad', converter.add_transpose_to_input_if_nhwc(tfop, tfdn_output_grad))
+        nnefop.add_arg('orig_input_shape',
+                       utils.shape_nhwc_to_nchw(tf_orig_input_shape) if is_nhwc else tf_orig_input_shape)
+        nnefop.add_arg('padding', nnefpadding)
+        if utils.has_not_equal_1(spatial_strides):
+            nnefop.add_arg('stride', spatial_strides)
+        if utils.has_not_equal_1(spatial_dilations):
+            nnefop.add_arg('dilation', spatial_dilations)
+        if "depthwise" in tfop.name:
+            nnefop.add_arg('groups', 0)
+        converter.add_nnefop_with_result_transposed_if_nhwc(tfop, nnefop, 'input_grad', nnefop.name)
+    else:
+        nnefop = dog.OperationNode("deconv")
+        nnefop.add_arg('input', converter.add_transpose_to_input_if_nhwc(tfop, tfdn_output_grad))
+        nnefop.add_arg('filter', nnefdn_filter)
+        nnefop.add_arg('bias', 0.0)
+        nnefop.add_arg('border', 'constant')
+        nnefop.add_arg('padding', nnefpadding)
         nnefop.add_arg('stride', spatial_strides)
-    if utils.has_not_equal_1(spatial_dilations):
         nnefop.add_arg('dilation', spatial_dilations)
-    if "depthwise" in tfop.name:
-        nnefop.add_arg('groups', 0)
-    converter.add_nnefop_with_result_transposed_if_nhwc(tfop, nnefop, 'input_grad', nnefop.name)
+        nnefop.add_arg('output_shape', (utils.shape_nhwc_to_nchw(tf_orig_input_shape)
+                                        if is_nhwc else tf_orig_input_shape))
+        nnefop.add_arg('groups', 0 if "depthwise" in tfop.name else 1)
+        converter.add_nnefop_with_result_transposed_if_nhwc(tfop, nnefop, 'output', nnefop.name)
 
 
 def convert_conv_backprop_filter(tfop, converter):
@@ -387,7 +429,7 @@ def convert_pool(tfop, converter):
     size = list(tfop.args['ksize'])
     strides = list(tfop.args['strides'])
     padding = converter.nnef_padding(tfop.args['padding'], input_rank)
-    border = converter.nnef_border(tfop.args.get('_border', 'constant'))
+    border = converter.nnef_border(tfop.args.get('_border', 'ignore'))
 
     nnefdn_input = converter.add_transpose_to_input_if_nhwc(tfop, tfdn_value)
 
@@ -400,8 +442,7 @@ def convert_pool(tfop, converter):
     nnefop.add_arg('input', nnefdn_input)
     nnefop.add_arg("size", size)
     nnefop.add_arg("padding", padding)
-    if border != 'constant':
-        nnefop.add_arg("border", border)
+    nnefop.add_arg("border", border)
     if utils.has_not_equal_1(strides):
         nnefop.add_arg("stride", strides)
 
@@ -447,7 +488,13 @@ def convert_unary(tfop, converter):
 
 
 def convert_binary(tfop, converter):
-    nnefop = dog.OperationNode(converter.nnef_op(tfop.name))
+    nnef_op_name = converter.nnef_op(tfop.name)
+
+    if nnef_op_name in ["eq", "ne"]:
+        assert isinstance(tfop.args["x"], float) or tfop.args["x"].dtype.startswith("float"), \
+            "Eq/ne is only supported for floats in nnef."
+
+    nnefop = dog.OperationNode(nnef_op_name)
 
     nnefop.add_arg('x', converter.add_unsqueeze_to_arg_if_broadcast(tfop, tfop.args['x'], tfop.args['y']))
     nnefop.add_arg('y', converter.add_unsqueeze_to_arg_if_broadcast(tfop, tfop.args['y'], tfop.args['x']))
@@ -489,7 +536,10 @@ def convert_where(tfop, converter):
 
 
 def convert_reduce(tfop, converter):
-    tfdn_input = tfop.args['input_tensor']
+    tfdn_input = tfop.args.get('input_tensor')
+    if tfdn_input is None:
+        tfdn_input = tfop.args['input']
+
     input_rank = converter.get_rank_safe(tfdn_input)
 
     keep_dims = tfop.args.get("keepdims")
@@ -711,9 +761,6 @@ def convert_reshape(tfop, converter):
     tfdn_tensor = tfop.args['tensor']
     nnefop = dog.OperationNode('reshape')
     nnefop.add_arg('input', converter.get_nnefdn(tfdn_tensor))
-
-    if converter.enable_shape_of and "_shape_source" in tfop.args:
-        nnefop.extra["_shape_source"] = converter.get_nnefdn(tfop.args["_shape_source"])
 
     nnefshape = list(tfop.args['shape'])
     nnefop.add_arg('shape', nnefshape)
@@ -1064,6 +1111,9 @@ DefaultConverters = {
     tf.reduce_sum: (convert_reduce, 'sum_reduce'),
     tf.reduce_mean: (convert_reduce, 'mean_reduce'),
     tf.reduce_max: (convert_reduce, 'max_reduce'),
+    tf.reduce_min: (convert_reduce, 'min_reduce'),
+    tf.argmax: (convert_reduce, 'argmax_reduce'),
+    tf.argmin: (convert_reduce, 'argmin_reduce'),
     tf.matmul: (convert_matmul, 'matmul'),
     tf.add_n: (convert_add_n, 'add_n'),
     tf.nn.sigmoid: (convert_unary, 'sigmoid'),
@@ -1116,7 +1166,7 @@ DefaultConverters = {
     tf.batch_to_space: convert_skip_with_error,
     tf.batch_to_space_nd: convert_skip_with_error,
     tf.fill: convert_skip_with_error,
-    tf.tile: (convert_passthrough, "input"),  # TODO consider changing to convert_skip_with_error
+    tf.tile: convert_tile_to_add,
     tf.invert_permutation: convert_skip_with_error,
     tf.floor_div: convert_skip_with_error,
     tf.dynamic_stitch: convert_skip_with_error,
@@ -1147,7 +1197,8 @@ DefaultConverters = {
     tf_array_grad._TransposeGrad: convert_skip_with_error,  # see tf2dog._fix_special_grad_invocations
     tf_math_grad._MinOrMaxGrad: convert_skip_with_error,
 
-    tf.shape: convert_skip_with_error
+    tf.shape: convert_skip_with_error,
+    tf.shape_n: convert_skip_with_error,
 }
 
 DefaultConverters.update({

@@ -45,7 +45,7 @@ def debug_print_nnefgraph(nnefgraph):
 
 def _convert(nnefgraph, verbose=False):
     # debug_print_nnefgraph(nnefgraph)
-    nnefdog = nnef_to_dog.nnefgraph_to_nnefdog(nnefgraph)
+    nnefdog = nnef_to_dog.nnefgraph_to_nnefdog(nnefgraph, with_weights=False)
 
     converter = converters.Converter(nnefdog)
 
@@ -150,7 +150,7 @@ def create_checkpoint_with_values(net_fun, file_name, variable_value_by_name):
                 value = np.reshape(value, variable_shape)
 
             sess.run(tf.assign(variable, value))
-        saver.save(sess, file_name)
+        saver.save(sess, os.path.relpath(file_name))
 
 
 def _has_dat_file(dir_name):
@@ -169,14 +169,20 @@ def convert(nnef_path, output_path=".", verbose=False, _print_trafos=True, _exte
         if verbose:
             print("Converting...")
 
-        if nnef_path.endswith(".nnef.tgz"):
+        if os.path.isfile(nnef_path):
+            assert nnef_path.endswith('.tgz') or nnef_path.endswith('.nnef'), \
+                "Please specify a .nnef or a .tgz file or a directory"
+
+        if os.path.isdir(nnef_path):
+            nnef_dir_path = utils.without_slash(nnef_path)
+            nnef_file_path = os.path.join(nnef_dir_path, "graph.nnef")
+            export_variables = True
+        elif nnef_path.endswith(".tgz"):
             tmp_dir_name = tempfile.mkdtemp(prefix="nnef_to_tf_")
             utils.tgz_extract(nnef_path, tmp_dir_name)
             nnef_dir_path = tmp_dir_name
             nnef_file_path = os.path.join(nnef_dir_path, "graph.nnef")
-            export_variables = _has_dat_file(nnef_dir_path)
-            if verbose and not export_variables:
-                print("No weights were present in {}".format(nnef_path))
+            export_variables = True
         elif nnef_path.endswith(".nnef"):
             nnef_dir_path = utils.without_file_name(nnef_path)
             nnef_file_path = nnef_path
@@ -185,13 +191,9 @@ def convert(nnef_path, output_path=".", verbose=False, _print_trafos=True, _exte
                 print("No weights are exported when an NNEF file is given as input. "
                       "If you need that, try an archive or a directory.")
         else:
-            nnef_dir_path = utils.without_slash(nnef_path)
-            nnef_file_path = os.path.join(nnef_dir_path, "graph.nnef")
-            export_variables = _has_dat_file(nnef_dir_path)
-            if verbose and not export_variables:
-                print("No weights were present in {}".format(nnef_path))
+            assert False
 
-        tfdog, trafos = _convert(nnef_parser_config.parse_file(nnef_file_path), verbose=verbose)
+        tfdog, trafos = _convert(nnef_parser_config.load_model(nnef_file_path), verbose=verbose)
         src = tfdog_to_source(tfdog, generate_name_map=_extended_mode)
 
         net_fun = tfsource_to_function(src)

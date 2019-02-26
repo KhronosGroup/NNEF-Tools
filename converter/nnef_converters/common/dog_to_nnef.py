@@ -25,24 +25,22 @@ from .utils import StringIO
 from .nnef_dog_types import NnefGraph
 
 
-def nnefdog_to_source(nnefdog, file_handle=None, custom_fragments="", enable_shape_of=False):
+def nnefdog_to_source(nnefdog, file_handle=None, custom_fragments=""):
     if file_handle is None:
         string_io = StringIO()
         try:
             # noinspection PyUnresolvedReferences, PyTypeChecker
             return _nnefdog_to_source_impl(nnefdog, string_io,
-                                           custom_fragments=custom_fragments,
-                                           enable_shape_of=enable_shape_of).getvalue()
+                                           custom_fragments=custom_fragments).getvalue()
         finally:
             string_io.close()
     else:
         return _nnefdog_to_source_impl(nnefdog, file_handle,
-                                       custom_fragments=custom_fragments,
-                                       enable_shape_of=enable_shape_of)
+                                       custom_fragments=custom_fragments)
 
 
-def _nnefdog_to_source_impl(nnefdog, file_handle, custom_fragments="", enable_shape_of=False):
-    # type: (NnefGraph, TextIO, str, bool)->TextIO
+def _nnefdog_to_source_impl(nnefdog, file_handle, custom_fragments=""):
+    # type: (NnefGraph, TextIO, str)->TextIO
 
     f = file_handle
     fix_str = utils.ensure_not_unicode_in_python2
@@ -51,8 +49,6 @@ def _nnefdog_to_source_impl(nnefdog, file_handle, custom_fragments="", enable_sh
     print(nnef.format_version((1, 0)), file=f)
 
     extensions = []
-    if enable_shape_of:
-        extensions.append("KHR_enable_operator_expressions")
     print(nnef.format_extensions(extensions), file=f)
 
     print(file=f)
@@ -61,22 +57,23 @@ def _nnefdog_to_source_impl(nnefdog, file_handle, custom_fragments="", enable_sh
         print(custom_fragments, file=f)
         print(file=f)
 
-    graph_params = nnef.format_graph(name=fix_str(nnefdog.name),
-                                     inputs=[fix_str(name) for name in nnefdog.input_dn_names],
-                                     outputs=[fix_str(name) for name in nnefdog.output_dn_names])
+    graph_name = fix_str(nnefdog.name)
+    graph_inputs = [fix_str(name) for name in nnefdog.input_dn_names]
+    graph_outputs = [fix_str(name) for name in nnefdog.output_dn_names]
 
-    print("graph {}".format(graph_params), file=f)
+    print("graph {}({}) -> ({})".format(graph_name, ', '.join(graph_inputs), ', '.join(graph_outputs)), file=f)
     print("{", file=f)
 
     for op in nnefdog.ops:
         dtype = op.result.dtype if op.name in ["external", "constant", "variable"] else None
         invocation = nnef.format_invocation(name=fix_str(op.name),
-                                            args=[],
-                                            kwargs=_preprocess_args(op.args),
-                                            results=_results_to_result_names(op.results.values()),
+                                            attribs=_preprocess_args(op.args),
+                                            inputs=tuple(),
+                                            outputs=_results_to_result_names(op.results.values()),
                                             dtype=dtype)
 
-        comments = utils.without_nones([dn.extra.get(dog.EXTRA_COMMENT) for dn in op.get_result_nodes()])
+        comments = utils.without_nones([op.extra.get(dog.EXTRA_COMMENT)]
+                                       + [dn.extra.get(dog.EXTRA_COMMENT) for dn in op.get_result_nodes()])
         comment = "  # {}".format(", ".join(comments)) if comments else ""
         print("{}{};{}".format(indent, invocation, comment), file=f)
 

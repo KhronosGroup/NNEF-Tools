@@ -128,8 +128,6 @@ def _tensor_to_data_node(tensor, tensor_name=None, data_node=None):
         data_node.name = tensor_name
         if tensor.shape.dims is not None:
             data_node.shape = tensor.shape.as_list()
-            if len(data_node.shape) == 0:
-                data_node.shape = [1]
         else:
             # TODO find a better way to handle the case (this only happens with tf.gradients sometimes)
             # No need to print warning, it will fail if used

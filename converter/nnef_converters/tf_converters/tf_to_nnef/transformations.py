@@ -115,7 +115,11 @@ def with_block_size_applied(shape, block_shape, data_format, crops=None):
 
 
 def get_tf_reduction_axes(tfop_reduce):
-    rank = len(dog.get_shape_safe(tfop_reduce.args["input_tensor"]))
+    tfdn_input = tfop_reduce.args.get("input_tensor")
+    if tfdn_input is None:
+        tfdn_input = tfop_reduce.args["input"]
+
+    rank = len(dog.get_shape_safe(tfdn_input))
     tfaxes = tfop_reduce.args.get('axis')
     if tfaxes is None:
         tfaxes = tfop_reduce.args.get('reduction_indices')
@@ -513,7 +517,7 @@ def transform_evaluate_shapes(ops, converter):
     # Perm is not really good
     shapelike_args = ["shape", "output_shape", "axis", "axes", "reduction_indices", "dims", "size", "begin", "end",
                       "strides", "perm", "filter_sizes", "input_sizes", "dilations", "block_shape", "orig_input_shape",
-                      "crops"]
+                      "crops", "max_output_size"]
     for op in ops:
         arg_names = [arg for arg in shapelike_args if arg in op.args]
         for arg_name in arg_names:
@@ -533,14 +537,6 @@ def transform_evaluate_shapes(ops, converter):
                     return evaluated_arg
                 else:
                     return arg
-
-            if (converter.enable_shape_of
-                    and (arg_name == "output_shape" or op.name == get_qualified_name(tf.reshape))
-                    and isinstance(arg, dog.DataNode)
-                    and arg.producer
-                    and arg.producer.name == get_qualified_name(tf.shape)
-                    and isinstance(arg.producer.args["input"], dog.DataNode)):
-                op.set_arg("_{}_source".format(arg_name), arg.producer.args["input"])
 
             op.set_arg(arg_name, utils.recursive_transform(arg, evaluate))
     return ops2
@@ -1441,22 +1437,6 @@ def transform_range(ops, converter):
             op.set_arg("value", np.arange(start=start, stop=limit, step=delta, dtype=dtype).tolist())
 
     return ops
-
-
-def transform_add_shapeofs(nnefops, converter):
-    nnefdns = set(utils.flatten([op.get_result_nodes() for op in nnefops]))
-
-    for nnefop in nnefops:
-        for shape_name in ["shape", "output_shape"]:
-            shape_source_name = "_{}_source".format(shape_name)
-
-            if shape_source_name in nnefop.extra:
-                nnefdn = nnefop.extra[shape_source_name]
-                shape_source_trafos = nnefdn.extra.get(nnef_shape_optimizer.EXTRA_APPLIED_TRANSFORMATIONS)
-                result_trafos = nnefop.result.extra.get(nnef_shape_optimizer.EXTRA_APPLIED_TRANSFORMATIONS)
-                if nnefdn in nnefdns and shape_source_trafos == result_trafos:
-                    nnefop.set_arg(shape_name, nnef.ShapeOf(utils.ensure_not_unicode_in_python2(nnefdn.name)))
-    return nnefops
 
 
 def transform_lrn_grad(ops, converter):

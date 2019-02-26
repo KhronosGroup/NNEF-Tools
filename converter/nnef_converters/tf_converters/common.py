@@ -33,3 +33,5 @@ tensorflow_factory = dog.Factory(TensorFlowGraph, TensorFlowDN, TensorFlowOp)
 
 if has_typing:
     TensorFlowDNLike = Union[TensorFlowDN, bool, int, float]
+else:
+    TensorFlowDNLike = object

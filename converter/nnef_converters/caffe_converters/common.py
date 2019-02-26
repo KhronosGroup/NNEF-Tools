@@ -50,3 +50,5 @@ caffe_factory = dog.Factory(CaffeGraph, CaffeDN, CaffeOp)
 
 if has_typing:
     CaffeDNLike = Union[CaffeDN, bool, int, float]
+else:
+    CaffeDNLike = object

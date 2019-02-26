@@ -94,7 +94,9 @@ def main():
 
     with tf.Session() as sess:
         sess.run(init_op)
-        saver.save(sess, os.path.join(args.output_path, function_name + "_ckpt", function_name + ".ckpt"))
+        saver.save(sess, os.path.relpath(os.path.join(args.output_path,
+                                                      function_name + "_ckpt",
+                                                      function_name + ".ckpt")))
 
     # prevent tf bug
     del saver

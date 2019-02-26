@@ -14,4 +14,5 @@
 
 from __future__ import division, print_function
 
-from .tf_to_nnef import convert, export_network, export_activations
+from .tf_to_nnef import convert, export_network, export_activations, propagate_shape_unary, propagate_shape_binary
+

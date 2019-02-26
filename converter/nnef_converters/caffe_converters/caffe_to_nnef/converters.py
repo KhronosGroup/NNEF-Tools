@@ -222,7 +222,7 @@ def convert_elu(caffeop, converter):
 
 
 def generic_convert_convolution(caffeop, converter, target_name):
-    # type: (CaffeOp, Converter)->None
+    # type: (CaffeOp, Converter, str)->None
 
     factor = caffeop.args["stride"][0]
     if (caffeop.name == "Deconvolution"
@@ -231,7 +231,8 @@ def generic_convert_convolution(caffeop, converter, target_name):
             and not caffeop.args["bias_term"]
             and caffeop.args["kernel_size"] == 2 * [2 * factor - factor % 2]
             and caffeop.args["stride"] == 2 * [factor]
-            and caffeop.args["pad"] == 2 * [int(math.ceil((factor - 1) / 2.0))]):
+            and caffeop.args["pad"] == 2 * [int(math.ceil((factor - 1) / 2.0))]
+            and caffeop.args["group"] == dog.get_shape_safe(caffeop.args[dog.gen_arg_name(0)])[1]):
         converter.add_targetop_ex(caffeop, "multilinear_upsample",
                                   OrderedDict([
                                       ("input", caffeop.args[dog.gen_arg_name(0)]),

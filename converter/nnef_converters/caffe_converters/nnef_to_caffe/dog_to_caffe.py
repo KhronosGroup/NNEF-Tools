@@ -29,7 +29,7 @@ def _print_name_value(name, value, file, indent_level):
 
     spaces = indent_level * "  "
     if value is not None:
-        if isinstance(value, str):
+        if isinstance(value, str) and name != "engine":
             print('{}{}: "{}"'.format(spaces, name, value), file=file)
         else:
             print('{}{}: {}'.format(spaces, name, value), file=file)
