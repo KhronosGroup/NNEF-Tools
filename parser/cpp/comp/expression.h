@@ -660,7 +660,8 @@ namespace nnef
 
         const Expr* arg( const std::string& name ) const
         {
-            return _args[name].get();
+            auto it = _args.find(name);
+            return it != _args.end() ? it->second.get() : nullptr;
         }
 
         virtual Kind kind() const

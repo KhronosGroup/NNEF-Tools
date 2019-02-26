@@ -18,6 +18,7 @@
 #define _NNEF_BINARY_H_
 
 #include "error.h"
+#include "shape.h"
 #include <functional>
 #include <algorithm>
 #include <iostream>
@@ -40,7 +41,8 @@ namespace nnef
         uint32_t extents[MaxRank];
         uint32_t bits_per_item;
         uint32_t quant_code;
-        uint8_t  quant_params[76];
+        uint32_t quant_params[8];
+        uint8_t reserved[44];
     };
 
 
@@ -91,7 +93,7 @@ namespace nnef
         }
         if ( header.rank > TensorHeader::MaxRank )
         {
-            throw Error("tensor rank %d exceeds maximum possible value (%d)", (int)header.rank, (int)TensorHeader::MaxRank);
+            throw Error("tensor rank %d exceeds maximum allowed rank (%d)", (int)header.rank, (int)TensorHeader::MaxRank);
         }
 
         const uint32_t item_count = std::accumulate(header.extents, header.extents + header.rank, (uint32_t)1, std::multiplies<uint32_t>());
@@ -128,6 +130,16 @@ namespace nnef
                     throw Error("unkown Khronos-defined item type code: %x", (int)code);
                 }
             }
+        }
+    }
+    
+    inline void validate_tensor_shape( const TensorHeader& header, const Shape& expected_shape )
+    {
+        const Shape shape(header.extents, header.extents + header.rank);
+        if ( shape != expected_shape )
+        {
+            throw Error("shape %s in variable file does not match shape %s defined in network structure",
+                        nnef::toString(shape).c_str(), nnef::toString(expected_shape).c_str());
         }
     }
 

@@ -18,7 +18,6 @@
 #include "include/flat/flat_parser.h"
 #include "include/comp/comp_parser.h"
 #include "include/flat/quant_parser.h"
-#include "include/comp/layers_source.h"
 #include <initializer_list>
 #include <exception>
 #include <fstream>
@@ -47,9 +46,6 @@ static PyObject* NNEF_Error;
 #define PY_INTEGER_CHECK PyInt_Check
 #define PY_INTEGER_AS_LONG PyInt_AsLong
 #endif
-
-
-static const size_t MaxDims = 8;
 
 
 struct NNEF_Identifier
@@ -85,12 +81,9 @@ static PyTypeObject NNEF_Identifier_Type =
 static PyObject* OrderedDict;
 static PyObject* NamedTuple;
 
-static PyObject* Prototype;
-static PyObject* TensorType;
-static PyObject* ArrayType;
-static PyObject* TupleType;
-
-static PyObject* ShapeOf;
+static PyObject* Tensor;
+static PyObject* Operation;
+static PyObject* Graph;
 
 
 static PyObject* makeNamedTuple( const char* name, std::initializer_list<const char*> fields )
@@ -171,15 +164,11 @@ static PyObject* buildPyObjectFromValue( const nnef::Value& value )
             }
             return tuple;
         }
-        case nnef::Value::ShapeOf:
-        {
-            PyObject* arg = PY_STRING_FROM_CSTR(value.shape_of().id.c_str());
-            return PyObject_CallObject(ShapeOf, PyTuple_Pack(1, arg));
-        }
     }
+    return nullptr;
 }
 
-static nnef::Value buildValueFromPyObject( PyObject* object )
+/*static nnef::Value buildValueFromPyObject( PyObject* object )
 {
     if ( object == Py_None )
     {
@@ -234,12 +223,12 @@ static nnef::Value buildValueFromPyObject( PyObject* object )
         const PyTypeObject* type = object->ob_type;
         throw std::invalid_argument(type->tp_name);
     }
-}
+}*/
 
 static PyObject* buildPyListFromShape( const nnef::Shape& shape )
 {
-    PyObject* list = PyList_New(shape.rank());
-    for ( size_t i = 0; i < shape.rank(); ++i )
+    PyObject* list = PyList_New(shape.size());
+    for ( size_t i = 0; i < shape.size(); ++i )
     {
         PyList_SetItem(list, i, Py_BuildValue("i", shape[i]));
     }
@@ -254,7 +243,7 @@ static nnef::Shape shapeFromPyList( PyObject* list )
     for ( size_t i = 0; i < size; ++i )
     {
         auto item = PyList_GetItem(list, i);
-        shape[i] = (nnef::Shape::extent_type)PY_INTEGER_AS_LONG(item);
+        shape[i] = (nnef::Shape::value_type)PY_INTEGER_AS_LONG(item);
     }
     return shape;
 }
@@ -265,107 +254,6 @@ static PyObject* buildValuePyDict( const nnef::Dictionary<nnef::Value>& args )
     for ( auto& arg : args )
     {
         PyDict_SetItemString(dict, arg.first.c_str(), buildPyObjectFromValue(arg.second));
-    }
-    return dict;
-}
-
-static PyObject* buildPyTypespec( const nnef::Type* type )
-{
-    switch ( type->kind() )
-    {
-        case nnef::Type::Primitive:
-        {
-            auto primitiveType = dynamic_cast<const nnef::PrimitiveType*>(type);
-            return PY_STRING_FROM_CSTR(nnef::toString(primitiveType->name()));
-        }
-        case nnef::Type::Tensor:
-        {
-            auto tensorType = dynamic_cast<const nnef::TensorType*>(type);
-            auto dataType = tensorType->dataType() ? buildPyTypespec(tensorType->dataType()) : buildPyNone();
-            return PyObject_CallObject(TensorType, PyTuple_Pack(1, dataType));
-        }
-        case nnef::Type::Array:
-        {
-            auto arrayType = dynamic_cast<const nnef::ArrayType*>(type);
-            auto itemType = buildPyTypespec(arrayType->itemType());
-            return PyObject_CallObject(ArrayType, PyTuple_Pack(1, itemType));
-        }
-        case nnef::Type::Tuple:
-        {
-            auto tupleType = dynamic_cast<const nnef::TupleType*>(type);
-            PyObject* itemTypes = PyList_New(tupleType->size());
-            for ( size_t i = 0; i < tupleType->size(); ++i )
-            {
-                PyList_SetItem(itemTypes, i, buildPyTypespec(tupleType->itemType(i)));
-            }
-            return PyObject_CallObject(TupleType, PyTuple_Pack(1, itemTypes));
-        }
-    }
-}
-
-static PyObject* getPyTypespec( const nnef::Type* type )
-{
-    static std::map<const nnef::Type*,PyObject*> typespecs;
-
-    auto& typespec = typespecs[type];
-    if ( !typespec )
-    {
-        typespec = buildPyTypespec(type);
-    }
-    return typespec;
-}
-
-static PyObject* buildPyPrototype( const nnef::Prototype& proto )
-{
-    PyObject* name = PY_STRING_FROM_CSTR(proto.name().c_str());
-
-    PyObject* params = PyList_New(proto.paramCount());
-    for ( size_t i = 0; i < proto.paramCount(); ++i )
-    {
-        auto& param = proto.param(i);
-        auto key = PY_STRING_FROM_CSTR(param.name().c_str());
-        auto value = getPyTypespec(param.type());
-        PyList_SetItem(params, i, PyTuple_Pack(2, key, value));
-    }
-    params = PyObject_CallObject(OrderedDict, PyTuple_Pack(1, params));
-
-    PyObject* defaults = PyDict_New();
-    for ( size_t i = 0; i < proto.paramCount(); ++i )
-    {
-        auto& param = proto.param(i);
-        if ( param.defaultValue() )
-        {
-            PyDict_SetItemString(defaults, param.name().c_str(), buildPyObjectFromValue(param.defaultValue()));
-        }
-    }
-    if ( proto.genericParamDefault() )
-    {
-        PyDict_SetItemString(defaults, "?", PY_STRING_FROM_CSTR(nnef::toString(proto.genericParamDefault()->name())));
-    }
-
-    PyObject* results = PyList_New(proto.resultCount());
-    for ( size_t i = 0; i < proto.resultCount(); ++i )
-    {
-        auto& result = proto.result(i);
-        auto key = PY_STRING_FROM_CSTR(result.name().c_str());
-        auto value = getPyTypespec(result.type());
-        PyList_SetItem(results, i, PyTuple_Pack(2, key, value));
-    }
-    results = PyObject_CallObject(OrderedDict, PyTuple_Pack(1, results));
-
-    PyObject* generic = buildPyBoolean(proto.isGeneric());
-
-    return PyObject_CallObject(Prototype, PyTuple_Pack(5, name, params, results, defaults, generic));
-}
-
-static PyObject* getPyPrototype( const nnef::Prototype& proto )
-{
-    static std::map<std::string,PyObject*> protos;
-
-    auto& dict = protos[proto.name()];
-    if ( !dict )
-    {
-        dict = buildPyPrototype(proto);
     }
     return dict;
 }
@@ -387,8 +275,8 @@ static std::string buildErrorString( nnef::Error e )
 
 struct GraphCallback : public nnef::Parser::Callback
 {
-    GraphCallback( const std::set<std::string>& atomics, std::istream& qis, const char* qfn )
-    : atomics(atomics), qis(qis), qfn(qfn)
+    GraphCallback( std::istream& qis, const char* qfn )
+    : qis(qis), qfn(qfn)
     {
     }
 
@@ -406,190 +294,181 @@ struct GraphCallback : public nnef::Parser::Callback
 
     virtual void beginGraph( const nnef::Prototype& proto, const nnef::Dictionary<nnef::Prototype>& fragments )
     {
-        quantizations = PyDict_New();
+        PyObject* name = PY_STRING_FROM_CSTR(proto.name().c_str());
+        
+        this->tensors = PyDict_New();
+        this->operations = PyList_New(0);
+        
+        PyObject* inputs = PyList_New(proto.paramCount());
+        for ( size_t i = 0; i < proto.paramCount(); ++i )
+        {
+            PyList_SetItem(inputs, i, PY_STRING_FROM_CSTR(proto.param(i).name().c_str()));
+        }
+        
+        PyObject* outputs = PyList_New(proto.resultCount());
+        for ( size_t i = 0; i < proto.resultCount(); ++i )
+        {
+            PyList_SetItem(outputs, i, PY_STRING_FROM_CSTR(proto.result(i).name().c_str()));
+        }
+        
+        this->graph = PyObject_CallObject(Graph, PyTuple_Pack(5, name, tensors, operations, inputs, outputs));
+        
         if ( qis )
         {
-            auto quant = nnef::QuantParser::parse(qis, qfn, fragments);
-
-            for ( auto& it : quant )
-            {
-                PyDict_SetItemString(quantizations, it.first.c_str(), buildValuePyDict(it.second));
-            }
-        }
-
-        graph = getPyPrototype(proto);
-
-        operations = PyList_New(0);
-
-        declarations = PyDict_New();
-        for ( auto& it : fragments )
-        {
-            auto& proto = it.second;
-            PyDict_SetItemString(declarations, proto.name().c_str(), getPyPrototype(proto));
+            quant = nnef::QuantParser::parse(qis, qfn, fragments);
         }
     }
 
     virtual void endGraph( const nnef::Prototype& proto, const nnef::Dictionary<nnef::Typename>& dtypes, const nnef::Dictionary<nnef::Shape>& shapes )
     {
-        this->dtypes = PyDict_New();
-        for ( auto& it : dtypes )
+        for ( auto& it : shapes )
         {
-            PyDict_SetItemString(this->dtypes, it.first.c_str(), PY_STRING_FROM_CSTR(nnef::toString(it.second)));
+            PyObject* name = PY_STRING_FROM_CSTR(it.first.c_str());
+            PyObject* shape = buildPyListFromShape(it.second);
+            PyObject* dtype = PY_STRING_FROM_CSTR(nnef::toString(dtypes.at(it.first)));
+            PyObject* data = buildPyNone();
+            PyObject* compression = buildPyNone();
+            PyObject* quantization = PyDict_New();
+            for ( auto& qit : quant )
+            {
+                PyDict_SetItemString(quantization, qit.first.c_str(), buildValuePyDict(qit.second));
+            }
+            
+            PyObject* tensor = PyObject_CallObject(Tensor, PyTuple_Pack(6, name, dtype, shape, data, compression, quantization));
+            PyDict_SetItemString(tensors, it.first.c_str(), tensor);
         }
     }
 
     virtual void operation( const nnef::Prototype& proto, const nnef::Dictionary<nnef::Value>& args,
                            const nnef::Dictionary<nnef::Typename>& dtypes, const nnef::Dictionary<nnef::Shape>& shapes )
     {
-        PyObject* decl = getPyPrototype(proto);
-        PyObject* dict = buildValuePyDict(args);
+        PyObject* attribs = PyList_New(0);
+        PyObject* inputs = PyList_New(0);
+        PyObject* outputs = PyList_New(0);
+        PyObject* dtype = args.count("?") ? PY_STRING_FROM_CSTR(args.at("?").string().c_str()) : buildPyNone();
+        
+        for ( size_t i = 0; i < proto.paramCount(); ++i )
+        {
+            auto& param = proto.param(i);
+            auto& value = args.at(param.name());
+            if ( param.type()->isAttribute() )
+            {
+                PyList_Append(attribs, PyTuple_Pack(2, PY_STRING_FROM_CSTR(param.name().c_str()), buildPyObjectFromValue(value)));
+            }
+            else
+            {
+                PyList_Append(inputs, PyTuple_Pack(2, PY_STRING_FROM_CSTR(param.name().c_str()), buildPyObjectFromValue(value)));
+            }
+        }
+        for ( size_t i = 0; i < proto.resultCount(); ++i )
+        {
+            auto& result = proto.result(i);
+            auto& value = args.at(result.name());
+            PyList_Append(outputs, PyTuple_Pack(2, PY_STRING_FROM_CSTR(result.name().c_str()), buildPyObjectFromValue(value)));
+        }
+        
+        attribs = PyObject_CallObject(OrderedDict, PyTuple_Pack(1, attribs));
+        inputs = PyObject_CallObject(OrderedDict, PyTuple_Pack(1, inputs));
+        outputs = PyObject_CallObject(OrderedDict, PyTuple_Pack(1, outputs));
 
-        PyList_Append(operations, PyTuple_Pack(2, decl, dict));
+        PyObject* operation = PyObject_CallObject(Operation, PyTuple_Pack(5, PY_STRING_FROM_CSTR(proto.name().c_str()), attribs, inputs, outputs, dtype));
+        PyList_Append(operations, operation);
     }
 
-    virtual bool isAtomic( const nnef::Prototype& proto, const nnef::Dictionary<nnef::Value>& args )
-    {
-        return atomics.find(proto.name()) != atomics.end();
-    }
-
-    const std::set<std::string>& atomics;
     std::istream& qis;
     const char* qfn;
+    nnef::Dictionary<nnef::Dictionary<nnef::Value>> quant;
 
-    PyObject* graph;
+    PyObject* tensors;
     PyObject* operations;
-    PyObject* dtypes;
+    PyObject* graph;
     PyObject* version;
     PyObject* extensions;
-    PyObject* declarations;
-    PyObject* quantizations;
 };
 
 
 static PyObject* custom_shapes = PyDict_New();
-static PyObject* defer_shapes = PyDict_New();
+static nnef::ShapeFuncs shape_funcs = nnef::standardShapeFuncs();
 
 
-struct CustomPropagation : nnef::Propagation
+static void shapesToPy( const nnef::Value& value, const nnef::Dictionary<nnef::Shape>& shapes, PyObject* pyShapes )
 {
-    CustomPropagation() : Propagation(MaxDims)
+    if ( value.kind() == nnef::Value::Identifier )
     {
-        shapes = PyDict_New();
-    }
-
-    virtual bool shouldDeferShapeOf( const nnef::Prototype& proto, const std::string& param ) const
-    {
-        auto defer = PyDict_GetItemString(defer_shapes, proto.name().c_str());
-        if ( defer )
+        if ( shapes.count(value.identifier()) )
         {
-            if ( PyList_Check(defer) )
-            {
-                const size_t size = PyList_Size(defer);
-                for ( size_t i = 0; i < size; ++i )
-                {
-                    auto item = PyList_GetItem(defer, i);
-                    const char* str = PY_STRING_AS_CSTR(item);
-                    if ( param == str )
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            else
-            {
-                const char* str = PY_STRING_AS_CSTR(defer);
-                return param == str;
-            }
-        }
-        return false;
-    }
-
-    virtual void propagateShapes( const nnef::Prototype& proto, const nnef::Dictionary<nnef::Value>& args, nnef::Dictionary<nnef::Shape>& shapes )
-    {
-        auto prop = PyDict_GetItemString(custom_shapes, proto.name().c_str());
-        if ( prop )
-        {
-            PyObject* pyProto = getPyPrototype(proto);
-            PyObject* pyArgs = buildValuePyDict(args);
-
-            if ( !PyObject_Call(prop, PyTuple_Pack(3, pyProto, pyArgs, this->shapes), NULL) )
-            {
-                throw nnef::Error("call to custom shape propagator failed");
-            }
-
-            PyObject* name = PyObject_GetAttrString(prop, "__name__");
-
-            for ( size_t i = 0; i < proto.resultCount(); ++i )
-            {
-                auto& result = args[proto.result(i).name()];
-                shapesFromPy(shapes, result, PY_STRING_AS_CSTR(name));
-            }
-        }
-        else
-        {
-            nnef::Propagation::propagateShapes(proto, args, shapes);
-
-            for ( size_t i = 0; i < proto.resultCount(); ++i )
-            {
-                auto& result = args[proto.result(i).name()];
-                shapesToPy(shapes, result);
-            }
+            PyDict_SetItemString(pyShapes, value.identifier().c_str(), buildPyListFromShape(shapes.at(value.identifier())));
         }
     }
-
-    void shapesFromPy( nnef::Dictionary<nnef::Shape>& shapes, const nnef::Value& value, const char* prop_fn )
+    else if ( value.kind() == nnef::Value::Array || value.kind() == nnef::Value::Tuple )
     {
-        if ( value.kind() == nnef::Value::Identifier )
+        for ( auto& item : value.items() )
         {
-            PyObject* shape = PyDict_GetItemString(this->shapes, value.identifier().c_str());
+            shapesToPy(item, shapes, pyShapes);
+        }
+    }
+}
+
+static void shapesFromPy( const nnef::Value& value, PyObject* pyShapes, nnef::Dictionary<nnef::Shape>& shapes, const char* prop_fn )
+{
+    if ( value.kind() == nnef::Value::Identifier )
+    {
+        if ( !shapes.count(value.identifier()) )
+        {
+            PyObject* shape = PyDict_GetItemString(pyShapes, value.identifier().c_str());
             if ( !shape )
             {
                 throw nnef::Error("custom shape not set for tensor '%s' by function '%s'", value.identifier().c_str(), prop_fn);
             }
             shapes[value.identifier()] = shapeFromPyList(shape);
         }
-        else if ( value.kind() == nnef::Value::Array || value.kind() == nnef::Value::Tuple )
-        {
-            for ( auto& item : value.items() )
-            {
-                shapesFromPy(shapes, item, prop_fn);
-            }
-        }
     }
-
-    void shapesToPy( nnef::Dictionary<nnef::Shape>& shapes, const nnef::Value& value )
+    else if ( value.kind() == nnef::Value::Array || value.kind() == nnef::Value::Tuple )
     {
-        if ( value.kind() == nnef::Value::Identifier )
+        for ( auto& item : value.items() )
         {
-            PyDict_SetItemString(this->shapes, value.identifier().c_str(), buildPyListFromShape(shapes[value.identifier()]));
-        }
-        else if ( value.kind() == nnef::Value::Array || value.kind() == nnef::Value::Tuple )
-        {
-            for ( auto& item : value.items() )
-            {
-                shapesToPy(shapes, item);
-            }
+            shapesFromPy(item, pyShapes, shapes, prop_fn);
         }
     }
+}
 
-    PyObject* shapes;
-};
+static void customShapeFunc( const std::string& op, const std::map<std::string,nnef::Value>& args, std::map<std::string,nnef::Shape>& shapes )
+{
+    PyObject* pyShapes = PyDict_New();
+    
+    for ( auto& it : args )
+    {
+        shapesToPy(it.second, shapes, pyShapes);
+    }
+    
+    PyObject* pyArgs = buildValuePyDict(args);
+    
+    auto func = PyDict_GetItemString(custom_shapes, op.c_str());
+    if ( !PyObject_Call(func, PyTuple_Pack(3, PY_STRING_FROM_CSTR(op.c_str()), pyArgs, pyShapes), NULL) )
+    {
+        throw nnef::Error("call to custom shape propagator failed");
+    }
+    
+    PyObject* name = PyObject_GetAttrString(func, "__name__");
+    
+    for ( auto& it : args )
+    {
+        shapesFromPy(it.second, pyShapes, shapes, PY_STRING_AS_CSTR(name));
+    }
+}
 
 
-static CustomPropagation propagation;
-static nnef::CompParser parser(propagation);
+static nnef::CompParser parser(shape_funcs);
 
 
 static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool isFile )
 {
 	const char* input = nullptr;
     const char* quant = nullptr;
-    PyObject* atomics = PyList_New(0);
 
-    static const char* kwlist[] = { "", "quantization", "atomics", NULL };
+    static const char* kwlist[] = { "", "quantization", NULL };
 
-	if ( !PyArg_ParseTupleAndKeywords(args, kwargs, "s|zO!", (char**)kwlist, &input, &quant, &PyList_Type, &atomics) )
+	if ( !PyArg_ParseTupleAndKeywords(args, kwargs, "s|z", (char**)kwlist, &input, &quant) )
     {
         return NULL;
     }
@@ -630,38 +509,12 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
     std::istream& is = isFile ? (std::istream&)fs : (std::istream&)ss;
     std::istream& qis = isFile ? (std::istream&)qfs : (std::istream&)qss;
 
-    std::set<std::string> atoms;
-    const size_t atomCount = PyList_Size(atomics);
-    for ( size_t i = 0; i < atomCount; ++i )
-    {
-        PyObject* item = PyList_GetItem(atomics, i);
-        if ( PY_STRING_CHECK(item) )
-        {
-            atoms.insert(PY_STRING_AS_CSTR(item));
-        }
-        else
-        {
-            PyErr_SetString(NNEF_Error, "parameter 'atomics' must be a list of strings");
-            return NULL;
-        }
-    }
-
-    GraphCallback callback(atoms, qis, isFile ? quant : "quantization");
+    GraphCallback callback(qis, isFile ? quant : "quantization");
 
 	try
     {
         parser.parse(is, isFile ? input : "input", callback);
-
-        PyObject* dict = PyDict_New();
-        PyDict_SetItemString(dict, "graph", callback.graph);
-        PyDict_SetItemString(dict, "dtypes", callback.dtypes);
-        PyDict_SetItemString(dict, "shapes", propagation.shapes);
-        PyDict_SetItemString(dict, "version", callback.version);
-        PyDict_SetItemString(dict, "extensions", callback.extensions);
-        PyDict_SetItemString(dict, "declarations", callback.declarations);
-        PyDict_SetItemString(dict, "quantizations", callback.quantizations);
-
-        return PyTuple_Pack(2, dict, callback.operations);
+        return callback.graph;
     }
     catch ( nnef::Error e )
     {
@@ -727,16 +580,6 @@ static PyObject* unregisterCustomOps( PyObject* self, PyObject* args )
     return unregisterOps(key);
 }
 
-static PyObject* registerLayerOps( PyObject* self )
-{
-    return registerOps("layers", nnef::layers_source());
-}
-
-static PyObject* unregisterLayerOps( PyObject* self )
-{
-    return unregisterOps("layers");
-}
-
 static PyObject* registerCustomShapes( PyObject* self, PyObject* args )
 {
     PyObject* shapes;
@@ -762,85 +605,22 @@ static PyObject* registerCustomShapes( PyObject* self, PyObject* args )
         if ( value != Py_None )
         {
             PyDict_SetItem(custom_shapes, key, value);
+            shape_funcs[PY_STRING_AS_CSTR(key)] = customShapeFunc;
         }
         else
         {
-            PyDict_DelItem(custom_shapes, key);
+            shape_funcs.erase(PY_STRING_AS_CSTR(key));
         }
     }
     return buildPyNone();
 }
-
-static PyObject* registerDeferredShapes( PyObject* self, PyObject* args )
-{
-    PyObject* shapes;
-    if ( !PyArg_ParseTuple(args, "O!", &PyDict_Type, &shapes) )
-    {
-        return NULL;
-    }
-
-    auto items = PyDict_Items(shapes);
-    const size_t count = PyList_Size(items);
-    for ( size_t i = 0; i < count; ++i )
-    {
-        auto item = PyList_GetItem(items, i);
-        auto key = PyTuple_GetItem(item, 0);
-        auto value = PyTuple_GetItem(item, 1);
-
-        if ( !PY_STRING_CHECK(key) )
-        {
-            PyErr_SetString(NNEF_Error, "deferred shapes must be a dict with string keys");
-            return NULL;
-        }
-
-        if ( PyList_Check(value) )
-        {
-            const size_t listSize = PyList_Size(value);
-            for ( size_t j = 0; j < listSize; ++j )
-            {
-                auto listItem = PyList_GetItem(value, j);
-                if ( !PY_STRING_CHECK(listItem) )
-                {
-                    PyErr_SetString(NNEF_Error, "deferred shapes must be a dict with (list of) string values");
-                    return NULL;
-                }
-            }
-        }
-        else if ( !PY_STRING_CHECK(value) )
-        {
-            PyErr_SetString(NNEF_Error, "deferred shapes must be a dict with (list of) string values");
-            return NULL;
-        }
-
-        PyDict_SetItem(defer_shapes, key, value);
-    }
-    return buildPyNone();
-}
-
-static PyObject* enumerateStandardOperations()
-{
-    const std::vector<nnef::Prototype> prototypes = nnef::stdlibPrototypes();
-
-    PyObject* list = PyList_New(prototypes.size());
-    for ( size_t i = 0; i < prototypes.size(); ++i )
-    {
-        PyList_SetItem(list, i, PY_STRING_FROM_CSTR(prototypes[i].name().c_str()));
-    }
-    return list;
-}
-
-
-static PyObject* StandardOperations = enumerateStandardOperations();
 
 
 static PyMethodDef NNEF_Methods[] = 
 {
-    { "register_layer_ops", (PyCFunction)registerLayerOps, METH_VARARGS | METH_KEYWORDS, "Register layer operations to the parser" },
-    { "unregister_layer_ops", (PyCFunction)unregisterLayerOps, METH_VARARGS | METH_KEYWORDS, "Unregister layer operations from the parser" },
     { "register_custom_ops", (PyCFunction)registerCustomOps, METH_VARARGS | METH_KEYWORDS, "Register custom operations to the parser" },
     { "unregister_custom_ops", (PyCFunction)unregisterCustomOps, METH_VARARGS | METH_KEYWORDS, "Unregister custom operations from the parser" },
     { "register_custom_shapes", (PyCFunction)registerCustomShapes, METH_VARARGS | METH_KEYWORDS, "Register custom shape propagation to the parser" },
-    { "register_deferred_shapes", (PyCFunction)registerDeferredShapes, METH_VARARGS | METH_KEYWORDS, "Register deferred shapes to the parser" },
 	{ "parse_file", (PyCFunction)parseFile, METH_VARARGS | METH_KEYWORDS, "Parse the contents of a file" },
     { "parse_string", (PyCFunction)parseString, METH_VARARGS | METH_KEYWORDS, "Parse the contents of a string" },
  	{ NULL, NULL, 0, NULL }
@@ -894,34 +674,23 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
     Py_INCREF(&NNEF_Identifier_Type);
     PyModule_AddObject(module, "Identifier", (PyObject*)&NNEF_Identifier_Type);
 
-    Py_INCREF(StandardOperations);
-    PyModule_AddObject(module, "StandardOperations", StandardOperations);
-
     auto collections = PyImport_ImportModule("collections");
     auto dict = PyModule_GetDict(collections);
     OrderedDict = PyDict_GetItemString(dict, "OrderedDict");
     NamedTuple = PyDict_GetItemString(dict, "namedtuple");
 
-    Prototype = makeNamedTuple("Prototype", { "name", "params", "results", "defaults", "generic" });
-    Py_INCREF(Prototype);
-    PyModule_AddObject(module, "Prototype", Prototype);
+    Tensor = makeNamedTuple("Tensor", { "name", "dtype", "shape", "data", "compression", "quantization" });
+    Py_INCREF(Tensor);
+    PyModule_AddObject(module, "Tensor", Tensor);
 
-    TensorType = makeNamedTuple("TensorType", { "dataType" });
-    Py_INCREF(TensorType);
-    PyModule_AddObject(module, "TensorType", TensorType);
-
-    ArrayType = makeNamedTuple("ArrayType", { "itemType" });
-    Py_INCREF(ArrayType);
-    PyModule_AddObject(module, "ArrayType", ArrayType);
-
-    TupleType = makeNamedTuple("TupleType", { "itemTypes" });
-    Py_INCREF(TupleType);
-    PyModule_AddObject(module, "TupleType", TupleType);
-
-    ShapeOf = makeNamedTuple("ShapeOf", { "id" });
-    Py_INCREF(ShapeOf);
-    PyModule_AddObject(module, "ShapeOf", ShapeOf);
-
+    Operation = makeNamedTuple("Operation", { "name", "attribs", "inputs", "outputs", "dtype" });
+    Py_INCREF(Operation);
+    PyModule_AddObject(module, "Operation", Operation);
+    
+    Graph = makeNamedTuple("Graph", { "name", "tensors", "operations", "inputs", "outputs" });
+    Py_INCREF(Graph);
+    PyModule_AddObject(module, "Graph", Graph);
+    
 #if PY_MAJOR_VERSION >= 3
 	return module;
 #endif

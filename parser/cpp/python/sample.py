@@ -15,15 +15,16 @@
 import nnef
 
 
-attrs, ops = nnef.parse_string(
-    "version 1.0;"
-    "graph Net( input ) -> ( output )"
-    "{"
-    "   input = external(shape = [1,3,224,224]);"
-    "   filter = variable(shape = [32,3,5,5], label = 'conv/filter');"
-    "   output = conv(input, filter);"
-    "}"
+graph = nnef.parse_string(
+    """
+    version 1.0;
+    graph Net( input ) -> ( output )
+    {
+        input = external(shape = [1,3,224,224]);
+        filter = variable(shape = [32,3,5,5], label = 'conv/filter');
+        output = conv(input, filter);
+    }
+    """
 )
 
-
-print(nnef.format_document(attrs,ops))
+print(nnef.format_graph(graph.name, graph.inputs, graph.outputs, graph.operations))

@@ -40,6 +40,8 @@ namespace nnef
 
         struct Callback
         {
+            virtual ~Callback() {}
+            
             virtual void beginDocument( const std::string& filename, const version_t& version ) {}
             virtual void endDocument( const std::string& filename ) {}
 
@@ -50,11 +52,11 @@ namespace nnef
 
             virtual void operation( const Prototype& proto, const Dictionary<Value>& args, const Dictionary<Typename>& dtypes,
                                    const Dictionary<Shape>& shapes ) = 0;
-
-            virtual bool isAtomic( const Prototype& proto, const Dictionary<Value>& args ) { return false; }
         };
 
     public:
+        
+        virtual ~Parser() {}
 
         virtual void parse( std::istream& is, const char* filename, Callback& callback ) = 0;
 

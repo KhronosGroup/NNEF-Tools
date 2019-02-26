@@ -17,7 +17,6 @@
 #ifndef _NNEF_EVALUATION_H_
 #define _NNEF_EVALUATION_H_
 
-#include "../common/propagation.h"
 #include "../common/dictionary.h"
 #include "../common/error.h"
 #include "../common/value.h"
@@ -40,8 +39,8 @@ namespace nnef
 
     public:
 
-        Evaluation( const std::vector<Assignment>& assignments, const Fragments& fragments, Propagation& propagation, bool deferShapeOf )
-        : _fragments(fragments), _propagation(propagation), _deferShapeOf(deferShapeOf)
+        Evaluation( const std::vector<Assignment>& assignments, const Fragments& fragments, const ShapeFuncs& shapeFuncs )
+        : _fragments(fragments), _shapeFuncs(shapeFuncs)
         {
             for ( auto& assignment : assignments )
             {
@@ -57,18 +56,14 @@ namespace nnef
             {
                 case Expr::Identifier:
                 {
-                    auto& identifier = dynamic_cast<const IdentifierExpr&>(expr);
+                    auto& identifier = static_cast<const IdentifierExpr&>(expr);
                     
-                    auto value = values[identifier.name()];
-                    if ( !value && fallbackToIds )
-                    {
-                        value = Value::identifier(identifier.name());
-                    }
-                    return value;
+                    auto it = values.find(identifier.name());
+                    return it != values.end() ? it->second : (fallbackToIds ? Value::identifier(identifier.name()) : Value::none());
                 }
                 case Expr::Array:
                 {
-                    auto& array = dynamic_cast<const ArrayExpr&>(expr);
+                    auto& array = static_cast<const ArrayExpr&>(expr);
 
                     Value::items_t items(array.size());
                     for ( size_t i = 0; i < array.size(); ++i )
@@ -79,7 +74,7 @@ namespace nnef
                 }
                 case Expr::Tuple:
                 {
-                    auto& tuple = dynamic_cast<const TupleExpr&>(expr);
+                    auto& tuple = static_cast<const TupleExpr&>(expr);
                     
                     Value::items_t items(tuple.size());
                     for ( size_t i = 0; i < tuple.size(); ++i )
@@ -107,7 +102,7 @@ namespace nnef
                 case Expr::Array:
                 case Expr::Tuple:
                 {
-                    auto& sequence = dynamic_cast<const ItemExpr&>(expr);
+                    auto& sequence = static_cast<const ItemExpr&>(expr);
                     
                     Value::items_t items(sequence.size());
                     for ( size_t i = 0; i < sequence.size(); ++i )
@@ -118,7 +113,7 @@ namespace nnef
                 }
                 case Expr::Unary:
                 {
-                    auto& unary = dynamic_cast<const UnaryExpr&>(expr);
+                    auto& unary = static_cast<const UnaryExpr&>(expr);
                     if ( unary.op() == '-' )
                     {
                         auto arg = evaluateRvalue(unary.right());
@@ -141,17 +136,16 @@ namespace nnef
         }
 
         void evaluateAssign( const Expr& lhs, const Expr& rhs, Dictionary<Value>& values, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
-                            Callback& callback, const PrimitiveType* dtype, bool silent, const Value& context )
+                            Callback& callback, const PrimitiveType* dtype, const Value& context )
         {
-            auto value = evaluate(rhs, values, shapes, dtypes, callback, dtype, silent, context);
-            assign(lhs, value, values, shapes, dtypes, callback, silent);
-            declare(value, rhs.type(), dtypes, dtype);
+            auto value = evaluate(rhs, values, shapes, dtypes, callback, dtype, context);
+            assign(lhs, value, values, shapes, dtypes, callback);
         }
 
     private:
 
         Value evaluate( const Expr& expr, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
-                       Callback& callback, const PrimitiveType* dtype, bool silent, const Value& context = Value::none() )
+                       Callback& callback, const PrimitiveType* dtype, const Value& context = Value::none() )
         {
             switch ( expr.kind() )
             {
@@ -161,43 +155,43 @@ namespace nnef
                 }
                 case Expr::Identifier:
                 {
-                    return evaluate(dynamic_cast<const IdentifierExpr&>(expr), values);
+                    return evaluate(static_cast<const IdentifierExpr&>(expr), values);
                 }
                 case Expr::Array:
                 {
-                    return evaluate(dynamic_cast<const ArrayExpr&>(expr), values, shapes, dtypes, callback, dtype, silent, context);
+                    return evaluate(static_cast<const ArrayExpr&>(expr), values, shapes, dtypes, callback, dtype, context);
                 }
                 case Expr::Tuple:
                 {
-                    return evaluate(dynamic_cast<const TupleExpr&>(expr), values, shapes, dtypes, callback, dtype, silent, context);
+                    return evaluate(static_cast<const TupleExpr&>(expr), values, shapes, dtypes, callback, dtype, context);
                 }
                 case Expr::Subscript:
                 {
-                    return evaluate(dynamic_cast<const SubscriptExpr&>(expr), values, shapes, dtypes, callback, dtype, silent);
+                    return evaluate(static_cast<const SubscriptExpr&>(expr), values, shapes, dtypes, callback, dtype);
                 }
                 case Expr::Unary:
                 {
-                    return evaluate(dynamic_cast<const UnaryExpr&>(expr), values, shapes, dtypes, callback, dtype, silent);
+                    return evaluate(static_cast<const UnaryExpr&>(expr), values, shapes, dtypes, callback, dtype);
                 }
                 case Expr::Binary:
                 {
-                    return evaluate(dynamic_cast<const BinaryExpr&>(expr), values, shapes, dtypes, callback, dtype, silent);
+                    return evaluate(static_cast<const BinaryExpr&>(expr), values, shapes, dtypes, callback, dtype);
                 }
                 case Expr::Select:
                 {
-                    return evaluate(dynamic_cast<const SelectExpr&>(expr), values, shapes, dtypes, callback, dtype, silent, context);
+                    return evaluate(static_cast<const SelectExpr&>(expr), values, shapes, dtypes, callback, dtype, context);
                 }
                 case Expr::Comprehension:
                 {
-                    return evaluate(dynamic_cast<const ComprehensionExpr&>(expr), values, shapes, dtypes, callback, dtype, silent, context);
+                    return evaluate(static_cast<const ComprehensionExpr&>(expr), values, shapes, dtypes, callback, dtype, context);
                 }
                 case Expr::Builtin:
                 {
-                    return evaluate(dynamic_cast<const BuiltinExpr&>(expr), values, shapes, dtypes, callback, dtype, silent);
+                    return evaluate(static_cast<const BuiltinExpr&>(expr), values, shapes, dtypes, callback, dtype);
                 }
                 case Expr::Invocation:
                 {
-                    return evaluate(dynamic_cast<const InvocationExpr&>(expr), values, shapes, dtypes, callback, dtype, silent, context);
+                    return evaluate(static_cast<const InvocationExpr&>(expr), values, shapes, dtypes, callback, dtype, context);
                 }
                 default:
                 {
@@ -209,20 +203,30 @@ namespace nnef
 
         static Value evaluateLiteral( const Expr& expr )
         {
-            auto type = dynamic_cast<const PrimitiveType&>(*expr.type());
+            auto type = static_cast<const PrimitiveType&>(*expr.type());
             switch ( type.name() )
             {
                 case Typename::Integer:
-                    return evaluate(dynamic_cast<const IntegerExpr&>(expr));
+                {
+                    return evaluate(static_cast<const IntegerExpr&>(expr));
+                }
                 case Typename::Scalar:
-                    return evaluate(dynamic_cast<const ScalarExpr&>(expr));
+                {
+                    return evaluate(static_cast<const ScalarExpr&>(expr));
+                }
                 case Typename::Logical:
-                    return evaluate(dynamic_cast<const LogicalExpr&>(expr));
+                {
+                    return evaluate(static_cast<const LogicalExpr&>(expr));
+                }
                 case Typename::String:
-                    return evaluate(dynamic_cast<const StringExpr&>(expr));
-                case Typename::Generic:
+                {
+                    return evaluate(static_cast<const StringExpr&>(expr));
+                }
+                default:
+                {
                     assert(false);
                     return Value::none();
+                }
             }
         }
 
@@ -248,47 +252,45 @@ namespace nnef
 
         static Value evaluate( const IdentifierExpr& identifier, const Dictionary<Value>& values )
         {
-            if ( !values.contains(identifier.name()) )
+            if ( !values.count(identifier.name()) )
             {
                 throw Error(identifier.position(), "undefined identifier '%s'", identifier.name().c_str());
             }
-            return values[identifier.name()];
+            return values.at(identifier.name());
         }
 
         Value evaluate( const ArrayExpr& array, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
-                       Callback& callback, const PrimitiveType* dtype, bool silent, const Value& context )
+                       Callback& callback, const PrimitiveType* dtype, const Value& context )
         {
             Value::items_t items(array.size());
             for ( size_t i = 0; i < array.size(); ++i )
             {
                 auto ctx = context.kind() == Value::Array ? context[i] : Value::none();
-                items[i] = evaluate(array.item(i), values, shapes, dtypes, callback, dtype, silent, ctx);
+                items[i] = evaluate(array.item(i), values, shapes, dtypes, callback, dtype, ctx);
             }
             return Value::array(items);
         }
 
         Value evaluate( const TupleExpr& tuple, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
-                       Callback& callback, const PrimitiveType* dtype, bool silent, const Value& context )
+                       Callback& callback, const PrimitiveType* dtype, const Value& context )
         {
             Value::items_t items(tuple.size());
             for ( size_t i = 0; i < tuple.size(); ++i )
             {
                 auto ctx = context.kind() == Value::Tuple ? context[i] : Value::none();
-                items[i] = evaluate(tuple.item(i), values, shapes, dtypes, callback, dtype, silent, ctx);
+                items[i] = evaluate(tuple.item(i), values, shapes, dtypes, callback, dtype, ctx);
             }
             return Value::tuple(items);
         }
 
         Value evaluate( const SubscriptExpr& subscript, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
-                       Callback& callback, const PrimitiveType* dtype, bool silent )
+                       Callback& callback, const PrimitiveType* dtype )
         {
-            Value sequence = evaluate(subscript.sequence(), values, shapes, dtypes, callback, dtype, silent);
-
-            sequence = evaluateShapeOf(sequence, shapes);
+            Value sequence = evaluate(subscript.sequence(), values, shapes, dtypes, callback, dtype);
 
             if ( subscript.isRange() )
             {
-                Value::integer_t i = subscript.begin() ? evaluate(*subscript.begin(), values, shapes, dtypes, callback, dtype, silent).integer() : (Value::integer_t)0;
+                Value::integer_t i = subscript.begin() ? evaluate(*subscript.begin(), values, shapes, dtypes, callback, dtype).integer() : (Value::integer_t)0;
                 if ( i < 0 )
                 {
                     i += sequence.size();
@@ -298,7 +300,7 @@ namespace nnef
                     throw Error(subscript.position(), "range begin (%d) out of bounds (size = %d)", (int)i, (int)sequence.size());
                 }
 
-                Value::integer_t j = subscript.end() ? evaluate(*subscript.end(), values, shapes, dtypes, callback, dtype, silent).integer() : (Value::integer_t)sequence.size();
+                Value::integer_t j = subscript.end() ? evaluate(*subscript.end(), values, shapes, dtypes, callback, dtype).integer() : (Value::integer_t)sequence.size();
                 if ( j < 0 )
                 {
                     j += sequence.size();
@@ -326,7 +328,7 @@ namespace nnef
             }
             else
             {
-                Value::integer_t index = evaluate(*subscript.begin(), values, shapes, dtypes, callback, dtype, silent).integer();
+                Value::integer_t index = evaluate(*subscript.begin(), values, shapes, dtypes, callback, dtype).integer();
                 if ( index < 0 )
                 {
                     index += sequence.size();
@@ -348,11 +350,9 @@ namespace nnef
         }
 
         Value evaluate( const UnaryExpr& unary, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
-                       Callback& callback, const PrimitiveType* dtype, bool silent )
+                       Callback& callback, const PrimitiveType* dtype )
         {
-            Value right = evaluate(unary.right(), values, shapes, dtypes, callback, dtype, silent);
-
-            right = evaluateShapeOf(right, shapes);
+            Value right = evaluate(unary.right(), values, shapes, dtypes, callback, dtype);
 
             if ( unary.op() == '!' )
             {
@@ -382,15 +382,12 @@ namespace nnef
         }
 
         Value evaluate( const BinaryExpr& binary, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
-                       Callback& callback, const PrimitiveType* dtype, bool silent )
+                       Callback& callback, const PrimitiveType* dtype )
         {
             bool lazy = binary.op() == Lexer::And || binary.op() == Lexer::Or;
 
-            Value left = evaluate(binary.left(), values, shapes, dtypes, callback, dtype, silent);
-            Value right = lazy ? Value::none() : evaluate(binary.right(), values, shapes, dtypes, callback, dtype, silent);
-
-            left = evaluateShapeOf(left, shapes);
-            right = evaluateShapeOf(right, shapes);
+            Value left = evaluate(binary.left(), values, shapes, dtypes, callback, dtype);
+            Value right = lazy ? Value::none() : evaluate(binary.right(), values, shapes, dtypes, callback, dtype);
 
             switch ( binary.op() )
             {
@@ -474,11 +471,11 @@ namespace nnef
                 }
                 case Lexer::And:
                 {
-                    return !left.logical() ? left : evaluate(binary.right(), values, shapes, dtypes, callback, dtype, silent);
+                    return !left.logical() ? left : evaluate(binary.right(), values, shapes, dtypes, callback, dtype);
                 }
                 case Lexer::Or:
                 {
-                    return left.logical() ? left : evaluate(binary.right(), values, shapes, dtypes, callback, dtype, silent);
+                    return left.logical() ? left : evaluate(binary.right(), values, shapes, dtypes, callback, dtype);
                 }
                 case Lexer::In:
                 {
@@ -497,23 +494,20 @@ namespace nnef
         }
 
         Value evaluate( const SelectExpr& select, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
-                       Callback& callback, const PrimitiveType* dtype, bool silent, const Value& context )
+                       Callback& callback, const PrimitiveType* dtype, const Value& context )
         {
-            Value condition = evaluate(select.condition(), values, shapes, dtypes, callback, dtype, silent);
-            return condition.logical() ? evaluate(select.trueValue(), values, shapes, dtypes, callback, dtype, silent, context) :
-                                         evaluate(select.falseValue(), values, shapes, dtypes, callback, dtype, silent, context);
+            Value condition = evaluate(select.condition(), values, shapes, dtypes, callback, dtype);
+            return condition.logical() ? evaluate(select.trueValue(), values, shapes, dtypes, callback, dtype, context) :
+                                         evaluate(select.falseValue(), values, shapes, dtypes, callback, dtype, context);
         }
 
         Value evaluate( const ComprehensionExpr& comprehension, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
-                       Callback& callback, const PrimitiveType* dtype, bool silent, const Value& context )
+                       Callback& callback, const PrimitiveType* dtype, const Value& context )
         {
             std::vector<Value> iterables;
             for ( size_t i = 0; i < comprehension.iteratorCount(); ++i )
             {
-                auto iterable = evaluate(comprehension.iterable(i), values, shapes, dtypes, callback, dtype, silent);
-
-                iterable = evaluateShapeOf(iterable, shapes);
-
+                auto iterable = evaluate(comprehension.iterable(i), values, shapes, dtypes, callback, dtype);
                 iterables.push_back(iterable);
             }
             
@@ -533,14 +527,14 @@ namespace nnef
             {
                 for ( size_t k = 0; k < iterables.size(); ++k )
                 {
-                    assign(comprehension.iterator(k), iterables[k][i], ids, shapes, dtypes, callback, silent);
+                    assign(comprehension.iterator(k), iterables[k][i], ids, shapes, dtypes, callback);
                 }
 
-                bool accept = comprehension.condition() ? evaluate(*comprehension.condition(), ids, shapes, dtypes, callback, dtype, silent).logical() : true;
+                bool accept = comprehension.condition() ? evaluate(*comprehension.condition(), ids, shapes, dtypes, callback, dtype).logical() : true;
                 if ( accept )
                 {
                     auto ctx = context.kind() == Value::Array && items.size() < context.size() ? context[items.size()] : Value::none();
-                    auto item = evaluate(comprehension.item(), ids, shapes, dtypes, callback, dtype, silent, ctx);
+                    auto item = evaluate(comprehension.item(), ids, shapes, dtypes, callback, dtype, ctx);
                     items.push_back(item);
                 }
 
@@ -553,7 +547,7 @@ namespace nnef
         }
 
         Value evaluate( const InvocationExpr& invocation, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
-                       Callback& callback, const PrimitiveType* dtype, bool silent, const Value& context )
+                       Callback& callback, const PrimitiveType* dtype, const Value& context )
         {
             auto& fragment = _fragments.at(invocation.target());
             auto& proto = fragment.prototype();
@@ -563,7 +557,7 @@ namespace nnef
             {
                 auto& param = proto.param(i);
                 auto arg = invocation.arg(param.name());
-                ids[param.name()] = arg ? evaluate(*arg, values, shapes, dtypes, callback, dtype, silent) : param.defaultValue();
+                ids[param.name()] = arg ? evaluate(*arg, values, shapes, dtypes, callback, dtype) : param.defaultValue();
             }
 
             const PrimitiveType* dataType = invocation.dataType() == primitiveType(Typename::Generic) ? dtype : invocation.dataType();
@@ -572,45 +566,36 @@ namespace nnef
                 ids["?"] = Value::string(dataType->toString());
             }
             
-            bool atomic = fragment.assignmentCount() == 0 || callback.isAtomic(proto, ids);
-            
-            if ( atomic )
+            if ( !invocation.type()->isAttribute() )
             {
-                evaluateShapeOf(proto, ids, shapes);
-            }
-
-            if ( fragment.assignmentCount() == 0 )
-            {
-                for ( size_t i = 0; i < proto.resultCount(); ++i )
+                checkStructure(context ? context : Value::identifier(""), invocation.type(), invocation.position());
+                
+                if ( proto.resultCount() == 1 )
                 {
-                    const Value hint = context.kind() == Value::Tuple && context.size() == proto.resultCount() ? context[i] : context;
-
-                    auto& result = proto.result(i);
-                    if ( result.type()->kind() == Type::Array )
+                    ids[proto.result(0).name()] = context ? context : makeResultValue(proto.name());
+                }
+                else
+                {
+                    for ( size_t i = 0; i < proto.resultCount(); ++i )
                     {
-                        const size_t length = _propagation.resultArrayLength(proto, result.name(), ids, shapes);
-                        if ( hint.kind() == Value::Array && hint.size() == length )
-                        {
-                            ids[result.name()] = hint;
-                        }
-                        else if ( hint.kind() == Value::Identifier )
-                        {
-                            ids[result.name()] = makeResultValue(proto.name(), length, hint.identifier());
-                        }
-                        else
-                        {
-                            ids[result.name()] = makeResultValue(proto.name(), length);
-                        }
-                    }
-                    else
-                    {
-                        ids[result.name()] = hint.kind() == Value::Identifier ? hint : makeResultValue(proto.name());
+                        ids[proto.result(i).name()] = context ? context[i] : makeResultValue(proto.name());
                     }
                 }
-
+            }
+            
+            bool atomic = fragment.assignmentCount() == 0 || _shapeFuncs.count(proto.name());
+            if ( atomic )
+            {
                 try
                 {
-                    _propagation.propagateShapes(proto, ids, shapes);
+                    if ( !_shapeFuncs.count(proto.name()) )
+                    {
+                        throw Error("shape function not defined for operation '%s'", proto.name().c_str());
+                    }
+                    auto func = _shapeFuncs.at(proto.name());
+                    func(proto.name(), ids, shapes);
+                    
+                    callback.operation(proto, ids, dtypes, shapes);
                 }
                 catch ( Error e )
                 {
@@ -619,29 +604,6 @@ namespace nnef
             }
             else
             {
-                for ( size_t i = 0; i < proto.resultCount(); ++i )
-                {
-                    auto& result = proto.result(i);
-                    if ( !result.type()->isAttribute() )
-                    {
-                        const Value hint = context.kind() == Value::Tuple && context.size() == proto.resultCount() ? context[i] : context;
-                        if ( hint )
-                        {
-                            bool hintMatchesType = (result.type()->kind() == Type::Array && hint.kind() == Value::Array)
-                                                || (result.type()->kind() == Type::Tuple && hint.kind() == Value::Tuple)
-                                                || (result.type()->kind() == Type::Tensor && hint.kind() == Value::Identifier);
-                            if ( hintMatchesType )
-                            {
-                                ids[result.name()] = hint;
-                            }
-                        }
-                        else if ( atomic )
-                        {
-                            ids[result.name()] = makeResultValue(proto.name());
-                        }
-                    }
-                }
-
                 for ( size_t i = 0; i < fragment.assignmentCount(); ++i )
                 {
                     auto& assignment = fragment.assignment(i);
@@ -649,7 +611,7 @@ namespace nnef
                     const Value ctx = evaluateLvalue(assignment.lhs(), ids, false);
                     try
                     {
-                        evaluateAssign(assignment.lhs(), assignment.rhs(), ids, shapes, dtypes, callback, dataType, silent || atomic, ctx);
+                        evaluateAssign(assignment.lhs(), assignment.rhs(), ids, shapes, dtypes, callback, dataType, ctx);
                     }
                     catch ( Error e )
                     {
@@ -657,30 +619,35 @@ namespace nnef
                     }
                 }
             }
-
-            if ( atomic && !silent )
-            {
-                callback.operation(proto, ids, dtypes, shapes);
-            }
-
+            
+            Value value;
             if ( proto.resultCount() == 1 )
             {
-                return ids[proto.result(0).name()];
+                value = ids[proto.result(0).name()];
             }
-            Value::items_t items(proto.resultCount());
-            for ( size_t i = 0; i < proto.resultCount(); ++i )
+            else
             {
-                items[i] = ids[proto.result(i).name()];
+                Value::items_t items(proto.resultCount());
+                for ( size_t i = 0; i < proto.resultCount(); ++i )
+                {
+                    items[i] = ids[proto.result(i).name()];
+                }
+                value = Value::tuple(items);
             }
-            return Value::tuple(items);
+            
+            if ( atomic )
+            {
+                declare(value, invocation.type(), dtypes, dtype);
+                assert(shapes.size() == dtypes.size());
+            }
+            
+            return value;
         }
 
         Value evaluate( const BuiltinExpr& builtin, const Dictionary<Value>& values, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
-                       Callback& callback, const PrimitiveType* dtype, bool silent )
+                       Callback& callback, const PrimitiveType* dtype )
         {
-            Value arg = evaluate(builtin.arg(), values, shapes, dtypes, callback, dtype, silent);
-
-            arg = evaluateShapeOf(arg, shapes);
+            Value arg = evaluate(builtin.arg(), values, shapes, dtypes, callback, dtype);
 
             switch ( builtin.op() )
             {
@@ -707,15 +674,11 @@ namespace nnef
                         std::vector<Value> items;
                         return Value::array(items);
                     }
-                    else if ( _deferShapeOf )
-                    {
-                        return Value::shape_of(arg.identifier());
-                    }
                     else
                     {
-                        auto& shape = shapes[arg.identifier()];
+                        auto& shape = shapes.at(arg.identifier());
 
-                        std::vector<Value> items(shape.rank());
+                        std::vector<Value> items(shape.size());
                         for ( size_t i = 0; i < items.size(); ++i )
                         {
                             items[i] = Value::integer(shape[i]);
@@ -848,14 +811,14 @@ namespace nnef
             return Value::none();
         }
 
-        void assign( const Expr& lhs, const Value& rvalue, Dictionary<Value>& ids, Dictionary<Shape>& shapes, const Dictionary<Typename>& dtypes,
-                    Callback& callback, bool silent = false )
+        void assign( const Expr& lhs, const Value& rvalue, Dictionary<Value>& ids, Dictionary<Shape>& shapes, Dictionary<Typename>& dtypes,
+                    Callback& callback )
         {
             switch ( lhs.kind() )
             {
                 case Expr::Array:
                 {
-                    auto& array = dynamic_cast<const ArrayExpr&>(lhs);
+                    auto& array = static_cast<const ArrayExpr&>(lhs);
                     if ( array.size() != rvalue.size() )
                     {
                         throw Error(lhs.position(), "cannot assign array of length %d to array of length %d",
@@ -863,40 +826,41 @@ namespace nnef
                     }
                     for ( size_t i = 0; i < array.size(); ++i )
                     {
-                        assign(array.item(i), rvalue[i], ids, shapes, dtypes, callback, silent);
+                        assign(array.item(i), rvalue[i], ids, shapes, dtypes, callback);
                     }
                     break;
                 }
                 case Expr::Tuple:
                 {
-                    auto& tuple = dynamic_cast<const TupleExpr&>(lhs);
+                    auto& tuple = static_cast<const TupleExpr&>(lhs);
                     assert(tuple.size() == rvalue.size());
 
                     for ( size_t i = 0; i < tuple.size(); ++i )
                     {
-                        assign(tuple.item(i), rvalue[i], ids, shapes, dtypes, callback, silent);
+                        assign(tuple.item(i), rvalue[i], ids, shapes, dtypes, callback);
                     }
                     break;
                 }
                 case Expr::Identifier:
                 {
-                    auto& identifier = dynamic_cast<const IdentifierExpr&>(lhs);
+                    auto& identifier = static_cast<const IdentifierExpr&>(lhs);
                     auto& lvalue = ids[identifier.name()];
 
                     if ( lvalue )
                     {
-                        if ( lvalue != rvalue && !silent )
+                        if ( lvalue != rvalue )
                         {
                             assert(lvalue.kind() == Value::Identifier);
                             assert(rvalue.kind() == Value::Identifier);
 
-                            const Typename dtype = dtypes[rvalue.identifier()];
+                            const Typename dtype = dtypes.at(rvalue.identifier());
                             const Value dvalue = Value::string(toString(dtype));
 
                             const Prototype& proto = _fragments.at("copy").prototype();
                             const Dictionary<Value> args = { std::make_pair("x", rvalue), std::make_pair("y", lvalue), std::make_pair("?", dvalue) };
 
-                            _propagation.propagateShapes(proto, args, shapes);
+                            shapes[lvalue.identifier()] = shapes[rvalue.identifier()];
+                            dtypes[lvalue.identifier()] = dtypes[rvalue.identifier()];
                             callback.operation(proto, args, dtypes, shapes);
                         }
                     }
@@ -922,7 +886,7 @@ namespace nnef
                 case Expr::Array:
                 case Expr::Tuple:
                 {
-                    auto& items = dynamic_cast<const ItemExpr&>(lhs);
+                    auto& items = static_cast<const ItemExpr&>(lhs);
                     for ( size_t i = 0; i < items.size(); ++i )
                     {
                         unassign(items.item(i), ids);
@@ -931,7 +895,7 @@ namespace nnef
                 }
                 case Expr::Identifier:
                 {
-                    auto& identifier = dynamic_cast<const IdentifierExpr&>(lhs);
+                    auto& identifier = static_cast<const IdentifierExpr&>(lhs);
                     ids.erase(identifier.name());
                     break;
                 }
@@ -951,18 +915,18 @@ namespace nnef
                 {
                     assert(type->kind() == Type::Tensor);
                     const std::string& id = arg.identifier();
-                    auto tensorType = dynamic_cast<const TensorType*>(type);
+                    auto tensorType = static_cast<const TensorType*>(type);
                     assert(tensorType->dataType()->kind() == Type::Primitive);
-                    auto dataType = dynamic_cast<const PrimitiveType*>(tensorType->dataType());
+                    auto dataType = static_cast<const PrimitiveType*>(tensorType->dataType());
                     auto name = dataType->name() == Typename::Generic ? dtype->name() : dataType->name();
-                    assert(!dtypes.contains(id) || dtypes[id] == name);
+                    assert(!dtypes.count(id) || dtypes.at(id) == name);
                     dtypes.emplace(id, name);
                     break;
                 }
                 case Value::Array:
                 {
                     assert(type->kind() == Type::Array);
-                    auto arrayType = dynamic_cast<const ArrayType*>(type);
+                    auto arrayType = static_cast<const ArrayType*>(type);
                     for ( size_t i = 0; i < arg.size(); ++i )
                     {
                         declare(arg[i], arrayType->itemType(), dtypes, dtype);
@@ -972,7 +936,7 @@ namespace nnef
                 case Value::Tuple:
                 {
                     assert(type->kind() == Type::Tuple);
-                    auto tupleType = dynamic_cast<const TupleType*>(type);
+                    auto tupleType = static_cast<const TupleType*>(type);
                     for ( size_t i = 0; i < arg.size(); ++i )
                     {
                         declare(arg[i], tupleType->itemType(i), dtypes, dtype);
@@ -985,28 +949,57 @@ namespace nnef
                 }
             }
         }
-
-    private:
-
-        void evaluateShapeOf( const Prototype& proto, Dictionary<Value>& args, const Dictionary<Shape>& shapes )
+        
+        static void checkStructure( const Value& value, const Type* type, const Error::Position& position )
         {
-            for ( auto it = args.begin(); it != args.end(); ++it )
+            switch ( type->kind() )
             {
-                if ( it->second.kind() == Value::ShapeOf && !_propagation.shouldDeferShapeOf(proto, it->first) )
+                case Type::Primitive:
+                case Type::Tensor:
                 {
-                    it->second = makeShapeValue(shapes[it->second.shape_of().id]);
+                    if ( value.kind() != Value::Identifier )
+                    {
+                        throw Error(position, "invocation context mismatch: expected identifier on left hand side to match type '%s'",
+                                    type->toString().c_str());
+                    }
+                    break;
+                }
+                case Type::Array:
+                {
+                    if ( value.kind() != Value::Array )
+                    {
+                        throw Error(position, "invocation context mismatch: expected array on left hand side to match type '%s'",
+                                    type->toString().c_str());
+                    }
+                    auto& array = static_cast<const ArrayType&>(*type);
+                    for ( size_t i = 0; i < value.size(); ++i )
+                    {
+                        checkStructure(value[i], array.itemType(), position);
+                    }
+                    break;
+                }
+                case Type::Tuple:
+                {
+                    if ( value.kind() != Value::Tuple )
+                    {
+                        throw Error(position, "invocation context mismatch: expected tuple on left hand side to match type '%s'",
+                                    type->toString().c_str());
+                    }
+                    auto& tuple = static_cast<const TupleType&>(*type);
+                    for ( size_t i = 0; i < value.size(); ++i )
+                    {
+                        checkStructure(value[i], tuple.itemType(i), position);
+                    }
+                    break;
                 }
             }
         }
 
-        static Value evaluateShapeOf( const Value& value, const Dictionary<Shape>& shapes )
-        {
-            return value.kind() == Value::ShapeOf ? makeShapeValue(shapes[value.shape_of().id]) : value;
-        }
+    private:
 
         static Value makeShapeValue( const Shape& shape )
         {
-            Value::items_t items(shape.rank());
+            Value::items_t items(shape.size());
             for ( size_t i = 0; i < items.size(); ++i )
             {
                 items[i] = Value::integer((Value::integer_t)shape[i]);
@@ -1070,14 +1063,14 @@ namespace nnef
             {
                 case Expr::Identifier:
                 {
-                    auto& identifier = dynamic_cast<const IdentifierExpr&>(expr);
+                    auto& identifier = static_cast<const IdentifierExpr&>(expr);
                     _reservedIds.insert(identifier.name());
                     break;
                 }
                 case Expr::Array:
                 case Expr::Tuple:
                 {
-                    auto& items = dynamic_cast<const ItemExpr&>(expr);
+                    auto& items = static_cast<const ItemExpr&>(expr);
                     for ( size_t i = 0; i < items.size(); ++i )
                     {
                         addReservedIdentifiers(items.item(i));
@@ -1128,8 +1121,7 @@ namespace nnef
     private:
 
         const Fragments& _fragments;
-        Propagation& _propagation;
-        const bool _deferShapeOf;
+        const ShapeFuncs& _shapeFuncs;
 
         Dictionary<size_t> _tensorCounts;
         std::set<std::string> _reservedIds;
