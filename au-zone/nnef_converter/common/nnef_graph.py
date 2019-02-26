@@ -76,7 +76,7 @@ class NNEFGraph(object):
             for output_node in output_list_:
                 add_node_to_nx_graph(output_node)
 
-            for node in reversed(bottom_top_node):
+            for node in reversed(bottom_top_nodes):
                 type_node = 'node'
                 if node in input_list_:
                     type_node = 'input'
@@ -104,7 +104,7 @@ class NNEFGraph(object):
             "Compile" the nodes: creates edge connections, calls node specific callbacks (if defined)
         '''
         for node in self.nx_graph:
-           self.nx_graph.node[node]['node'].compile(self.nx_graph)
+            self.nx_graph.node[node]['node'].compile(self.nx_graph)
 
         '''
             post_compile_callback:  Callback to provide converter's specific interaction with the nxgraph if required

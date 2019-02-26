@@ -110,7 +110,6 @@ class Node(object):
         self.unique_name = kwargs['_uid']
         self.parameters_ = {}
         self.output_shape = None
-        self.tensor_data_file = None
         self.tensor = None
         self.output_value_ = None
         if not hasattr(self, 'defaults'):
@@ -220,12 +219,6 @@ class Node(object):
         print("DBG: Printing from parameters_ dict")
         for key, val in self.parameters_.items():
             print(key, ":", val)
-
-    def set_tensordatafile(self, tdf):
-        self.tensor_data_file = tdf
-
-    def get_tensordatafile(self):
-        return self.tensor_data_file
 
     def set_parameter(self, key, param):
         self.parameters_[key] = param
