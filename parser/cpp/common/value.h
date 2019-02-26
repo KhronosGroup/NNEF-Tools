@@ -466,7 +466,6 @@ namespace nnef
                     return true;
                 }
             }
-            assert(false);
             return false;
         }
         
