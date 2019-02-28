@@ -329,9 +329,12 @@ struct GraphCallback : public nnef::Parser::Callback
             PyObject* data = buildPyNone();
             PyObject* compression = buildPyNone();
             PyObject* quantization = PyDict_New();
-            for ( auto& qit : quant )
+            if ( quant.count(it.first) )
             {
-                PyDict_SetItemString(quantization, qit.first.c_str(), buildValuePyDict(qit.second));
+                for ( auto& qit : quant.at(it.first) )
+                {
+                    PyDict_SetItemString(quantization, qit.first.c_str(), buildPyObjectFromValue(qit.second));
+                }
             }
             
             PyObject* tensor = PyObject_CallObject(Tensor, PyTuple_Pack(6, name, dtype, shape, data, compression, quantization));

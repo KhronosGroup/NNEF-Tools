@@ -261,6 +261,7 @@ def write_tensor(file, tensor, version=(1,0), quantization={}):
         params[1] = quantization['max']
     elif code == QUANT_CODE_INTEGER:
         params[0] = 0 if dtype == np.uint else 1
+        params[1] = quantization.get('scale', 0)
     elif code != QUANT_CODE_FLOAT:
         raise ValueError('unsupported item type code: {}'.format(code))
 
@@ -318,7 +319,10 @@ def read_tensor(file):
     if code == QUANT_CODE_LINEAR or code == QUANT_CODE_LOGARITHMIC:
         quantization['min'] = params[0]
         quantization['max'] = params[1]
-    elif code != QUANT_CODE_FLOAT and code != QUANT_CODE_INTEGER:
+    elif code == QUANT_CODE_INTEGER:
+        if params[1] != 0:
+            quantization['scale'] = params[1]
+    elif code != QUANT_CODE_FLOAT:
         raise ValueError('unsupported item type code: {}'.format(code))
 
     return tensor, quantization

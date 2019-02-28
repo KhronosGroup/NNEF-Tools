@@ -59,6 +59,14 @@ std::ostream& print_values( std::ostream& os, const nnef::ValueDict& m )
     return os;
 }
 
+bool is_nnef_folder( const std::string& path )
+{
+    auto sep = path.back() != '/' && path.back() != '\\' ? "/" : "";
+    auto filename = path + sep + "graph.nnef";
+    std::ifstream is(filename);
+    return is.is_open();
+}
+
 
 int main( int argc, const char * argv[] )
 {
@@ -67,7 +75,6 @@ int main( int argc, const char * argv[] )
         std::cout << "Usage: nnef-validator <network-structure.nnef> (--option)*" << std::endl;
         std::cout << std::endl;
         std::cout << "Description of options:" << std::endl;
-        std::cout << "--graph: parse graph file only" << std::endl;
         std::cout << "--custom <fn>: import custom fragments defined in a separate file" << std::endl;
         std::cout << "--atomic <op>: op to treat as atomic" << std::endl;
         std::cout << "--lower <op>: op to lower" << std::endl;
@@ -76,16 +83,11 @@ int main( int argc, const char * argv[] )
     
     const std::string path = argv[1];
     
-    bool graph_only = false;
     std::string customs;
     auto shapeFuncs = nnef::standardShapeFuncs();
     for ( int i = 2; i < argc; ++i )
     {
-        if ( std::strcmp(argv[i], "--graph") == 0 )
-        {
-            graph_only = true;
-        }
-        else if ( std::strcmp(argv[i], "--custom") == 0 )
+        if ( std::strcmp(argv[i], "--custom") == 0 )
         {
             if ( argc > i+1 )
             {
@@ -137,15 +139,13 @@ int main( int argc, const char * argv[] )
     nnef::Graph graph;
     std::string error;
     
-    bool ok = graph_only ? nnef::parse_graph(path, "", graph, error, customs, shapeFuncs) : nnef::load_model(path, graph, error, customs, shapeFuncs);
+    bool ok = is_nnef_folder(path) ? nnef::load_model(path, graph, error, customs, shapeFuncs) : nnef::parse_graph(path, "", graph, error, customs, shapeFuncs);
     
     if ( !ok )
     {
         std::cout << error << std::endl;
         return -1;
     }
-    
-    std::cout << "-- Validation succeeded, printing lowered graph --" << std::endl << std::endl;
     
     std::cout << "graph " << graph.name << "( " << graph.inputs << " ) -> ( " << graph.outputs << " )" << std::endl;
     std::cout << "{" << std::endl;
@@ -168,6 +168,7 @@ int main( int argc, const char * argv[] )
         std::cout << ");" << std::endl;
     }
     std::cout << "}" << std::endl;
+    std::cout << "Validation succeeded" << std::endl << std::endl;
     
     return 0;
 }

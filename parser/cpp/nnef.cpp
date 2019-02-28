@@ -204,6 +204,10 @@ namespace nnef
         else if ( header.quant_code == TensorHeader::Integer )
         {
             tensor.compression.emplace_back("signed", Value::logical(header.quant_params[0] != 0));
+            if ( header.quant_params[1] )
+            {
+                tensor.compression.emplace_back("scale", Value::scalar(header.quant_params[1]));
+            }
         }
         
         tensor.data.resize(header.data_length);
@@ -267,6 +271,7 @@ namespace nnef
         else if ( header.quant_code == TensorHeader::Integer )
         {
             header.quant_params[0] = tensor.compression.at("signed", Value::logical(false)).logical() ? 1 : 0;
+            header.quant_params[1] = tensor.compression.at("scale", Value::scalar(0.0)).scalar();
         }
         
         os.write((char*)&header, sizeof(header));
