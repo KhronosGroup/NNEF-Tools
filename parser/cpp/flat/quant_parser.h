@@ -43,7 +43,7 @@ namespace nnef
             for ( unsigned line = 0; lexer.token() != Lexer::Eof; ++line )
             {
                 const std::string tensor = lexer.string();
-                if ( quantization.contains(tensor) )
+                if ( quantization.count(tensor) )
                 {
                     throw Error(lexer.position(), "duplicate quantization entries for tensor '%s'", tensor.c_str());
                 }

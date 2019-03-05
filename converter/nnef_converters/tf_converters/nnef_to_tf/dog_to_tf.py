@@ -25,8 +25,6 @@ from ...common import utils
 def _transform_arg(arg):
     if isinstance(arg, dog.DataNode):
         return arg.name
-    elif isinstance(arg, nnef.ShapeOf):
-        return "tf.shape({})".format(str(arg))
     elif isinstance(arg, str):
         return "'{}'".format(arg)
     elif isinstance(arg, tf.DType):

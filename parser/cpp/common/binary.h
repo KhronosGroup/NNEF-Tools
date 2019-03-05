@@ -18,6 +18,7 @@
 #define _NNEF_BINARY_H_
 
 #include "error.h"
+#include "shape.h"
 #include <functional>
 #include <algorithm>
 #include <iostream>
@@ -40,13 +41,13 @@ namespace nnef
         uint32_t extents[MaxRank];
         uint32_t bits_per_item;
         uint32_t quant_code;
-        uint8_t  quant_params[76];
+        uint32_t quant_params[8];
+        uint8_t reserved[44];
     };
 
 
     template<typename T, typename U = float>
-    inline void fill_tensor_header( TensorHeader& header, const size_t version[2], const size_t rank, const T* extents, const size_t bits_per_item,
-                                   const TensorHeader::QuantCode quant_code = TensorHeader::Float, const std::vector<U>& quant_params = {} )
+    inline void fill_tensor_header( TensorHeader& header, const size_t version[2], const size_t rank, const T* extents, const size_t bits_per_item )
     {
         const char* magic = "N\xEF";
 
@@ -67,16 +68,8 @@ namespace nnef
         header.data_length = (uint32_t)((item_count * bits_per_item + 7) / 8);
         header.bits_per_item = (uint32_t)bits_per_item;
         header.rank = (uint32_t)rank;
-        header.quant_code = quant_code;
 
         std::copy_n(extents, rank, header.extents);
-
-        if ( sizeof(U) * quant_params.size() > 32 )
-        {
-            throw Error("quantization parameters exceed maximum possible length of 32 bytes (found %d btyes)", (int)(sizeof(U) * quant_params.size()));
-        }
-
-        std::copy(quant_params.begin(), quant_params.end(), (U*)header.quant_params);
     }
 
     inline void validate_tensor_header( const TensorHeader& header )
@@ -91,7 +84,7 @@ namespace nnef
         }
         if ( header.rank > TensorHeader::MaxRank )
         {
-            throw Error("tensor rank %d exceeds maximum possible value (%d)", (int)header.rank, (int)TensorHeader::MaxRank);
+            throw Error("tensor rank %d exceeds maximum allowed rank (%d)", (int)header.rank, (int)TensorHeader::MaxRank);
         }
 
         const uint32_t item_count = std::accumulate(header.extents, header.extents + header.rank, (uint32_t)1, std::multiplies<uint32_t>());
@@ -128,6 +121,16 @@ namespace nnef
                     throw Error("unkown Khronos-defined item type code: %x", (int)code);
                 }
             }
+        }
+    }
+    
+    inline void validate_tensor_shape( const TensorHeader& header, const Shape& expected_shape )
+    {
+        const Shape shape(header.extents, header.extents + header.rank);
+        if ( shape != expected_shape )
+        {
+            throw Error("shape %s in variable file does not match shape %s defined in network structure",
+                        nnef::toString(shape).c_str(), nnef::toString(expected_shape).c_str());
         }
     }
 

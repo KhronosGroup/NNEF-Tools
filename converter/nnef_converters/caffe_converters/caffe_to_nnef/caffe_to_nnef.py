@@ -21,7 +21,7 @@ import tempfile
 from . import caffe_to_dog
 from . import converters
 from . import transformations
-from ..common import EXTRA_WEIGHTS, EXTRA_ACTIVATIONS
+from ..common import EXTRA_WEIGHTS, EXTRA_ACTIVATIONS, CaffeGraph
 from ...common import dog_to_nnef
 from ...common import utils
 from ...common.types import *
@@ -41,7 +41,7 @@ def prototxt_to_nnef(prototxt_file_name,
                      caffemodel_file_name=None,
                      with_activations=False,
                      with_variables=True):
-    # type: (str, str, Optional[str], bool)->None
+    # type: (str, str, Optional[str], bool, bool)->None
 
     nnefdir = utils.without_file_name(nnef_file_name)
     utils.ensure_dir(nnefdir)

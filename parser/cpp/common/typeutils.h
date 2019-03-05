@@ -20,6 +20,7 @@
 #include "typespec.h"
 #include "prototype.h"
 #include "dictionary.h"
+#include <cassert>
 
 
 namespace nnef
@@ -38,14 +39,14 @@ namespace nnef
             {
                 case Type::Primitive:
                 {
-                    auto primitiveType1 = dynamic_cast<const PrimitiveType*>(type1);
-                    auto primitiveType2 = dynamic_cast<const PrimitiveType*>(type2);
+                    auto primitiveType1 = static_cast<const PrimitiveType*>(type1);
+                    auto primitiveType2 = static_cast<const PrimitiveType*>(type2);
                     return primitiveType1->name() == primitiveType2->name() || primitiveType2->name() == Typename::Generic;
                 }
                 case Type::Tensor:
                 {
-                    auto tensorType1 = dynamic_cast<const TensorType*>(type1);
-                    auto tensorType2 = dynamic_cast<const TensorType*>(type2);
+                    auto tensorType1 = static_cast<const TensorType*>(type1);
+                    auto tensorType2 = static_cast<const TensorType*>(type2);
                     if ( tensorType1->dataType() && tensorType2->dataType() )
                     {
                         return isCastable(tensorType1->dataType(), tensorType2->dataType(), allowPrimitiveToTensor);
@@ -57,8 +58,8 @@ namespace nnef
                 }
                 case Type::Array:
                 {
-                    auto arrayType1 = dynamic_cast<const ArrayType*>(type1);
-                    auto arrayType2 = dynamic_cast<const ArrayType*>(type2);
+                    auto arrayType1 = static_cast<const ArrayType*>(type1);
+                    auto arrayType2 = static_cast<const ArrayType*>(type2);
                     if ( arrayType1->itemType() && arrayType2->itemType() )
                     {
                         return isCastable(arrayType1->itemType(), arrayType2->itemType(), allowPrimitiveToTensor);
@@ -70,8 +71,8 @@ namespace nnef
                 }
                 case Type::Tuple:
                 {
-                    auto tupleType1 = dynamic_cast<const TupleType*>(type1);
-                    auto tupleType2 = dynamic_cast<const TupleType*>(type2);
+                    auto tupleType1 = static_cast<const TupleType*>(type1);
+                    auto tupleType2 = static_cast<const TupleType*>(type2);
                     if ( tupleType1->size() != tupleType2->size() )
                     {
                         return false;
@@ -89,7 +90,7 @@ namespace nnef
         }
         else if ( type1->kind() == Type::Primitive && type2->kind() == Type::Tensor && allowPrimitiveToTensor )
         {
-            auto tensorType = dynamic_cast<const TensorType*>(type2);
+            auto tensorType = static_cast<const TensorType*>(type2);
             return !tensorType->dataType() || isCastable(type1, tensorType->dataType());
         }
 
@@ -124,17 +125,17 @@ namespace nnef
             }
             case Type::Tensor:
             {
-                auto tensor = dynamic_cast<const TensorType*>(paramType);
+                auto tensor = static_cast<const TensorType*>(paramType);
                 return tensor->dataType() == primitiveType(Typename::Generic) ? tensorType(dataType->name()) : paramType;
             }
             case Type::Array:
             {
-                auto array = dynamic_cast<const ArrayType*>(paramType);
+                auto array = static_cast<const ArrayType*>(paramType);
                 return array->itemType() ? arrayType(bindDataType(array->itemType(), dataType)) : paramType;
             }
             case Type::Tuple:
             {
-                auto tuple = dynamic_cast<const TupleType*>(paramType);
+                auto tuple = static_cast<const TupleType*>(paramType);
                 
                 std::vector<const Type*> itemTypes(tuple->size());
                 for ( size_t i = 0; i < tuple->size(); ++i )
@@ -144,6 +145,8 @@ namespace nnef
                 return tupleType(itemTypes);
             }
         }
+        assert(false);
+        return nullptr;
     }
 
     inline void deduceDataType( const Type* paramType, const Type* argType, const PrimitiveType*& dataType )
@@ -156,7 +159,7 @@ namespace nnef
                 {
                     if ( paramType->isGeneric() )
                     {
-                        auto primitiveType = dynamic_cast<const PrimitiveType*>(argType);
+                        auto primitiveType = static_cast<const PrimitiveType*>(argType);
                         if ( !dataType )
                         {
                             dataType = primitiveType;
@@ -170,8 +173,8 @@ namespace nnef
                 }
                 case Type::Tensor:
                 {
-                    auto tensorType1 = dynamic_cast<const TensorType*>(paramType);
-                    auto tensorType2 = dynamic_cast<const TensorType*>(argType);
+                    auto tensorType1 = static_cast<const TensorType*>(paramType);
+                    auto tensorType2 = static_cast<const TensorType*>(argType);
                     if ( tensorType1->dataType() && tensorType2->dataType() )
                     {
                         deduceDataType(tensorType1->dataType(), tensorType2->dataType(), dataType);
@@ -180,8 +183,8 @@ namespace nnef
                 }
                 case Type::Array:
                 {
-                    auto arrayType1 = dynamic_cast<const ArrayType*>(paramType);
-                    auto arrayType2 = dynamic_cast<const ArrayType*>(argType);
+                    auto arrayType1 = static_cast<const ArrayType*>(paramType);
+                    auto arrayType2 = static_cast<const ArrayType*>(argType);
                     if ( arrayType1->itemType() && arrayType2->itemType() )
                     {
                         deduceDataType(arrayType1->itemType(), arrayType2->itemType(), dataType);
@@ -190,8 +193,8 @@ namespace nnef
                 }
                 case Type::Tuple:
                 {
-                    auto tupleType1 = dynamic_cast<const TupleType*>(paramType);
-                    auto tupleType2 = dynamic_cast<const TupleType*>(argType);
+                    auto tupleType1 = static_cast<const TupleType*>(paramType);
+                    auto tupleType2 = static_cast<const TupleType*>(argType);
                     assert(tupleType1->size() == tupleType2->size());
 
                     for ( size_t i = 0; i < tupleType1->size(); ++i )
@@ -204,7 +207,7 @@ namespace nnef
         }
         else if ( paramType->kind() == Type::Tensor && argType->kind() == Type::Primitive )
         {
-            auto tensorType = dynamic_cast<const TensorType*>(paramType);
+            auto tensorType = static_cast<const TensorType*>(paramType);
             deduceDataType(tensorType->dataType(), argType, dataType);
         }
     }
@@ -216,7 +219,7 @@ namespace nnef
             auto& param = proto.param(i);
             if ( param.type()->isGeneric() )
             {
-                auto argType = types[param.name()];
+                auto argType = types.at(param.name());
                 deduceDataType(param.type(), argType, dataType);
             }
         }

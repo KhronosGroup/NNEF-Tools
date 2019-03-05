@@ -18,6 +18,32 @@ import nnef
 
 from .types import *
 
+
+# noinspection PyProtectedMember
+class Config(object):
+    def __init__(self, key=None, custom_ops=None, custom_shapes=None):
+        # type: (Optional[str], Optional[str], Optional[Dict[str, Callable]])->None
+        self.key = key if key else "custom_ops_" + str(id(self))
+        self.custom_ops = custom_ops
+        self.custom_shapes = custom_shapes.copy() if custom_shapes else None
+
+    def __enter__(self):
+        if self.custom_ops:
+            nnef._register_custom_ops(self.key, self.custom_ops)
+        if self.custom_shapes:
+            nnef._register_custom_shapes(self.custom_shapes)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.custom_ops:
+            nnef._unregister_custom_ops(self.key)
+        if self.custom_shapes:
+            custom_shapes = self.custom_shapes.copy()
+            for k in custom_shapes.keys():
+                custom_shapes[k] = None
+            nnef._register_custom_shapes(custom_shapes)
+
+
 _NonAtomicOperationsSet = {"rms_pool", "softabs", "log2", "linear", "planewise_conv", "planewise_deconv",
                            "separable_conv", "separable_deconv", "l1_normalization", "layer_normalization",
                            "divisive_normalization"}
@@ -28,10 +54,11 @@ _CustomOperationNames = ["max_pool_grad",
                          "conv_grad_input",
                          "conv_grad_filter"]
 
-_NonAtomicCustomOperationsSet = {}
+_NonAtomicCustomOperationsSet = set()
 
-AtomicOperations = ([op for op in nnef.StandardOperations if op not in _NonAtomicOperationsSet]
-                    + [op for op in _CustomOperationNames if op not in _NonAtomicCustomOperationsSet])
+# NNEF must be parsed with this before calling nnef_to_tf.Converter on it
+ParserConfigToExpandNonAtomics = Config(
+    key='nonatomics', custom_shapes={op: None for op in _NonAtomicOperationsSet | _NonAtomicCustomOperationsSet})
 
 CustomOperations = \
     """
@@ -93,12 +120,16 @@ CustomOperations = \
     """
 
 
+def _nnef_get_shape(args, shapes, arg_name):
+    return shapes[args[arg_name]] if isinstance(args[arg_name], nnef.Identifier) else []
+
+
 def _max_pool_grad_shape(proto, args, shapes):
-    shapes[args['input_grad']] = shapes[args['orig_input']]
+    shapes[args['input_grad']] = _nnef_get_shape(args, shapes, 'orig_input')
 
 
 def _max_pool_grad_with_index_shape(proto, args, shapes):
-    shapes[args['input_grad']] = shapes[args['orig_input']]
+    shapes[args['input_grad']] = _nnef_get_shape(args, shapes, 'orig_input')
 
 
 def _avg_pool_grad_shape(proto, args, shapes):
@@ -121,54 +152,16 @@ CustomShapes = {
     "conv_grad_filter": _conv_grad_filter_shape
 }
 
-DeferShapes = {
-    # TODO fix shapeof in nnef2tf
-    # "deconv": ["output_shape"],
-    # "reshape": ["shape"]
-}
+default_config = Config(custom_ops=CustomOperations, custom_shapes=CustomShapes)
 
 
-# noinspection PyProtectedMember
-class Config(object):
-    def __init__(self, key=None, custom_ops=None, custom_shapes=None, deferred_shapes=None):
-        # type: (Optional[str], Optional[str], Optional[Dict[str, function]], Optional[Dict[str, List[str]]])->None
-        self.key = key if key else "custom_ops_" + str(id(self))
-        self.custom_ops = custom_ops
-        self.custom_shapes = custom_shapes.copy() if custom_shapes else None
-        self.deferred_shapes = deferred_shapes.copy() if deferred_shapes else None
-
-    def __enter__(self):
-        if self.custom_ops:
-            nnef._register_custom_ops(self.key, self.custom_ops)
-        if self.custom_shapes:
-            nnef._register_custom_shapes(self.custom_shapes)
-        if self.deferred_shapes:
-            nnef._register_deferred_shapes(self.deferred_shapes)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.custom_ops:
-            nnef._unregister_custom_ops(self.key)
-        if self.custom_shapes:
-            custom_shapes = self.custom_shapes.copy()
-            for k in custom_shapes.keys():
-                custom_shapes[k] = None
-            nnef._register_custom_shapes(custom_shapes)
-        if self.deferred_shapes:
-            deferred_shapes = self.deferred_shapes.copy()
-            for k in deferred_shapes.keys():
-                deferred_shapes[k] = []
-            nnef._register_deferred_shapes(deferred_shapes)
-
-
-default_config = Config(custom_ops=CustomOperations, custom_shapes=CustomShapes, deferred_shapes=DeferShapes)
-
-
-def parse_file(file_name):
-    with default_config:
-        return nnef.parse_file(file_name, atomics=AtomicOperations)
+def load_model(file_name):
+    with ParserConfigToExpandNonAtomics:
+        with default_config:
+            return nnef.load_model(file_name)
 
 
 def parse_string(string):
-    with default_config:
-        return nnef.parse_string(string, atomics=AtomicOperations)
+    with ParserConfigToExpandNonAtomics:
+        with default_config:
+            return nnef.parse_string(string)

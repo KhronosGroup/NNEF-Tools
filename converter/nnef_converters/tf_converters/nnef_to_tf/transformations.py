@@ -213,7 +213,10 @@ def transform_transpose_to_target_lang(nnefdog):
     new_ops = []
     for op in nnefdog.ops:
         if op.name in conv_ops:
-            input_channels = op.args['input'].shape[1]
+            if op.name == "deconv":
+                input_channels = op.args['output_shape'][1]
+            else:
+                input_channels = op.args['input'].shape[1]
 
             add_transpose_to_arg(op, 'input', new_ops)
             if op.args["groups"] == 1:

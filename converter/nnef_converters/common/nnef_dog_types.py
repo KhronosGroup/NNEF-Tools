@@ -43,3 +43,5 @@ nnef_factory = dog.Factory(NnefGraph, NnefDN, NnefOp)
 
 if has_typing:
     NnefDNLike = Union[NnefDN, bool, int, float]
+else:
+    NnefDNLike = object

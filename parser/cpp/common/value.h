@@ -19,6 +19,7 @@
 
 #include <string>
 #include <sstream>
+#include <vector>
 
 
 namespace nnef
@@ -43,15 +44,8 @@ namespace nnef
         {
             explicit identifier_t( const std::string& s ) : std::string(s) {}
         };
-
-        struct shape_of_t
-        {
-            const std::string id;
-
-            explicit shape_of_t( const std::string& s ) : id(s) {}
-        };
         
-        enum Kind { None, Integer, Scalar, Logical, String, Identifier, Array, Tuple, ShapeOf };
+        enum Kind { None, Integer, Scalar, Logical, String, Identifier, Array, Tuple };
         
     private:
         
@@ -80,11 +74,6 @@ namespace nnef
         {
         }
 
-        Value( const Kind kind, const shape_of_t& value )
-        : _kind(kind), _shape_of(value)
-        {
-        }
-
         Value( const Kind kind, const items_t& value )
         : _kind(kind), _items(value)
         {
@@ -97,9 +86,10 @@ namespace nnef
         
     public:
 
-        static Value none()
+        static const Value& none()
         {
-            return Value();
+            static const Value none;
+            return none;
         }
         
         static Value integer( const integer_t& value )
@@ -147,11 +137,6 @@ namespace nnef
             return Value(Tuple, std::forward<items_t>(items));
         }
 
-        static Value shape_of( const std::string& value )
-        {
-            return Value(ShapeOf, shape_of_t(value));
-        }
-
         static Value make( const integer_t& value )
         {
             return Value(Integer, value);
@@ -175,11 +160,6 @@ namespace nnef
         static Value make( const identifier_t& value )
         {
             return Value(Identifier, value);
-        }
-
-        static Value make( const shape_of_t& value )
-        {
-            return Value(ShapeOf, value);
         }
         
     public:
@@ -282,12 +262,6 @@ namespace nnef
             return _items;
         }
 
-        const shape_of_t& shape_of() const
-        {
-            checkKind(ShapeOf);
-            return _shape_of;
-        }
-
         const items_t& items() const
         {
             checkNested();
@@ -362,11 +336,6 @@ namespace nnef
                     new(&_identifier) identifier_t(std::move(other._identifier));
                     break;
                 }
-                case ShapeOf:
-                {
-                    new(&_shape_of) shape_of_t(std::move(other._shape_of));
-                    break;
-                }
                 case Integer:
                 {
                     _integer = other._integer;
@@ -408,11 +377,6 @@ namespace nnef
                 case Identifier:
                 {
                     new(&_identifier) identifier_t(other._identifier);
-                    break;
-                }
-                case ShapeOf:
-                {
-                    new(&_shape_of) shape_of_t(other._shape_of);
                     break;
                 }
                 case Integer:
@@ -457,11 +421,6 @@ namespace nnef
                     _identifier.~identifier_t();
                     break;
                 }
-                case ShapeOf:
-                {
-                    _shape_of.~shape_of_t();
-                    break;
-                }
                 default:
                 {
                     break;
@@ -502,15 +461,12 @@ namespace nnef
                 {
                     return _logical == other._logical;
                 }
-                case ShapeOf:
-                {
-                    return _shape_of.id == other._shape_of.id;
-                }
                 case None:
                 {
                     return true;
                 }
             }
+            return false;
         }
         
     private:
@@ -524,7 +480,6 @@ namespace nnef
             string_t _string;
             identifier_t _identifier;
             items_t _items;
-            shape_of_t _shape_of;
         };
     };
     
@@ -593,11 +548,6 @@ namespace nnef
                     os << arg[i];
                 }
                 os << ')';
-                break;
-            }
-            case Value::ShapeOf:
-            {
-                os << "shape_of" << '(' << arg.shape_of().id << ')';
                 break;
             }
         }

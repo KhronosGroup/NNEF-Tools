@@ -17,7 +17,6 @@
 #ifndef _NNEF_COMP_PARSER_H_
 #define _NNEF_COMP_PARSER_H_
 
-#include "../common/propagation.h"
 #include "../common/dictionary.h"
 #include "../common/prototype.h"
 #include "../common/typeutils.h"
@@ -53,15 +52,13 @@ namespace nnef
         
     public:
 
-        CompParser( Propagation& propagation )
-        : _propagation(propagation), _flags(0)
+        CompParser( const ShapeFuncs& shapeFuncs )
+        : _shapeFuncs(shapeFuncs), _flags(0)
         {
         }
         
         virtual void parse( std::istream& is, const char* filename, Callback& callback )
         {
-            _propagation.reset();
-
             Lexer lexer(is, filename);
             lexer.next();
 
@@ -104,17 +101,17 @@ namespace nnef
             Dictionary<Shape> shapes;
             Dictionary<Typename> dtypes;
 
-            Evaluation evaluation(assignments, fragments, _propagation, true);
+            Evaluation evaluation(assignments, fragments, _shapeFuncs);
             for ( auto& assignment : assignments )
             {
                 if ( assignment.rhs().kind() == Expr::Invocation )
                 {
-                    auto& target = dynamic_cast<const InvocationExpr&>(assignment.rhs()).target();
+                    auto& target = static_cast<const InvocationExpr&>(assignment.rhs()).target();
                     checkGraphParam(assignment.lhs(), graph, fragments.at(target).prototype().name());
                 }
 
                 const Value context = evaluation.evaluateLvalue(assignment.lhs(), Dictionary<Value>(), true);
-                evaluation.evaluateAssign(assignment.lhs(), assignment.rhs(), values, shapes, dtypes, callback, nullptr, false, context);
+                evaluation.evaluateAssign(assignment.lhs(), assignment.rhs(), values, shapes, dtypes, callback, nullptr, context);
             }
 
             callback.endGraph(graph, dtypes, shapes);
@@ -170,7 +167,7 @@ namespace nnef
             const std::string name = lexer.string();
             lexer.readToken(Lexer::Identifier);
 
-            if ( prototypes.contains(name) )
+            if ( prototypes.count(name) )
             {
                 throw Error(position, "operation '%s' already defined", name.c_str());
             }
@@ -386,7 +383,7 @@ namespace nnef
                 for ( size_t i = 0; i < proto.paramCount(); ++i )
                 {
                     auto& param = proto.param(i);
-                    if ( !decls.contains(param.name()) )
+                    if ( !decls.count(param.name()) )
                     {
                         throw Error(lexer.position(), "graph parameter '%s' is not assigned", param.name().c_str());
                     }
@@ -420,7 +417,7 @@ namespace nnef
             {
                 case Expr::Identifier:
                 {
-                    auto& identifier = dynamic_cast<const IdentifierExpr&>(expr);
+                    auto& identifier = static_cast<const IdentifierExpr&>(expr);
 
                     if ( target == "external" )
                     {
@@ -443,7 +440,7 @@ namespace nnef
                 case Expr::Tuple:
                 {
                     bool valid = true;
-                    auto& items = dynamic_cast<const ItemExpr&>(expr);
+                    auto& items = static_cast<const ItemExpr&>(expr);
                     for ( size_t i = 0; i < items.size(); ++i )
                     {
                         valid &= checkGraphParam(items.item(i), graph, target);
@@ -694,7 +691,7 @@ namespace nnef
 
             lexer.readToken(Lexer::Identifier);
             
-            if ( lexer.token() == '(' || (lexer.token() == '<' && prototypes && prototypes->contains(string)) )
+            if ( lexer.token() == '(' || (lexer.token() == '<' && prototypes && prototypes->count(string)) )
             {
                 return parseInvocation(lexer, prototypes, decls, position, string, allowLiteral, allowIdentifier, allowOperator);
             }
@@ -925,7 +922,7 @@ namespace nnef
             {
                 auto& param = proto.param(i);
 
-                if ( !args.contains(param.name()) )
+                if ( !args.count(param.name()) )
                 {
                     if ( !param.defaultValue() )
                     {
@@ -1098,9 +1095,9 @@ namespace nnef
                     throw Error(beg->position(), "tuple index must be an integer literal");
                 }
 
-                auto idx = dynamic_cast<const IntegerExpr&>(*beg).value();
+                auto idx = static_cast<const IntegerExpr&>(*beg).value();
 
-                type = dynamic_cast<const TupleType*>(sequence->type())->itemType(idx);
+                type = static_cast<const TupleType*>(sequence->type())->itemType(idx);
             }
             else if ( sequence->type()->kind() == Type::Array || sequence->type() == primitiveType(Typename::String) )
             {
@@ -1135,7 +1132,7 @@ namespace nnef
 
                 if ( sequence->type()->kind() == Type::Array )
                 {
-                    auto arrayType = dynamic_cast<const ArrayType*>(sequence->type());
+                    auto arrayType = static_cast<const ArrayType*>(sequence->type());
                     type = range ? arrayType : arrayType->itemType();
                 }
                 else
@@ -1207,7 +1204,7 @@ namespace nnef
                 iterators.push_back(iterator);
                 iterables.push_back(iterable);
                 
-                auto itemType = dynamic_cast<const ArrayType*>(iterable->type())->itemType();
+                auto itemType = static_cast<const ArrayType*>(iterable->type())->itemType();
                 declare(*iterator, itemType, *decls);
             }
             while ( lexer.readIfToken(',') );
@@ -1288,8 +1285,8 @@ namespace nnef
             {
                 case Expr::Identifier:
                 {
-                    auto& identifier = dynamic_cast<const IdentifierExpr&>(expr);
-                    if ( declared.contains(identifier.name()) )
+                    auto& identifier = static_cast<const IdentifierExpr&>(expr);
+                    if ( declared.count(identifier.name()) )
                     {
                         throw Error(expr.position(), "identifier '%s' is already declared", identifier.name().c_str());
                     }
@@ -1302,8 +1299,8 @@ namespace nnef
                     {
                         throw Error(expr.position(), "cannot assign result of type '%s' to array", type->toString().c_str());
                     }
-                    auto& array = dynamic_cast<const ArrayExpr&>(expr);
-                    auto arrayType = dynamic_cast<const ArrayType*>(type);
+                    auto& array = static_cast<const ArrayExpr&>(expr);
+                    auto arrayType = static_cast<const ArrayType*>(type);
                     for ( size_t i = 0; i < array.size(); ++i )
                     {
                         declare(array.item(i), arrayType->itemType(), declared);
@@ -1316,8 +1313,8 @@ namespace nnef
                     {
                         throw Error(expr.position(), "cannot assign result of type '%s' to tuple", type->toString().c_str());
                     }
-                    auto& tuple = dynamic_cast<const TupleExpr&>(expr);
-                    auto tupleType = dynamic_cast<const TupleType*>(type);
+                    auto& tuple = static_cast<const TupleExpr&>(expr);
+                    auto tupleType = static_cast<const TupleType*>(type);
                     if ( tupleType->size() != tuple.size() )
                     {
                         throw Error(expr.position(), "cannot assign result of type '%s' to a tuple of size %d",
@@ -1342,14 +1339,14 @@ namespace nnef
             {
                 case Expr::Identifier:
                 {
-                    auto& identifier = dynamic_cast<const IdentifierExpr&>(expr);
+                    auto& identifier = static_cast<const IdentifierExpr&>(expr);
                     declared.erase(identifier.name());
                     break;
                 }
                 case Expr::Array:
                 case Expr::Tuple:
                 {
-                    auto& items = dynamic_cast<const ItemExpr&>(expr);
+                    auto& items = static_cast<const ItemExpr&>(expr);
                     for ( size_t i = 0; i < items.size(); ++i )
                     {
                         undeclare(items.item(i), declared);
@@ -1376,7 +1373,7 @@ namespace nnef
             for ( size_t i = 0; i < proto.paramCount(); ++i )
             {
                 auto& param = proto.param(i);
-                if ( !types.contains(param.name()) )
+                if ( !types.count(param.name()) )
                 {
                     assert(param.defaultValue());
                     types[param.name()] = typeOf(param.defaultValue());
@@ -1576,16 +1573,14 @@ namespace nnef
                     }
                     return tupleType(itemTypes);
                 }
-                case Value::ShapeOf:
-                {
-                    return arrayType(primitiveType(Typename::Integer));
-                }
                 case Value::Identifier:
                 case Value::None:
                 {
                     return nullptr;
                 }
             }
+            assert(false);
+            return nullptr;
         }
         
         static int tokenPrecedence( int token )
@@ -1715,7 +1710,7 @@ namespace nnef
                     {
                         return false;
                     }
-                    auto arrayType = dynamic_cast<const ArrayType*>(type);
+                    auto arrayType = static_cast<const ArrayType*>(type);
                     for ( size_t i = 0; i < value.size(); ++i )
                     {
                         if ( !checkGraphParamType(value[i], arrayType->itemType()) )
@@ -1731,7 +1726,7 @@ namespace nnef
                     {
                         return false;
                     }
-                    auto tupleType = dynamic_cast<const TupleType*>(type);
+                    auto tupleType = static_cast<const TupleType*>(type);
                     for ( size_t i = 0; i < value.size(); ++i )
                     {
                         if ( !checkGraphParamType(value[i], tupleType->itemType(i)) )
@@ -1740,10 +1735,6 @@ namespace nnef
                         }
                     }
                     return true;
-                }
-                case Value::ShapeOf:
-                {
-                    return false;
                 }
                 case Value::None:
                 {
@@ -1754,7 +1745,7 @@ namespace nnef
 
     private:
 
-        Propagation& _propagation;
+        const ShapeFuncs& _shapeFuncs;
         size_t _flags;
 
         std::map<std::string,std::string> _imports;

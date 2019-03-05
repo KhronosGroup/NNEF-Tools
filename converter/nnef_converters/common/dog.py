@@ -212,9 +212,6 @@ class Graph(object):
                   "=", op.name, utils.recursive_transform(op.args, transform),
                   "extra", utils.recursive_transform(op.extra, transform))
 
-        for dn in self.dn_by_name.values():
-            print(dn.name, "extra", utils.recursive_transform(dn.extra, transform))
-
         print()
 
     def remove_ops(self, ops_to_remove):
@@ -347,3 +344,5 @@ class Factory(object):
 
 if has_typing:
     DataNodeLike = Union[DataNode, bool, int, float]
+else:
+    DataNodeLike = object

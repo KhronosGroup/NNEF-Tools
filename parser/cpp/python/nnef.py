@@ -17,25 +17,17 @@ import _nnef
 import sys
 import os
 import numpy as np
-from collections import OrderedDict
 
 
-Identifier = _nnef.Identifier
-ShapeOf = _nnef.ShapeOf
-Error = _nnef.Error
-Prototype = _nnef.Prototype
-TensorType = _nnef.TensorType
-ArrayType = _nnef.ArrayType
-TupleType = _nnef.TupleType
-StandardOperations = _nnef.StandardOperations
+Identifier = _nnef.Identifier   # subclass of str
+Error = _nnef.Error             # subclass of exception
 
-
-def _register_layer_ops():
-    _nnef.register_layer_ops()
-
-
-def _unregister_layer_ops():
-    _nnef.unregister_layer_ops()
+Graph = _nnef.Graph             # namedtuple('Graph', ['name': str, 'tensors': typing.Dict[str, Tensor], 'operations': typing.List[Operation],
+                                #                       'inputs': typing.List[str], 'outputs': typing.List['str']])
+Tensor = _nnef.Tensor           # namedtuple('Tensor', ['name': str, 'dtype': str, 'shape': typing.List[int], 'data': numpy.ndarray,
+                                #                       'compression': typing.Dict[str, object], 'quantization': Dict[str, object]])
+Operation = _nnef.Operation     # namedtuple('Operation', ['name': str, 'attribs': OrderedDict[str, object], 'inputs': OrderedDict[str, object],
+                                #                           'outputs': OrderedDict[str, object], 'dtype': str])
 
 
 def _register_custom_ops(key, text):
@@ -50,16 +42,34 @@ def _register_custom_shapes(shapes):
     _nnef.register_custom_shapes(shapes)
 
 
-def _register_deferred_shapes(shapes):
-    _nnef.register_deferred_shapes(shapes)
+def parse_string(input, quantization=None):
+    return _nnef.parse_string(input, quantization=quantization)
 
 
-def parse_file(input, quantization=None, atomics=StandardOperations):
-    return _nnef.parse_file(input, quantization=quantization, atomics=atomics)
+def load_model(path):
+    if os.path.isfile(path):
+        return _nnef.parse_file(path)
+    
+    graph_filename = os.path.join(path, 'graph.nnef')
+    quant_filename = os.path.join(path, 'graph.quant')
 
+    graph = _nnef.parse_file(graph_filename, quant_filename if os.path.isfile(quant_filename) else None)
 
-def parse_string(input, quantization=None, atomics=StandardOperations):
-    return _nnef.parse_string(input, quantization=quantization, atomics=atomics)
+    for operation in graph.operations:
+        if operation.name == 'variable':
+            variable_filename = os.path.join(path, operation.attribs['label'] + '.dat')
+            tensor_name = operation.outputs['output']
+            with open(variable_filename) as variable_file:
+                data, compression = read_tensor(variable_file)
+            
+            tensor = graph.tensors[tensor_name]
+            
+            if list(tensor.shape) != list(data.shape):
+                raise Error('shape {} in variable file does not match shape {} defined in network structure'.format(data.shape, tensor.shape))
+            
+            graph.tensors[tensor_name] = Tensor(tensor.name, tensor.dtype, tensor.shape, data, compression, tensor.quantization)
+
+    return graph
 
 
 def format_version(version):
@@ -79,8 +89,6 @@ def format_extensions(extensions):
 def format_argument(value):
     if isinstance(value, Identifier):
         return value
-    elif isinstance(value, ShapeOf):
-        return 'shape_of(' + value.id + ')'
     elif isinstance(value, str):
         return "'" + value + "'"
     elif isinstance(value, bool):
@@ -114,15 +122,11 @@ def format_result(value):
         raise TypeError('results must be of type nnef.Identifier or list/tuple of such, found: ' + str(type(value)))
 
 
-def format_invocation(name, args, kwargs, results=[], dtype=None):
+def format_invocation(name, attribs, inputs, outputs=None, dtype=None):
     string = str()
 
-    for (idx, result) in enumerate(results):
-        if idx != 0:
-            string += ', '
-        string += format_result(result)
-
-    if len(results) != 0:
+    if outputs is not None:
+        string += ', '.join([format_result(output) for output in outputs])
         string += ' = '
 
     string += name
@@ -131,147 +135,23 @@ def format_invocation(name, args, kwargs, results=[], dtype=None):
         string += '<' + dtype + '>'
 
     string += '('
-
-    idx = 0
-
-    for arg in args:
-        if idx != 0:
-            string += ', '
-        string += format_argument(arg)
-        idx += 1
-
-    for (key, value) in kwargs.items():
-        if idx != 0:
-            string += ', '
-        string += key
-        string += ' = '
-        string += format_argument(value)
-        idx += 1
-
+    string += ', '.join([format_argument(input) for input in inputs])
+    if len(inputs) and len(attribs):
+        string += ', '
+    string += ', '.join(key + ' = ' + format_argument(value) for (key, value) in attribs.items())
     string += ')'
 
     return string
 
 
-def format_typespec(typespec):
-    _check_typespec(typespec)
-
-    if isinstance(typespec, str):
-        return typespec
-    elif isinstance(typespec, TensorType):
-        return 'tensor<' + format_typespec(typespec.dataType) + '>' if typespec.dataType is not None else 'tensor<>'
-    elif isinstance(typespec, ArrayType):
-        return format_typespec(typespec.itemType) + '[]'
-    elif isinstance(typespec, TupleType):
-        string = '('
-        for idx, item in enumerate(typespec.itemTypes):
-            if idx != 0:
-                string += ','
-            string += format_typespec(item)
-        string += ')'
-        return string
-
-
-def _format_params(items):
-    string = ''
-    for idx, item in enumerate(items):
-        if idx != 0:
-            string += ', '
-        string += item
-    return '( ' + string + ' )'
-
-
-def format_params(params, defaults={}):
-    def _format_default(param, defaults):
-        return ' = ' + format_argument(defaults[param]) if param in defaults else ''
-
-    items = [param + ': ' + format_typespec(typespec) + _format_default(param, defaults) for (param, typespec) in params.items()]
-    return _format_params(items)
-
-
-def format_graph(name, inputs, outputs):
-    if isinstance(inputs, dict):
-        inputs = [input for (input, type) in inputs.items() if not _is_attribute_type(type)]
-
-    return name + _format_params(inputs) + ' -> ' + _format_params(outputs)
-
-
-def format_prototype(name, inputs, outputs, defaults={}):
-    has_generic_input = any([_is_generic_type(input) for input in inputs.values()])
-    has_generic_output = any([_is_generic_type(output) for output in outputs.values()])
-    is_generic = has_generic_input or has_generic_output
-    generic_default = defaults.get('?')
-    generic = '<? = ' + generic_default + '>' if generic_default is not None else '<?>' if is_generic else ''
-
-    return name + generic + format_params(inputs, defaults) + ' -> ' + format_params(outputs)
-
-
-def format_document(attrs, ops):
-    string = format_version(attrs['version']) + '\n'
-    string += format_extensions(attrs['extensions']) + '\n'
-
-    graph = attrs['graph']
-    string += 'graph ' + format_graph(name=graph.name, inputs=graph.params, outputs=graph.results) + '\n'
-
+def format_graph(name, inputs, outputs, operations):
+    string = 'graph ' + name + '( ' + ', '.join(inputs) + ' ) -> ( ' + ', '.join(outputs) + ' )\n'
     string += '{\n'
-    for (proto, args) in ops:
-        inputs, attribs, outputs, dtype = split_args(args, params=proto.params, results=proto.results, split_attribs=True)
-        invocation = format_invocation(proto.name, args=inputs.values(), kwargs=attribs, results=outputs.values(), dtype=dtype)
+    for operation in operations:
+        invocation = format_invocation(operation.name, operation.attribs, operation.inputs.values(), operation.outputs.values(), operation.dtype)
         string += '\t' + invocation + ';\n'
     string += '}\n'
     return string
-
-
-def split_args(args, params, results, split_attribs):
-    inputs = OrderedDict()
-    attribs = OrderedDict()
-    for (name, type) in params.items():
-        if split_attribs and _is_attribute_type(type):
-            attribs[name] = args[name]
-        else:
-            inputs[name] = args[name]
-
-    outputs = OrderedDict()
-    for (name, type) in results.items():
-        outputs[name] = args[name]
-
-    dtype = args.get('?')
-    return (inputs, attribs, outputs, dtype) if split_attribs else (inputs, outputs, dtype)
-
-
-def _is_attribute_type(typespec):
-    _check_typespec(typespec)
-
-    if isinstance(typespec, str):
-        return True
-    elif isinstance(typespec, TensorType):
-        return False
-    elif isinstance(typespec, ArrayType):
-        return _is_attribute_type(typespec.itemType)
-    elif isinstance(typespec, TupleType):
-        return all([_is_attribute_type(item) for item in typespec.itemTypes])
-
-
-def _is_generic_type(typespec):
-    _check_typespec(typespec)
-
-    if isinstance(typespec, str):
-        return typespec == '?'
-    elif isinstance(typespec, TensorType):
-        return _is_generic_type(typespec.dataType)
-    elif isinstance(typespec, ArrayType):
-        return _is_generic_type(typespec.itemType)
-    elif isinstance(typespec, TupleType):
-        return any([_is_generic_type(item) for item in typespec.itemTypes])
-
-
-def _check_typespec(typespec):
-    if isinstance(typespec, str):
-        if not typespec in ['scalar', 'integer', 'logical', 'string', '?']:
-            raise TypeError('invalid primitive type name: ' + typespec)
-    elif not isinstance(typespec, (TensorType, ArrayType, TupleType)):
-        raise TypeError('typespec must be string or one of nnef.TensorType, nnef.ArrayType, nnef.TupleType')
-
 
 
 QUANT_CODE_FLOAT = 0x00
@@ -381,6 +261,7 @@ def write_tensor(file, tensor, version=(1,0), quantization={}):
         params[1] = quantization['max']
     elif code == QUANT_CODE_INTEGER:
         params[0] = 0 if dtype == np.uint else 1
+        params[1] = quantization.get('scale', 0)
     elif code != QUANT_CODE_FLOAT:
         raise ValueError('unsupported item type code: {}'.format(code))
 
@@ -434,11 +315,14 @@ def read_tensor(file):
 
     tensor = data.reshape(shape)
 
-    quantization = {'code': code}
+    quantization = {'op-code': code}
     if code == QUANT_CODE_LINEAR or code == QUANT_CODE_LOGARITHMIC:
         quantization['min'] = params[0]
         quantization['max'] = params[1]
-    elif code != QUANT_CODE_FLOAT and code != QUANT_CODE_INTEGER:
+    elif code == QUANT_CODE_INTEGER:
+        if params[1] != 0:
+            quantization['scale'] = params[1]
+    elif code != QUANT_CODE_FLOAT:
         raise ValueError('unsupported item type code: {}'.format(code))
 
     return tensor, quantization

@@ -23,17 +23,7 @@ from . import utils
 from .nnef_dog_types import NnefDN, NnefOp, NnefGraph
 
 
-def nnefgraph_to_nnefdog(nnefgraph, variables_dir=None):
-    if variables_dir:
-        variables_dir = utils.without_slash(variables_dir)
-
-    properties, nnefops = nnefgraph
-    dtype_by_nnefdn_name = properties["dtypes"]
-    shape_by_nnefdn_name = properties["shapes"]
-    graph_name = properties["graph"].name
-    graph_inputs = list(properties["graph"].params.keys())
-    graph_outputs = list(properties["graph"].results.keys())
-
+def nnefgraph_to_nnefdog(nnefgraph, with_weights=True):
     ops = []
     dn_by_name = {}
 
@@ -53,8 +43,8 @@ def nnefgraph_to_nnefdog(nnefgraph, variables_dir=None):
 
         if isinstance(result, nnef.Identifier):
             dn = NnefDN(str(result))
-            dn.shape = list(shape_by_nnefdn_name[str(result)])
-            dn.dtype = str(dtype_by_nnefdn_name.get(str(result)))
+            dn.shape = list(nnefgraph.tensors[str(result)].shape)
+            dn.dtype = nnefgraph.tensors[str(result)].dtype
             dn.producer = op
             if dn.name in dn_by_name:
                 utils.print_error("DataNode {} defined multiple times".format(dn.name))
@@ -71,21 +61,22 @@ def nnefgraph_to_nnefdog(nnefgraph, variables_dir=None):
             return utils.REMOVE
         return dn
 
-    for prototype, values in nnefops:
-        op = NnefOp(prototype.name)
+    for nnefop in nnefgraph.operations:
+        op = NnefOp(nnefop.name)
 
-        args = OrderedDict([(name, values[name]) for name in prototype.params.keys()])
-        results = OrderedDict([(name, values[name]) for name in prototype.results.keys()])
+        args = OrderedDict()
+        args.update(nnefop.inputs)
+        args.update(nnefop.attribs)
 
         op.args = utils.recursive_transform(args, lambda arg: transform_arg(arg, op))
-        op.results = utils.recursive_transform(results, lambda result: transform_result(result, op))
+        op.results = utils.recursive_transform(nnefop.outputs, lambda result: transform_result(result, op))
         ops.append(op)
 
-        if variables_dir and op.name == "variable":
-            op.result_node.extra[dog.EXTRA_WEIGHTS] = utils.read_nnef_tensor(
-                "{}/{}.dat".format(variables_dir, op.args["label"]))
+        if with_weights and op.name == "variable":
+            op.result_node.extra[dog.EXTRA_WEIGHTS] = nnefgraph.tensors[nnefop.outputs["output"]].data
+            assert op.result_node.extra[dog.EXTRA_WEIGHTS] is not None
 
-    input_dn_names = [dn.name for dn in utils.recursive_transform(graph_inputs, transform_tensor_to_dn)]
-    output_dn_names = [dn.name for dn in utils.recursive_transform(graph_outputs, transform_tensor_to_dn)]
+    input_dn_names = [dn.name for dn in utils.recursive_transform(nnefgraph.inputs, transform_tensor_to_dn)]
+    output_dn_names = [dn.name for dn in utils.recursive_transform(nnefgraph.outputs, transform_tensor_to_dn)]
 
-    return NnefGraph(graph_name, ops, dn_by_name, input_dn_names, output_dn_names)
+    return NnefGraph(nnefgraph.name, ops, dn_by_name, input_dn_names, output_dn_names)

@@ -15,7 +15,7 @@
 import nnef
 
 
-def shuffle_shape(proto, args, shapes):
+def shuffle_shape(op, args, shapes):
     shapes[args['output']] = shapes[args['input']]
 
 
@@ -23,19 +23,17 @@ nnef._register_custom_ops("shuffle", "fragment shuffle<?>( input: tensor<?>, gro
 nnef._register_custom_shapes({"shuffle": shuffle_shape})
 
 
-attrs, ops = nnef.parse_string(
+graph = nnef.parse_string(
     """
     version 1.0;
     graph Net( input ) -> ( output )
     {
-       input = external(shape = [1,3,224,224]);
-       filter = variable(shape = [32,3,5,5], label = 'conv/filter');
-       conv = conv(input, filter);
-       output = shuffle(conv, groups = 4);
+        input = external(shape = [1,3,224,224]);
+        filter = variable(shape = [32,3,5,5], label = 'conv/filter');
+        conv = conv(input, filter);
+        output = shuffle(conv, groups = 4);
     }
-    """,
-    atomics = nnef.StandardOperations + ["shuffle"]
+    """
 )
 
-
-print(nnef.format_document(attrs,ops))
+print(nnef.format_graph(graph.name, graph.inputs, graph.outputs, graph.operations))

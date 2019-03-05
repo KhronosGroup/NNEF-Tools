@@ -17,7 +17,6 @@
 #ifndef _NNEF_FLAT_PARSER_H_
 #define _NNEF_FLAT_PARSER_H_
 
-#include "../common/propagation.h"
 #include "../common/prototype.h"
 #include "../common/dictionary.h"
 #include "../common/typeutils.h"
@@ -41,15 +40,13 @@ namespace nnef
 
     public:
 
-        FlatParser( Propagation& propagation )
-        : _propagation(propagation)
+        FlatParser( const ShapeFuncs& shapeFuncs )
+        : _shapeFuncs(shapeFuncs)
         {
         }
 
         virtual void parse( std::istream& is, const char* filename, Callback& callback )
         {
-            _propagation.reset();
-            
             Lexer lexer(is, filename);
             lexer.next();
 
@@ -175,7 +172,7 @@ namespace nnef
             for ( size_t i = 0; i < graph.paramCount(); ++i )
             {
                 auto& param = graph.param(i);
-                if ( !declared.contains(param.name()) )
+                if ( !declared.count(param.name()) )
                 {
                     throw Error(position, "graph parameter '%s' not assigned", param.name().c_str());
                 }
@@ -184,7 +181,7 @@ namespace nnef
             for ( size_t i = 0; i < graph.resultCount(); ++i )
             {
                 auto& result = graph.result(i);
-                if ( !declared.contains(result.name()) )
+                if ( !declared.count(result.name()) )
                 {
                     throw Error(position, "graph result '%s' not assigned", result.name().c_str());
                 }
@@ -265,7 +262,13 @@ namespace nnef
             
             try
             {
-                _propagation.propagateShapes(proto, args, shapes);
+                if ( !_shapeFuncs.count(proto.name()) )
+                {
+                    throw Error("shape function not defined for operation '%s'", proto.name().c_str());
+                }
+                auto func = _shapeFuncs.at(proto.name());
+                func(proto.name(), args, shapes);
+                
                 callback.operation(proto, args, dtypes, shapes);
             }
             catch ( Error e )
@@ -344,7 +347,7 @@ namespace nnef
                     throw Error(position, "expected named argument");
                 }
 
-                if ( args.contains(param->name()) )
+                if ( args.count(param->name()) )
                 {
                     throw Error(position, "duplicate arguments: parameter '%s' already assigned (%u,%u)",
                                 param->name().c_str());
@@ -363,7 +366,7 @@ namespace nnef
             {
                 auto& param = proto.param(i);
 
-                if ( &param != exclusion && !args.contains(param.name()) )
+                if ( &param != exclusion && !args.count(param.name()) )
                 {
                     if ( param.defaultValue() )
                     {
@@ -403,13 +406,13 @@ namespace nnef
                         throw Error(position, "cannot assign result of type '%s' to tensor identifier", type->toString().c_str());
                     }
                     const std::string& id = arg.identifier();
-                    if ( dtypes.contains(id) )
+                    if ( dtypes.count(id) )
                     {
                         throw Error(position, "identifier '%s' already declared", id.c_str());
                     }
-                    auto dataType = dynamic_cast<const TensorType*>(type)->dataType();
+                    auto dataType = static_cast<const TensorType*>(type)->dataType();
                     assert(dataType->kind() == Type::Primitive);
-                    dtypes.emplace(id, dynamic_cast<const PrimitiveType*>(dataType)->name());
+                    dtypes.emplace(id, static_cast<const PrimitiveType*>(dataType)->name());
                     break;
                 }
                 case Value::Array:
@@ -418,7 +421,7 @@ namespace nnef
                     {
                         throw Error(position, "cannot assign result of type '%s' to array", type->toString().c_str());
                     }
-                    auto arrayType = dynamic_cast<const ArrayType*>(type);
+                    auto arrayType = static_cast<const ArrayType*>(type);
                     for ( size_t i = 0; i < arg.size(); ++i )
                     {
                         declare(arg[i], arrayType->itemType(), dtypes, position);
@@ -431,7 +434,7 @@ namespace nnef
                     {
                         throw Error(position, "cannot assign result of type '%s' to tuple", type->toString().c_str());
                     }
-                    auto tupleType = dynamic_cast<const TupleType*>(type);
+                    auto tupleType = static_cast<const TupleType*>(type);
                     for ( size_t i = 0; i < arg.size(); ++i )
                     {
                         declare(arg[i], tupleType->itemType(i), dtypes, position);
@@ -560,7 +563,7 @@ namespace nnef
 
         static Value makeIdentifier( const std::string& name, const Position& position, const Dictionary<Typename>* decls )
         {
-            if ( decls && !decls->contains(name) )
+            if ( decls && !decls->count(name) )
             {
                 throw Error(position, "undeclared identifier '%s'", name.c_str());
             }
@@ -617,20 +620,7 @@ namespace nnef
 
             return Value::tuple(std::move(items));
         }
-
-        static Value parseShapeOf( Lexer& lexer, const Dictionary<Typename>* decls )
-        {
-            lexer.next();
-            lexer.readToken('(');
-
-            auto id = lexer.string();
-            lexer.readToken(Lexer::Identifier);
-
-            lexer.readToken(')');
-
-            return Value::shape_of(id);
-        }
-
+        
     private:
 
         static const Type* typeOf( const Value& value, const Dictionary<Typename>& declared )
@@ -655,7 +645,7 @@ namespace nnef
                 }
                 case Value::Identifier:
                 {
-                    return tensorType(declared[value.identifier()]);
+                    return tensorType(declared.at(value.identifier()));
                 }
                 case Value::Array:
                 {
@@ -671,15 +661,13 @@ namespace nnef
                     }
                     return tupleType(itemTypes);
                 }
-                case Value::ShapeOf:
-                {
-                    return arrayType(primitiveType(Typename::Integer));
-                }
                 case Value::None:
                 {
                     return nullptr;
                 }
             }
+            assert(false);
+            return nullptr;
         }
 
         static bool deduceDataType( const Prototype& proto, const Dictionary<Value>& args, const Dictionary<Typename>& declared,
@@ -693,7 +681,7 @@ namespace nnef
             for ( size_t i = 0; i < proto.paramCount(); ++i )
             {
                 auto& param = proto.param(i);
-                if ( !types.contains(param.name()) )
+                if ( !types.count(param.name()) )
                 {
                     assert(param.defaultValue());
                     types[param.name()] = typeOf(param.defaultValue(), declared);
@@ -724,7 +712,7 @@ namespace nnef
 
     private:
 
-        Propagation& _propagation;
+        const ShapeFuncs& _shapeFuncs;
     };
 
 }   // namespace nnef

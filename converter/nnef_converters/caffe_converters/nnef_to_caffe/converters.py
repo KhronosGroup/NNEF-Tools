@@ -429,7 +429,8 @@ def generic_convert_conv(nnefop, converter, target_name, is_upscale=False):
                                  "pad": pad,
                                  "stride": stride,
                                  "dilation": dilation,
-                                 "group": nnefop.args["groups"]
+                                 "group": nnefop.args["groups"],
+                                 "engine": "CAFFE" if nnefop.args["groups"] != 1 else None
                              ],
                              extra={
                                  EXTRA_CAFFE_PARAM_NAME: "convolution_param",
@@ -767,7 +768,8 @@ def convert_multilinear_upsample(nnefop, converter):
                                  "bias_term": False,
                                  "pad": int(math.ceil((factor - 1) / 2.0)),
                                  "stride": factor,
-                                 "weight_filler": dict(type="bilinear")
+                                 "weight_filler": dict(type="bilinear"),
+                                 "group": dog.get_shape_safe(nnefop.args["input"])[1],
                              ],
                              extra={
                                  EXTRA_CAFFE_PARAM_NAME: "convolution_param",

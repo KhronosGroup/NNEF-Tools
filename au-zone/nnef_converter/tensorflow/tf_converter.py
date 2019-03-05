@@ -1133,7 +1133,6 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
                           _output_shape=[shape[0], channels],
                           _np_tensor=np.random.randn(*[shape[0], channels]).astype(np.float32),
                           _np_dtype=np.dtype(np.float32))
-        h.tensor_data_file.write_to_disk(h.parameters['label'] + '.dat')
 
         z_filter = node.Variable(shape=[channels, shape[1]+channels],
                           label=scope + '/z/filter',
@@ -1141,7 +1140,6 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
                           _output_shape=[channels, shape[1]+channels],
                           _np_tensor=np.random.randn(*[channels, shape[1]+channels]).astype(np.float32),
                           _np_dtype=np.dtype(np.float32))
-        z_filter.tensor_data_file.write_to_disk(h.parameters['label'] + '.dat')
 
         r_filter = node.Variable(shape=[channels, shape[1]+channels],
                           label=scope + '/r/filter',
@@ -1149,7 +1147,6 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
                           _output_shape=[channels, shape[1]+channels],
                           _np_tensor=np.random.randn(*[channels, shape[1]+channels]).astype(np.float32),
                           _np_dtype=np.dtype(np.float32))
-        r_filter.tensor_data_file.write_to_disk(h.parameters['label'] + '.dat')
 
         s_filter = node.Variable(shape=[channels, shape[1]+channels],
                           label=scope + '/s/filter',
@@ -1157,7 +1154,6 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
                           _output_shape=[channels, shape[1]+channels],
                           _np_tensor=np.random.randn(*[channels, shape[1]+channels]).astype(np.float32),
                           _np_dtype=np.dtype(np.float32))
-        s_filter.tensor_data_file.write_to_disk(h.parameters['label'] + '.dat')
 
         z_bias = node.Variable(shape=[1, channels],
                           label=scope + '/z/bias',
@@ -1165,7 +1161,6 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
                           _output_shape=[1, channels],
                           _np_tensor=np.random.randn(*[1, channels]).astype(np.float32),
                           _np_dtype=np.dtype(np.float32))
-        z_bias.tensor_data_file.write_to_disk(h.parameters['label'] + '.dat')
 
         r_bias = node.Variable(shape=[1, channels],
                           label=scope + '/r/bias',
@@ -1173,7 +1168,6 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
                           _output_shape=[1, channels],
                           _np_tensor=np.random.randn(*[1, channels]).astype(np.float32),
                           _np_dtype=np.dtype(np.float32))
-        r_bias.tensor_data_file.write_to_disk(h.parameters['label'] + '.dat')
 
         s_bias = node.Variable(shape=[1, channels],
                           label=scope + '/s/bias',
@@ -1181,7 +1175,6 @@ class TensorflowImporter(TensorflowLogger, ImporterExporter):
                           _output_shape=[1, channels],
                           _np_tensor=np.random.randn(*[1, channels]).astype(np.float32),
                           _np_dtype=np.dtype(np.float32))
-        s_bias.tensor_data_file.write_to_disk(h.parameters['label'] + '.dat')
 
         nnef_node_gru = node.Gru(input=nnef_node_reshape,
                                  channels=channels,
