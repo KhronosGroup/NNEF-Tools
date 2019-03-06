@@ -38,4 +38,4 @@ file(GLOB LIB_HEADERS ${LIB_COMMON_DIR}/*.h ${LIB_FLAT_DIR}/*.h ${LIB_COMP_DIR}/
 
 # Create the target
 set(target nnef-validator)
-add_executable(${target} ${LIB_HEADERS} main.cpp)
+add_executable(${target} ${LIB_HEADERS} main.cpp nnef.cpp)
