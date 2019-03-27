@@ -484,9 +484,12 @@ def convert_prelu(nnefop, converter):
     converter.assert_unique_variable(nnefop, "alpha")
     converter.add_caffeop_ex(nnefop, "PReLU",
                              [nnefop.args["x"]],
+                             converter.ordered_dict_maker[
+                                "channel_shared": (len(converter.get_shape_safe(nnefop.args["alpha"])) == 0)
+                             ],
                              extra={
                                  EXTRA_VARIABLE_LABELS: [
-                                     converter.get_label_safe(nnefop.args["alpha"])
+                                     converter.get_label_safe(nnefop.args["alpha"]),
                                  ]
                              })
 
@@ -853,7 +856,7 @@ DefaultConverters = {
     "mean_reduce": partial(generic_convert_reduce, pool=1),
     "elu": partial(generic_convert_unary, target_name="ELU"),
     "relu": partial(generic_convert_unary, target_name="ReLU"),
-    "prelu": partial(generic_convert_unary, target_name="PReLU"),
+    "prelu": convert_prelu,
     "sigmoid": partial(generic_convert_unary, target_name="Sigmoid"),
     "abs": partial(generic_convert_unary, target_name="AbsVal"),
     "tanh": partial(generic_convert_unary, target_name="TanH"),
