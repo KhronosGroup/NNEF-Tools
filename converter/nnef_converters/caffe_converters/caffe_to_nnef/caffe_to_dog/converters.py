@@ -124,6 +124,13 @@ def generic_convert_convolution(layer, op, converter):
     converter.add_variables(layer, op, "weight", "bias")
 
 
+def convert_prelu(layer, op, converter):
+    # type: (LayerParameter, CaffeOp, Converter)->None
+    params = layer.prelu_param
+    op.add_arg("channel_shared", bool(params.channel_shared))
+    converter.add_variables(layer, op, "alpha")
+
+
 def convert_pooling(layer, op, converter):
     # type: (LayerParameter, CaffeOp, Converter)->None
     params = layer.pooling_param
@@ -259,6 +266,7 @@ DefaultConverters = {
     "Flatten": convert_flatten,
     "ArgMax": convert_argmax,
     "Pooling": convert_pooling,
+    "PReLU": convert_prelu,
     "ELU": convert_elu,
     "ReLU": convert_relu,
     "Concat": convert_concat,

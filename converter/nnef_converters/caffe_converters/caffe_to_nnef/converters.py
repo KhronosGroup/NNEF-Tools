@@ -65,7 +65,7 @@ class Converter(ConverterBase):
     @staticmethod
     def get_pooling_right_padding(h, k, p, q, s):
         # type: (int, int, int, int, int)->int
-        a = int(math.ceil(float(h + p + q - k)/s))
+        a = int(math.ceil(float(h + p + q - k) / s))
         return s * a + k - h - p
 
 
@@ -136,7 +136,7 @@ def convert_scale(caffeop, converter):
 
 
 def generic_convert_unary(caffeop, converter, target_name):
-    # type: (CaffeOp, Converter)->None
+    # type: (CaffeOp, Converter, str)->None
 
     converter.add_targetop_ex(caffeop, target_name,
                               OrderedDict([
@@ -204,6 +204,24 @@ def convert_relu(caffeop, converter):
                                   OrderedDict([
                                       ("y", caffeop.result)
                                   ]))
+
+
+def convert_prelu(caffeop, converter):
+    # type: (CaffeOp, Converter)->None
+
+    weights = caffeop.extra[EXTRA_WEIGHTS]
+
+    converter.add_targetop_ex(
+        caffeop, "prelu",
+        OrderedDict([
+            ("x", caffeop.args[dog.gen_arg_name(0)]),
+            ("alpha", (converter.make_variable(caffeop, "alpha", (weights["alpha"]
+                                                                  if caffeop.args["channel_shared"]
+                                                                  else np.expand_dims(weights["alpha"], 0))))),
+        ]),
+        OrderedDict([
+            ("y", caffeop.result)
+        ]))
 
 
 def convert_elu(caffeop, converter):
@@ -558,6 +576,7 @@ DefaultConverters = {
     "Pooling": convert_pooling,
     "ELU": convert_elu,
     "ReLU": convert_relu,
+    "PReLU": convert_prelu,
     "Concat": convert_concat,
     "Eltwise": convert_eltwise,
     "InnerProduct": convert_inner_product,
