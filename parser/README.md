@@ -73,6 +73,6 @@ graph = nnef.parse_string("version 1.0; graph ...", quantization = "...")
 
 can be used to parse a graph and optional quantization info from files or strings.
 
-After invocation, `graph` is a data structure (named tuple) containing the name, tensors, operations, inputs and outputs of the graph. See `nnef.py` and `python/sample.py` for more details.
+After invocation, `graph` is a data structure (named tuple) containing the name, tensors, operations, inputs and outputs of the graph. See `nnef.py` and `python/sample.py` for more details. If shape information is also required, it can be obtained by calling `nnef.infer_shapes(graph)`, which updates the shape information on the graph structure in place.
 
 The script `validate.py` is a Python implementation of the NNEF validator. Its command line arguments are the same as listed above.
