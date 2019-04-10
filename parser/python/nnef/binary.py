@@ -144,7 +144,7 @@ def read_tensor(file):
 
     [bits, code] = _fromfile(file, dtype=np.uint32, count=2)
     params = _fromfile(file, dtype=np.float32, count=8)
-    padding = _fromfile(file, dtype=np.uint32, count=11)
+    _padding = _fromfile(file, dtype=np.uint32, count=11)
 
     signed = params[0] != 0 if code == QUANT_CODE_INTEGER else False
 
@@ -166,7 +166,7 @@ def read_tensor(file):
     if code == QUANT_CODE_LINEAR or code == QUANT_CODE_LOGARITHMIC:
         quantization['min'] = params[0]
         quantization['max'] = params[1]
-    elif code != QUANT_CODE_FLOAT:
+    elif code != QUANT_CODE_FLOAT and code != QUANT_CODE_INTEGER:
         raise ValueError('unsupported item type code: {}'.format(code))
 
     return tensor, quantization
