@@ -1,8 +1,6 @@
 from __future__ import division, print_function, absolute_import
 
-from nnef_tools.io.nnef.parser_config import *
-
-_SOURCE = """
+NNEF_OP_DEFINITIONS = """
 # tensor declaration operations
 
 fragment external<? = scalar>( shape: integer[] ) -> ( output: tensor<?> );
@@ -524,5 +522,3 @@ fragment add_n( x: tensor<scalar>[] ) -> ( y: tensor<scalar> )
     y = x[0] + add_n(x[1:]) if length_of(x) > 0 else constant(shape = [1], value = [0.0]);
 }
 """
-
-CONFIG = NNEFParserConfig(source=_SOURCE)

@@ -195,8 +195,7 @@ def convert_nnef_to_tf_pb(
         else:
             assert False, "{} exists, delete it or use overwrite=True".format(output_directory)
 
-    parser_configs = [nnef_to_tf.ParserConfig,
-                      NNEFParserConfig.load_config('std')]
+    parser_configs = [nnef_to_tf.ParserConfig, NNEFParserConfig.STANDARD_CONFIG]
     if extra_parser_configs:
         parser_configs += extra_parser_configs
     g = nnef_io.read(nnef_tgz_or_dir_path, parser_configs=parser_configs)

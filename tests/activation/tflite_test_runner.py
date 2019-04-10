@@ -49,10 +49,6 @@ class TFLiteTestRunner(unittest.TestCase):
         print(command)
         convert.convert_using_command(command)
 
-        nnef_io.read("out/nnef/{}/model/graph.nnef".format(network_name), parser_configs=[
-            NNEFParserConfig.load_config('std')
-        ])
-
         command = """
         ./nnef_tools/convert.py --input-framework=nnef \\
                                 --output-framework=tensorflow-lite \\

@@ -1,6 +1,7 @@
 from __future__ import division, print_function, absolute_import
 
 import importlib
+import typing
 
 import nnef
 
@@ -8,6 +9,7 @@ from nnef_tools.core import utils
 
 
 class NNEFParserConfig(object):
+    STANDARD_CONFIG = None  # It is loaded after the class definition
 
     def __init__(self, source=None, shapes=None, expand=None):
         if source is None:
@@ -38,21 +40,57 @@ class NNEFParserConfig(object):
         nnef.infer_shapes(graph=graph, custom_shapes=self._shapes)
         return graph
 
+    @property
+    def empty(self):
+        return not self._source and not self._shapes and not self._expand
+
     @staticmethod
-    def load_config(name):
+    def load_config(module_name):
         # type: (str)->NNEFParserConfig
 
-        try:
-            return importlib.import_module("nnef_tools.io.nnef.parser_config_" + name).CONFIG
-        except ImportError:
-            pass
+        """
 
-        try:
-            return importlib.import_module("nnef_parser_config_" + name).CONFIG
-        except ImportError:
-            pass
+        :param module_name: "package.module"
+        :return: NNEFParserConfig
+        """
 
-        return importlib.import_module(name).CONFIG
+        module = importlib.import_module(module_name)
+
+        custom_fragments = ""
+        if hasattr(module, "NNEF_OP_DEFINITIONS"):
+            custom_fragments = module.NNEF_OP_DEFINITIONS
+        custom_expands = []
+        if hasattr(module, "NNEF_LOWERED_OPS"):
+            custom_expands = module.NNEF_LOWERED_OPS
+        custom_shapes = {}
+        if hasattr(module, "NNEF_SHAPE_PROPAGATORS"):
+            custom_shapes = module.NNEF_SHAPE_PROPAGATORS
+
+        return NNEFParserConfig(source=custom_fragments, shapes=custom_shapes, expand=custom_expands)
+
+    @staticmethod
+    def load_configs(module_names="", load_standard=True):
+        # type: (typing.Union[str, typing.List[str], None], bool)->typing.List[NNEFParserConfig]
+
+        """
+
+        :param module_names: "package.module" or "p1.m1,p2.m2", or ["p1.m1", "p2.m2"]
+        :param load_standard: Load the standard NNEF op definitions as well
+        :return: parser configs
+        """
+
+        if module_names is None:
+            module_names = []
+        if utils.is_anystr(module_names):
+            module_names = [name.strip() for name in module_names.split(',')] if module_names.strip() else []
+
+        configs = [NNEFParserConfig.STANDARD_CONFIG] if load_standard else []
+        for module_name in module_names:
+            config = NNEFParserConfig.load_config(module_name)
+
+            if not config.empty:
+                configs.append(config)
+        return configs
 
     @staticmethod
     def combine_configs(configs):
@@ -71,3 +109,6 @@ class NNEFParserConfig(object):
         return NNEFParserConfig(source='\n\n'.join(config._source for config in configs),
                                 shapes=shapes,
                                 expand=expand)
+
+
+NNEFParserConfig.STANDARD_CONFIG = NNEFParserConfig.load_config("nnef_tools.io.nnef.parser_config_std")

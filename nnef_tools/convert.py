@@ -119,7 +119,7 @@ def get_reader(input_framework,
     if input_framework == 'nnef':
         from nnef_tools.io.nnef.nnef_io import Reader
 
-        configs = [NNEFParserConfig.load_config('std')]
+        configs = [NNEFParserConfig.STANDARD_CONFIG]
 
         if output_framework in ['tensorflow-pb', 'tensorflow-py', 'tensorflow-lite']:
             from nnef_tools.conversion.tensorflow import nnef_to_tf
@@ -130,22 +130,7 @@ def get_reader(input_framework,
         else:
             assert False
 
-        module_names = [n.strip() for n in custom_converters.split(',')] if custom_converters else []
-        for module_name in module_names:
-            module = importlib.import_module(module_name)
-
-            custom_fragments = ""
-            if hasattr(module, "NNEF_OP_DEFINITIONS"):
-                custom_fragments = module.NNEF_OP_DEFINITIONS
-            custom_expands = []
-            if hasattr(module, "NNEF_LOWERED_OPS"):
-                custom_expands = module.NNEF_LOWERED_OPS
-            custom_shapes = {}
-            if hasattr(module, "NNEF_SHAPE_PROPAGATORS"):
-                custom_shapes = module.NNEF_SHAPE_PROPAGATORS
-
-            if custom_shapes or custom_fragments or custom_expands:
-                configs.append(NNEFParserConfig(source=custom_fragments, shapes=custom_shapes, expand=custom_expands))
+        configs += NNEFParserConfig.load_configs(custom_converters, load_standard=False)
 
         return Reader(parser_configs=configs)
     elif input_framework == 'tensorflow-pb':
