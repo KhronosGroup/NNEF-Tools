@@ -1,0 +1,101 @@
+# Copyright (c) 2017 The Khronos Group Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+version 1.0;
+
+graph vgg_19( input ) -> ( output )
+{
+	input = external(shape = [1, 3, 224, 224]);
+	kernel1 = variable(shape = [64, 3, 3, 3], label = 'vgg_19/conv1/conv1_1/kernel');
+	bias1 = variable(shape = [1, 64], label = 'vgg_19/conv1/conv1_1/bias');
+	conv1 = conv(input, kernel1, bias1, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu1 = relu(conv1);
+	kernel2 = variable(shape = [64, 64, 3, 3], label = 'vgg_19/conv1/conv1_2/kernel');
+	bias2 = variable(shape = [1, 64], label = 'vgg_19/conv1/conv1_2/bias');
+	conv2 = conv(relu1, kernel2, bias2, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu2 = relu(conv2);
+	pool1 = max_pool(relu2, size = [1, 1, 2, 2], padding = [(0, 0), (0, 0), (0, 0), (0, 0)], border = 'ignore', stride = [1, 1, 2, 2]);
+	kernel3 = variable(shape = [128, 64, 3, 3], label = 'vgg_19/conv2/conv2_1/kernel');
+	bias3 = variable(shape = [1, 128], label = 'vgg_19/conv2/conv2_1/bias');
+	conv3 = conv(pool1, kernel3, bias3, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu3 = relu(conv3);
+	kernel4 = variable(shape = [128, 128, 3, 3], label = 'vgg_19/conv2/conv2_2/kernel');
+	bias4 = variable(shape = [1, 128], label = 'vgg_19/conv2/conv2_2/bias');
+	conv4 = conv(relu3, kernel4, bias4, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu4 = relu(conv4);
+	pool2 = max_pool(relu4, size = [1, 1, 2, 2], padding = [(0, 0), (0, 0), (0, 0), (0, 0)], border = 'ignore', stride = [1, 1, 2, 2]);
+	kernel5 = variable(shape = [256, 128, 3, 3], label = 'vgg_19/conv3/conv3_1/kernel');
+	bias5 = variable(shape = [1, 256], label = 'vgg_19/conv3/conv3_1/bias');
+	conv5 = conv(pool2, kernel5, bias5, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu5 = relu(conv5);
+	kernel6 = variable(shape = [256, 256, 3, 3], label = 'vgg_19/conv3/conv3_2/kernel');
+	bias6 = variable(shape = [1, 256], label = 'vgg_19/conv3/conv3_2/bias');
+	conv6 = conv(relu5, kernel6, bias6, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu6 = relu(conv6);
+	kernel7 = variable(shape = [256, 256, 3, 3], label = 'vgg_19/conv3/conv3_3/kernel');
+	bias7 = variable(shape = [1, 256], label = 'vgg_19/conv3/conv3_3/bias');
+	conv7 = conv(relu6, kernel7, bias7, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu7 = relu(conv7);
+	kernel8 = variable(shape = [256, 256, 3, 3], label = 'vgg_19/conv3/conv3_4/kernel');
+	bias8 = variable(shape = [1, 256], label = 'vgg_19/conv3/conv3_4/bias');
+	conv8 = conv(relu7, kernel8, bias8, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu8 = relu(conv8);
+	pool3 = max_pool(relu8, size = [1, 1, 2, 2], padding = [(0, 0), (0, 0), (0, 0), (0, 0)], border = 'ignore', stride = [1, 1, 2, 2]);
+	kernel9 = variable(shape = [512, 256, 3, 3], label = 'vgg_19/conv4/conv4_1/kernel');
+	bias9 = variable(shape = [1, 512], label = 'vgg_19/conv4/conv4_1/bias');
+	conv9 = conv(pool3, kernel9, bias9, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu9 = relu(conv9);
+	kernel10 = variable(shape = [512, 512, 3, 3], label = 'vgg_19/conv4/conv4_2/kernel');
+	bias10 = variable(shape = [1, 512], label = 'vgg_19/conv4/conv4_2/bias');
+	conv10 = conv(relu9, kernel10, bias10, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu10 = relu(conv10);
+	kernel11 = variable(shape = [512, 512, 3, 3], label = 'vgg_19/conv4/conv4_3/kernel');
+	bias11 = variable(shape = [1, 512], label = 'vgg_19/conv4/conv4_3/bias');
+	conv11 = conv(relu10, kernel11, bias11, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu11 = relu(conv11);
+	kernel12 = variable(shape = [512, 512, 3, 3], label = 'vgg_19/conv4/conv4_4/kernel');
+	bias12 = variable(shape = [1, 512], label = 'vgg_19/conv4/conv4_4/bias');
+	conv12 = conv(relu11, kernel12, bias12, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu12 = relu(conv12);
+	pool4 = max_pool(relu12, size = [1, 1, 2, 2], padding = [(0, 0), (0, 0), (0, 0), (0, 0)], border = 'ignore', stride = [1, 1, 2, 2]);
+	kernel13 = variable(shape = [512, 512, 3, 3], label = 'vgg_19/conv5/conv5_1/kernel');
+	bias13 = variable(shape = [1, 512], label = 'vgg_19/conv5/conv5_1/bias');
+	conv13 = conv(pool4, kernel13, bias13, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu13 = relu(conv13);
+	kernel14 = variable(shape = [512, 512, 3, 3], label = 'vgg_19/conv5/conv5_2/kernel');
+	bias14 = variable(shape = [1, 512], label = 'vgg_19/conv5/conv5_2/bias');
+	conv14 = conv(relu13, kernel14, bias14, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu14 = relu(conv14);
+	kernel15 = variable(shape = [512, 512, 3, 3], label = 'vgg_19/conv5/conv5_3/kernel');
+	bias15 = variable(shape = [1, 512], label = 'vgg_19/conv5/conv5_3/bias');
+	conv15 = conv(relu14, kernel15, bias15, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu15 = relu(conv15);
+	kernel16 = variable(shape = [512, 512, 3, 3], label = 'vgg_19/conv5/conv5_4/kernel');
+	bias16 = variable(shape = [1, 512], label = 'vgg_19/conv5/conv5_4/bias');
+	conv16 = conv(relu15, kernel16, bias16, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu16 = relu(conv16);
+	pool5 = max_pool(relu16, size = [1, 1, 2, 2], padding = [(0, 0), (0, 0), (0, 0), (0, 0)], border = 'ignore', stride = [1, 1, 2, 2]);
+	kernel17 = variable(shape = [4096, 512, 7, 7], label = 'vgg_19/fc6/kernel');
+	bias17 = variable(shape = [1, 4096], label = 'vgg_19/fc6/bias');
+	conv17 = conv(pool5, kernel17, bias17, padding = [(0, 0), (0, 0)], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu17 = relu(conv17);
+	kernel18 = variable(shape = [4096, 4096, 1, 1], label = 'vgg_19/fc7/kernel');
+	bias18 = variable(shape = [1, 4096], label = 'vgg_19/fc7/bias');
+	conv18 = conv(relu17, kernel18, bias18, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+	relu18 = relu(conv18);
+	kernel19 = variable(shape = [1000, 4096, 1, 1], label = 'vgg_19/fc8/kernel');
+	bias19 = variable(shape = [1, 1000], label = 'vgg_19/fc8/bias');
+	output = conv(relu18, kernel19, bias19, padding = [], border = 'constant', stride = [1, 1], dilation = [1, 1]);
+}

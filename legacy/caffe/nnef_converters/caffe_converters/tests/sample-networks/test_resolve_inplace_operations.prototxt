@@ -1,0 +1,25 @@
+layer {
+  name: "input1"
+  type: "Input"
+  top: "input1"
+  input_param {
+    shape {
+      dim: 10
+      dim: 4
+      dim: 64
+      dim: 64
+    }
+  }
+}
+layer {
+  name: "relu1"
+  type: "ReLU"
+  bottom: "input1"
+  top: "input1"
+}
+layer {
+  name: "scale1"
+  type: "Scale"
+  bottom: "input1"
+  top: "input1"
+}
