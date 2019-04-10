@@ -14,7 +14,7 @@ The code also contains an example main.cpp that showcases the usage of the parse
 
 The tool itself parses and validates an NNEF graph structure document, and echoes an
 optionally flattened version of it. The arguments required to the tool are as follows
-* <path>: the path to the NNEF folder or the standalone graph file
+* \<path>: the path to the NNEF folder or the standalone graph file
 * --stdlib \<file-name>: an alternate definition of standard operations (defaults to all-primitive definitions)
 * --lower \<op-name>: the name of the operation to be lowered (if defined as compound)
 * --shapes: turn on shape inference and shape validity checking
