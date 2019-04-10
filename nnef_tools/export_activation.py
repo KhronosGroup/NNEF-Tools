@@ -91,7 +91,7 @@ please add its location to PYTHONPATH.
                         help="""tensorflow-pb: path of pb file
 tensorflow-py: package.module:function or package.module:function:checkpoint_path.ckpt""")
 
-    parser.add_argument("--conversion-json",
+    parser.add_argument("--conversion-info",
                         required=True,
                         help="""Path of the conversion.json file that was created by the convert tool when converting the model to NNEF.""")
 

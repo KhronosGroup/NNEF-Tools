@@ -95,7 +95,7 @@ Example:
                                    --input-model=tf_models/frozen_inception_v1.pb \
                                    --input-shape="{'input:0':('float32', [1,224,224,3])}" \
                                    --output-directory=out/nnef/frozen_inception_v1/activations \
-                                   --conversion-json=out/nnef/frozen_inception_v1/conversion.json
+                                   --conversion-info=out/nnef/frozen_inception_v1/conversion.json
 ```
 
 # Activation tests:
