@@ -596,11 +596,11 @@ namespace nnef
             if ( it == StandardShapeFuncs.end() )
             {
                 it = custom_shapes.find(op.name);
-            }
-            if ( it == custom_shapes.end() )
-            {
-                error = "Shape function for operation '" + op.name + "' is not provided";
-                return false;
+				if ( it == custom_shapes.end() )
+				{
+					error = "Shape function for operation '" + op.name + "' is not provided";
+					return false;
+				}
             }
             auto func = it->second;
             
