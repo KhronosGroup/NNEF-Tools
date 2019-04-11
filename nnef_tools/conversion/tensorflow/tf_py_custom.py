@@ -109,16 +109,17 @@ class OpDef(object):
         args = [(n, self._unify_type(t)) for n, t in args]
         names = name if isinstance(name, (list, tuple)) else [name]
         assert len(names) >= 1
-        self.imports = ""
+        self.imports = []
         self.op_names = []
         for name in names:
             assert '.' in name
             if not name.startswith('tf.') and not name.startswith('_tf.'):
                 parts = name.split('.')
-                self.imports += "from {} import {}\n".format('.'.join(parts[:-1]), parts[-1])
+                self.imports.append("from {} import {}\n".format('.'.join(parts[:-1]), parts[-1]))
                 name = parts[-1]
+            else:
+                self.imports.append("")
             self.op_names.append(name)
-        self.imports = self.imports.rstrip()
 
         arg_protos = []
         for arg_name, arg_type in args:

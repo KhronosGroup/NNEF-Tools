@@ -101,17 +101,23 @@ def get_tf_py_custom_traceable_functions(module_names_comma_sep):
         if hasattr(module, "TENSORFLOW_PY_OP_DEFINITIONS"):
             opdefs = module.TENSORFLOW_PY_OP_DEFINITIONS
             for opdef in opdefs:
-                if opdef.imports:
-                    exec(opdef.imports)
-                fun_names = opdef.op_names
                 funs = []
-                for fun_name in fun_names:
-                    funs.append(eval(fun_name))
+                for import_, fun_name in zip(opdef.imports, opdef.op_names):
+                    try:
+                        if import_:
+                            exec(import_)
+                        funs.append(eval(fun_name))
+                    except (ImportError, NameError):
+                        # print("Custom function not found: {}".format(import_))
+                        pass
+
                 custom_traceable_functions.append(TraceableFunction(opdef.op_proto, funs))
     return custom_traceable_functions
 
 
 def get_tf_py_imports_and_op_protos(module_names_comma_sep):
+    exec("import tensorflow as tf")
+    exec("from nnef_tools.io.tensorflow.tf_py.tf_py_definitions import tf_internal as _tf")
     module_names = [n.strip() for n in module_names_comma_sep.split(',')] if module_names_comma_sep else []
     imports = []
     op_protos = []
@@ -120,8 +126,19 @@ def get_tf_py_imports_and_op_protos(module_names_comma_sep):
         if hasattr(module, "TENSORFLOW_PY_OP_DEFINITIONS"):
             opdefs = module.TENSORFLOW_PY_OP_DEFINITIONS
             for opdef in opdefs:
+                imports_for_this_op = []
+                for import_, fun_name in zip(opdef.imports, opdef.op_names):
+                    if import_:
+                        try:
+                            if import_:
+                                exec(import_)
+                            eval(fun_name)
+                            imports_for_this_op.append(import_)
+                        except (ImportError, NameError):
+                            # print("Custom function not found: {}".format(import_))
+                            pass
                 op_protos.append(opdef.op_proto)
-                imports.append(opdef.imports)
+                imports.append("\n".join(imports_for_this_op))
     return "\n".join(imports), op_protos
 
 
