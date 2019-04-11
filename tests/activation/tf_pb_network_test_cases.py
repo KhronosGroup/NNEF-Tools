@@ -54,6 +54,7 @@ def get_tensors_with_no_consumers():
             for tensor in op.values()]
 
 
+# From: https://www.tensorflow.org/lite/guide/hosted_models
 class TFPbNetworkTestCases(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -92,7 +92,10 @@ def export(output_path,  # type: str
             if init_variables:
                 sess.run(tf.global_variables_initializer())
             if checkpoint_path is not None:
-                saver.restore(sess, checkpoint_path)
+                if os.path.isdir(checkpoint_path):
+                    saver.restore(sess, tf.train.latest_checkpoint(checkpoint_path))
+                else:
+                    saver.restore(sess, checkpoint_path)
             values = sess.run(tensors, feed_dict)
 
             for i, arr in enumerate(values):

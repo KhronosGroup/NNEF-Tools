@@ -24,6 +24,7 @@ if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')
 
 
+# From: https://www.tensorflow.org/lite/guide/hosted_models
 class TFLiteNetworkTestCases(TFLiteTestRunner):
     def test_mnasnet_0_5_224(self):
         self._test_model(download_and_untar_once(

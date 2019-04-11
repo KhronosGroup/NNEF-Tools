@@ -21,7 +21,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.contrib import slim as tf_slim
 from tensorflow.contrib.layers.python.layers import layers as tf_layers
-from tensorflow.contrib.slim.python.slim.nets.alexnet import alexnet_v2
 
 from nnef_tools.io.tensorflow.tf_py.tf_py_definitions import tf_internal
 from tests.activation.tf_py_test_runner import TFPyTestRunner
@@ -2116,20 +2115,6 @@ def network_resize_bicubic1():
     return tf.image.resize_bicubic(images, [64, 64])
 
 
-def network_alexnet_v2():
-    input_shape = [1, 224, 224, 3]
-    input_ = tf.placeholder(dtype=tf.float32, name='input', shape=input_shape)
-    net, _end_points = alexnet_v2(input_, num_classes=1000, is_training=False)
-    return net
-
-
-def network_alexnet_v2_nosqueeze():
-    input_shape = [1, 224, 224, 3]
-    input_ = tf.placeholder(dtype=tf.float32, name='input', shape=input_shape)
-    net, _end_points = alexnet_v2(input_, num_classes=1000, is_training=False, spatial_squeeze=False)
-    return net
-
-
 class TFPyLayerTestCases(TFPyTestRunner):
 
     def test_naming(self):
@@ -2971,12 +2956,6 @@ class TFPyLayerTestCases(TFPyTestRunner):
 
     def test_resize_bicubic1(self):
         self._test(network_resize_bicubic1, cmp=False)  # Imprecise conversion
-
-    def test_alexnet_v2(self):
-        self._test(network_alexnet_v2)
-
-    def test_alexnet_v2_nosqueeze(self):
-        self._test(network_alexnet_v2_nosqueeze)
 
 
 if __name__ == "__main__":

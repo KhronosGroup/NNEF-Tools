@@ -18,6 +18,7 @@ import os
 import unittest
 
 import tensorflow as tf
+from tensorflow.contrib.slim.python.slim.nets.alexnet import alexnet_v2
 from tensorflow.contrib.slim.python.slim.nets.inception_v1 import inception_v1
 from tensorflow.contrib.slim.python.slim.nets.inception_v2 import inception_v2
 from tensorflow.contrib.slim.python.slim.nets.inception_v3 import inception_v3
@@ -32,6 +33,13 @@ if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')
 
 TEST_MODULE = "tests.activation.tf_py_network_test_cases"
+
+
+def network_alexnet_v2():
+    input_shape = [1, 224, 224, 3]
+    input_ = tf.placeholder(dtype=tf.float32, name='input', shape=input_shape)
+    net, _end_points = alexnet_v2(input_, num_classes=1000, is_training=False)
+    return net
 
 
 def network_inception_v1():
@@ -104,6 +112,9 @@ class TFPyNetworkTestCases(TFPyTestRunner):
 
     def test_vgg_16(self):
         self._test(network_vgg_16, test_module=TEST_MODULE)
+
+    def test_alexnet_v2(self):
+        self._test(network_alexnet_v2, test_module=TEST_MODULE)
 
 
 if __name__ == "__main__":
