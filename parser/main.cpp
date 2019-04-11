@@ -21,17 +21,17 @@
 
 
 template<typename T>
-std::ostream& operator<<( std::ostream& os, const std::vector<T>& v )
+std::ostream& print( std::ostream& os, const std::vector<T>& v, const char* sep = ", " )
 {
-    for ( auto it = v.begin(); it != v.end(); ++it )
-    {
-        if ( it != v.begin() )
-        {
-            os << ", ";
-        }
-        os << *it;
-    }
-    return os;
+	for ( auto it = v.begin(); it != v.end(); ++it )
+	{
+		if ( it != v.begin() )
+		{
+			os << sep;
+		}
+		os << *it;
+	}
+	return os;
 }
 
 std::ostream& print_items( std::ostream& os, const nnef::ValueDict& m )
@@ -58,6 +58,12 @@ std::ostream& print_values( std::ostream& os, const nnef::ValueDict& m )
         os << it->second;
     }
     return os;
+}
+
+template<typename T>
+std::ostream& operator<<( std::ostream& os, const std::vector<T>& v )
+{
+	return print(os, v);
 }
 
 
@@ -131,7 +137,7 @@ int main( int argc, const char * argv[] )
     
     if ( !ok )
     {
-        std::cout << error << std::endl;
+        std::cerr << error << std::endl;
         return -1;
     }
     
@@ -139,7 +145,7 @@ int main( int argc, const char * argv[] )
     {
         if ( !nnef::infer_shapes(graph, error) )
         {
-            std::cout << error << std::endl;
+            std::cerr << error << std::endl;
             return -1;
         }
     }
@@ -149,20 +155,7 @@ int main( int argc, const char * argv[] )
     for ( const auto& op : graph.operations )
     {
         std::cout << "\t";
-        for ( auto it = op.outputs.begin(); it != op.outputs.end(); ++it )
-        {
-            if ( it != op.outputs.begin() )
-            {
-                std::cout << ", ";
-            }
-            std::cout << it->second;
-            if ( infer_shapes )
-            {
-                auto& tensor = graph.tensors.at(it->second.identifier());
-                std::cout << ": " << tensor.dtype << "[" << tensor.shape << "]";
-            }
-        }
-        
+		print_values(std::cout, op.outputs);
         std::cout << " = " << op.name;
         if ( !op.dtype.empty() )
         {
@@ -175,10 +168,27 @@ int main( int argc, const char * argv[] )
             std::cout << ", ";
         }
         print_items(std::cout, op.attribs);
-        std::cout << ");" << std::endl;
+        std::cout << ");";
+		
+		if ( infer_shapes )
+		{
+			std::cout << "    # ";
+			for ( auto it = op.outputs.begin(); it != op.outputs.end(); ++it )
+			{
+				if ( it != op.outputs.begin() )
+				{
+					std::cout << ", ";
+				}
+				auto& tensor = graph.tensors.at(it->second.identifier());
+				std::cout << tensor.dtype << "[";
+				print(std::cout, tensor.shape, ",");
+				std::cout << "]";
+			}
+		}
+		std::cout << std::endl;
     }
     std::cout << "}" << std::endl;
-    std::cout << "Validation succeeded" << std::endl;
+    std::cerr << "Validation succeeded" << std::endl;
     
     return 0;
 }
