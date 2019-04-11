@@ -77,7 +77,7 @@ In the python interpreter, type
 
 ````
 import nnef
-graph = nnef.load_model('example.nnef')
+graph = nnef.load_graph('example.nnef')
 ````
 
 If the path (`example.nnef`) points to a folder (with a graph.nnef in it), the whole model with weights is loaded. 
