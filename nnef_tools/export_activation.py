@@ -1,4 +1,19 @@
 #!/usr/bin/env python
+
+# Copyright (c) 2017 The Khronos Group Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from __future__ import division, print_function, absolute_import
 
 import sys
@@ -76,7 +91,7 @@ def get_args():
     parser = argparse.ArgumentParser(description="NNEFTools/export_activation: Neural network activation export tool",
                                      formatter_class=argparse.RawTextHelpFormatter,
                                      epilog="""Tips:
-- If you refer to a Python package or module that is not in the current directory, 
+- If you refer to a Python package or module that is not in the current directory,
 please add its location to PYTHONPATH.
 - Quote parameters if they contain spaces or special characters.
 """)
@@ -114,28 +129,28 @@ tensorflow-py: package.module:function or package.module:function:checkpoint_pat
      - color_format: RGB or BGR
      - data_format: NCHW or NHWC
      - sub: float
-     - div: float 
-   - The applied image preprocessing is the following in pseudocode (where input_size and input_dtype comes from the network or --input-shape): 
+     - div: float
+   - The applied image preprocessing is the following in pseudocode (where input_size and input_dtype comes from the network or --input-shape):
        image = ((uint8_image.astype(float)-sub)/div).resize(input_size).astype(input_dtype)
  - Tensor(filename) for all types
-   - filename must be the path of an NNEF tensor file (.dat) 
+   - filename must be the path of an NNEF tensor file (.dat)
  Default: Random(0.0, 1.0, 0, 255, 0.5).""")
 
     parser.add_argument('--input-shape',
                         default="",
-                        help="""tensorflow-pb: The dtype and shape of input tensors must be specified if they are not set in the protobuf file. 
-The value must be a (dtype, shape) tuple or a tensor_name->(dtype, shape) dict. 
+                        help="""tensorflow-pb: The dtype and shape of input tensors must be specified if they are not set in the protobuf file.
+The value must be a (dtype, shape) tuple or a tensor_name->(dtype, shape) dict.
 Dtype must be one of:
-    float16, float32, float64, 
+    float16, float32, float64,
     int8, int16, int32, int64,
     uint8, uint16, uint32, uint64
-    bool 
+    bool
 Default: (empty).""")
 
     parser.add_argument('--tensors-at-once',
                         default=25,
                         type=int,
-                        help="""Number of tensors to evaluate at once. 
+                        help="""Number of tensors to evaluate at once.
 On a computer with low (gpu) memory, a lower number is appropriate.
 All tensors will evaluated but in groups of size '--tensors-at-once'.
 Default: 25.""")

@@ -21,5 +21,3 @@ class NNEFVersion(object):
         self.major = NNEF_VERSION_MAJOR
         self.minor = NNEF_VERSION_MINOR
         self.version = str(self.major) + "." + str(self.minor)
-
-    

@@ -59,7 +59,7 @@ _NonAtomicCustomOperationsSet = set()
 
 CustomOperations = \
     """
-    fragment max_pool_grad( 
+    fragment max_pool_grad(
         orig_input: tensor<scalar>,
         orig_output: tensor<scalar>,
         output_grad: tensor<scalar>,
@@ -68,7 +68,7 @@ CustomOperations = \
         padding: (integer, integer)[] = [],
         stride: integer[] = [],
         dilation: integer[] = [] )
-    -> ( input_grad: tensor<scalar> );   
+    -> ( input_grad: tensor<scalar> );
 
     fragment max_pool_grad_with_index(
         orig_input: tensor<scalar>,
@@ -79,9 +79,9 @@ CustomOperations = \
         padding: (integer, integer)[] = [],
         stride: integer[] = [],
         dilation: integer[] = [] )
-    -> ( input_grad: tensor<scalar> );    
+    -> ( input_grad: tensor<scalar> );
 
-    fragment avg_pool_grad( 
+    fragment avg_pool_grad(
         output_grad: tensor<scalar>,
         orig_input_shape: integer[],
         size: integer[],
@@ -89,9 +89,9 @@ CustomOperations = \
         padding: (integer, integer)[] = [],
         stride: integer[] = [],
         dilation: integer[] = [] )
-    -> ( input_grad: tensor<scalar> );    
+    -> ( input_grad: tensor<scalar> );
 
-    fragment conv_grad_input( 
+    fragment conv_grad_input(
         orig_filter: tensor<scalar>,
         output_grad: tensor<scalar>,
         bias: tensor<scalar> = 0.0,
@@ -101,9 +101,9 @@ CustomOperations = \
         stride: integer[] = [],
         dilation: integer[] = [],
         groups: integer = 1 )
-    -> ( input_grad: tensor<scalar> );    
+    -> ( input_grad: tensor<scalar> );
 
-    fragment conv_grad_filter( 
+    fragment conv_grad_filter(
         orig_input: tensor<scalar>,
         output_grad: tensor<scalar>,
         bias: tensor<scalar> = 0.0,
@@ -113,7 +113,7 @@ CustomOperations = \
         stride: integer[] = [],
         dilation: integer[] = [],
         groups: integer = 1 )
-    -> ( input_grad: tensor<scalar> );    
+    -> ( input_grad: tensor<scalar> );
     """
 
 

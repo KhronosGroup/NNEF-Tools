@@ -35,7 +35,7 @@ if __name__ == '__main__':
         except FileNotFoundError as e:
             print('Could not open file: ' + args.stdlib)
             exit(-1)
-    
+
     try:
         graph = nnef.load_graph(args.path, stdlib=stdlib, lowered=args.lower.split(','))
     except nnef.Error as err:

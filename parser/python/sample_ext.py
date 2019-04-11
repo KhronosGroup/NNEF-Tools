@@ -24,9 +24,9 @@ graph = nnef.parse_string(
     """
     version 1.0;
     extension KHR_enable_fragment_definitions;
-    
+
     fragment shuffle<?>( input: tensor<?>, groups: integer ) -> ( output: tensor<?> );
-    
+
     graph Net( input ) -> ( output )
     {
         input = external(shape = [1,3,224,224]);

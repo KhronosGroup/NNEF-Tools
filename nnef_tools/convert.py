@@ -1,4 +1,19 @@
 #!/usr/bin/env python
+
+# Copyright (c) 2017 The Khronos Group Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from __future__ import division, print_function, absolute_import
 
 import sys
@@ -345,7 +360,7 @@ def get_args(argv):
     parser = argparse.ArgumentParser(description="NNEFTools/convert: Neural network conversion tool",
                                      formatter_class=argparse.RawTextHelpFormatter,
                                      epilog="""Tips:
-- If you refer to a Python package or module that is not in the current directory, 
+- If you refer to a Python package or module that is not in the current directory,
 please add its location to PYTHONPATH.
 - Quote parameters if they contain spaces or special characters.""")
 
@@ -361,42 +376,42 @@ please add its location to PYTHONPATH.
                         required=True,
                         help="""nnef: path of NNEF file, directory or nnef.tgz file.
     In case of a single NNEF file, no weights are loaded.
-onnx: path of ONNX file 
+onnx: path of ONNX file
 tensorflow-pb: path of pb file
 tensorflow-py: package.module.function or package.module.function:checkpoint_path.ckpt
 tensorflow-lite: path of tflite file""")
 
     parser.add_argument("--output-directory",
                         default="convert.out",
-                        help="""Path of output directory. 
+                        help="""Path of output directory.
 Default: convert.out""")
 
     parser.add_argument("--io-transformation",
                         default="IDENTITY",
-                        help="""The transformation to apply to input and output tensors. 
-It can be a single transformation (applied to all IO tensors) or a tensor_name->transformation dict. 
-Available transformations: 
+                        help="""The transformation to apply to input and output tensors.
+It can be a single transformation (applied to all IO tensors) or a tensor_name->transformation dict.
+Available transformations:
 - Transpose(axes: List[int])
 - IDENTITY
 - SMART_NHWC_TO_NCHW
-- SMART_NCHW_TO_NHWC 
-The 'SMART' transformations work like a Transpose for rank >= 3 and IDENTITY otherwise. 
+- SMART_NCHW_TO_NHWC
+The 'SMART' transformations work like a Transpose for rank >= 3 and IDENTITY otherwise.
 Default: IDENTITY
 """)
 
     parser.add_argument('--input-shape',
                         default="",
-                        help="""onnx: The shape of input tensors must be specified if they are not set in the protobuf file. 
-    The value must be a (dtype, shape) tuple or a tensor_name->(dtype, shape) dict. 
+                        help="""onnx: The shape of input tensors must be specified if they are not set in the protobuf file.
+    The value must be a (dtype, shape) tuple or a tensor_name->(dtype, shape) dict.
     DType must be one of:
         FLOAT16, FLOAT, DOUBLE,
         INT8, INT16, INT32, INT64,
         UINT8, UINT16, UINT32, UINT64,
         BOOL
-tensorflow-pb: The shape of input tensors must be specified if they are not set in the protobuf file. 
-    The value must be a (dtype, shape) tuple or a tensor_name->(dtype, shape) dict. 
+tensorflow-pb: The shape of input tensors must be specified if they are not set in the protobuf file.
+    The value must be a (dtype, shape) tuple or a tensor_name->(dtype, shape) dict.
     DType must be one of:
-        float16, float32, float64, 
+        float16, float32, float64,
         int8, int16, int32, int64,
         uint8, uint16, uint32, uint64
         bool
