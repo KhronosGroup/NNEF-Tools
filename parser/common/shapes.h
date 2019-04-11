@@ -889,8 +889,8 @@ namespace nnef
         check(filter.size() == 2, "filter shape must be of rank 2 (found %d)", (int)filter.size());
         check(input[1] == filter[1], "inner dimensions must agree (%d vs %d)", (int)input[1], (int)filter[1]);
         check(bias[1] == filter[0], "bias channels (%d) does not match filter count (%d)", (int)bias[1], (int)filter[0]);
-        
-        return (Shape){ input[0], filter[0] };
+		
+        return Shape({ input[0], filter[0] });
     }
 
     inline Shape update_shape( const Shape& variable, const Shape& value )
