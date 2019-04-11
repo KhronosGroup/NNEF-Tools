@@ -130,15 +130,14 @@ def get_tf_py_imports_and_op_protos(module_names_comma_sep):
                 for import_, fun_name in zip(opdef.imports, opdef.op_names):
                     if import_:
                         try:
-                            if import_:
-                                exec(import_)
-                            eval(fun_name)
-                            imports_for_this_op.append(import_)
-                        except (ImportError, NameError):
+                            exec(import_)
+                            imports_for_this_op.append(import_.strip())
+                        except ImportError:
                             # print("Custom function not found: {}".format(import_))
                             pass
                 op_protos.append(opdef.op_proto)
-                imports.append("\n".join(imports_for_this_op))
+                if imports_for_this_op:
+                    imports.append("\n".join(imports_for_this_op))
     return "\n".join(imports), op_protos
 
 
