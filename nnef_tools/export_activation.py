@@ -168,16 +168,16 @@ def tf_set_default_graph_from_pb(frozen_graph_filename):
 def get_function_by_path(path):
     """
 
-    :param path: "package.module:function" or "package.module:checkpoint_path.ckpt"
+    :param path: "package.module.function" or "package.module.function:checkpoint_path.ckpt"
     :return: function
     """
     parts = path.split(':')
 
-    assert len(parts) in [2, 3]
-    if len(parts) == 2 or not parts[2]:
-        package_and_module, function_name = parts[:2]
+    assert len(parts) in [1, 2]
+    if len(parts) == 1 or not parts[1]:
+        package_and_module, function_name = parts[0].rsplit('.', 1)
     else:
-        package_and_module, function_name, _checkpoint_path = parts
+        package_and_module, function_name = parts[0].rsplit('.', 1)
 
     sys.path.insert(0, '.')
     try:
@@ -302,7 +302,7 @@ def tf_export_activations(input_shapes,
            init_variables=init_variables)
 
 
-def export_activations(input_framework, input_model, input_shape, input_source, conversion_json, output_directory,
+def export_activations(input_framework, input_model, input_shape, input_source, conversion_info, output_directory,
                        tensors_per_iter):
     if input_framework == 'tensorflow-py':
         tf_reset()
@@ -310,10 +310,10 @@ def export_activations(input_framework, input_model, input_shape, input_source, 
         network_function()
         parts = input_model.split(':')
         ensure_dirs(output_directory)
-        checkpoint_path = parts[2] if len(parts) >= 3 and parts[2] else None
+        checkpoint_path = parts[1] if len(parts) >= 2 and parts[1] else None
         tf_export_activations(input_shapes=input_shape,
                               input_sources=input_source,
-                              conversion_info_file_name=conversion_json,
+                              conversion_info_file_name=conversion_info,
                               output_directory=output_directory,
                               checkpoint_path=checkpoint_path,
                               init_variables=not checkpoint_path,
@@ -324,7 +324,7 @@ def export_activations(input_framework, input_model, input_shape, input_source, 
         ensure_dirs(output_directory)
         tf_export_activations(input_shapes=input_shape,
                               input_sources=input_source,
-                              conversion_info_file_name=conversion_json,
+                              conversion_info_file_name=conversion_info,
                               output_directory=output_directory,
                               tensors_per_iter=tensors_per_iter,
                               init_variables=False)
@@ -337,7 +337,7 @@ def export_activations_using_command_line_args(args):
                        input_model=args.input_model,
                        input_shape=args.input_shape,
                        input_source=args.input,
-                       conversion_json=args.conversion_json,
+                       conversion_info=args.conversion_info,
                        output_directory=args.output_directory,
                        tensors_per_iter=args.tensors_at_once)
 
