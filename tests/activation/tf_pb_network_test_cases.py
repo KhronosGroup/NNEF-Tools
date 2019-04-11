@@ -54,7 +54,7 @@ def get_tensors_with_no_consumers():
             for tensor in op.values()]
 
 
-class TFPbNetworkTestCases2(unittest.TestCase):
+class TFPbNetworkTestCases(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if 'TF_CPP_MIN_LOG_LEVEL' not in os.environ:
@@ -65,18 +65,6 @@ class TFPbNetworkTestCases2(unittest.TestCase):
 
         if os.path.exists('out'):
             shutil.rmtree('out')
-
-    @staticmethod
-    def _test_gen():
-        networks_224 = ['frozen_inception_v1', 'frozen_inception_v2', 'frozen_resnet_v1_101', 'frozen_resnet_v1_152',
-                        'frozen_resnet_v1_50', 'frozen_resnet_v2_101', 'frozen_resnet_v2_152', 'frozen_resnet_v2_50',
-                        'frozen_vgg_16', 'frozen_vgg_19', 'mobilenet_v2_1.0_224_frozen', 'mobilenet_v2_1.4_224_frozen']
-        networks_299 = ['frozen_inception_resnet_v2', 'frozen_inception_v3', 'frozen_inception_v4']
-        for network in networks_224 + networks_299:
-            print("""
-def test_{}(self):
-    self._test_network('{}', {})
-            """.format(network.replace('.', '_').replace('-', '_'), network, 224 if network in networks_224 else 299))
 
     def _test_network(self, path, size):
         network = os.path.basename(path.rsplit('.', 1)[0])

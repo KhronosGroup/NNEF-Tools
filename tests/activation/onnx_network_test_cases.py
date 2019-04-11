@@ -14,7 +14,6 @@
 
 from __future__ import division, print_function, absolute_import
 
-import glob
 import os
 import unittest
 
@@ -26,15 +25,6 @@ if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
 
 
 class ONNXNetworkTestCases(ONNXTestRunner):
-    def _generate_tests(self):
-        self.assertTrue(os.path.exists('./onnx_models'))
-        filenames = glob.glob('./onnx_models/*.onnx')
-        for filename in filenames:
-            network_name = filename[len('./onnx_models/'):-len('.onnx')]
-            network_name = network_name.replace('.', '_').replace('-', '_')
-            print('def test_{}(self):'.format(network_name))
-            print('    self._test_model("{}")'.format(filename))
-
     def test_alexnet(self):
         self._test_model(
             download_and_untar_once(url="https://s3.amazonaws.com/download.onnx/models/opset_8/bvlc_alexnet.tar.gz",
