@@ -98,8 +98,10 @@ _Floating point models_
 Name | Size | Original | Converted
 --- | --- | --- | ---
 SqueezeNet | 5.0 Mb | [TensorFlow](https://storage.googleapis.com/download.tensorflow.org/models/tflite/model_zoo/upload_20180427/squeezenet_2018_04_27.tgz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/squeezenet.tfpb.nnef.tgz)
-SqueezeNet 1.0 | 4.7 Mb | [ONNX](https://s3.amazonaws.com/download.onnx/models/opset_9/squeezenet.tar.gz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/squeezenet_1.0.onnx.nnef.tgz)
-SqueezeNet 1.1 | 4.7 Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/squeezenet/squeezenet1.1/squeezenet1.1.onnx) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/squeezenet_1.1.onnx.nnef.tgz)
+SqueezeNet 1.0 | 4.7 Mb | [ONNX](https://s3.amazonaws.com/download.onnx/models/opset_9/squeezenet.tar.gz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/squeezenet_v1.0.onnx.nnef.tgz)
+SqueezeNet 1.1 | 4.7 Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/squeezenet/squeezenet1.1/squeezenet1.1.onnx) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/squeezenet_v1.1.onnx.nnef.tgz)
+SqueezeNet 1.0 | 4.7 Mb | [Caffe](https://github.com/DeepScale/SqueezeNet/tree/master/SqueezeNet_v1.0) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/squeezenet_v1.0.caffemodel.nnef.tgz)
+SqueezeNet 1.1 | 4.7 Mb | [Caffe](https://github.com/DeepScale/SqueezeNet/tree/master/SqueezeNet_v1.1) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/squeezenet_v1.1.caffemodel.nnef.tgz)
 
 
 ShuffleNet
