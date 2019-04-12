@@ -127,3 +127,135 @@ The following table lists the correspondence between operations in Caffe and NNE
 | Log(base,a,b) | log(a * x + b) / log(base)
 | Reduction | sum_reduce, mean_reduce
 | ArgMax | argmax_reduce
+
+
+# ONNX
+
+The following table lists the correspondence between operations in ONNX and NNEF.
+
+| ONNX | NNEF | Notes
+| --- | --- | ---
+| Abs | abs
+| Acos | -
+| Acosh | -
+| Add | add
+| And | and
+| ArgMax | argmax_reduce
+| ArgMin | argmin_reduce
+| Asin | -
+| Asinh | -
+| Atan | -
+| Atanh | -
+| AveragePool | avg_pool
+| BatchNormalization | batch_normalization
+| Cast | select | logical to integer/scalar
+|      | ne | integer/scalar to logical
+| Ceil | ceil
+| Clip | clamp
+| Compress | -
+| Concat | concat
+| Constant | constant
+| ConstantOfShape | constant
+| Conv | conv
+| ConvTranspose | deconv
+| Cos | -
+| Cosh | -
+| DepthToSpace | reshape(transpose(reshape))
+| Div | div
+| Dropout | copy
+| Elu | elu | + arithmetic when alpha != 1.0
+| Equal | eq
+| Erf | -
+| Exp | exp
+| Expand | add(constant(0)) | workaround
+| EyeLike | -
+| Flatten | reshape
+| Floor | floor
+| GRU | -
+| Gather | -
+| Gemm | matmul
+| GlobalAveragePool | mean_reduce
+| GlobalLpPool | sum_reduce(abs) | if p = 1
+|              | sqrt(sum_reduce(sqr)) | if p = 2
+| GlobalMaxPool | max_reduce
+| Greater | gt
+| HardSigmoid | clamp(add(mul))
+| HardMax | -
+| Identity | copy
+| If | -
+| InstanceNormalization | div(moments) | + further arithmetic
+| IsNan | -
+| LRN | local_response_normalization
+| LSTM | -
+| LeakyRelu | leaky_relu
+| Less | lt
+| Log | log
+| LogSoftmax | log(softmax)
+| Loop | -
+| LpNormalization | l1_normalization
+|                 | l2_normalization
+| LpPool | -
+| MatMul | matmul
+| Max | max
+| MaxPool | max_pool
+| MaxRoiPool | max_roi_pool
+| MaxUnpool | desample
+| Mean | div(add)
+| Min | min
+| Mul | mul
+| Multinomial | -
+| Neg | neg
+| Not | not
+| OneHot | -
+| Or | or
+| PRelu | prelu
+| Pad | box | workaround
+| Pow | pow
+| RNN | -
+| RandomNormal | -
+| RandomNormalLike | -
+| RandomUniform | -
+| RandomUniformLike | -
+| Reciprocal | rcp
+| ReduceL1 | sum_reduce(abs)
+| ReduceL2 | sqrt(sum_reduce(sqr))
+| ReduceLogSum | log(sum_reduce)
+| ReduceLogSumExp | log(sum_reduce(exp))
+| ReduceMax | max_reduce
+| ReduceMean | mean_reduce
+| ReduceMin | min_reduce
+| ReduceProd | -
+| ReduceSum | sum_reduce
+| ReduceSumSquare | sum_reduce(sqr)
+| Relu | relu
+| Reshape | reshape
+| Scan | -
+| Scatter | -
+| Selu | -
+| Shape | constant | if can be evaluated
+| Shrink | -
+| Sigmoid | sigmoid
+| Sign | sign
+| Sin | -
+| Sinh | -
+| Size | constant | if can be evaluated
+| Slice | slice
+| Softmax | softmax
+| Softplus | softplus
+| Softsign | -
+| SpaceToDepth | -
+| Split | split
+| Sqrt | sqrt
+| Squeeze | squeeze
+| Sub | sub
+| Sum | add
+| Tan | -
+| Tanh | tanh
+| Tile | -
+| TopK | -
+| Transpose | transpose
+| Unsqueeze | unsqueeze
+| Upsample | multilinear_upsample
+|          | nearest_upsample
+| Where | select
+| Xor | or(and(x,not(y)),and(y,not(x)))
