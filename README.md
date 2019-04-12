@@ -5,6 +5,9 @@ This repository contains tools to generate and consume NNEF documents, such as a
 **Much of the tools have been recently refactored into a new `nnef_tools` package.** This is an ongoing work, and some of the converters (Caffe, Caffe2) have not yet been migrated to this new package. These converters can be found in the 'legacy' folder.
 
 
+A **Model Zoo** is now available; the 'models' folder contains a variety of NNEF models converted from various sources.
+
+
 # Change in shape inference compared to previous version (04.10.2019)
 
 According to a change in version 1.0.1 of the NNEF specification, the `shape_of` operator in NNEF syntax is deprecated, and the parser does not support it. This enables the decoupling of parsing from shape inference, allowing parsing to succeed even if shape information is not available for all operations, such as custom defined operations before the graph definition. Shape inference can still be run after training, furthermore it can be customized (via function pointers) for custom defined operations.
