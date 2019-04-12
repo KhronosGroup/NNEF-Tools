@@ -94,7 +94,7 @@ def trace(network_function,  # type: typing.Callable[[], typing.Any]
 
 
 def write(tf_graph,  # type: TFGraph
-          dir_path,  # type: str
+          file_path,  # type: str
           write_weights=True,  # type: bool
           custom_op_protos=None,  # type: typing.Optional[typing.List[OpProto]]
           custom_imports=None  # type: str
@@ -110,18 +110,18 @@ def write(tf_graph,  # type: TFGraph
         old_names[tensor] = tensor.name
         tensor.name = utils.anystr_to_str(names_to_write[tensor])
 
-    if not os.path.exists(dir_path):
-        os.makedirs(dir_path)
+    if not os.path.exists(os.path.dirname(file_path)):
+        os.makedirs(os.path.dirname(file_path))
 
-    with open(os.path.join(dir_path, "model.py"), "w") as f:
+    with open(file_path, "w") as f:
         _print(tf_graph, file_handle=f, custom_op_protos=custom_op_protos, custom_imports=custom_imports)
 
-    with open(os.path.join(dir_path, "model.py"), "r") as f:
+    with open(file_path, "r") as f:
         tf_source = f.read()
 
     if tf_graph.list_variables() and write_weights:
-        checkpoint_dir = os.path.join(dir_path, "checkpoint")
-        checkpoint_path = os.path.join(checkpoint_dir, "model.ckpt")
+        checkpoint_dir = file_path + ".checkpoint"
+        checkpoint_path = os.path.join(checkpoint_dir, os.path.basename(file_path) + ".ckpt")
         if not os.path.exists(checkpoint_dir):
             os.makedirs(checkpoint_dir)
 

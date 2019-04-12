@@ -71,20 +71,22 @@ class TFPbNetworkTestCases(unittest.TestCase):
         network = os.path.basename(path.rsplit('.', 1)[0])
         input_shape = "(float32, [2, {size}, {size}, 3])".format(size=size)
         command = """
-        ./nnef_tools/convert.py --input-framework=tensorflow-pb \\
+        ./nnef_tools/convert.py --input-format=tensorflow-pb \\
                                 --input-model={} \\
                                 --input-shape="{}" \\
-                                --output-framework=nnef \\
-                                --output-directory=out/nnef/{} \\
-                                --compress""".format(path, input_shape, network)
+                                --output-format=nnef \\
+                                --output-model=out/nnef/{}.nnef.tgz \\
+                                --compress \\
+                                --conversion-info""".format(path, input_shape, network)
         print(command)
         convert.convert_using_command(command)
 
         command = """
-        ./nnef_tools/convert.py --input-framework=nnef \\
-                                --input-model=out/nnef/{}/model.nnef.tgz \\
-                                --output-framework=tensorflow-pb \\
-                                --output-directory=out/tensorflow-pb/{}""".format(network, network)
+        ./nnef_tools/convert.py --input-format=nnef \\
+                                --input-model=out/nnef/{}.nnef.tgz \\
+                                --output-format=tensorflow-pb \\
+                                --output-model=out/tensorflow-pb/{}.pb \\
+                                --conversion-info""".format(network, network)
         print(command)
         convert.convert_using_command(command)
 
@@ -99,7 +101,7 @@ class TFPbNetworkTestCases(unittest.TestCase):
             activations = sess.run(outputs, feed_dict={input: feed})
 
         tf.reset_default_graph()
-        load_graph_from_pb('out/tensorflow-pb/{}/model.pb'.format(network))
+        load_graph_from_pb('out/tensorflow-pb/{}.pb'.format(network))
 
         [input] = get_placeholders()
         outputs = get_tensors_with_no_consumers()

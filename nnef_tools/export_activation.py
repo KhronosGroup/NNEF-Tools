@@ -96,10 +96,10 @@ please add its location to PYTHONPATH.
 - Quote parameters if they contain spaces or special characters.
 """)
 
-    parser.add_argument("--input-framework",
+    parser.add_argument("--input-format",
                         choices=['tensorflow-pb', 'tensorflow-py'],
                         required=True,
-                        help="""Input framework""")
+                        help="""Input format""")
 
     parser.add_argument("--input-model",
                         required=True,
@@ -110,9 +110,8 @@ tensorflow-py: package.module:function or package.module:function:checkpoint_pat
                         required=True,
                         help="""Path of the conversion.json file that was created by the convert tool when converting the model to NNEF.""")
 
-    parser.add_argument("--output-directory",
-                        default="export_activation.out",
-                        help="""Path of output directory. Default: export_activation.out""")
+    parser.add_argument("--output-path",
+                        help="""Path of output directory. Default: {model_name}.activations where --conversion-info={model_name}.conversion.json """)
 
     parser.add_argument('--input',
                         default="Random(0.0, 1.0, 0, 255, 0.5)",
@@ -157,16 +156,16 @@ Default: 25.""")
 
     args = parser.parse_args()
     args.input = parse_input(args.input)
-    if args.input_framework == 'tensorflow-py':
+    if args.input_format == 'tensorflow-py':
         check_tf_py_input_model(args.input_model)
-    if args.input_framework == 'tensorflow-pb':
+    if args.input_format == 'tensorflow-pb':
         args.input_shape = parse_input_shapes(args.input_shape)
     else:
         args.input_shape = None
 
     args.no_weights = False
 
-    if args.input_framework == 'tensorflow-py' and not tf_py_has_checkpoint(args.input_model) and not args.no_weights:
+    if args.input_format == 'tensorflow-py' and not tf_py_has_checkpoint(args.input_model) and not args.no_weights:
         args.no_weights = True
 
     return args
@@ -301,7 +300,7 @@ def create_feed_dict(input_sources, input_shapes):
 def tf_export_activations(input_shapes,
                           input_sources,
                           conversion_info_file_name,
-                          output_directory,
+                          output_path,
                           checkpoint_path=None,
                           init_variables=False,
                           tensors_per_iter=25):
@@ -309,7 +308,7 @@ def tf_export_activations(input_shapes,
     input_shapes = tf_get_input_shapes(input_shape=input_shapes)
     feed_dict = create_feed_dict(input_sources=input_sources, input_shapes=input_shapes)
     info = conversion_info.load(conversion_info_file_name)
-    export(output_path=output_directory,
+    export(output_path=output_path,
            feed_dict=feed_dict,
            conversion_info=info,
            checkpoint_path=checkpoint_path,
@@ -317,30 +316,36 @@ def tf_export_activations(input_shapes,
            init_variables=init_variables)
 
 
-def export_activations(input_framework, input_model, input_shape, input_source, conversion_info, output_directory,
+def export_activations(input_format, input_model, input_shape, input_source, conversion_info, output_path,
                        tensors_per_iter):
-    if input_framework == 'tensorflow-py':
+    if output_path is None:
+        output_path = conversion_info
+        if output_path.endswith('.conversion.json'):
+            output_path = output_path[:-len('.conversion.json')]
+        output_path += ".activations"
+
+    if input_format == 'tensorflow-py':
         tf_reset()
         network_function = get_function_by_path(input_model)
         network_function()
         parts = input_model.split(':')
-        ensure_dirs(output_directory)
+        ensure_dirs(output_path)
         checkpoint_path = parts[1] if len(parts) >= 2 and parts[1] else None
         tf_export_activations(input_shapes=input_shape,
                               input_sources=input_source,
                               conversion_info_file_name=conversion_info,
-                              output_directory=output_directory,
+                              output_path=output_path,
                               checkpoint_path=checkpoint_path,
                               init_variables=not checkpoint_path,
                               tensors_per_iter=tensors_per_iter)
-    elif input_framework == 'tensorflow-pb':
+    elif input_format == 'tensorflow-pb':
         tf_reset()
         tf_set_default_graph_from_pb(input_model)
-        ensure_dirs(output_directory)
+        ensure_dirs(output_path)
         tf_export_activations(input_shapes=input_shape,
                               input_sources=input_source,
                               conversion_info_file_name=conversion_info,
-                              output_directory=output_directory,
+                              output_path=output_path,
                               tensors_per_iter=tensors_per_iter,
                               init_variables=False)
     else:
@@ -348,12 +353,12 @@ def export_activations(input_framework, input_model, input_shape, input_source, 
 
 
 def export_activations_using_command_line_args(args):
-    export_activations(input_framework=args.input_framework,
+    export_activations(input_format=args.input_format,
                        input_model=args.input_model,
                        input_shape=args.input_shape,
                        input_source=args.input,
                        conversion_info=args.conversion_info,
-                       output_directory=args.output_directory,
+                       output_path=args.output_path,
                        tensors_per_iter=args.tensors_at_once)
 
 
