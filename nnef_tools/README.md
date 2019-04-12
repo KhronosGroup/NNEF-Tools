@@ -72,6 +72,8 @@ Examples:
                         --output-directory=out/tensorflow-pb/frozen_inception_v1
 ```
 
+Mappings between operations in various frameworks and NNEF can be found [here](operation_mapping.md).
+
 ### The activation exporter tool: ```nnef_tools/export_activation.py```
 
 The activation exporter tool can be used to export the activations (the evaluated values of the tensors) 
@@ -98,7 +100,7 @@ Example:
                                    --conversion-info=out/nnef/frozen_inception_v1/conversion.json
 ```
 
-# Activation tests:
+## Activation tests:
 
 These tests convert the model to NNEF and then convert it back to the original framework. 
 They compare the activations (heatmaps) of the original and the converted graph.
