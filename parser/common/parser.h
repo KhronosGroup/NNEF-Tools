@@ -21,6 +21,7 @@
 #include "lexer.h"
 #include "prototype.h"
 #include "dictionary.h"
+#include <functional>
 
 
 namespace nnef
