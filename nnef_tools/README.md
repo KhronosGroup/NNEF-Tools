@@ -29,6 +29,11 @@ We use caffe2, but now it is inside the `torch` package.
 
 ```pip install onnx torch```
 
+For conversion to/from TensorFlow-Lite, the `flatbuffers` package is needed.
+
+```pip install flatbuffers```
+
+
 ## Command line tools
 
 ### The conversion tool: ```nnef_tools/convert.py```
