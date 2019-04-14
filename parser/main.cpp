@@ -71,7 +71,7 @@ int main( int argc, const char * argv[] )
 {
     if ( argc < 2 )
     {
-        std::cout << "Usage: nnef-validator <network-structure.nnef> (--option)*" << std::endl;
+        std::cout << "Usage: nnef-validator <path/to/NNEF/folder> (--option)*" << std::endl;
         std::cout << std::endl;
         std::cout << "Description of options:" << std::endl;
         std::cout << "--stdlib <path>: path to alternative stdlib source file" << std::endl;
