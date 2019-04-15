@@ -18,13 +18,13 @@ You have to install dependencies only for the functionalities that you are using
 
 | Functionality                              | Dependencies                                                        |
 |--------------------------------------------|---------------------------------------------------------------------|
-|  TensorFlow Python code + activation tests | pip install typing six numpy "tensorflow-gpu<1.13                   |
-|  TensorFlow Protobuf                       | pip install typing six numpy protobuf                               |
+|  TensorFlow Python code conversion (+tests)| pip install typing six numpy "tensorflow-gpu<1.13                   |
+|  TensorFlow Protobuf conversion            | pip install typing six numpy protobuf                               |
 |  TensorFlow Protobuf activation tests      | pip install typing six numpy protobuf "tensorflow-gpu<1.13"         |
-|  TensorFlow Lite                           | pip install typing six numpy flatbuffers                            |
+|  TensorFlow Lite conversion                | pip install typing six numpy flatbuffers                            |
 |  TensorFlow Lite activation tests          | pip install typing six numpy flatbuffers "tensorflow-gpu<1.13"      |
 |  TensorFlow activation export              | pip install typing six numpy scipy matplotlib "tensorflow-gpu<1.13" |
-|  ONNX                                      | pip install typing six numpy protobuf                               |
+|  ONNX conversion                           | pip install typing six numpy protobuf                               |
 |  ONNX activation tests                     | pip install typing six numpy protobuf onnx torch                    |
 
 All dependencies (just for reference):
