@@ -19,7 +19,6 @@ from __future__ import division, print_function, absolute_import
 import os
 import shutil
 import typing
-from enum import Enum
 
 from nnef_tools.activation_export.tensorflow import tf_activation_exporter
 from nnef_tools.conversion import conversion_info
@@ -37,7 +36,7 @@ from nnef_tools.optimization.nnef.nnef_data_format_optimizer import IOTransform
 from nnef_tools.optimization.tensorflow import tf_data_format_optimizer
 
 
-class OptimizationLevel(Enum):
+class OptimizationLevel(object):
     NONE = 0
     INTERNAL = 1
     FULL = 2

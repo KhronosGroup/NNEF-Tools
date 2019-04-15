@@ -14,6 +14,10 @@
 
 from __future__ import division, print_function, absolute_import
 
+import typing
+
+from nnef_tools.core import utils
+from nnef_tools.io.tensorflow.tf_graph import *
 from nnef_tools.io.tensorflow.tf_py.tf_py_definitions import *
 
 

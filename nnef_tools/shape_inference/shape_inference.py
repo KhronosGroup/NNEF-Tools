@@ -16,25 +16,36 @@ from __future__ import division, print_function, absolute_import
 
 import typing
 from collections import namedtuple
-from enum import Enum
 
 
-class Padding(Enum):
+class Padding(object):
     VALID = 0
     SAME_UPPER = 1
     SAME_LOWER = 2
 
+    @staticmethod
+    def allowed(value):
+        return value in [Padding.VALID, Padding.SAME_UPPER, Padding.SAME_LOWER]
 
-class Broadcast(Enum):
+
+class Broadcast(object):
     NONE = 0
     SAME_RANK = 1  # (1, 2, 3), (2, 2, 3) is broadcastable
     FROM_LEFT = 2  # (1, 2, 3), (1, 2) is broadcastable
     FROM_RIGHT = 3  # (1, 2, 3), (2, 3) is broadcastable
 
+    @staticmethod
+    def allowed(value):
+        return value in [Broadcast.NONE, Broadcast.SAME_RANK, Broadcast.FROM_LEFT, Broadcast.FROM_RIGHT]
 
-class Format(Enum):
+
+class Format(object):
     NCHW = 0
     NHWC = 1
+
+    @staticmethod
+    def allowed(value):
+        return value in [Format.NCHW, Format.NHWC]
 
 
 DecomposedStridedSlice = namedtuple('DecomposedStridedSlice',
@@ -105,7 +116,7 @@ def elementwise(inputs, broadcast):
 
     assert len(inputs) > 0
 
-    if broadcast == broadcast.NONE:
+    if broadcast == Broadcast.NONE:
         assert all(inputs[i] == inputs[0] for i in range(1, len(inputs)))
         return list(inputs[0])
 
@@ -141,12 +152,12 @@ def sliding_window(input,  # type: ShapeType
     # type: (...)->ShapeType
     assert len(input) == len(filter) == len(stride) == len(dilation)
     assert output_padding is None or len(output_padding) == len(filter)
-    assert isinstance(padding, Padding) or len(padding) == len(filter)
+    assert Padding.allowed(padding) or len(padding) == len(filter)
 
     if output_padding is None:
         output_padding = len(filter) * [(0, 0)]
 
-    if isinstance(padding, Padding):
+    if Padding.allowed(padding):
         if padding == Padding.VALID:
             padding = valid_padding(len(input))
         elif padding in [Padding.SAME_LOWER, Padding.SAME_UPPER]:
@@ -278,7 +289,7 @@ def conv(input,  # type: ShapeType
     assert output_channels % groups == 0
 
     assert len(filter) == len(stride) == len(dilation)
-    assert isinstance(padding, Padding) or len(padding) == len(filter)
+    assert Padding.allowed(padding) or len(padding) == len(filter)
     assert output_padding is None or len(output_padding) == len(filter)
     assert spatial_begin + len(filter) <= len(input)
     assert channel_axis < spatial_begin or channel_axis >= spatial_begin + len(filter)
@@ -643,5 +654,3 @@ def strided_slice(input, begin, end, stride, ellipsis_mask, new_axis_mask, shrin
 def tile(input, repeat):
     assert len(input) == len(repeat)
     return [i * r for i, r in zip(input, repeat)]
-
-

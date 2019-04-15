@@ -7,32 +7,41 @@ This is a repository of NNEF converters and other tools.
 Python2 version >= 2.7.12 and Python3 version >= 3.5.2 are supported.
 Python3 is recommended.
 
-All tools need an installed `nnef` package.
+For all tools an installed `nnef` package is needed:
 
-Other dependencies for all tools:
+```
+cd parser/python
+python setup.py install
+cd ../..
+```
+You have to install dependencies only for the functionalities that you are using:
 
-```pip install numpy typing six```
+| Functionality                              | Dependencies                                                        |
+|--------------------------------------------|---------------------------------------------------------------------|
+|  TensorFlow Python code + activation tests | pip install typing six numpy "tensorflow-gpu<1.13                   |
+|  TensorFlow Protobuf                       | pip install typing six numpy protobuf                               |
+|  TensorFlow Protobuf activation tests      | pip install typing six numpy protobuf "tensorflow-gpu<1.13"         |
+|  TensorFlow Lite                           | pip install typing six numpy flatbuffers                            |
+|  TensorFlow Lite activation tests          | pip install typing six numpy flatbuffers "tensorflow-gpu<1.13"      |
+|  TensorFlow activation export              | pip install typing six numpy scipy matplotlib "tensorflow-gpu<1.13" |
+|  ONNX                                      | pip install typing six numpy protobuf                               |
+|  ONNX activation tests                     | pip install typing six numpy protobuf onnx torch                    |
 
-For activation export with image as input source:
+All dependencies (just for reference):
+```
+pip install typing six numpy scipy matplotlib protobuf flatbuffers onnx torch "tensorflow-gpu<1.13"
+```
 
-```pip install matplotlib scipy```
+### Remarks for ONNX activation tests
 
-For export from TensorFlow Python code, a working TensorFlow installation is needed.
-It is also needed for the test cases of TensorFlow Protobuf and TensorFlow Lite. 
+Caffe2 is now in `torch`, that's why we need it.
+
+### Remarks for TensorFlow export
+
+For TensorFlow Python code conversion and some test cases, a working TensorFlow installation is needed.
 Versions 1.8 - 1.12 should be fine. Prefer the GPU versions as they support more operations.
 Some operations are not supported by older versions, but the tools should work in general.
-
-```pip install tensorflow-gpu==1.12```
-
-For ONNX test cases the `onnx` and the `torch` package is required.
-We use caffe2, but now it is inside the `torch` package.
-
-```pip install onnx torch```
-
-For conversion to/from TensorFlow-Lite, the `flatbuffers` package is needed.
-
-```pip install flatbuffers```
-
+If you use the CPU version or an older version, some test cases might break. 
 
 ## Command line tools
 

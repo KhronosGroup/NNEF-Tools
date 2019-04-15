@@ -90,9 +90,30 @@ def onnx_parse_input_shapes(s):
         exit(1)
 
 
-def get_tf_py_custom_traceable_functions(module_names_comma_sep):
+def try_eval_tf(__import, __fun_name):
     exec("import tensorflow as tf")
-    exec("from nnef_tools.io.tensorflow.tf_py.tf_py_definitions import tf_internal as _tf")
+    exec("from nnef_tools.io.tensorflow.tf_py.tf_py_compat import tf_internal as _tf")
+    try:
+        if __import:
+            exec(__import)
+        return eval(__fun_name)
+    except (ImportError, NameError):
+        # print("Custom function not found: {}".format(__import))
+        return None
+
+
+def try_import(__import):
+    if __import:
+        try:
+            exec(__import)
+            return True
+        except ImportError:
+            # print("Custom function not found: {}".format(import_))
+            return False
+    return False
+
+
+def get_tf_py_custom_traceable_functions(module_names_comma_sep):
     from nnef_tools.io.tensorflow.tf_py.tf_py_definitions import TraceableFunction
     module_names = [n.strip() for n in module_names_comma_sep.split(',')] if module_names_comma_sep else []
     custom_traceable_functions = []
@@ -103,21 +124,15 @@ def get_tf_py_custom_traceable_functions(module_names_comma_sep):
             for opdef in opdefs:
                 funs = []
                 for import_, fun_name in zip(opdef.imports, opdef.op_names):
-                    try:
-                        if import_:
-                            exec(import_)
-                        funs.append(eval(fun_name))
-                    except (ImportError, NameError):
-                        # print("Custom function not found: {}".format(import_))
-                        pass
+                    fun = try_eval_tf(import_, fun_name)
+                    if fun is not None:
+                        funs.append(fun)
 
                 custom_traceable_functions.append(TraceableFunction(opdef.op_proto, funs))
     return custom_traceable_functions
 
 
 def get_tf_py_imports_and_op_protos(module_names_comma_sep):
-    exec("import tensorflow as tf")
-    exec("from nnef_tools.io.tensorflow.tf_py.tf_py_definitions import tf_internal as _tf")
     module_names = [n.strip() for n in module_names_comma_sep.split(',')] if module_names_comma_sep else []
     imports = []
     op_protos = []
@@ -128,13 +143,8 @@ def get_tf_py_imports_and_op_protos(module_names_comma_sep):
             for opdef in opdefs:
                 imports_for_this_op = []
                 for import_, fun_name in zip(opdef.imports, opdef.op_names):
-                    if import_:
-                        try:
-                            exec(import_)
-                            imports_for_this_op.append(import_.strip())
-                        except ImportError:
-                            # print("Custom function not found: {}".format(import_))
-                            pass
+                    if try_import(import_):
+                        imports_for_this_op.append(import_.strip())
                 op_protos.append(opdef.op_proto)
                 if imports_for_this_op:
                     imports.append("\n".join(imports_for_this_op))

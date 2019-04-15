@@ -12,18 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tensorflow.core.framework.graph_pb2 import GraphDef
-from tensorflow.core.framework.node_def_pb2 import NodeDef
-from tensorflow.core.framework.attr_value_pb2 import AttrValue
-from tensorflow.core.framework.types_pb2 import DataType
-from tensorflow.core.framework.tensor_pb2 import TensorProto
-from tensorflow.core.framework.tensor_shape_pb2 import TensorShapeProto
+from __future__ import division, print_function, absolute_import
 
-__all__ = [
-    'GraphDef',
-    'NodeDef',
-    'AttrValue',
-    'DataType',
-    'TensorProto',
-    'TensorShapeProto',
-]
+import os
+import sys
+
+try:
+    sys.path.insert(0, os.path.dirname(__file__))
+    from tensorflow.core.framework.graph_pb2 import GraphDef
+    from tensorflow.core.framework.node_def_pb2 import NodeDef
+    from tensorflow.core.framework.attr_value_pb2 import AttrValue
+    from tensorflow.core.framework.types_pb2 import DataType
+    from tensorflow.core.framework.tensor_pb2 import TensorProto
+    from tensorflow.core.framework.tensor_shape_pb2 import TensorShapeProto
+
+    __all__ = [
+        'GraphDef',
+        'NodeDef',
+        'AttrValue',
+        'DataType',
+        'TensorProto',
+        'TensorShapeProto',
+    ]
+finally:
+    sys.path.pop(0)

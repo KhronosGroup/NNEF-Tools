@@ -19,11 +19,17 @@ import inspect
 import os
 import sys
 import traceback
+import typing
+from collections import OrderedDict
 
 import numpy as np
+import six
+import tensorflow as tf
 
 from nnef_tools.conversion import conversion_info
 from nnef_tools.core import graph_utils
+from nnef_tools.core import utils
+from nnef_tools.io.tensorflow.tf_graph import *
 from nnef_tools.io.tensorflow.tf_py import tf_py_shape_inference, tf_py_eval
 from nnef_tools.io.tensorflow.tf_py.tf_py_definitions import *
 
@@ -40,6 +46,8 @@ def trace(network_function,  # type: typing.Callable[[], typing.Any]
         custom_traceable_functions = []
 
     traceable_functions = DefaultTraceableFunctions + custom_traceable_functions
+    for trf in traceable_functions:
+        trf.eval_functions()
 
     functions_by_name = {trf.op_proto.op_name: trf.functions for trf in traceable_functions}
     if expand_gradients:
@@ -239,7 +247,7 @@ def _print(tf_graph, file_handle, custom_op_protos=None, custom_imports=None, wi
         print("from collections import OrderedDict", file=f)
         print("import tensorflow as tf", file=f)
         if any(op.name.startswith("_tf.") for op in tf_graph.operations):
-            print("from nnef_tools.io.tensorflow.tf_py.tf_py_definitions import tf_internal as _tf", file=f)
+            print("from nnef_tools.io.tensorflow.tf_py.tf_py_compat import tf_internal as _tf", file=f)
         if custom_imports:
             print(custom_imports, file=f)
         print(file=f)
