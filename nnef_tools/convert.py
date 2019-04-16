@@ -26,7 +26,7 @@ import shlex
 import argparse
 import importlib
 import os
-
+import typing
 import six
 
 from nnef_tools.conversion import conversion_info
@@ -151,21 +151,21 @@ def get_tf_py_imports_and_op_protos(module_names_comma_sep):
     return "\n".join(imports), op_protos
 
 
-def get_reader(input_framework,
-               output_framework,
+def get_reader(input_format,
+               output_format,
                input_shape=None,
                permissive=False,
                with_weights=True,
                custom_converters=None):
-    if input_framework == 'nnef':
+    if input_format == 'nnef':
         from nnef_tools.io.nnef.nnef_io import Reader
 
         configs = [NNEFParserConfig.STANDARD_CONFIG]
 
-        if output_framework in ['tensorflow-pb', 'tensorflow-py', 'tensorflow-lite']:
+        if output_format in ['tensorflow-pb', 'tensorflow-py', 'tensorflow-lite']:
             from nnef_tools.conversion.tensorflow import nnef_to_tf
             configs.append(nnef_to_tf.ParserConfig)
-        elif output_framework in ['onnx']:
+        elif output_format in ['onnx']:
             from nnef_tools.conversion.onnx import nnef_to_onnx
             configs.append(nnef_to_onnx.ParserConfig)
         else:
@@ -174,22 +174,22 @@ def get_reader(input_framework,
         configs += NNEFParserConfig.load_configs(custom_converters, load_standard=False)
 
         return Reader(parser_configs=configs)
-    elif input_framework == 'tensorflow-pb':
+    elif input_format == 'tensorflow-pb':
         # TODO custom converter
         from nnef_tools.io.tensorflow.tf_pb_io import Reader
         return Reader(convert_to_tf_py=True, input_shape=input_shape)
-    elif input_framework == 'tensorflow-py':
+    elif input_format == 'tensorflow-py':
         from nnef_tools.io.tensorflow.tf_py_io import Reader
         if custom_converters:
             custom_traceable_functions = get_tf_py_custom_traceable_functions(custom_converters)
         else:
             custom_traceable_functions = None
         return Reader(expand_gradients=True, custom_traceable_functions=custom_traceable_functions)
-    elif input_framework == 'tensorflow-lite':
+    elif input_format == 'tensorflow-lite':
         # TODO custom converter
         from nnef_tools.io.tensorflow.tflite_io import Reader
         return Reader(convert_to_tf_py=True)
-    elif input_framework == 'onnx':
+    elif input_format == 'onnx':
         # TODO custom converter
         from nnef_tools.io.onnx.onnx_io import Reader
         return Reader(propagate_shapes=True, input_shape=input_shape)
@@ -197,35 +197,35 @@ def get_reader(input_framework,
         assert False
 
 
-def get_custom_converters(input_framework, output_framework, custom_converters):
+def get_custom_converters(input_format, output_format, custom_converters):
     module_names = [n.strip() for n in custom_converters.split(',')] if custom_converters else []
     custom_converter_by_op_name = {}
 
     for module_name in module_names:
         module = importlib.import_module(module_name)
-        attrname = (input_framework + "_to_" + output_framework + "_converters").replace('-', '_').upper()
+        attrname = (input_format + "_to_" + output_format + "_converters").replace('-', '_').upper()
         if hasattr(module, attrname):
             custom_converter_by_op_name.update(getattr(module, attrname))
 
     return custom_converter_by_op_name
 
 
-def get_converter(input_framework, output_framework, prefer_nchw=False, permissive=False, custom_converters=None):
-    if input_framework in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite'] and output_framework == 'nnef':
+def get_converter(input_format, output_format, prefer_nchw=False, permissive=False, custom_converters=None):
+    if input_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite'] and output_format == 'nnef':
         from nnef_tools.conversion.tensorflow.tf_to_nnef import Converter
 
-        if input_framework == 'tensorflow-py' and custom_converters:
-            custom_converter_by_op_name = get_custom_converters(input_framework, output_framework, custom_converters)
+        if input_format == 'tensorflow-py' and custom_converters:
+            custom_converter_by_op_name = get_custom_converters(input_format, output_format, custom_converters)
         else:
             custom_converter_by_op_name = None
 
         return Converter(enable_imprecise_image_resize=permissive,
                          custom_converter_by_op_name=custom_converter_by_op_name)
-    elif input_framework == 'nnef' and output_framework in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite']:
+    elif input_format == 'nnef' and output_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite']:
         from nnef_tools.conversion.tensorflow.nnef_to_tf import Converter
 
-        if output_framework == 'tensorflow-py' and custom_converters:
-            custom_converter_by_op_name = get_custom_converters(input_framework, output_framework, custom_converters)
+        if output_format == 'tensorflow-py' and custom_converters:
+            custom_converter_by_op_name = get_custom_converters(input_format, output_format, custom_converters)
         else:
             custom_converter_by_op_name = None
 
@@ -233,17 +233,17 @@ def get_converter(input_framework, output_framework, prefer_nchw=False, permissi
                          enable_imprecise_image_resize=permissive,
                          enable_imprecise_padding_border=permissive,
                          custom_converter_by_op_name=custom_converter_by_op_name)
-    elif input_framework == 'onnx' and output_framework == 'nnef':
+    elif input_format == 'onnx' and output_format == 'nnef':
         from nnef_tools.conversion.onnx.onnx_to_nnef import Converter
 
-        custom_converter_by_op_name = (get_custom_converters(input_framework, output_framework, custom_converters)
+        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
                                        if custom_converters else None)
 
         return Converter(custom_converter_by_op_name=custom_converter_by_op_name)
-    elif input_framework == 'nnef' and output_framework == 'onnx':
+    elif input_format == 'nnef' and output_format == 'onnx':
         from nnef_tools.conversion.onnx.nnef_to_onnx import Converter
 
-        custom_converter_by_op_name = (get_custom_converters(input_framework, output_framework, custom_converters)
+        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
                                        if custom_converters else None)
 
         return Converter(enable_imprecise_image_resize=permissive,
@@ -252,25 +252,25 @@ def get_converter(input_framework, output_framework, prefer_nchw=False, permissi
         assert False
 
 
-def get_data_format_optimizer(input_framework, output_framework, io_transformation):
-    if input_framework in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite', 'onnx'] and output_framework == 'nnef':
+def get_data_format_optimizer(input_format, output_format, io_transformation):
+    if input_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite', 'onnx'] and output_format == 'nnef':
         from nnef_tools.optimization.nnef.nnef_data_format_optimizer import Optimizer
         return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
-    elif input_framework == 'nnef' and output_framework in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite']:
+    elif input_format == 'nnef' and output_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite']:
         from nnef_tools.optimization.tensorflow.tf_data_format_optimizer import Optimizer
         return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
-    elif input_framework == 'nnef' and output_framework == 'onnx':
+    elif input_format == 'nnef' and output_format == 'onnx':
         from nnef_tools.optimization.onnx.onnx_data_format_optimizer import Optimizer
         return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
     else:
         assert False
 
 
-def get_writer(input_framework, output_framework, with_weights=True, custom_converters=None):
-    if output_framework == 'nnef':
+def get_writer(input_format, output_format, with_weights=True, custom_converters=None):
+    if output_format == 'nnef':
         from nnef_tools.io.nnef.nnef_io import Writer
         return Writer(write_weights=with_weights)
-    elif output_framework == 'tensorflow-py':
+    elif output_format == 'tensorflow-py':
         from nnef_tools.io.tensorflow.tf_py_io import Writer
 
         if custom_converters:
@@ -279,35 +279,49 @@ def get_writer(input_framework, output_framework, with_weights=True, custom_conv
             custom_imports, custom_op_protos = None, None
 
         return Writer(write_weights=with_weights, custom_op_protos=custom_op_protos, custom_imports=custom_imports)
-    elif output_framework == 'tensorflow-pb':
+    elif output_format == 'tensorflow-pb':
         from nnef_tools.io.tensorflow.tf_pb_io import Writer
         return Writer(convert_from_tf_py=True)
-    elif output_framework == 'tensorflow-lite':
+    elif output_format == 'tensorflow-lite':
         from nnef_tools.io.tensorflow.tflite_io import Writer
         return Writer(convert_from_tf_py=True)
-    elif output_framework == 'onnx':
+    elif output_format == 'onnx':
         from nnef_tools.io.onnx.onnx_io import Writer
         return Writer()
     else:
         assert False
 
 
-def get_output_file_name(output_framework, output_directory, compress):
-    if output_framework == 'nnef':
+def get_extension(output_format, compress):
+    if output_format == 'nnef':
         if compress:
-            return os.path.join(output_directory, "model.nnef.tgz")
+            return ".nnef.tgz"
         else:
-            return os.path.join(output_directory, "model")
-    elif output_framework == 'tensorflow-py':
-        return os.path.join(output_directory, "model")
-    elif output_framework == 'tensorflow-pb':
-        return os.path.join(output_directory, "model.pb")
-    elif output_framework == 'onnx':
-        return os.path.join(output_directory, "model.onnx")
-    elif output_framework == 'tensorflow-lite':
-        return os.path.join(output_directory, "model.tflite")
+            return ".nnef"
+    elif output_format == 'tensorflow-py':
+        return ".py"
+    elif output_format == 'tensorflow-pb':
+        return ".pb"
+    elif output_format == 'onnx':
+        return ".onnx"
+    elif output_format == 'tensorflow-lite':
+        return ".tflite"
     else:
         assert False
+
+
+def get_output_path(output_format, output_directory, output_prefix, compress):
+    return os.path.join(output_directory, output_prefix + get_extension(output_format, compress))
+
+
+def fix_extension(path, ext):
+    if path.endswith(ext):
+        return path
+    return path + ext
+
+
+def fix_output_path(output_format, output_path, compress):
+    return fix_extension(output_path, get_extension(output_format, compress))
 
 
 def ensure_dirs(dir):
@@ -322,43 +336,84 @@ def convert_using_premade_objects(in_filename, out_filename, out_info_filename, 
     opt_info = data_format_optimizer(target_graph) if data_format_optimizer is not None else None
     ensure_dirs(os.path.dirname(out_filename))
     write_info = writer(target_graph, out_filename)
-    combined_info = conversion_info.compose(conv_info, opt_info, write_info)
-    ensure_dirs(os.path.dirname(out_info_filename))
-    conversion_info.dump(combined_info, out_info_filename)
+
+    if out_info_filename:
+        combined_info = conversion_info.compose(conv_info, opt_info, write_info)
+        ensure_dirs(os.path.dirname(out_info_filename))
+        conversion_info.dump(combined_info, out_info_filename)
 
 
-def convert(input_framework,
-            output_framework,
+def convert(input_format,
+            output_format,
             input_model,
-            output_directory,
+            output_path,
             input_shape=None,
             prefer_nchw=False,
             io_transformation=None,
             compress=False,
             permissive=False,
             with_weights=True,
-            custom_converters=None):
+            custom_converters=None,
+            conversion_info=False  # type: typing.Union[bool, str, None]
+            ):
+    if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef']:
+        output_prefix = os.path.basename(os.path.abspath(input_model))
+    elif input_format == 'tensorflow-py':
+        assert '.' in input_model
+        output_prefix = input_model.split(':')[0].split('.')[1]
+    else:
+        assert False
+
+    if output_path:
+        if output_path.endswith('/') or output_path.endswith('\\'):
+            output_path = get_output_path(output_format=output_format,
+                                          output_directory=os.path.abspath(output_path),
+                                          output_prefix=output_prefix,
+                                          compress=compress)
+        else:
+            output_path = fix_output_path(output_format=output_format,
+                                          output_path=output_path,
+                                          compress=compress)
+    else:
+        if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef']:
+            output_dir = os.path.dirname(os.path.abspath(input_model))
+            if not output_dir:
+                output_dir = '.'
+        else:
+            output_dir = '.'
+
+        output_path = get_output_path(output_format=output_format,
+                                      output_directory=output_dir,
+                                      output_prefix=output_prefix,
+                                      compress=compress)
+
+    if conversion_info is True:
+        conversion_info = output_path + ".conversion.json"
+    elif conversion_info:
+        if conversion_info.endswith('/') or conversion_info.endswith('\\'):
+            conversion_info += os.path.basename(output_path) + '.conversion.json'
+        else:
+            conversion_info = fix_extension(conversion_info, '.json')
+
     convert_using_premade_objects(in_filename=input_model,
-                                  out_filename=get_output_file_name(output_framework=output_framework,
-                                                                    output_directory=output_directory,
-                                                                    compress=compress),
-                                  out_info_filename=os.path.join(output_directory, "conversion.json"),
-                                  reader=get_reader(input_framework=input_framework,
-                                                    output_framework=output_framework,
+                                  out_filename=output_path,
+                                  out_info_filename=conversion_info,
+                                  reader=get_reader(input_format=input_format,
+                                                    output_format=output_format,
                                                     input_shape=input_shape,
                                                     permissive=permissive,
                                                     with_weights=with_weights,
                                                     custom_converters=custom_converters),
-                                  converter=get_converter(input_framework=input_framework,
-                                                          output_framework=output_framework,
+                                  converter=get_converter(input_format=input_format,
+                                                          output_format=output_format,
                                                           prefer_nchw=prefer_nchw,
                                                           permissive=permissive,
                                                           custom_converters=custom_converters),
-                                  data_format_optimizer=get_data_format_optimizer(input_framework=input_framework,
-                                                                                  output_framework=output_framework,
+                                  data_format_optimizer=get_data_format_optimizer(input_format=input_format,
+                                                                                  output_format=output_format,
                                                                                   io_transformation=io_transformation),
-                                  writer=get_writer(input_framework=input_framework,
-                                                    output_framework=output_framework,
+                                  writer=get_writer(input_format=input_format,
+                                                    output_format=output_format,
                                                     with_weights=with_weights,
                                                     custom_converters=custom_converters))
 
@@ -369,17 +424,18 @@ def tf_py_has_checkpoint(input_model):
 
 
 def convert_using_args(args):
-    convert(input_framework=args.input_framework,
-            output_framework=args.output_framework,
+    convert(input_format=args.input_format,
+            output_format=args.output_format,
             input_model=args.input_model,
-            output_directory=args.output_directory,
+            output_path=args.output_model,
             input_shape=args.input_shape,
             prefer_nchw=args.prefer_nchw,
             io_transformation=args.io_transformation,
             compress=args.compress,
             permissive=args.permissive,
             with_weights=not args.no_weights,
-            custom_converters=args.custom_converters)
+            custom_converters=args.custom_converters,
+            conversion_info=args.conversion_info)
 
 
 def get_args(argv):
@@ -390,14 +446,14 @@ def get_args(argv):
 please add its location to PYTHONPATH.
 - Quote parameters if they contain spaces or special characters.""")
 
-    parser.add_argument("--input-framework",
+    parser.add_argument("--input-format",
                         choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx'],
                         required=True,
-                        help="""Input framework""")
-    parser.add_argument("--output-framework",
+                        help="""Input format""")
+    parser.add_argument("--output-format",
                         choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx'],
                         required=True,
-                        help="""Output framework""")
+                        help="""Output format""")
     parser.add_argument("--input-model",
                         required=True,
                         help="""nnef: path of NNEF file, directory or nnef.tgz file.
@@ -407,10 +463,12 @@ tensorflow-pb: path of pb file
 tensorflow-py: package.module.function or package.module.function:checkpoint_path.ckpt
 tensorflow-lite: path of tflite file""")
 
-    parser.add_argument("--output-directory",
-                        default="convert.out",
-                        help="""Path of output directory.
-Default: convert.out""")
+    parser.add_argument("--output-model",
+                        help="""Path of output file.
+If it ends with '/' or '\\', it is considered a directory and the filename is auto-generated, similarly to the default.
+Default: tensorflow-py: {function name}.{output extension}, others: {input path}.{output extension}
+Example for default name generation: module.function -> function.nnef
+                                     directory/network.onnx -> directory/network.onnx.nnef""")
 
     parser.add_argument("--io-transformation",
                         default="IDENTITY",
@@ -459,31 +517,39 @@ Default: (empty).
     parser.add_argument('--custom-converters',
                         help="""Module(s) of custom converters: e.g. "package.module", "package.module1,package.module2""")
 
+    parser.add_argument("--conversion-info",
+                        nargs='?',
+                        default=False,
+                        const=True,
+                        help="""Set this to write a conversion info file. 
+Without an argument: Write to {output path}.conversion.json. 
+With an argument: Write to the path defined by the argument.""")
+
     args = parser.parse_args(args=argv[1:])
     args.io_transformation = parse_io_transform(args.io_transformation)
-    if args.input_framework == 'tensorflow-py':
+    if args.input_format == 'tensorflow-py':
         check_tf_py_input_model(args.input_model)
-    if args.input_framework == 'tensorflow-pb':
+    if args.input_format == 'tensorflow-pb':
         args.input_shape = tf_pb_parse_input_shapes(args.input_shape)
-    elif args.input_framework == 'onnx':
+    elif args.input_format == 'onnx':
         args.input_shape = onnx_parse_input_shapes(args.input_shape)
     else:
         args.input_shape = None
 
     args.no_weights = False
 
-    if sum(framework == 'nnef' for framework in [args.input_framework, args.output_framework]) != 1:
+    if sum(framework == 'nnef' for framework in [args.input_format, args.output_format]) != 1:
         print("Error: Either input or output framework must be nnef.", file=sys.stderr)
         exit(1)
 
-    if args.input_framework == 'tensorflow-py' and not tf_py_has_checkpoint(args.input_model):
+    if args.input_format == 'tensorflow-py' and not tf_py_has_checkpoint(args.input_model):
         args.no_weights = True
 
-    if args.compress and args.output_framework != 'nnef':
+    if args.compress and args.output_format != 'nnef':
         print("Error: --compress can now be only used with NNEF as output framework.")
         exit(1)
 
-    if args.input_framework == "nnef" and not os.path.isdir(args.input_model) and not args.input_model.endswith('.tgz'):
+    if args.input_format == "nnef" and not os.path.isdir(args.input_model) and not args.input_model.endswith('.tgz'):
         args.no_weights = True
 
     return args
@@ -492,7 +558,7 @@ Default: (empty).
 def convert_using_argv(argv):
     args = get_args(argv)
 
-    if 'tensorflow-py' in [args.input_framework, args.output_framework]:
+    if 'tensorflow-py' in [args.input_format, args.output_format]:
         if 'TF_CPP_MIN_LOG_LEVEL' not in os.environ:
             os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
         import tensorflow as tf

@@ -14,9 +14,9 @@
 
 from __future__ import division, print_function, absolute_import
 
-import shutil
 import fnmatch
 import os
+import shutil
 import sys
 import unittest
 
@@ -137,33 +137,34 @@ class TFPyTestRunner(unittest.TestCase):
 
             compress_nnef = False
             command = """
-                ./nnef_tools/convert.py --input-framework=tensorflow-py \\
-                                        --output-framework=nnef \\
+                ./nnef_tools/convert.py --input-format=tensorflow-py \\
+                                        --output-format=nnef \\
                                         --input-model={module}.{network}{checkpoint} \\
-                                        --output-directory=out/{network}/nnef \\
+                                        --output-model=out/{network}/{network}.nnef{tgz} \\
                                         --custom-converters="{custom}" \\
                                         --permissive \\
                                         --io-transformation=SMART_TF_NHWC_TO_NCHW \\
+                                        --conversion-info \\
                                         {compress}
                 """.format(checkpoint=':' + checkpoint_path if checkpoint_path else "",
                            network=fun.__name__,
                            custom=custom_tf_to_nnef_converters,
                            compress="--compress" if compress_nnef else "",
-                           module=test_module)
+                           module=test_module,
+                           tgz=".tgz" if compress_nnef else "")
 
             convert.convert_using_command(command)
-
-            open(os.path.join("out", fun.__name__, "__init__.py"), "w").close()
 
             tf.reset_default_graph()
             tf.set_random_seed(0)
             fun()
-            conv_info = conversion_info.load(os.path.join("out", fun.__name__, "nnef", "conversion.json"))
-            tf_activation_exporter.export(output_path=os.path.join("out", fun.__name__, "nnef", "activations"),
-                                          feed_dict=feed_dict,
-                                          conversion_info=conv_info,
-                                          checkpoint_path=checkpoint_path,
-                                          verbose=False)
+            conv_info = conversion_info.load(os.path.join("out", fun.__name__, fun.__name__ + ".nnef.conversion.json"))
+            tf_activation_exporter.export(
+                output_path=os.path.join("out", fun.__name__, fun.__name__ + ".nnef", "activations"),
+                feed_dict=feed_dict,
+                conversion_info=conv_info,
+                checkpoint_path=checkpoint_path,
+                verbose=False)
 
             prefer_nhwc_options = [True]
             if tf_has_cuda_gpu():
@@ -171,66 +172,63 @@ class TFPyTestRunner(unittest.TestCase):
             for prefer_nhwc in prefer_nhwc_options:
                 print("Converting to TensorFlow {}".format("NHWC" if prefer_nhwc else "NCHW"))
                 data_format_str = ("nhwc" if prefer_nhwc else "nchw")
-                tf_output_dir = os.path.join("out", fun.__name__, "tf_" + data_format_str)
+                tf_output_path = os.path.join("out", fun.__name__, fun.__name__ + '_' + data_format_str + '.py')
                 command = """
-                    ./nnef_tools/convert.py --input-framework=nnef \\
-                                            --output-framework=tensorflow-py \\
-                                            --input-model=out/{network}/nnef/model{tgz} \\
-                                            --output-directory={output} \\
+                    ./nnef_tools/convert.py --input-format=nnef \\
+                                            --output-format=tensorflow-py \\
+                                            --input-model=out/{network}/{network}.nnef{tgz} \\
+                                            --output-model={output} \\
                                             --io-transformation=SMART_NCHW_TO_TF_NHWC \\
                                             --custom-converters="{custom}" \\
-                                            --permissive
+                                            --permissive \\
+                                            --conversion-info
                     """.format(network=fun.__name__,
                                custom=custom_nnef_to_tf_converters,
                                tgz=".nnef.tgz" if compress_nnef else "",
-                               output=tf_output_dir)
+                               output=tf_output_path)
                 convert.convert_using_command(command)
 
-                open(os.path.join(tf_output_dir, "__init__.py"), "w").close()
-                open(os.path.join(tf_output_dir, "model", "__init__.py"), "w").close()
-
-                with open(os.path.join(tf_output_dir, "model", "model.py")) as f:
+                with open(os.path.join(tf_output_path), 'r') as f:
                     tf_src = f.read()
 
                 # noinspection PyProtectedMember
                 new_net_fun = tf_py_io._tfsource_to_function(tf_src, fun.__name__)
 
-                conv_info_tf_to_nnef = conversion_info.load(os.path.join(out_dir, "nnef", "conversion.json"))
-                conv_info_nnef_to_tf = conversion_info.load(os.path.join(tf_output_dir, "conversion.json"))
+                conv_info_tf_to_nnef = conversion_info.load(os.path.join("out", fun.__name__, fun.__name__ + ".nnef.conversion.json"))
+                conv_info_nnef_to_tf = conversion_info.load(os.path.join(tf_output_path + ".conversion.json"))
                 conv_info_tf_to_tf = conversion_info.compose(conv_info_tf_to_nnef, conv_info_nnef_to_tf)
 
-                conversion_info.dump(conv_info_tf_to_tf, os.path.join(tf_output_dir, "conv_info_tf_to_tf.json"))
+                conversion_info.dump(conv_info_tf_to_tf, os.path.join(tf_output_path + ".conv_info_tf_to_tf.json"))
 
                 feed_dict2 = activation_test.transform_feed_dict(feed_dict, conv_info_tf_to_tf)
-                nnef2_out_dir = os.path.join(out_dir, "nnef_from_tf_" + data_format_str)
+                nnef2_out_dir = os.path.join(tf_output_path + ".nnef")
 
                 tf.reset_default_graph()
                 tf.set_random_seed(0)
 
                 command = """
-                    ./nnef_tools/convert.py --input-framework=tensorflow-py \\
-                                            --output-framework=nnef \\
+                    ./nnef_tools/convert.py --input-format=tensorflow-py \\
+                                            --output-format=nnef \\
                                             --input-model={input}{checkpoint} \\
-                                            --output-directory={output} \\
+                                            --output-model={output} \\
                                             --custom-converters="{custom}" \\
                                             --permissive \\
                                             --io-transformation=SMART_TF_NHWC_TO_NCHW \\
+                                            --conversion-info \\
                                             {compress}
-                    """.format(checkpoint=(':' + (os.path.join(tf_output_dir, "model", "checkpoint", "model.ckpt")
+                    """.format(checkpoint=(':' + (os.path.join(tf_output_path + ".checkpoint")
                                                                             if checkpoint_path else "")),
-                               input=tf_output_dir.replace('/', '.') + ".model.model." + fun.__name__,
+                               input=tf_output_path.replace('/', '.')[:-len('.py')] + "." + fun.__name__,
                                custom=custom_tf_to_nnef_converters,
                                compress="--compress" if compress_nnef else "",
                                output=nnef2_out_dir)
 
                 convert.convert_using_command(command)
 
-                conv_info_tf_to_nnef2 = conversion_info.load(os.path.join(out_dir,
-                                                                          "nnef_from_tf_" + data_format_str,
-                                                                          "conversion.json"))
+                conv_info_tf_to_nnef2 = conversion_info.load(nnef2_out_dir + ".conversion.json")
                 conv_info_nnef_to_nnef = conversion_info.compose(conv_info_nnef_to_tf, conv_info_tf_to_nnef2)
-                conversion_info.dump(conv_info_nnef_to_nnef, os.path.join(nnef2_out_dir,
-                                                                          "conv_info_nnef_to_nnef.json"))
+                conversion_info.dump(conv_info_nnef_to_nnef,
+                                     os.path.join(nnef2_out_dir + ".conv_info_nnef_to_nnef.json"))
 
                 tf.reset_default_graph()
                 tf.set_random_seed(0)
@@ -239,14 +237,14 @@ class TFPyTestRunner(unittest.TestCase):
                     output_path=os.path.join(nnef2_out_dir, "activations"),
                     feed_dict=feed_dict2,
                     conversion_info=conv_info_tf_to_nnef2,
-                    checkpoint_path=(os.path.join(tf_output_dir, "model", "checkpoint", "model.ckpt")
+                    checkpoint_path=(os.path.join(tf_output_path + ".checkpoint")
                                      if checkpoint_path else None),
                     verbose=False)
 
                 if cmp:
                     activation_test.compare_activation_dirs(
-                        os.path.join(out_dir, "nnef", "activations"),
-                        os.path.join(out_dir, "nnef_from_tf_" + data_format_str, "activations"),
+                        os.path.join("out", fun.__name__, fun.__name__ + ".nnef", "activations"),
+                        os.path.join(nnef2_out_dir, "activations"),
                         conv_info_nnef_to_nnef,
                         verbose=False)
         finally:

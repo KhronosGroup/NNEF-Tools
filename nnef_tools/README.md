@@ -73,17 +73,17 @@ To change the data format of certain inputs/outputs, the ```--io-transformation`
 Examples:
 
 ```
-./nnef_tools/convert.py --input-framework=tensorflow-pb \
+./nnef_tools/convert.py --input-format=tensorflow-pb \
+                        --output-format=nnef \
                         --input-model=tf_models/frozen_inception_v1.pb \
+                        --output-model=out/nnef/frozen_inception_v1.nnef.tgz \
                         --input-shape="(float32, [2, 224, 224, 3])" \
-                        --output-framework=nnef \
-                        --output-directory=out/nnef/frozen_inception_v1 \
                         --compress
 
-./nnef_tools/convert.py --input-framework=nnef \
+./nnef_tools/convert.py --input-format=nnef \
+                        --output-format=tensorflow-pb \
                         --input-model=out/nnef/frozen_inception_v1/model.nnef.tgz \
-                        --output-framework=tensorflow-pb \
-                        --output-directory=out/tensorflow-pb/frozen_inception_v1
+                        --output-model=out/tensorflow-pb/frozen_inception_v1.pb
 ```
 
 Mappings between operations in various frameworks and NNEF can be found [here](operation_mapping.md).
@@ -93,25 +93,27 @@ Mappings between operations in various frameworks and NNEF can be found [here](o
 The activation exporter tool can be used to export the activations (the evaluated values of the tensors) 
 of the TensorFlow graphs.
  
-Before using the tool, one needs to convert the model to NNEF, and supply the resulting ```conversion.json``` to the exporter.  
+Before using the tool, one needs to convert the model to NNEF, and supply the resulting ```conversion.json``` to the exporter.
+To make the converter write a  ```conversion.json``` we have to pass the ```--conversion-info``` flag to it. 
 
 The tool has an extensive help that can be printed with ```--help```.
 
 Example:
 
 ```
-./nnef_tools/convert.py --input-framework=tensorflow-pb \
+./nnef_tools/convert.py --input-format=tensorflow-pb \
+                        --output-format=nnef \
                         --input-model=tf_models/frozen_inception_v1.pb \
+                        --output-model=out/nnef/frozen_inception_v1.nnef.tgz \
                         --input-shape="{'input:0':('float32', [1,224,224,3])}" \
-                        --output-framework=nnef \
-                        --output-directory=out/nnef/frozen_inception_v1 \
+                        --conversion-info \
                         --compress
 
-./nnef_tools/export_activation.py  --input-framework=tensorflow-pb \
+./nnef_tools/export_activation.py  --input-format=tensorflow-pb \
                                    --input-model=tf_models/frozen_inception_v1.pb \
                                    --input-shape="{'input:0':('float32', [1,224,224,3])}" \
-                                   --output-directory=out/nnef/frozen_inception_v1/activations \
-                                   --conversion-info=out/nnef/frozen_inception_v1/conversion.json
+                                   --output-path=out/nnef/frozen_inception_v1_activations \
+                                   --conversion-info=out/nnef/frozen_inception_v1.nnef.tgz.conversion.json
 ```
 
 ## Activation tests:

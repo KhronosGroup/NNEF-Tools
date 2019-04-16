@@ -138,34 +138,36 @@ class ONNXTestRunner(unittest.TestCase):
         if custom_converters is None:
             custom_converters = []
 
-        convs = ["onnx_to_nnef_" + conv for conv in custom_converters]
+        convs = ["custom.onnx_to_nnef_" + conv for conv in custom_converters]
         network_name = filename.rsplit('/', 1)[1].rsplit('.', 1)[0].replace('.', '_').replace('-', '_')
         print(filename)
         command = """
-        ./nnef_tools/convert.py --input-framework=onnx \\
-                                --output-framework=nnef \\
+        ./nnef_tools/convert.py --input-format=onnx \\
+                                --output-format=nnef \\
                                 --input-model={} \\
-                                --output-directory=out/nnef/{} \\
+                                --output-model=out/nnef/{}.nnef \\
                                 --input-shape="{}" \\
                                 --custom-converters="{}" \\
-                                --permissive
+                                --permissive \\
+                                --conversion-info
         """.format(filename, network_name, source_shape, ','.join(convs))
         print(command)
         convert.convert_using_command(command)
 
-        convs = ["nnef_to_onnx_" + conv for conv in custom_converters]
+        convs = ["custom.nnef_to_onnx_" + conv for conv in custom_converters]
         command = """
-        ./nnef_tools/convert.py --input-framework=nnef \\
-                                --output-framework=onnx \\
-                                --input-model=out/nnef/{}/model \\
-                                --output-directory=out/onnx/{} \\
+        ./nnef_tools/convert.py --input-format=nnef \\
+                                --output-format=onnx \\
+                                --input-model=out/nnef/{}.nnef \\
+                                --output-model=out/onnx/{}.onnx \\
                                 --custom-converters="{}" \\
-                                --permissive
+                                --permissive \\
+                                --conversion-info
         """.format(network_name, network_name, ','.join(convs))
         print(command)
         convert.convert_using_command(command)
 
-        filename2 = os.path.join('out', 'onnx', network_name, 'model.onnx')
+        filename2 = os.path.join('out', 'onnx', network_name + '.onnx')
         check_onnx_model(filename2)
 
         g = onnx_io.read_onnx_from_protobuf(filename2)

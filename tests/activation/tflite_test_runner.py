@@ -52,27 +52,29 @@ class TFLiteTestRunner(unittest.TestCase):
         network_name = filename.rsplit('/', 1)[1].rsplit('.', 1)[0].replace('.', '_').replace('-', '_')
         print(filename)
         command = """
-        ./nnef_tools/convert.py --input-framework=tensorflow-lite \\
-                                --output-framework=nnef \\
+        ./nnef_tools/convert.py --input-format=tensorflow-lite \\
+                                --output-format=nnef \\
                                 --input-model={input} \\
-                                --output-directory=out/nnef/{network} \\
-                                --permissive
+                                --output-model=out/nnef/{network}.nnef \\
+                                --permissive \\
+                                --conversion-info
         """.format(input=filename, network=network_name)
         print(command)
         convert.convert_using_command(command)
 
         command = """
-        ./nnef_tools/convert.py --input-framework=nnef \\
-                                --output-framework=tensorflow-lite \\
-                                --input-model=out/nnef/{network}/model \\
-                                --output-directory=out/tflite/{network} \\
-                                --permissive
+        ./nnef_tools/convert.py --input-format=nnef \\
+                                --output-format=tensorflow-lite \\
+                                --input-model=out/nnef/{network}.nnef \\
+                                --output-model=out/tflite/{network}.tflite \\
+                                --permissive \\
+                                --conversion-info
         """.format(network=network_name)
         print(command)
         convert.convert_using_command(command)
 
         if run:
-            output2, _ = self.run_model(model_path="out/tflite/{}/model.tflite".format(network_name),
+            output2, _ = self.run_model(model_path="out/tflite/{}.tflite".format(network_name),
                                         input_data=input,
                                         max_val=max_val)
 
