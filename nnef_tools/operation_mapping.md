@@ -192,9 +192,10 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | Log | log
 | LogSoftmax | log(softmax)
 | Loop | -
-| LpNormalization | l1_normalization
-|                 | l2_normalization
-| LpPool | -
+| LpNormalization | l1_normalization | if p == 1
+|                 | l2_normalization | if p == 2
+| LpPool | avg_pool(abs) | if p = 1
+|        | sqrt(avg_pool(sqr)) | if p = 2
 | MatMul | matmul
 | Max | max
 | MaxPool | max_pool
