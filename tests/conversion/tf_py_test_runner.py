@@ -121,7 +121,11 @@ class TFPyTestRunner(unittest.TestCase):
               cmp=True,
               custom_tf_to_nnef_converters="",
               custom_nnef_to_tf_converters="",
-              test_module="tests.activation.tf_py_layer_test_cases"):
+              test_module="tests.conversion.tf_py_layer_test_cases"):
+
+        activation_testing = int(os.environ.get('NNEF_ACTIVATION_TESTING', '1'))
+        print("Activation testing is", "ON" if activation_testing else "OFF")
+
         out_dir = os.path.join("out", fun.__name__)
         try:
             tf.reset_default_graph()
@@ -155,16 +159,18 @@ class TFPyTestRunner(unittest.TestCase):
 
             convert.convert_using_command(command)
 
-            tf.reset_default_graph()
-            tf.set_random_seed(0)
-            fun()
-            conv_info = conversion_info.load(os.path.join("out", fun.__name__, fun.__name__ + ".nnef.conversion.json"))
-            tf_activation_exporter.export(
-                output_path=os.path.join("out", fun.__name__, fun.__name__ + ".nnef", "activations"),
-                feed_dict=feed_dict,
-                conversion_info=conv_info,
-                checkpoint_path=checkpoint_path,
-                verbose=False)
+            if activation_testing:
+                tf.reset_default_graph()
+                tf.set_random_seed(0)
+                fun()
+                conv_info = conversion_info.load(os.path.join("out", fun.__name__, fun.__name__ + ".nnef.conversion.json"))
+
+                tf_activation_exporter.export(
+                    output_path=os.path.join("out", fun.__name__, fun.__name__ + ".nnef", "activations"),
+                    feed_dict=feed_dict,
+                    conversion_info=conv_info,
+                    checkpoint_path=checkpoint_path,
+                    verbose=False)
 
             prefer_nhwc_options = [True]
             if tf_has_cuda_gpu():
@@ -230,23 +236,24 @@ class TFPyTestRunner(unittest.TestCase):
                 conversion_info.dump(conv_info_nnef_to_nnef,
                                      os.path.join(nnef2_out_dir + ".conv_info_nnef_to_nnef.json"))
 
-                tf.reset_default_graph()
-                tf.set_random_seed(0)
-                new_net_fun()
-                tf_activation_exporter.export(
-                    output_path=os.path.join(nnef2_out_dir, "activations"),
-                    feed_dict=feed_dict2,
-                    conversion_info=conv_info_tf_to_nnef2,
-                    checkpoint_path=(os.path.join(tf_output_path + ".checkpoint")
-                                     if checkpoint_path else None),
-                    verbose=False)
-
-                if cmp:
-                    activation_test.compare_activation_dirs(
-                        os.path.join("out", fun.__name__, fun.__name__ + ".nnef", "activations"),
-                        os.path.join(nnef2_out_dir, "activations"),
-                        conv_info_nnef_to_nnef,
+                if activation_testing:
+                    tf.reset_default_graph()
+                    tf.set_random_seed(0)
+                    new_net_fun()
+                    tf_activation_exporter.export(
+                        output_path=os.path.join(nnef2_out_dir, "activations"),
+                        feed_dict=feed_dict2,
+                        conversion_info=conv_info_tf_to_nnef2,
+                        checkpoint_path=(os.path.join(tf_output_path + ".checkpoint")
+                                         if checkpoint_path else None),
                         verbose=False)
+
+                    if cmp:
+                        activation_test.compare_activation_dirs(
+                            os.path.join("out", fun.__name__, fun.__name__ + ".nnef", "activations"),
+                            os.path.join(nnef2_out_dir, "activations"),
+                            conv_info_nnef_to_nnef,
+                            verbose=False)
         finally:
             if DELETE_DATS_AND_CHECKPOINTS:
                 dat_files = recursive_glob(out_dir, "*.dat")

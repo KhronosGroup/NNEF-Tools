@@ -23,7 +23,7 @@ from caffe2.python import model_helper
 
 from nnef_tools.io.onnx import onnx_io
 from nnef_tools.io.onnx.onnx_graph import *
-from tests.activation.onnx_test_runner import ONNXTestRunner
+from tests.conversion.onnx_test_runner import ONNXTestRunner
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')

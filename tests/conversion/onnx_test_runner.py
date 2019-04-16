@@ -18,32 +18,8 @@ import os
 import unittest
 from collections import defaultdict
 
-import caffe2.python.onnx.backend as backend
-import caffe2.python.onnx.frontend
-import numpy as np
-import onnx
-from caffe2.python import model_helper
-
 from nnef_tools import convert
 from nnef_tools.io.onnx import onnx_io
-
-
-def check_onnx_model(filename):
-    model = onnx.load(filename)
-    onnx.checker.check_model(model)
-
-
-def run_onnx_model(filename, input):
-    model = onnx.load(filename)
-    try:
-        rep = backend.prepare(model, device="CUDA:0")
-        outputs = rep.run(input)
-    except Exception:
-        print("Couldn't run in CUDA, running on CPU:")
-        rep = backend.prepare(model, device="CPU")
-        outputs = rep.run(input)
-
-    return outputs
 
 
 class ONNXTestRunner(unittest.TestCase):
@@ -51,6 +27,10 @@ class ONNXTestRunner(unittest.TestCase):
         self.op_num = defaultdict(lambda: 0)
 
     def _test_from_caffe2(self, net_fun, custom_converters=None):
+        import caffe2.python.onnx.backend as backend
+        import caffe2.python.onnx.frontend
+        import onnx
+
         predict_net, init_net, value_info = net_fun()
         name = net_fun.__name__.rsplit('_', 1)[0]
         filename = os.path.join('out', 'source_onnx', name + '.onnx')
@@ -78,6 +58,9 @@ class ONNXTestRunner(unittest.TestCase):
         self._test_model(filename, run=run, custom_converters=custom_converters)
 
     def get_unary_network_function(self, op_name, kwargs=None, dtype=None, shape=None):
+        import onnx
+        from caffe2.python import model_helper
+
         if kwargs is None:
             kwargs = {}
         if dtype is None:
@@ -98,7 +81,12 @@ class ONNXTestRunner(unittest.TestCase):
         self.op_num[op_name] += 1
         return f
 
-    def get_binary_network_function(self, op_name, dtype=onnx.TensorProto.FLOAT):
+    def get_binary_network_function(self, op_name, dtype=None):
+        import onnx
+        from caffe2.python import model_helper
+        if dtype is None:
+            dtype = onnx.TensorProto.FLOAT
+
         def f():
             print(op_name, dtype)
             value_info = {'x': (dtype, [1, 1, 5, 5]),
@@ -115,7 +103,13 @@ class ONNXTestRunner(unittest.TestCase):
         self.op_num[op_name] += 1
         return f
 
-    def get_ternary_network_function(self, op_name, dtype=onnx.TensorProto.FLOAT):
+    def get_ternary_network_function(self, op_name, dtype=None):
+        import onnx
+        from caffe2.python import model_helper
+
+        if dtype is None:
+            dtype = onnx.TensorProto.FLOAT
+
         def f():
             print(op_name, dtype)
             value_info = {'x': (dtype, [1, 1, 5, 5]),
@@ -168,7 +162,6 @@ class ONNXTestRunner(unittest.TestCase):
         convert.convert_using_command(command)
 
         filename2 = os.path.join('out', 'onnx', network_name + '.onnx')
-        check_onnx_model(filename2)
 
         g = onnx_io.read_onnx_from_protobuf(filename2)
         input_shapes = [input.shape for input in g.inputs]
@@ -176,30 +169,55 @@ class ONNXTestRunner(unittest.TestCase):
 
         del g
 
-        if run:
-            inputs = []
-            for input_shape, input_dtype in zip(input_shapes, input_dtypes):
-                if input_dtype == 'FLOAT':
-                    inputs.append(np.random.random(input_shape).astype(np.float32) * 0.8 + 0.1)
-                elif input_dtype == 'BOOL':
-                    inputs.append(np.random.random(input_shape) > 0.5)
-                elif input_dtype == 'INT64':
-                    inputs.append((np.random.random(input_shape) * 1000).astype(np.int32))
-                else:
-                    assert False
+        activation_testing = int(os.environ.get('NNEF_ACTIVATION_TESTING', '1'))
+        print("Activation testing is", "ON" if activation_testing else "OFF")
+        if activation_testing:
+            import numpy as np
+            import caffe2.python.onnx.backend as backend
+            import onnx
 
-            outputs = None
-            if compare:
-                print('Running original ONNX:')
-                outputs = run_onnx_model(filename, inputs)
+            def check_onnx_model(filename):
+                model = onnx.load(filename)
+                onnx.checker.check_model(model)
 
-            print('Running our ONNX:')
-            outputs2 = run_onnx_model(filename2, inputs)
+            def run_onnx_model(filename, input):
+                model = onnx.load(filename)
+                try:
+                    rep = backend.prepare(model, device="CUDA:0")
+                    outputs = rep.run(input)
+                except Exception:
+                    print("Couldn't run in CUDA, running on CPU:")
+                    rep = backend.prepare(model, device="CPU")
+                    outputs = rep.run(input)
 
-            if compare:
-                print('Comparing:')
-                for output, output2 in zip(outputs, outputs2):
-                    # print('Max dist:', np.max(np.abs(output-output2)))
-                    self.assertTrue(np.all(np.isfinite(output)))
-                    self.assertTrue(np.all(np.isfinite(output2)))
-                    self.assertTrue(np.allclose(output, output2, atol=1e-5))
+                return outputs
+
+            check_onnx_model(filename2)
+
+            if run:
+                inputs = []
+                for input_shape, input_dtype in zip(input_shapes, input_dtypes):
+                    if input_dtype == 'FLOAT':
+                        inputs.append(np.random.random(input_shape).astype(np.float32) * 0.8 + 0.1)
+                    elif input_dtype == 'BOOL':
+                        inputs.append(np.random.random(input_shape) > 0.5)
+                    elif input_dtype == 'INT64':
+                        inputs.append((np.random.random(input_shape) * 1000).astype(np.int32))
+                    else:
+                        assert False
+
+                outputs = None
+                if compare:
+                    print('Running original ONNX:')
+                    outputs = run_onnx_model(filename, inputs)
+
+                print('Running our ONNX:')
+                outputs2 = run_onnx_model(filename2, inputs)
+
+                if compare:
+                    print('Comparing:')
+                    for output, output2 in zip(outputs, outputs2):
+                        # print('Max dist:', np.max(np.abs(output-output2)))
+                        self.assertTrue(np.all(np.isfinite(output)))
+                        self.assertTrue(np.all(np.isfinite(output2)))
+                        self.assertTrue(np.allclose(output, output2, atol=1e-5))

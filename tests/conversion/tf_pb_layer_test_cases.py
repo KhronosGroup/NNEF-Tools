@@ -25,7 +25,7 @@ import six
 import tensorflow as tf
 
 from nnef_tools.core import utils
-from tests.activation.tf_pb_test_runner import test_tf_pb as test_activations
+from tests.conversion.tf_pb_test_runner import test_tf_pb
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')
@@ -69,15 +69,18 @@ def run_test(output_name, output_nodes, recreate=True):
         save_protobuf(pb_path, output_nodes, sess, recreate)
         sess.close()
 
+    activation_testing = int(os.environ.get('NNEF_ACTIVATION_TESTING', '1'))
+    print("Activation testing is", "ON" if activation_testing else "OFF")
+
     for prefer_nhwc in [True, False]:
-        test_activations(filename=os.path.join(pb_path, 'test.pb'),
-                         source_shapes=source_shapes,
-                         feed_dict={utils.anystr_to_str(k): np.random.random(v)
-                                    for k, v in six.iteritems(source_shapes)},
-                         prefer_nhwc=prefer_nhwc,
-                         network_name=network_name,
-                         delete_after_each=False,
-                         export_io_only=True)
+        test_tf_pb(filename=os.path.join(pb_path, 'test.pb'),
+                   source_shapes=source_shapes,
+                   feed_dict={utils.anystr_to_str(k): np.random.random(v)
+                              for k, v in six.iteritems(source_shapes)} if activation_testing else None,
+                   prefer_nhwc=prefer_nhwc,
+                   network_name=network_name,
+                   delete_after_each=False,
+                   export_io_only=True)
 
     return nnef.parse_file(os.path.join('out', network_name + '_nhwc', 'nnef', network_name + '_nnef', 'graph.nnef'))
 

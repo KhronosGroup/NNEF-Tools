@@ -23,7 +23,7 @@ from tensorflow.contrib import slim as tf_slim
 from tensorflow.contrib.layers.python.layers import layers as tf_layers
 
 from nnef_tools.io.tensorflow.tf_py.tf_py_compat import tf_internal
-from tests.activation.tf_py_test_runner import TFPyTestRunner
+from tests.conversion.tf_py_test_runner import TFPyTestRunner
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')

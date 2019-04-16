@@ -20,12 +20,12 @@ You have to install dependencies only for the functionalities that you are using
 |--------------------------------------------|---------------------------------------------------------------------|
 |  TensorFlow Python code conversion (+tests)| pip install typing six numpy "tensorflow-gpu<1.13                   |
 |  TensorFlow Protobuf conversion            | pip install typing six numpy protobuf                               |
-|  TensorFlow Protobuf activation tests      | pip install typing six numpy protobuf "tensorflow-gpu<1.13"         |
+|  TensorFlow Protobuf conversion tests      | pip install typing six numpy protobuf "tensorflow-gpu<1.13"         |
 |  TensorFlow Lite conversion                | pip install typing six numpy flatbuffers                            |
-|  TensorFlow Lite activation tests          | pip install typing six numpy flatbuffers "tensorflow-gpu<1.13"      |
+|  TensorFlow Lite conversion tests          | pip install typing six numpy flatbuffers "tensorflow-gpu<1.13"      |
 |  TensorFlow activation export              | pip install typing six numpy scipy matplotlib "tensorflow-gpu<1.13" |
 |  ONNX conversion                           | pip install typing six numpy protobuf                               |
-|  ONNX activation tests                     | pip install typing six numpy protobuf onnx torch                    |
+|  ONNX conversion tests                     | pip install typing six numpy protobuf onnx torch                    |
 
 All dependencies (just for reference):
 ```
@@ -116,17 +116,35 @@ Example:
                                    --conversion-info=out/nnef/frozen_inception_v1.nnef.tgz.conversion.json
 ```
 
-## Activation tests:
+## Conversion tests:
 
 These tests convert the model to NNEF and then convert it back to the original framework. 
 They compare the activations (heatmaps) of the original and the converted graph.
 
-- ```./tests/activation/*layer_test_cases.py```: Test cases for simple layers.
+- ```./tests/conversion/*layer_test_cases.py```: Test cases for simple layers.
 
-- ```./tests/activation/*network_test_cases.py```: Test cases for full networks.
+- ```./tests/conversion/*network_test_cases.py```: Test cases for full networks.
 
 
 How to run all layer tests (about 5 minutes on i7-7700 + GTX 1050 Ti)?
 ```
-python -m unittest discover -s 'tests/activation' -p '*layer_test_cases.py'
+python -m unittest discover -s 'tests/conversion' -p '*layer_test_cases.py'
 ```
+
+### Conversion testing without running the networks
+
+If you set the following environment variable
+then the conversion tests will not run the networks and they will not check the resulting activations.
+
+```
+export NNEF_ACTIVATION_TESTING=0
+```
+
+In this case the following tests can run with reduced dependencies:
+
+| Test                                       | Dependencies without activation testing |
+|--------------------------------------------|-----------------------------------------|
+|  onnx_network_test_cases.py                | pip install typing six numpy protobuf   |
+|  tf_pb_network_test_cases.py               | pip install typing six numpy protobuf   |
+|  tflite_network_test_cases.py              | pip install typing six numpy protobuf   |
+

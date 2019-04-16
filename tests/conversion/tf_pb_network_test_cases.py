@@ -20,11 +20,9 @@ import os
 import shutil
 import unittest
 
-import numpy as np
-import tensorflow as tf
-
 from nnef_tools import convert
-from tests.activation.file_downloader import download_and_untar_once
+from tests.conversion.file_downloader import download_and_untar_once
+
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')
@@ -34,6 +32,7 @@ if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
 
 def load_graph_from_pb(frozen_graph_filename):
     import tensorflow as tf
+
     with tf.gfile.GFile(frozen_graph_filename, "rb") as f:
         graph_def = tf.GraphDef()
         graph_def.ParseFromString(f.read())
@@ -41,6 +40,8 @@ def load_graph_from_pb(frozen_graph_filename):
 
 
 def get_placeholders():
+    import tensorflow as tf
+
     return [tensor
             for op in tf.get_default_graph().get_operations()
             if 'Placeholder' in op.node_def.op
@@ -48,6 +49,8 @@ def get_placeholders():
 
 
 def get_tensors_with_no_consumers():
+    import tensorflow as tf
+
     return [tensor
             for op in tf.get_default_graph().get_operations()
             if not any(tensor.consumers() for tensor in op.values())
@@ -61,8 +64,12 @@ class TFPbNetworkTestCases(unittest.TestCase):
         if 'TF_CPP_MIN_LOG_LEVEL' not in os.environ:
             os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-        np.random.seed(0)
-        tf.set_random_seed(0)
+        if int(os.environ.get('NNEF_ACTIVATION_TESTING', '1')):
+            import numpy as np
+            import tensorflow as tf
+
+            np.random.seed(0)
+            tf.set_random_seed(0)
 
         if os.path.exists('out'):
             shutil.rmtree('out')
@@ -90,27 +97,33 @@ class TFPbNetworkTestCases(unittest.TestCase):
         print(command)
         convert.convert_using_command(command)
 
-        tf.reset_default_graph()
-        load_graph_from_pb(path)
+        activation_testing = int(os.environ.get('NNEF_ACTIVATION_TESTING', '1'))
+        print("Activation testing is", "ON" if activation_testing else "OFF")
+        if activation_testing:
+            import numpy as np
+            import tensorflow as tf
 
-        [input] = get_placeholders()
-        outputs = get_tensors_with_no_consumers()
-        feed = np.random.random([2, size, size, 3])
+            tf.reset_default_graph()
+            load_graph_from_pb(path)
 
-        with tf.Session() as sess:
-            activations = sess.run(outputs, feed_dict={input: feed})
+            [input] = get_placeholders()
+            outputs = get_tensors_with_no_consumers()
+            feed = np.random.random([2, size, size, 3])
 
-        tf.reset_default_graph()
-        load_graph_from_pb('out/tensorflow-pb/{}.pb'.format(network))
+            with tf.Session() as sess:
+                activations = sess.run(outputs, feed_dict={input: feed})
 
-        [input] = get_placeholders()
-        outputs = get_tensors_with_no_consumers()
+            tf.reset_default_graph()
+            load_graph_from_pb('out/tensorflow-pb/{}.pb'.format(network))
 
-        with tf.Session() as sess:
-            activations2 = sess.run(outputs, feed_dict={input: feed})
+            [input] = get_placeholders()
+            outputs = get_tensors_with_no_consumers()
 
-        for a1, a2 in zip(activations, activations2):
-            self.assertTrue(np.allclose(a1, a2))
+            with tf.Session() as sess:
+                activations2 = sess.run(outputs, feed_dict={input: feed})
+
+            for a1, a2 in zip(activations, activations2):
+                self.assertTrue(np.allclose(a1, a2))
 
     def test_densenet(self):
         path = download_and_untar_once(
