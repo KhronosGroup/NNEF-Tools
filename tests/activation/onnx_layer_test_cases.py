@@ -454,8 +454,16 @@ class ONNXLayerTestCases(ONNXTestRunner):
         g.outputs = (y,)
         self._test_from_onnx_graph(g, 'LpNormalization', run=False)
 
-    # def test_LpPool(self):
-    #     pass
+    def test_LpPool(self):
+        g = ONNXGraph('test_network')
+        x = ONNXTensor(graph=g, name='x', shape=[1, 2, 5, 5], dtype='FLOAT')
+        y = ONNXTensor(graph=g, name='y', shape=[1, 2, 5, 5], dtype='FLOAT')
+        ONNXOperation(graph=g, name='LpPool', inputs=x, outputs=y, attribs=dict(kernel_shape=[3, 3],
+                                                                                strides=[2, 2],
+                                                                                p=1))
+        g.inputs = (x,)
+        g.outputs = (y,)
+        self._test_from_onnx_graph(g, 'LpPool', run=False)
 
     @staticmethod
     def Matmul_network():

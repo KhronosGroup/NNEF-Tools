@@ -469,7 +469,7 @@ def generic_convert_global_pooling(converter, onnx_op, nnef_graph, target_name, 
                           outputs=output)
 
 
-def convert_global_lp_pooling(converter, onnx_op, nnef_graph):
+def convert_global_lp_pool(converter, onnx_op, nnef_graph):
     # type: (Converter, ONNXOperation, NNEFGraph)->None
     p = onnx_op.attribs.get('p', 2.0)
     assert p in [1.0, 2.0], 'Lp pooling is only supported for L1 and L2.'
@@ -505,8 +505,8 @@ def convert_reshape(converter, onnx_op, nnef_graph):
                       outputs=output)
 
 
-def generic_convert_pool(converter, onnx_op, nnef_graph, target_name):
-    # type: (Converter, ONNXOperation, NNEFGraph, str)->None
+def generic_convert_pool(converter, onnx_op, nnef_graph, target_name, before='', after=''):
+    # type: (Converter, ONNXOperation, NNEFGraph, str, str, str)->None
 
     input = converter.converted_tensor(onnx_op.input)
     outputs = converter.converted_tensors(onnx_op.outputs)
@@ -524,15 +524,42 @@ def generic_convert_pool(converter, onnx_op, nnef_graph, target_name):
     assert len(outputs) in [1, 2]
     assert onnx_op.attribs.get('storage_order', 0) == 0, 'Only row major storage order is supported'
 
-    NNEFOperation(graph=nnef_graph,
-                  name=target_name + ('_with_index' if len(outputs) == 2 else ''),
-                  inputs=input,
-                  attribs=dict(size=[1, 1] + filter_size,
-                               border='ignore' if onnx_op.attribs.get('count_include_pad', 0) == 0 else 'constant',
-                               padding=[(0, 0), (0, 0)] + padding,
-                               stride=[1, 1] + stride,
-                               dilation=[1, 1] + dilation),
-                  outputs=outputs)
+    if before:
+        input = NNEFOperation(graph=nnef_graph,
+                              name=before,
+                              inputs=input,
+                              outputs=NNEFTensor(graph=nnef_graph, shape=list(input.shape), dtype=input.dtype)).output
+
+    pooling = NNEFOperation(graph=nnef_graph,
+                            name=target_name + ('_with_index' if len(outputs) == 2 else ''),
+                            inputs=input,
+                            outputs=outputs,
+                            attribs=dict(size=[1, 1] + filter_size,
+                                         border='ignore' if onnx_op.attribs.get('count_include_pad', 0) == 0 else 'constant',
+                                         padding=[(0, 0), (0, 0)] + padding,
+                                         stride=[1, 1] + stride,
+                                         dilation=[1, 1] + dilation))
+    pooled = pooling.outputs[0]
+
+    if after:
+        NNEFOperation(graph=nnef_graph,
+                      name=after,
+                      inputs=pooled,
+                      outputs=NNEFTensor(graph=nnef_graph, shape=list(pooled.shape), dtype=pooled.dtype))
+
+
+def convert_lp_pool(converter, onnx_op, nnef_graph, target_name):
+    # type: (Converter, ONNXOperation, NNEFGraph, str)->None
+
+    p = onnx_op.attribs.get('p', 2.0)
+    assert p in [1.0, 2.0], 'Lp pooling is only supported for L1 and L2.'
+
+    if p == 1.0:
+        generic_convert_pool(converter, onnx_op, nnef_graph, target_name='box', before='abs')
+    elif p == 2.0:
+        generic_convert_pool(converter, onnx_op, nnef_graph, target_name='box', before='sqr', after='sqrt')
+    else:
+        assert False
 
 
 def convert_matmul(converter, onnx_op, nnef_graph):
@@ -1370,7 +1397,7 @@ _StandardConverters = {
     'Gather': UNSUPPORTED,
     'Gemm': convert_gemm,
     'GlobalAveragePool': partial(generic_convert_global_pooling, target_name='mean_reduce'),
-    'GlobalLpPool': convert_global_lp_pooling,
+    'GlobalLpPool': convert_global_lp_pool,
     'GlobalMaxPool': partial(generic_convert_global_pooling, target_name='max_reduce'),
     'Greater': partial(generic_convert_binary_with_axis, target_name='gt'),
     'HardSigmoid': convert_hard_sigmoid,
@@ -1387,7 +1414,7 @@ _StandardConverters = {
     'LogSoftmax': convert_log_softmax,
     'Loop': UNSUPPORTED,
     'LpNormalization': convert_lp_normalization,
-    'LpPool': UNSUPPORTED,
+    'LpPool': convert_lp_pool,
     'MatMul': convert_matmul,
     'Max': partial(generic_convert_variadic, target_name='max', normalize=False),
     'MaxPool': partial(generic_convert_pool, target_name='max_pool'),
