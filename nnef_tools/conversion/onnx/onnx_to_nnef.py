@@ -548,8 +548,8 @@ def generic_convert_pool(converter, onnx_op, nnef_graph, target_name, before='',
                       outputs=NNEFTensor(graph=nnef_graph, shape=list(pooled.shape), dtype=pooled.dtype))
 
 
-def convert_lp_pool(converter, onnx_op, nnef_graph, target_name):
-    # type: (Converter, ONNXOperation, NNEFGraph, str)->None
+def convert_lp_pool(converter, onnx_op, nnef_graph):
+    # type: (Converter, ONNXOperation, NNEFGraph)->None
 
     p = onnx_op.attribs.get('p', 2.0)
     assert p in [1.0, 2.0], 'Lp pooling is only supported for L1 and L2.'

@@ -457,7 +457,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
     def test_LpPool(self):
         g = ONNXGraph('test_network')
         x = ONNXTensor(graph=g, name='x', shape=[1, 2, 5, 5], dtype='FLOAT')
-        y = ONNXTensor(graph=g, name='y', shape=[1, 2, 5, 5], dtype='FLOAT')
+        y = ONNXTensor(graph=g, name='y', shape=[1, 2, 2, 2], dtype='FLOAT')
         ONNXOperation(graph=g, name='LpPool', inputs=x, outputs=y, attribs=dict(kernel_shape=[3, 3],
                                                                                 strides=[2, 2],
                                                                                 p=1))
