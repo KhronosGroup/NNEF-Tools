@@ -523,7 +523,7 @@ def slice(input,  # type: ShapeType
         if zero_means_all:
             end = [dim if e == 0 else e for e, dim in zip(end, input)]
         end = [e + dim if e < 0 else e for e, dim in zip(end, input)]
-        res = [e - b for b, e in zip(begin, end)]
+        res = [min(e, dim) - b for dim, b, e in zip(input, begin, end)]
         return [r // abs(st) for r, st in zip(res, stride)]
     else:
         assert False

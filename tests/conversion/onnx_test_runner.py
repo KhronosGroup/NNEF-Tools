@@ -16,118 +16,12 @@ from __future__ import division, print_function, absolute_import
 
 import os
 import unittest
-from collections import defaultdict
 
 from nnef_tools import convert
 from nnef_tools.io.onnx import onnx_io
 
 
 class ONNXTestRunner(unittest.TestCase):
-    def setUp(self):
-        self.op_num = defaultdict(lambda: 0)
-
-    def _test_from_caffe2(self, net_fun, custom_converters=None):
-        import caffe2.python.onnx.backend as backend
-        import caffe2.python.onnx.frontend
-        import onnx
-
-        predict_net, init_net, value_info = net_fun()
-        name = net_fun.__name__.rsplit('_', 1)[0]
-        filename = os.path.join('out', 'source_onnx', name + '.onnx')
-        onnx_model = caffe2.python.onnx.frontend.caffe2_net_to_onnx_model(
-            predict_net,
-            init_net,
-            value_info,
-        )
-        onnx.checker.check_model(onnx_model)
-
-        if not os.path.exists(os.path.dirname(filename)):
-            os.makedirs(os.path.dirname(filename))
-        with open(filename, 'wb') as f:
-            onnx.save_model(onnx_model, f)
-
-        self._test_model(filename, custom_converters=custom_converters)
-
-    def _test_from_onnx_graph(self, g, name, run=True, custom_converters=None):
-        filename = os.path.join('out', 'source_onnx', name + '.onnx')
-
-        if not os.path.exists(os.path.dirname(filename)):
-            os.makedirs(os.path.dirname(filename))
-        onnx_io.write_onnx_to_protobuf(g, filename)
-
-        self._test_model(filename, run=run, custom_converters=custom_converters)
-
-    def get_unary_network_function(self, op_name, kwargs=None, dtype=None, shape=None):
-        import onnx
-        from caffe2.python import model_helper
-
-        if kwargs is None:
-            kwargs = {}
-        if dtype is None:
-            dtype = onnx.TensorProto.FLOAT
-        if shape is None:
-            shape = [1, 1, 5, 5]
-
-        def f():
-            value_info = {'x': (dtype, shape)}
-            model = model_helper.ModelHelper(name='test_network')
-            model.net.AddExternalInput('x')
-            getattr(model.net, op_name)('x', 'y', **kwargs)
-            model.net.AddExternalOutput(model.net.GetBlobRef('y'))
-
-            return model.net.Proto(), model.param_init_net.Proto(), value_info
-
-        f.__name__ = '{}{}_network'.format(op_name, self.op_num[op_name])
-        self.op_num[op_name] += 1
-        return f
-
-    def get_binary_network_function(self, op_name, dtype=None):
-        import onnx
-        from caffe2.python import model_helper
-        if dtype is None:
-            dtype = onnx.TensorProto.FLOAT
-
-        def f():
-            print(op_name, dtype)
-            value_info = {'x': (dtype, [1, 1, 5, 5]),
-                          'y': (dtype, [1, 1, 5, 1])}
-            model = model_helper.ModelHelper(name='test_network')
-            model.net.AddExternalInput('x')
-            model.net.AddExternalInput('y')
-            getattr(model.net, op_name)(['x', 'y'], 'z')
-            model.net.AddExternalOutput(model.net.GetBlobRef('z'))
-
-            return model.net.Proto(), model.param_init_net.Proto(), value_info
-
-        f.__name__ = '{}{}_network'.format(op_name, self.op_num[op_name])
-        self.op_num[op_name] += 1
-        return f
-
-    def get_ternary_network_function(self, op_name, dtype=None):
-        import onnx
-        from caffe2.python import model_helper
-
-        if dtype is None:
-            dtype = onnx.TensorProto.FLOAT
-
-        def f():
-            print(op_name, dtype)
-            value_info = {'x': (dtype, [1, 1, 5, 5]),
-                          'y': (dtype, [1, 1, 5, 5]),
-                          'z': (dtype, [1, 1, 5, 5])}
-            model = model_helper.ModelHelper(name='test_network')
-            model.net.AddExternalInput('x')
-            model.net.AddExternalInput('y')
-            model.net.AddExternalInput('z')
-            getattr(model.net, op_name)(['x', 'y', 'z'], 'w')
-            model.net.AddExternalOutput(model.net.GetBlobRef('w'))
-
-            return model.net.Proto(), model.param_init_net.Proto(), value_info
-
-        f.__name__ = '{}{}_network'.format(op_name, self.op_num[op_name])
-        self.op_num[op_name] += 1
-        return f
-
     def _test_model(self, filename, run=True, compare=True, source_shape="None", custom_converters=None):
         if custom_converters is None:
             custom_converters = []

@@ -807,7 +807,7 @@ def generic_convert_reduce(converter, onnx_op, nnef_graph, target_name, multi_ax
         if after:
             reduce = NNEFOperation(graph=nnef_graph,
                                    name=after,
-                                   inputs=output,
+                                   inputs=reduce.output,
                                    outputs=NNEFTensor(graph=nnef_graph,
                                                       shape=list(reduce.output.shape),
                                                       dtype=reduce.output.dtype))

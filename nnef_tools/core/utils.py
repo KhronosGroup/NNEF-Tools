@@ -23,6 +23,8 @@ from collections import OrderedDict
 
 import six
 
+INT32_MAX = 2147483647
+
 
 def nice_id(obj):
     return '@' + hex(id(obj))[2:]

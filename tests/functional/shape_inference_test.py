@@ -13,8 +13,10 @@
 # limitations under the License.
 
 from __future__ import division, print_function, absolute_import
-from nnef_tools.shape_inference import shape_inference as infer
+
 import unittest
+
+from nnef_tools.shape_inference import shape_inference as infer
 
 
 class TestShapePropagation(unittest.TestCase):
@@ -309,7 +311,8 @@ class TestShapePropagation(unittest.TestCase):
 
     def test_downsample(self):
         self.assertEqual([10, 16, 16, 3],
-                         infer.downsample([10, 32, 32, 3], [2, 2], spatial_begin=infer.spatial_begin(infer.Format.NHWC)))
+                         infer.downsample([10, 32, 32, 3], [2, 2],
+                                          spatial_begin=infer.spatial_begin(infer.Format.NHWC)))
         self.assertEqual([10, 16, 8], infer.downsample([10, 32, 32], [2, 4], format=infer.Format.NHWC))
         self.assertEqual([10, 3, 8, 16], infer.downsample([10, 3, 32, 32], [4, 2], format=infer.Format.NCHW))
 
@@ -374,6 +377,10 @@ class TestShapePropagation(unittest.TestCase):
                                                     begin=[0, 0, 0, 0],
                                                     size=[10, 10, 10, 10],
                                                     stride=[1, 2, 3, 4]))
+
+        self.assertEqual([1, 14, 25, 35], infer.slice(input=[10, 20, 30, 40],
+                                                      begin=[5, 5, 5, 5],
+                                                      end=[6, -1, 30, 999]))
 
     def test_bit_mask_to_array(self):
         self.assertEqual([0, 1, 1, 0], infer.bit_mask_to_array(6, 4))

@@ -620,8 +620,7 @@ def convert_slice(converter, nnef_op, onnx_graph):
     axes = list(nnef_op.attribs['axes'])
     starts = list(nnef_op.attribs['begin'])
 
-    INT_MAX = 2147483647
-    ends = list(INT_MAX if e == 0 else e for e in nnef_op.attribs['end'])
+    ends = list(utils.INT32_MAX if e == 0 else e for e in nnef_op.attribs['end'])
 
     ONNXOperation(graph=onnx_graph,
                   name='Slice',
