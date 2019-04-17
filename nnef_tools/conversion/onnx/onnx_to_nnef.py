@@ -535,7 +535,8 @@ def generic_convert_pool(converter, onnx_op, nnef_graph, target_name, before='',
                             inputs=input,
                             outputs=outputs,
                             attribs=dict(size=[1, 1] + filter_size,
-                                         border='ignore' if onnx_op.attribs.get('count_include_pad', 0) == 0 else 'constant',
+                                         border=('ignore' if onnx_op.attribs.get('count_include_pad', 0) == 0
+                                                 else 'constant'),
                                          padding=[(0, 0), (0, 0)] + padding,
                                          stride=[1, 1] + stride,
                                          dilation=[1, 1] + dilation))
@@ -1418,7 +1419,8 @@ _StandardConverters = {
     'MatMul': convert_matmul,
     'Max': partial(generic_convert_variadic, target_name='max', normalize=False),
     'MaxPool': partial(generic_convert_pool, target_name='max_pool'),
-    'MaxRoiPool': UNSUPPORTED,  # maybe support?
+    # Would be hard to support because NNEF needs int batch index and ONNX has float batch index (?)
+    'MaxRoiPool': UNSUPPORTED,
     'MaxUnpool': convert_max_unpool,
     'Mean': partial(generic_convert_variadic, target_name='add', normalize=True),
     'Min': partial(generic_convert_variadic, target_name='min', normalize=False),

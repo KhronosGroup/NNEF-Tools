@@ -488,7 +488,20 @@ class ONNXLayerTestCases(ONNXTestRunner):
         self._test_from_caffe2(self.get_unary_network_function('MaxPool', kwargs=dict(kernels=(3, 2), strides=(1, 2))))
 
     # def test_MaxRoiPool(self):
-    #     pass
+    #     g = ONNXGraph('test_network')
+    #     n, c, h, w = [1, 2, 32, 32]
+    #     pooled_h, pooled_w = [6, 6]
+    #     num_rois = 10
+    #
+    #     input = ONNXTensor(graph=g, name='input', shape=[n, c, h, w], dtype='FLOAT')
+    #
+    #     rois = ONNXTensor(graph=g, name='rois', shape=[num_rois, 5], dtype='FLOAT')
+    #     output = ONNXTensor(graph=g, name='output', shape=[num_rois, c, pooled_h, pooled_w], dtype='FLOAT')
+    #     ONNXOperation(graph=g, name='MaxRoiPool', inputs=(input, rois), outputs=output,
+    #                   attribs=dict(pooled_shape=[pooled_h, pooled_w], spatial_scale=2.0))
+    #     g.inputs = (input, rois)
+    #     g.outputs = (output,)
+    #     self._test_from_onnx_graph(g, 'MaxRoiPool', run=False)
 
     def test_MaxUnpool(self):
         g = ONNXGraph('test_network')
