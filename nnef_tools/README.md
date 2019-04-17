@@ -61,7 +61,7 @@ Supported frameworks:
 In all conversions either the input or the output framework must be NNEF.
 
 When converting from ONNX or Tensorflow Protobuf model, the shape of the input(s) might be incomplete or unknown in the model.
-By default - if the rank of the inputs is known - all unknown dimensions are considered as 1.
+By default (if the rank of the inputs is known) all unknown dimensions are set to 1.
 To specify an input shape manually, use the ```--input-shape``` option.
  
 Tensorflow uses NHWC as default data format while NNEF uses NCHW. 
