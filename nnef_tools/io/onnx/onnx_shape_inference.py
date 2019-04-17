@@ -14,12 +14,13 @@
 
 from __future__ import division, print_function, absolute_import
 
-import math
 import typing
 from functools import partial
 
+import math
 import numpy as np
 
+from nnef_tools.conversion import shape_fixer
 from nnef_tools.core import utils
 from nnef_tools.io.onnx.onnx_graph import *
 from nnef_tools.shape_inference import shape_inference as infer
@@ -27,35 +28,12 @@ from nnef_tools.shape_inference import shape_inference as infer
 _ConstValueByTensorT = typing.Dict[ONNXTensor, np.ndarray]
 
 
-def propagate(graph, source_shapes=None, source_dtypes=None):
-    # type: (ONNXGraph, typing.Dict[str, typing.List[int]], typing.Dict[str, str])->None
-
-    if source_shapes is None:
-        source_shapes = {}
-    if source_dtypes is None:
-        source_dtypes = {}
+def propagate(graph, source_shapes=None):
+    # type: (ONNXGraph, typing.Union[typing.Dict[str, typing.List[int]], typing.List[int], int, None])->None
 
     graph.sort()
 
-    for tensor in graph.tensors:
-        if tensor.name and tensor.name in source_shapes:
-            if not _is_compatible(tensor.shape, source_shapes[tensor.name]):
-                raise utils.NNEFToolsException(
-                    "The specified shape is incompatible with the original shape for {}. {} vs. {}".format(
-                        tensor.name, source_shapes[tensor.name], tensor.shape))
-            tensor.shape = source_shapes[tensor.name]
-        if tensor.name and tensor.name in source_dtypes:
-            if not (tensor.dtype is None or tensor.dtype == source_dtypes[tensor.name]):
-                raise utils.NNEFToolsException(
-                    "The specified dtype is incompatible with the original dtype for {}. {} vs. {}".format(
-                        tensor.name, source_dtypes[tensor.name], tensor.dtype))
-
-            tensor.dtype = source_dtypes[tensor.name]
-        if len(tensor.producers) == 0 and (tensor.shape is None or -1 in tensor.shape or tensor.dtype is None):
-            raise utils.NNEFToolsException(
-                "Source tensor '{}' has incomplete dtype or shape: {} {}\n"
-                "Please specify it in --input-shape or through the corresponding API.".format(
-                    tensor.name, tensor.dtype, tensor.shape))
+    shape_fixer.fix_input_shapes(graph, source_shapes)
 
     for op in graph.operations:
         # Shape prop
@@ -64,21 +42,10 @@ def propagate(graph, source_shapes=None, source_dtypes=None):
         assert not utils.has_le_0(propagated_shapes)
         assert len(propagated_shapes) == len(propagated_dtypes) == len(op.outputs)
         for new_shape, new_dtype, tensor in zip(propagated_shapes, propagated_dtypes, op.outputs):
-            assert _is_compatible(tensor.shape, new_shape)
+            assert utils.compatible_shapes(tensor.shape, new_shape)
             tensor.shape = new_shape
             assert tensor.dtype is None or tensor.dtype == new_dtype
             tensor.dtype = new_dtype
-
-
-def _is_compatible(orig_shape, shape):
-    if orig_shape is None:
-        return True
-    if len(orig_shape) != len(shape):
-        return False
-    for o, s in zip(orig_shape, shape):
-        if o != s and o != -1:
-            return False
-    return True
 
 
 def to_nnef_padding(onnx_padding):
@@ -358,8 +325,8 @@ def propagate_cast(op):
     types = ['UNDEFINED', 'FLOAT', 'UINT8', 'INT8', 'UINT16', 'INT16', 'INT32', 'INT64', 'STRING', 'BOOL', 'FLOAT16',
              'DOUBLE', 'UINT32', 'UINT64', 'COMPLEX64 ', 'COMPLEX128', 'BFLOAT16']  # TODO move out maybe
     return [infer.copy(op.input.shape)], [op.attribs['to']
-                                         if isinstance(op.attribs['to'], str)
-                                         else types[op.attribs['to']]]
+                                          if isinstance(op.attribs['to'], str)
+                                          else types[op.attribs['to']]]
 
 
 def propagate_constant_of_shape(op):

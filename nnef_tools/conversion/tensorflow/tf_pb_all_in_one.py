@@ -105,7 +105,6 @@ def convert_tf_pb_to_nnef(
         output_directory,
         network_name,
         source_shapes=None,
-        source_dtypes=None,
         compress=False,
 
         # Extra parameters
@@ -137,7 +136,7 @@ def convert_tf_pb_to_nnef(
 
     g = tf_pb_io.read_tf_graph_from_protobuf(file_name)
 
-    tf_pb_to_tf_py.evaluate_and_convert(tf_graph=g, source_shapes=source_shapes, source_dtypes=source_dtypes)
+    tf_pb_to_tf_py.evaluate_and_convert(tf_graph=g, source_shapes=source_shapes)
 
     converter = tf_to_nnef.Converter(
         enable_imprecise_image_resize=converter_allow_imprecise_image_resize)

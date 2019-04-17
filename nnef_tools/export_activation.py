@@ -45,14 +45,9 @@ def parse_input_shapes(s):
     if not s:
         return None
 
-    # allow parsing dtypes without quotes
-    for dtype in ['float16', 'float32', 'float64', 'int8', 'int16', 'int32', 'int64',
-                  'uint8', 'uint16', 'uint32', 'uint64', 'bool']:
-        locals()[dtype] = dtype
-
     try:
         return eval(s)
-    except Exception as e:
+    except Exception:
         print('Error: Can not evaluate the --input-shape parameter: {}.'.format(s), file=sys.stderr)
         exit(1)
 
@@ -137,14 +132,23 @@ tensorflow-py: package.module:function or package.module:function:checkpoint_pat
 
     parser.add_argument('--input-shape',
                         default="",
-                        help="""tensorflow-pb: The dtype and shape of input tensors must be specified if they are not set in the protobuf file.
-The value must be a (dtype, shape) tuple or a tensor_name->(dtype, shape) dict.
-Dtype must be one of:
-    float16, float32, float64,
-    int8, int16, int32, int64,
-    uint8, uint16, uint32, uint64
-    bool
-Default: (empty).""")
+                        help="""tensorflow-pb:
+The shape of input tensors might be incomplete in the input model.
+For example they could be [?, 224, 224, 3] (unknown batch size) or ? (unknown rank and shape).
+
+Set all missing dimensions to 10 (if the rank is known):
+--input-shape=10
+
+Set all input shapes to [10, 224, 224, 3]:
+--input-shape="[10, 224, 224, 3]"
+
+Set different input shapes for each input:
+--input-shape="{'input_name_1': [10, 224, 224, 3], 'input_name_2': [10, 299, 299, 3]}"
+To get the input names, and (possibly incomplete) input shapes, you can run the converter without --input-shape, 
+they will be listed if any of them is incomplete.
+
+Default: Unknown dimensions are set to 1. If the rank is unknown this option can not be omitted.
+""")
 
     parser.add_argument('--tensors-at-once',
                         default=25,
@@ -225,17 +229,6 @@ def tf_get_placeholders():
     return sorted(tensors, key=lambda t: t.name)
 
 
-def is_compatible(orig_shape, shape):
-    if orig_shape is None:
-        return True
-    if len(orig_shape) != len(shape):
-        return False
-    for o, s in zip(orig_shape, shape):
-        if o != s and o != -1:
-            return False
-    return True
-
-
 def tf_shape_normalize(shape):
     if shape.dims is None:
         return None
@@ -244,43 +237,57 @@ def tf_shape_normalize(shape):
 
 
 def tf_get_input_shapes(input_shape=None):
+    def get_shape_for(name):
+        if isinstance(input_shape, dict) and name in input_shape:
+            return input_shape[name]
+        elif isinstance(input_shape, list):
+            return list(input_shape)
+        elif utils.is_anyint(input_shape):
+            return utils.anyint_to_int(input_shape)
+        return None
+
     if isinstance(input_shape, dict):
         input_shape = {(k + ':0' if ':' not in k else k): v for k, v in six.iteritems(input_shape)}
+
     placeholders = tf_get_placeholders()
     new_input_shapes = {}
+
+    if input_shape is None:
+        if any(tf_shape_normalize(tensor.shape) is None or -1 in tf_shape_normalize(tensor.shape)
+               for tensor in placeholders):
+            for tensor in placeholders:
+                print("Info: Input shape: {}: {}".format(tensor.name, tf_shape_normalize(tensor.shape)))
+
     for tensor in placeholders:
-        if isinstance(input_shape, dict):
-            if tensor.name in input_shape:
-                dtype, shape = input_shape[tensor.name]
-                if not is_compatible(orig_shape=tf_shape_normalize(tensor.shape), shape=shape):
-                    raise utils.NNEFToolsException(
-                        "The specified shape is incompatible with the original shape for {}. {} vs. {}".format(
-                            tensor.name, shape, tf_shape_normalize(tensor.shape)))
-                if tensor.dtype is not None and tensor.dtype.name != dtype:
-                    raise utils.NNEFToolsException(
-                        "The specified dtype is incompatible with the original dtype for {}. {} vs. {}".format(
-                            tensor.name, dtype, tensor.dtype.name))
-            else:
-                dtype, shape = tensor.dtype.name, tf_shape_normalize(tensor.shape)
-        elif input_shape is not None:
-            dtype, shape = input_shape
-            if not is_compatible(orig_shape=tf_shape_normalize(tensor.shape), shape=shape):
+        tensor_shape = tf_shape_normalize(tensor.shape)
+        shape_for_this = get_shape_for(tensor.name) if tensor.name else None
+        if isinstance(shape_for_this, list):
+            if not utils.compatible_shapes(tensor_shape, shape_for_this):
                 raise utils.NNEFToolsException(
                     "The specified shape is incompatible with the original shape for {}. {} vs. {}".format(
-                        tensor.name, shape, tf_shape_normalize(tensor.shape)))
-            if tensor.dtype is not None and tensor.dtype.name != dtype:
+                        tensor.name, shape_for_this, tensor_shape))
+            tensor_shape = shape_for_this
+        elif shape_for_this is None or isinstance(shape_for_this, int):
+            if tensor_shape is None:
                 raise utils.NNEFToolsException(
-                    "The specified dtype is incompatible with the original dtype for {}. {} vs. {}".format(
-                        tensor.name, dtype, tensor.dtype.name))
+                    "The full shape must be specified for {}, because it is unknown.".format(tensor.name))
+            elif -1 in tensor_shape:
+                if shape_for_this is None:
+                    shape_for_this = 1
+                    print("Warning: Incomplete input shape is auto-fixed: {}. {} -> {}. "
+                          "Use --input-shape if other shape is desired.".format(
+                        tensor.name, tensor_shape, [shape_for_this if dim == -1 else dim for dim in tensor_shape]))
+                tensor_shape = [shape_for_this if dim == -1 else dim for dim in tensor_shape]
         else:
-            dtype, shape = tensor.dtype.name, tf_shape_normalize(tensor.shape)
-        new_input_shapes[tensor.name] = (dtype, shape)
+            assert False
 
-    for k, v in six.iteritems(new_input_shapes):
-        if v[0] is None or v[1] is None or None in v[1]:
-            raise utils.NNEFToolsException("Source tensor '{}' has incomplete dtype or shape: {} {}\n"
-                                           "Please specify it in --input-shape or through the corresponding API."
-                                           .format(k, v[0], v[1]))
+        if tensor.dtype is None:
+            raise utils.NNEFToolsException("An input tensor has incomplete dtype, "
+                                           "we have thought that this is impossible, "
+                                           "please file a bug report to NNEF Tools.")
+
+        new_input_shapes[tensor.name] = (tensor.dtype.name, tensor_shape)
+
     return new_input_shapes
 
 

@@ -56,36 +56,13 @@ def parse_io_transform(s):
         exit(1)
 
 
-def tf_pb_parse_input_shapes(s):
+def parse_input_shapes(s):
     if not s:
         return None
 
-    # allow parsing dtypes without quotes
-    for dtype in ['float16', 'float32', 'float64', 'int8', 'int16', 'int32', 'int64',
-                  'uint8', 'uint16', 'uint32', 'uint64', 'bool']:
-        locals()[dtype] = dtype
-
     try:
         return eval(s)
-    except Exception as e:
-        print('Error: Can not evaluate the --input-shape parameter: {}.'.format(s), file=sys.stderr)
-        exit(1)
-
-
-def onnx_parse_input_shapes(s):
-    if not s:
-        return None
-
-    # allow parsing dtypes without quotes
-    for dtype in ['FLOAT16', 'FLOAT', 'DOUBLE',
-                  'INT8', 'INT16', 'INT32', 'INT64',
-                  'UINT8', 'UINT16', 'UINT32', 'UINT64',
-                  'BOOL']:
-        locals()[dtype] = dtype
-
-    try:
-        return eval(s)
-    except Exception as e:
+    except Exception:
         print('Error: Can not evaluate the --input-shape parameter: {}.'.format(s), file=sys.stderr)
         exit(1)
 
@@ -484,22 +461,22 @@ Default: IDENTITY
 """)
 
     parser.add_argument('--input-shape',
-                        default="",
-                        help="""onnx: The shape of input tensors must be specified if they are not set in the protobuf file.
-    The value must be a (dtype, shape) tuple or a tensor_name->(dtype, shape) dict.
-    DType must be one of:
-        FLOAT16, FLOAT, DOUBLE,
-        INT8, INT16, INT32, INT64,
-        UINT8, UINT16, UINT32, UINT64,
-        BOOL
-tensorflow-pb: The shape of input tensors must be specified if they are not set in the protobuf file.
-    The value must be a (dtype, shape) tuple or a tensor_name->(dtype, shape) dict.
-    DType must be one of:
-        float16, float32, float64,
-        int8, int16, int32, int64,
-        uint8, uint16, uint32, uint64
-        bool
-Default: (empty).
+                        help="""onnx, tensorflow-pb:
+The shape of input tensors might be incomplete in the input model.
+For example they could be [?, 224, 224, 3] (unknown batch size) or ? (unknown rank and shape).
+
+Set all missing dimensions to 10 (if the rank is known):
+--input-shape=10
+
+Set all input shapes to [10, 224, 224, 3]:
+--input-shape="[10, 224, 224, 3]"
+
+Set different input shapes for each input:
+--input-shape="{'input_name_1': [10, 224, 224, 3], 'input_name_2': [10, 299, 299, 3]}"
+To get the input names, and (possibly incomplete) input shapes, you can run the converter without --input-shape, 
+they will be listed if any of them is incomplete.
+   
+Default: Unknown dimensions are set to 1. If the rank is unknown this option can not be omitted.
 """)
 
     parser.add_argument("--prefer-nchw",
@@ -530,9 +507,9 @@ With an argument: Write to the path defined by the argument.""")
     if args.input_format == 'tensorflow-py':
         check_tf_py_input_model(args.input_model)
     if args.input_format == 'tensorflow-pb':
-        args.input_shape = tf_pb_parse_input_shapes(args.input_shape)
+        args.input_shape = parse_input_shapes(args.input_shape)
     elif args.input_format == 'onnx':
-        args.input_shape = onnx_parse_input_shapes(args.input_shape)
+        args.input_shape = parse_input_shapes(args.input_shape)
     else:
         args.input_shape = None
 

@@ -313,3 +313,14 @@ def get_functions(prefix="", module=None):
 def batches(list, size):
     for i in range(0, len(list), size):
         yield list[i:i + size]
+
+
+def compatible_shapes(orig_shape, shape):
+    if orig_shape is None:
+        return True
+    if len(orig_shape) != len(shape):
+        return False
+    for o, s in zip(orig_shape, shape):
+        if o != s and o != -1:
+            return False
+    return True

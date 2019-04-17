@@ -76,7 +76,6 @@ class ONNXNetworkTestCases(ONNXTestRunner):
                 url="https://onnxzoo.blob.core.windows.net/models/opset_7/tiny_yolov2/tiny_yolov2.tar.gz",
                 member="*.onnx",
                 path="_models/onnx/tiny_yolov2_opset7.onnx"),
-            source_shape="{'image': (FLOAT, [2, 3, 416, 416])}",
             compare=False)
 
     def test_emotion_ferplus_opset1(self):
@@ -93,7 +92,6 @@ class ONNXNetworkTestCases(ONNXTestRunner):
                 url="https://onnxzoo.blob.core.windows.net/models/opset_8/tiny_yolov2/tiny_yolov2.tar.gz",
                 member="*.onnx",
                 path="_models/onnx/tiny_yolov2_opset8.onnx"),
-            source_shape="{'image': (FLOAT, [2, 3, 416, 416])}",
             compare=False)
 
     def test_shufflenet(self):
@@ -116,7 +114,6 @@ class ONNXNetworkTestCases(ONNXTestRunner):
                 url="https://onnxzoo.blob.core.windows.net/models/opset_1/tiny_yolov2/tiny_yolov2.tar.gz",
                 member="*.onnx",
                 path="_models/onnx/tiny_yolov2_opset1.onnx"),
-            source_shape="{'image': (FLOAT, [2, 3, 416, 416])}",
             compare=False)
 
     def test_resnet18v1(self):

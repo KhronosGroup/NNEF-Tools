@@ -60,8 +60,9 @@ Supported frameworks:
 
 In all conversions either the input or the output framework must be NNEF.
 
-When converting from ONNX or Tensorflow Protobuf model, the shape (or dtype) of the input(s) might not be set in the model.
-In this case the ```--input-shape``` option must be used.
+When converting from ONNX or Tensorflow Protobuf model, the shape of the input(s) might be incomplete or unknown in the model.
+By default - if the rank of the inputs is known - all unknown dimensions are considered as 1.
+To specify an input shape manually, use the ```--input-shape``` option.
  
 Tensorflow uses NHWC as default data format while NNEF uses NCHW. 
 The needed conversion is done by inserting transpose operations 
@@ -77,7 +78,7 @@ Examples:
                         --output-format=nnef \
                         --input-model=tf_models/frozen_inception_v1.pb \
                         --output-model=out/nnef/frozen_inception_v1.nnef.tgz \
-                        --input-shape="(float32, [2, 224, 224, 3])" \
+                        --input-shape="[2, 224, 224, 3]" \
                         --compress
 
 ./nnef_tools/convert.py --input-format=nnef \
@@ -105,13 +106,13 @@ Example:
                         --output-format=nnef \
                         --input-model=tf_models/frozen_inception_v1.pb \
                         --output-model=out/nnef/frozen_inception_v1.nnef.tgz \
-                        --input-shape="{'input:0':('float32', [1,224,224,3])}" \
+                        --input-shape="[1,224,224,3]" \
                         --conversion-info \
                         --compress
 
 ./nnef_tools/export_activation.py  --input-format=tensorflow-pb \
                                    --input-model=tf_models/frozen_inception_v1.pb \
-                                   --input-shape="{'input:0':('float32', [1,224,224,3])}" \
+                                   --input-shape="[1,224,224,3]" \
                                    --output-path=out/nnef/frozen_inception_v1_activations \
                                    --conversion-info=out/nnef/frozen_inception_v1.nnef.tgz.conversion.json
 ```

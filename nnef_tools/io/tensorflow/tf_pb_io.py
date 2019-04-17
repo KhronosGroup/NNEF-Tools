@@ -409,18 +409,7 @@ class Reader(object):
     def __call__(self, filename):
         g = read_tf_graph_from_protobuf(filename)
         if self._convert_to_tf_py:
-
-            if self._input_shape is None:
-                source_dtypes = None
-                source_shapes = None
-            elif isinstance(self._input_shape, dict):
-                source_dtypes = {k: v[0] for k, v in six.iteritems(self._input_shape)}
-                source_shapes = {k: v[1] for k, v in six.iteritems(self._input_shape)}
-            else:
-                source_dtypes = {i.name: self._input_shape[0] for i in g.inputs}
-                source_shapes = {i.name: self._input_shape[1] for i in g.inputs}
-
-            tf_pb_to_tf_py.evaluate_and_convert(g, source_dtypes=source_dtypes, source_shapes=source_shapes)
+            tf_pb_to_tf_py.evaluate_and_convert(g, source_shapes=self._input_shape)
         return g
 
 

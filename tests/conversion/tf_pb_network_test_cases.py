@@ -74,17 +74,16 @@ class TFPbNetworkTestCases(unittest.TestCase):
         if os.path.exists('out'):
             shutil.rmtree('out')
 
-    def _test_network(self, path, size):
+    def _test_network(self, path, size, custom_options=""):
         network = os.path.basename(path.rsplit('.', 1)[0])
-        input_shape = "(float32, [2, {size}, {size}, 3])".format(size=size)
         command = """
         ./nnef_tools/convert.py --input-format=tensorflow-pb \\
                                 --input-model={} \\
-                                --input-shape="{}" \\
                                 --output-format=nnef \\
                                 --output-model=out/nnef/{}.nnef.tgz \\
                                 --compress \\
-                                --conversion-info""".format(path, input_shape, network)
+                                --conversion-info \\
+                                {}""".format(path, network, custom_options)
         print(command)
         convert.convert_using_command(command)
 
@@ -108,7 +107,7 @@ class TFPbNetworkTestCases(unittest.TestCase):
 
             [input] = get_placeholders()
             outputs = get_tensors_with_no_consumers()
-            feed = np.random.random([2, size, size, 3])
+            feed = np.random.random([1, size, size, 3])
 
             with tf.Session() as sess:
                 activations = sess.run(outputs, feed_dict={input: feed})
@@ -193,7 +192,7 @@ class TFPbNetworkTestCases(unittest.TestCase):
             url="http://download.tensorflow.org/models/tflite_11_05_08/mobilenet_v2_1.0_224.tgz",
             member="*.pb",
             path="_models/tensorflow-pb/mobilenet_v2_1.0_224.pb")
-        self._test_network(path, 224)
+        self._test_network(path, 224, custom_options="--input-shape='[1, 224, 224, 3]'")
 
 
 if __name__ == '__main__':

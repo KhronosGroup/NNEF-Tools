@@ -20,6 +20,7 @@ from functools import partial
 import numpy as np
 import six
 
+from nnef_tools.conversion import shape_fixer
 from nnef_tools.core import utils
 from nnef_tools.io.tensorflow.tf_graph import *
 from nnef_tools.io.tensorflow.tf_pb import tf_pb_eval, tf_pb_shape_inference
@@ -59,39 +60,17 @@ def _evaluate_constant(tf_tensor):
 
 
 # noinspection PyProtectedMember
-def evaluate_and_convert(tf_graph, source_shapes=None, source_dtypes=None):
-    # type: (TFGraph, typing.Dict[str, typing.List[int]], typing.Dict[str, str])->None
-    if source_shapes is None:
-        source_shapes = {}
-    if source_dtypes is None:
-        source_dtypes = {}
-
-    source_shapes = {(k + ':0' if ':' not in k else k): v for k, v in six.iteritems(source_shapes)}
-    source_dtypes = {(k + ':0' if ':' not in k else k): v for k, v in six.iteritems(source_dtypes)}
+def evaluate_and_convert(tf_graph, source_shapes=None):
+    # type: (TFGraph, typing.Union[typing.Dict[str, typing.List[int]], typing.List[int], int, None])->None
 
     tf_graph.sort()
 
     for tensor in tf_graph.tensors:
         tensor.dtype = _tf_py_dtype_by_tf_pb_dtype.get(tensor.dtype, None)
 
-        if tensor.name and tensor.name in source_shapes:
-            if not _is_compatible(tensor.shape, source_shapes[tensor.name]):
-                raise utils.NNEFToolsException(
-                    "The specified shape is incompatible with the original shape for {}. {} vs. {}".format(
-                        tensor.name, source_shapes[tensor.name], tensor.shape))
-            tensor.shape = source_shapes[tensor.name]
-        if tensor.name and tensor.name in source_dtypes:
-            if not (tensor.dtype is None or tensor.dtype == source_dtypes[tensor.name]):
-                raise utils.NNEFToolsException(
-                    "The specified dtype is incompatible with the original dtype for {}. {} vs. {}".format(
-                        tensor.name, source_dtypes[tensor.name], tensor.dtype))
-
-            tensor.dtype = source_dtypes[tensor.name]
-        if len(tensor.producers) == 0 and (tensor.shape is None or -1 in tensor.shape or tensor.dtype is None):
-            raise utils.NNEFToolsException(
-                "Source tensor '{}' has incomplete dtype or shape: {} {}\n"
-                "Please specify it in --input-shape or through the corresponding API.".format(
-                    tensor.name, tensor.dtype, tensor.shape))
+    if isinstance(source_shapes, dict):
+        source_shapes = {(k + ':0' if ':' not in k else k): v for k, v in six.iteritems(source_shapes)}
+    shape_fixer.fix_input_shapes(tf_graph, source_shapes)
 
     const_value_by_tensor = {}
 
@@ -109,7 +88,7 @@ def evaluate_and_convert(tf_graph, source_shapes=None, source_dtypes=None):
         assert not utils.has_le_0(propagated_shapes)
         assert len(propagated_shapes) == len(propagated_dtypes) == len(op.outputs)
         for new_shape, new_dtype, tensor in zip(propagated_shapes, propagated_dtypes, op.outputs):
-            assert _is_compatible(tensor.shape, new_shape)
+            assert utils.compatible_shapes(tensor.shape, new_shape)
             tensor.shape = new_shape
             assert tensor.dtype is None or tensor.dtype == new_dtype
 
@@ -129,17 +108,6 @@ def evaluate_and_convert(tf_graph, source_shapes=None, source_dtypes=None):
                     label = label[:-2]
                 label = label.replace(':', '_')
             tensor.label = label
-
-
-def _is_compatible(orig_shape, shape):
-    if orig_shape is None:
-        return True
-    if len(orig_shape) != len(shape):
-        return False
-    for o, s in zip(orig_shape, shape):
-        if o != s and o != -1:
-            return False
-    return True
 
 
 def fix_types(list_):

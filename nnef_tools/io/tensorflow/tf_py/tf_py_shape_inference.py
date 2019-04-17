@@ -60,17 +60,6 @@ def _unify_shape(shape):
     return None
 
 
-def _is_compatible(orig_shape, shape):
-    if orig_shape is None:
-        return True
-    if len(orig_shape) != len(shape):
-        return False
-    for o, s in zip(orig_shape, shape):
-        if o != s and o is not None:
-            return False
-    return True
-
-
 def evaluate_shape_of_constant(tensor, const_value_by_tensor):
     # type: (TFTensor, typing.Dict[TFTensor, np.ndarray])->None
     if tensor in const_value_by_tensor:
@@ -166,7 +155,7 @@ def evaluate_shape_of_operation(op, const_value_by_tensor):
 
     for old_shape, tensor in zip(old_shapes, op.outputs):
         assert tensor.shape is not None and all(s is not None for s in tensor.shape)
-        assert _is_compatible(old_shape, tensor.shape), \
+        assert utils.compatible_shapes(old_shape, tensor.shape), \
             "{}: Evaluated shape ({}) not compatible with original shape ({})".format(tensor, tensor.shape, old_shape)
 
 
