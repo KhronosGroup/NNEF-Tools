@@ -16,12 +16,69 @@ from __future__ import division, print_function, absolute_import
 
 import os
 import unittest
+from collections import defaultdict
 
 from nnef_tools import convert
 from nnef_tools.io.onnx import onnx_io
+from nnef_tools.io.onnx.onnx_graph import *
 
 
 class ONNXTestRunner(unittest.TestCase):
+
+    def setUp(self):
+        self.op_num = defaultdict(lambda: 0)
+
+    def _graph_name(self, op_name):
+        return '{}{}_network'.format(op_name, self.op_num[op_name])
+
+    def _test_from_graph(self, g, run=True, custom_converters=None):
+        filename = os.path.join('out', 'source_onnx', g.name + '.onnx')
+        if not os.path.exists(os.path.dirname(filename)):
+            os.makedirs(os.path.dirname(filename))
+        onnx_io.write_onnx_to_protobuf(g, filename)
+        self._test_model(filename, run=run, custom_converters=custom_converters)
+
+    def _unary(self, op_name, attribs=None, dtype='FLOAT', out_dtype=None, shape=None, out_shape=None):
+        if attribs is None:
+            attribs = {}
+        if shape is None:
+            shape = [1, 1, 5, 5]
+        if out_shape is None:
+            out_shape = shape
+        if out_dtype is None:
+            out_dtype = dtype
+
+        g = ONNXGraph(self._graph_name(op_name))
+        x = ONNXTensor(graph=g, name='x', shape=list(shape), dtype=dtype)
+        y = ONNXTensor(graph=g, name='y', shape=list(out_shape), dtype=out_dtype)
+        ONNXOperation(graph=g, name=op_name, inputs=(x,), outputs=(y,), attribs=attribs)
+        g.inputs = (x,)
+        g.outputs = (y,)
+        return g
+
+    def _binary(self, op_name, dtype='FLOAT', out_dtype=None):
+        if out_dtype is None:
+            out_dtype = dtype
+        g = ONNXGraph(self._graph_name(op_name))
+        x = ONNXTensor(graph=g, name='x', shape=[1, 1, 5, 5], dtype=dtype)
+        y = ONNXTensor(graph=g, name='y', shape=[1, 1, 5, 1], dtype=dtype)
+        z = ONNXTensor(graph=g, name='z', shape=[1, 1, 5, 5], dtype=out_dtype)
+        ONNXOperation(graph=g, name=op_name, inputs=(x, y), outputs=(z,))
+        g.inputs = (x, y)
+        g.outputs = (z,)
+        return g
+
+    def _ternary(self, op_name, dtype='FLOAT'):
+        g = ONNXGraph(self._graph_name(op_name))
+        x = ONNXTensor(graph=g, name='x', shape=[1, 1, 5, 5], dtype=dtype)
+        y = ONNXTensor(graph=g, name='y', shape=[1, 1, 5, 5], dtype=dtype)
+        z = ONNXTensor(graph=g, name='z', shape=[1, 1, 5, 5], dtype=dtype)
+        w = ONNXTensor(graph=g, name='w', shape=[1, 1, 5, 5], dtype=dtype)
+        ONNXOperation(graph=g, name=op_name, inputs=(x, y, z), outputs=(w,))
+        g.inputs = (x, y, z)
+        g.outputs = (w,)
+        return g
+
     def _test_model(self, filename, run=True, compare=True, source_shape="None", custom_converters=None):
         if custom_converters is None:
             custom_converters = []

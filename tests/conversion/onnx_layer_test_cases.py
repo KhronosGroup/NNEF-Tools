@@ -16,7 +16,6 @@ from __future__ import division, print_function, absolute_import
 
 import os
 import unittest
-from collections import defaultdict
 
 from nnef_tools.core import utils
 from nnef_tools.io.onnx import onnx_io
@@ -29,64 +28,8 @@ if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
 
 class ONNXLayerTestCases(ONNXTestRunner):
 
-    def setUp(self):
-        self.op_num = defaultdict(lambda: 0)
-
-    def _graph_name(self, op_name):
-        return '{}{}_network'.format(op_name, self.op_num[op_name])
-
-    def _test(self, g, run=True, custom_converters=None):
-        filename = os.path.join('out', 'source_onnx', g.name + '.onnx')
-        if not os.path.exists(os.path.dirname(filename)):
-            os.makedirs(os.path.dirname(filename))
-        onnx_io.write_onnx_to_protobuf(g, filename)
-        self._test_model(filename, run=run, custom_converters=custom_converters)
-
-    def _unary(self, op_name, attribs=None, dtype='FLOAT', out_dtype=None, shape=None, out_shape=None):
-        if attribs is None:
-            attribs = {}
-        if shape is None:
-            shape = [1, 1, 5, 5]
-        if out_shape is None:
-            out_shape = shape
-        if out_dtype is None:
-            out_dtype = dtype
-
-        g = ONNXGraph(self._graph_name(op_name))
-        x = ONNXTensor(graph=g, name='x', shape=list(shape), dtype=dtype)
-        y = ONNXTensor(graph=g, name='y', shape=list(out_shape), dtype=out_dtype)
-        ONNXOperation(graph=g, name=op_name, inputs=(x,), outputs=(y,), attribs=attribs)
-        g.inputs = (x,)
-        g.outputs = (y,)
-        return g
-
-    def _binary(self, op_name, dtype='FLOAT', out_dtype=None):
-        if out_dtype is None:
-            out_dtype = dtype
-        g = ONNXGraph(self._graph_name(op_name))
-        x = ONNXTensor(graph=g, name='x', shape=[1, 1, 5, 5], dtype=dtype)
-        y = ONNXTensor(graph=g, name='y', shape=[1, 1, 5, 1], dtype=dtype)
-        z = ONNXTensor(graph=g, name='z', shape=[1, 1, 5, 5], dtype=out_dtype)
-        ONNXOperation(graph=g, name=op_name, inputs=(x, y), outputs=(z,))
-        g.inputs = (x, y)
-        g.outputs = (z,)
-        return g
-
-    def _ternary(self, op_name, dtype='FLOAT'):
-        g = ONNXGraph(self._graph_name(op_name))
-        x = ONNXTensor(graph=g, name='x', shape=[1, 1, 5, 5], dtype=dtype)
-        y = ONNXTensor(graph=g, name='y', shape=[1, 1, 5, 5], dtype=dtype)
-        z = ONNXTensor(graph=g, name='z', shape=[1, 1, 5, 5], dtype=dtype)
-        w = ONNXTensor(graph=g, name='w', shape=[1, 1, 5, 5], dtype=dtype)
-        ONNXOperation(graph=g, name=op_name, inputs=(x, y, z), outputs=(w,))
-        g.inputs = (x, y, z)
-        g.outputs = (w,)
-        return g
-
-    # Tests:
-
     def test_Abs(self):
-        self._test(self._unary('Abs'))
+        self._test_from_graph(self._unary('Abs'))
 
     # def test_Acos(self):
     #     pass
@@ -95,10 +38,10 @@ class ONNXLayerTestCases(ONNXTestRunner):
     #     pass
 
     def test_Add(self):
-        self._test(self._binary('Add'))
+        self._test_from_graph(self._binary('Add'))
 
     def test_And(self):
-        self._test(self._binary('And', dtype='BOOL', out_dtype='BOOL'))
+        self._test_from_graph(self._binary('And', dtype='BOOL', out_dtype='BOOL'))
 
     def test_ArgMax(self):
         g = ONNXGraph(self._graph_name('ArgMax'))
@@ -107,7 +50,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='ArgMax', inputs=(x,), outputs=(y,), attribs=dict(axis=1, keepdims=1))
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_ArgMin(self):
         g = ONNXGraph(self._graph_name('ArgMin'))
@@ -116,7 +59,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='ArgMin', inputs=(x,), outputs=(y,), attribs=dict(axis=1, keepdims=1))
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     # def test_Asin(self):
     #     pass
@@ -138,7 +81,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
                       attribs=dict(kernel_shape=(3, 3), strides=(2, 2), pads=[1, 1, 1, 1]))
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
         g = ONNXGraph(self._graph_name('AveragePool'))
         x = ONNXTensor(graph=g, name='x', shape=[1, 1, 5, 5], dtype='FLOAT')
@@ -147,7 +90,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
                       attribs=dict(kernel_shape=(3, 2), strides=(2, 3), pads=[1, 0, 0, 1]))
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_BatchNormalization(self):
         g = ONNXGraph(self._graph_name('BatchNormalization'))
@@ -161,7 +104,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
                       attribs=dict(epsilon=1e-6))
         g.inputs = (x, scale, bias, mean, var)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Cast(self):
         def test(from_, to):
@@ -171,7 +114,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
             ONNXOperation(graph=g, name='Cast', inputs=x, attribs=dict(to=onnx_io.build_dtype(to)), outputs=y)
             g.inputs = (x,)
             g.outputs = (y,)
-            self._test(g)
+            self._test_from_graph(g)
 
         test('BOOL', 'BOOL')
         test('FLOAT', 'FLOAT')
@@ -181,10 +124,10 @@ class ONNXLayerTestCases(ONNXTestRunner):
         test('BOOL', 'INT64')
 
     def test_Ceil(self):
-        self._test(self._unary('Ceil'))
+        self._test_from_graph(self._unary('Ceil'))
 
     def test_Clip(self):
-        self._test(self._unary('Clip', attribs=dict(min=0.4, max=0.6)))
+        self._test_from_graph(self._unary('Clip', attribs=dict(min=0.4, max=0.6)))
 
     # def test_Compress(self):
     #     pass
@@ -199,7 +142,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
                       attribs=dict(axis=1))
         g.inputs = (x, y, z)
         g.outputs = (w,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Constant(self):
         g = ONNXGraph(self._graph_name('Constant'))
@@ -209,7 +152,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Add', inputs=(x, c), outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_ConstantOfShape(self):
         # It fails in python2 (in the onnx backend itself)
@@ -223,7 +166,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Add', inputs=(x, constant_of_shape), outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Conv(self):
         g = ONNXGraph(self._graph_name('Conv'))
@@ -236,7 +179,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
                       attribs=dict(kernel_shape=(3, 3)))
         g.inputs = (x, w, b)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_ConvTranspose(self):
         g = ONNXGraph(self._graph_name('ConvTranspose'))
@@ -249,7 +192,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
                       attribs=dict(kernel_shape=(3, 3), pads=[0, 1, 0, 1]))
         g.inputs = (x, w, b)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     # def test_Cosh(self):
     #     pass
@@ -262,10 +205,10 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='DepthToSpace', inputs=x, attribs=dict(blocksize=4), outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g, run=False)  # Not implemented in caffe2
+        self._test_from_graph(g, run=False)  # Not implemented in caffe2
 
     def test_Div(self):
-        self._test(self._binary('Div'))
+        self._test_from_graph(self._binary('Div'))
 
     def test_Dropout(self):
         g = ONNXGraph(self._graph_name('Dropout'))
@@ -274,19 +217,19 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Dropout', inputs=x, outputs=y, attribs=dict(ratio=0.5))
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Elu(self):
-        self._test(self._unary('Elu'))
+        self._test_from_graph(self._unary('Elu'))
 
     def test_Equal(self):
-        self._test(self._binary('Equal', dtype='FLOAT', out_dtype='BOOL'))
+        self._test_from_graph(self._binary('Equal', dtype='FLOAT', out_dtype='BOOL'))
 
     # def test_Erf(self):
     #     pass
 
     def test_Exp(self):
-        self._test(self._unary('Exp'))
+        self._test_from_graph(self._unary('Exp'))
 
     def test_Expand(self):
         g = ONNXGraph(self._graph_name('Expand'))
@@ -296,7 +239,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Expand', inputs=(x, shape), outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     # def test_EyeLike(self):
     #     pass
@@ -308,10 +251,10 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Flatten', inputs=x, outputs=y, attribs=dict(axis=2))
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Floor(self):
-        self._test(self._unary('Floor'))
+        self._test_from_graph(self._unary('Floor'))
 
     # def test_GRU(self):
     #     pass
@@ -328,7 +271,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Gemm', inputs=(A, B, C), outputs=D)
         g.inputs = (A, B, C)
         g.outputs = (D,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_GlobalAveragePool(self):
         g = ONNXGraph(self._graph_name('GlobalAveragePool'))
@@ -337,7 +280,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='GlobalAveragePool', inputs=x, outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_GlobalLpPool(self):
         g = ONNXGraph(self._graph_name('GlobalLpPool'))
@@ -346,7 +289,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='GlobalLpPool', inputs=x, outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g, run=False)
+        self._test_from_graph(g, run=False)
 
     def test_GlobalMaxPool(self):
         g = ONNXGraph(self._graph_name('GlobalMaxPool'))
@@ -355,7 +298,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='GlobalMaxPool', inputs=x, outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Greater(self):
         g = ONNXGraph(self._graph_name('Greater'))
@@ -365,7 +308,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Greater', inputs=(x, y), outputs=a)
         g.inputs = (x, y)
         g.outputs = (a,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_HardSigmoid(self):
         g = ONNXGraph(self._graph_name('HardSigmoid'))
@@ -374,7 +317,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='HardSigmoid', inputs=x, attribs=dict(alpha=0.25, beta=0.6), outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     # def test_HardMax(self):
     #     pass
@@ -386,7 +329,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Identity', inputs=x, outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     # def test_If(self):
     #     pass
@@ -403,7 +346,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
                       outputs=y)
         g.inputs = (x, scale, bias)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     # def test_IsNan(self):
     #     pass
@@ -415,19 +358,19 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='LRN', inputs=x, outputs=y, attribs=dict(alpha=0.001, beta=0.7, bias=0.9, size=3))
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     # def test_LSTM(self):
     #     pass
 
     def test_LeakyRelu(self):
-        self._test(self._unary('LeakyRelu', attribs=dict(alpha=0.01)))
+        self._test_from_graph(self._unary('LeakyRelu', attribs=dict(alpha=0.01)))
 
     def test_Less(self):
-        self._test(self._binary('Less', dtype='FLOAT', out_dtype='BOOL'))
+        self._test_from_graph(self._binary('Less', dtype='FLOAT', out_dtype='BOOL'))
 
     def test_Log(self):
-        self._test(self._unary('Log'))
+        self._test_from_graph(self._unary('Log'))
 
     def test_LogSoftmax(self):
         g = ONNXGraph(self._graph_name('LogSoftmax'))
@@ -436,7 +379,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='LogSoftmax', inputs=x, outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     #
     # def test_Loop(self):
@@ -449,7 +392,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='LpNormalization', inputs=x, outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g, run=False)
+        self._test_from_graph(g, run=False)
 
     def test_LpPool(self):
         g = ONNXGraph(self._graph_name('LpPool'))
@@ -460,7 +403,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
                                                                                 p=1))
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g, run=False)
+        self._test_from_graph(g, run=False)
 
     def test_MatMul(self):
         g = ONNXGraph(self._graph_name('MatMul'))
@@ -470,10 +413,10 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='MatMul', inputs=(A, B), outputs=C)
         g.inputs = (A, B)
         g.outputs = (C,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Max(self):
-        self._test(self._ternary('Max'))
+        self._test_from_graph(self._ternary('Max'))
 
     def test_MaxPool(self):
         g = ONNXGraph(self._graph_name('MaxPool'))
@@ -483,23 +426,10 @@ class ONNXLayerTestCases(ONNXTestRunner):
                       attribs=dict(kernel_shape=(3, 2), strides=(1, 2)))
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     # def test_MaxRoiPool(self):
-    #     g = ONNXGraph(self._graph_name('qqq'))
-    #     n, c, h, w = [1, 2, 32, 32]
-    #     pooled_h, pooled_w = [6, 6]
-    #     num_rois = 10
-    #
-    #     input = ONNXTensor(graph=g, name='input', shape=[n, c, h, w], dtype='FLOAT')
-    #
-    #     rois = ONNXTensor(graph=g, name='rois', shape=[num_rois, 5], dtype='FLOAT')
-    #     output = ONNXTensor(graph=g, name='output', shape=[num_rois, c, pooled_h, pooled_w], dtype='FLOAT')
-    #     ONNXOperation(graph=g, name='MaxRoiPool', inputs=(input, rois), outputs=output,
-    #                   attribs=dict(pooled_shape=[pooled_h, pooled_w], spatial_scale=2.0))
-    #     g.inputs = (input, rois)
-    #     g.outputs = (output,)
-    #     self._test_from_onnx_graph(g, 'MaxRoiPool', run=False)
+    #   pass
 
     def test_MaxUnpool(self):
         g = ONNXGraph(self._graph_name('MaxUnpool'))
@@ -511,31 +441,31 @@ class ONNXLayerTestCases(ONNXTestRunner):
                                                                              strides=[2, 2]), outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g, run=False)
+        self._test_from_graph(g, run=False)
 
     def test_Mean(self):
-        self._test(self._ternary('Mean'))
+        self._test_from_graph(self._ternary('Mean'))
 
     def test_Min(self):
-        self._test(self._ternary('Min'))
+        self._test_from_graph(self._ternary('Min'))
 
     def test_Mul(self):
-        self._test(self._binary('Mul'))
+        self._test_from_graph(self._binary('Mul'))
 
     # def test_Multinomial(self):
     #     pass
 
     def test_Neg(self):
-        self._test(self._unary('Neg'))
+        self._test_from_graph(self._unary('Neg'))
 
     def test_Not(self):
-        self._test(self._unary('Not', dtype='BOOL'))
+        self._test_from_graph(self._unary('Not', dtype='BOOL'))
 
     # def test_OneHot(self):
     #     pass
 
     def test_Or(self):
-        self._test(self._binary('Or', dtype='BOOL', out_dtype='BOOL'))
+        self._test_from_graph(self._binary('Or', dtype='BOOL', out_dtype='BOOL'))
 
     def test_PRelu(self):
         g = ONNXGraph(self._graph_name('PRelu'))
@@ -545,7 +475,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='PRelu', inputs=(x, slope), outputs=y)
         g.inputs = (x, slope)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Pad(self):
         g = ONNXGraph(self._graph_name('Pad'))
@@ -555,7 +485,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
                                                                         0, 0, 1, 0]), outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g, run=False)
+        self._test_from_graph(g, run=False)
 
     def test_Pow(self):
         # Caffe2 pow can not broadcast
@@ -568,7 +498,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
                       outputs=z)
         g.inputs = (x, y)
         g.outputs = (z,)
-        self._test(g)
+        self._test_from_graph(g)
 
     # def test_RNN(self):
     #     pass
@@ -586,49 +516,49 @@ class ONNXLayerTestCases(ONNXTestRunner):
     #     pass
 
     def test_Reciprocal(self):
-        self._test(self._unary('Reciprocal'))
+        self._test_from_graph(self._unary('Reciprocal'))
 
     def test_ReduceL1(self):
-        self._test(self._unary('ReduceL1', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])), run=False)
-        self._test(self._unary('ReduceL1', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)), run=False)
+        self._test_from_graph(self._unary('ReduceL1', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])), run=False)
+        self._test_from_graph(self._unary('ReduceL1', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)), run=False)
 
     def test_ReduceL2(self):
-        self._test(self._unary('ReduceL2', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])), run=False)
-        self._test(self._unary('ReduceL2', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)), run=False)
+        self._test_from_graph(self._unary('ReduceL2', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])), run=False)
+        self._test_from_graph(self._unary('ReduceL2', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)), run=False)
 
     def test_ReduceLogSum(self):
-        self._test(self._unary('ReduceLogSum', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])), run=False)
-        self._test(self._unary('ReduceLogSum', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)), run=False)
+        self._test_from_graph(self._unary('ReduceLogSum', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])), run=False)
+        self._test_from_graph(self._unary('ReduceLogSum', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)), run=False)
 
     def test_ReduceLogSumExp(self):
-        self._test(self._unary('ReduceLogSumExp', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])), run=False)
-        self._test(self._unary('ReduceLogSumExp', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)), run=False)
+        self._test_from_graph(self._unary('ReduceLogSumExp', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])), run=False)
+        self._test_from_graph(self._unary('ReduceLogSumExp', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)), run=False)
 
     def test_ReduceMax(self):
-        self._test(self._unary('ReduceMax', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])))
-        self._test(self._unary('ReduceMax', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)))
+        self._test_from_graph(self._unary('ReduceMax', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])))
+        self._test_from_graph(self._unary('ReduceMax', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)))
 
     def test_ReduceMean(self):
-        self._test(self._unary('ReduceMean', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])))
-        self._test(self._unary('ReduceMean', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)))
+        self._test_from_graph(self._unary('ReduceMean', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])))
+        self._test_from_graph(self._unary('ReduceMean', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)))
 
     def test_ReduceMin(self):
-        self._test(self._unary('ReduceMin', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])))
-        self._test(self._unary('ReduceMin', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)))
+        self._test_from_graph(self._unary('ReduceMin', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])))
+        self._test_from_graph(self._unary('ReduceMin', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)))
 
     # def test_ReduceProd(self):
     #     pass
 
     def test_ReduceSum(self):
-        self._test(self._unary('ReduceSum', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])))
-        self._test(self._unary('ReduceSum', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)))
+        self._test_from_graph(self._unary('ReduceSum', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])))
+        self._test_from_graph(self._unary('ReduceSum', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)))
 
     def test_ReduceSumSquare(self):
-        self._test(self._unary('ReduceSumSquare', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])), run=False)
-        self._test(self._unary('ReduceSumSquare', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)), run=False)
+        self._test_from_graph(self._unary('ReduceSumSquare', out_shape=[1, 1, 1, 5], attribs=dict(axes=[1, 2])), run=False)
+        self._test_from_graph(self._unary('ReduceSumSquare', out_shape=[1, 5], attribs=dict(axes=[1, 2], keepdims=0)), run=False)
 
     def test_Relu(self):
-        self._test(self._unary('Relu'))
+        self._test_from_graph(self._unary('Relu'))
 
     def test_Reshape(self):
         g = ONNXGraph(self._graph_name('Reshape'))
@@ -638,7 +568,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Reshape', inputs=(input, shape), outputs=output)
         g.inputs = (input,)
         g.outputs = (output,)
-        self._test(g)
+        self._test_from_graph(g)
 
         g = ONNXGraph(self._graph_name('Reshape'))
         input = ONNXTensor(graph=g, name='input', shape=[1, 3, 5, 3], dtype='FLOAT')
@@ -647,7 +577,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Reshape', inputs=(input, shape), outputs=output)
         g.inputs = (input,)
         g.outputs = (output,)
-        self._test(g)
+        self._test_from_graph(g)
 
     # def test_Scan(self):
     #     pass
@@ -659,22 +589,22 @@ class ONNXLayerTestCases(ONNXTestRunner):
     #     pass
 
     def test_Shape(self):
-        self._test(self._unary('Shape', shape=[1, 2, 3, 4], out_shape=[4], dtype='FLOAT', out_dtype='INT64'))
+        self._test_from_graph(self._unary('Shape', shape=[1, 2, 3, 4], out_shape=[4], dtype='FLOAT', out_dtype='INT64'))
 
     # def test_Shrink(self):
     #     pass
 
     def test_Sigmoid(self):
-        self._test(self._unary('Sigmoid'))
+        self._test_from_graph(self._unary('Sigmoid'))
 
     def test_Sign(self):
-        self._test(self._unary('Sign'))
+        self._test_from_graph(self._unary('Sign'))
 
     # def test_Sinh(self):
     #     pass
 
     def test_Size(self):
-        self._test(self._unary('Size', shape=[1, 2, 3, 4], out_shape=[], dtype='FLOAT', out_dtype='INT64'))
+        self._test_from_graph(self._unary('Size', shape=[1, 2, 3, 4], out_shape=[], dtype='FLOAT', out_dtype='INT64'))
 
     def test_Slice(self):
         g = ONNXGraph(self._graph_name('Slice'))
@@ -684,13 +614,13 @@ class ONNXLayerTestCases(ONNXTestRunner):
                       attribs=dict(starts=[0, 1, 0, 0], ends=[utils.INT32_MAX, 3, utils.INT32_MAX, utils.INT32_MAX]))
         g.inputs = (input,)
         g.outputs = (output,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Softmax(self):
-        self._test(self._unary('Softmax'))
+        self._test_from_graph(self._unary('Softmax'))
 
     def test_Softplus(self):
-        self._test(self._unary('Softplus'))
+        self._test_from_graph(self._unary('Softplus'))
 
     # def test_Softsign(self):
     #     pass
@@ -707,25 +637,25 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Split', inputs=input, outputs=[a, b, c], attribs=dict(axis=2, split=[2, 1, 2]))
         g.inputs = (input,)
         g.outputs = (a, b, c)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Sqrt(self):
-        self._test(self._unary('Sqrt'))
+        self._test_from_graph(self._unary('Sqrt'))
 
     def test_Squeeze(self):
-        self._test(self._unary('Squeeze', shape=[1, 2, 1, 5], out_shape=[2, 5], attribs=dict(axes=[0, 2])))
+        self._test_from_graph(self._unary('Squeeze', shape=[1, 2, 1, 5], out_shape=[2, 5], attribs=dict(axes=[0, 2])))
 
     def test_Sub(self):
-        self._test(self._binary('Sub'))
+        self._test_from_graph(self._binary('Sub'))
 
     def test_Sum(self):
-        self._test(self._ternary('Sum'))
+        self._test_from_graph(self._ternary('Sum'))
 
     # def test_Tan(self):
     #     pass
 
     def test_Tanh(self):
-        self._test(self._unary('Tanh'))
+        self._test_from_graph(self._unary('Tanh'))
 
     def test_Tile(self):
         g = ONNXGraph(self._graph_name('Tile'))
@@ -737,14 +667,14 @@ class ONNXLayerTestCases(ONNXTestRunner):
                       outputs=z)
         g.inputs = (x,)
         g.outputs = (z,)
-        self._test(g)
+        self._test_from_graph(g)
 
     # def test_TopK(self):
     #     pass
 
     def test_Transpose(self):
-        self._test(self._unary('Transpose', shape=[1, 2, 3, 4], out_shape=[4, 3, 2, 1]))
-        self._test(
+        self._test_from_graph(self._unary('Transpose', shape=[1, 2, 3, 4], out_shape=[4, 3, 2, 1]))
+        self._test_from_graph(
             self._unary('Transpose', shape=[1, 2, 3, 4], out_shape=[4, 3, 1, 2], attribs=dict(perm=[3, 2, 0, 1])))
 
     def test_Unsqueeze(self):
@@ -754,7 +684,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Unsqueeze', inputs=x, attribs=dict(axes=[0, 5]), outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Upsample(self):
         g = ONNXGraph(self._graph_name('Upsample'))
@@ -764,7 +694,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Upsample', inputs=(x, m), attribs=dict(mode='linear'), outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
         g = ONNXGraph(self._graph_name('Upsample'))
         x = ONNXTensor(graph=g, name='x', shape=[1, 2, 5, 5], dtype='FLOAT')
         m = ONNXTensor(graph=g, name='m', shape=[4], dtype='FLOAT', data=[1.0, 1.0, 2.0, 2.0])
@@ -772,7 +702,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='Upsample', inputs=(x, m), attribs=dict(mode='nearest'), outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g)
+        self._test_from_graph(g)
 
     def test_Where(self):
         g = ONNXGraph(self._graph_name('Where'))
@@ -785,7 +715,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         g.outputs = (output,)
 
     def test_Xor(self):
-        self._test(self._binary('Xor', dtype='BOOL'))
+        self._test_from_graph(self._binary('Xor', dtype='BOOL'))
 
     def test_ImageScaler(self):
         g = ONNXGraph(self._graph_name('ImageScaler'))
@@ -794,7 +724,7 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='ImageScaler', inputs=x, attribs=dict(bias=[7.0, 3.0], scale=2.0), outputs=y)
         g.inputs = (x,)
         g.outputs = (y,)
-        self._test(g, run=False)
+        self._test_from_graph(g, run=False)
 
 
 if __name__ == '__main__':
