@@ -30,8 +30,6 @@ from nnef_tools.conversion import conversion_info
 from nnef_tools.core import utils
 from nnef_tools.io.tensorflow import tf_py_io
 
-DELETE_DATS_AND_CHECKPOINTS = True  # Uses less disk space
-
 
 def get_placeholders():
     tensors = []
@@ -116,6 +114,9 @@ class TFPyTestRunner(unittest.TestCase):
         print("TENSORFLOW", tf.__version__)
         print("GPU ENABLED" if tf_has_cuda_gpu() else "!!! GPU DISABLED")
 
+    def setUp(self):
+        self.delete_dats_and_checkpoints = False  # If True, it uses less space
+
     def _test(self,
               fun,
               cmp=True,
@@ -163,7 +164,8 @@ class TFPyTestRunner(unittest.TestCase):
                 tf.reset_default_graph()
                 tf.set_random_seed(0)
                 fun()
-                conv_info = conversion_info.load(os.path.join("out", fun.__name__, fun.__name__ + ".nnef.conversion.json"))
+                conv_info = conversion_info.load(
+                    os.path.join("out", fun.__name__, fun.__name__ + ".nnef.conversion.json"))
 
                 tf_activation_exporter.export(
                     output_path=os.path.join("out", fun.__name__, fun.__name__ + ".nnef", "activations"),
@@ -200,7 +202,8 @@ class TFPyTestRunner(unittest.TestCase):
                 # noinspection PyProtectedMember
                 new_net_fun = tf_py_io._tfsource_to_function(tf_src, fun.__name__)
 
-                conv_info_tf_to_nnef = conversion_info.load(os.path.join("out", fun.__name__, fun.__name__ + ".nnef.conversion.json"))
+                conv_info_tf_to_nnef = conversion_info.load(
+                    os.path.join("out", fun.__name__, fun.__name__ + ".nnef.conversion.json"))
                 conv_info_nnef_to_tf = conversion_info.load(os.path.join(tf_output_path + ".conversion.json"))
                 conv_info_tf_to_tf = conversion_info.compose(conv_info_tf_to_nnef, conv_info_nnef_to_tf)
 
@@ -255,7 +258,7 @@ class TFPyTestRunner(unittest.TestCase):
                             conv_info_nnef_to_nnef,
                             verbose=False)
         finally:
-            if DELETE_DATS_AND_CHECKPOINTS:
+            if self.delete_dats_and_checkpoints:
                 dat_files = recursive_glob(out_dir, "*.dat")
                 checkpoints = recursive_glob(out_dir, "*ckpt*")
                 for file_name in set(dat_files + checkpoints):

@@ -19,74 +19,17 @@ import os
 import sys
 import unittest
 
-import nnef
 import numpy as np
-import six
 import tensorflow as tf
 
-from nnef_tools.core import utils
-from tests.conversion.tf_pb_test_runner import test_tf_pb
+from tests.conversion.tf_pb_test_runner import TFPbTestRunner
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')
 
 
-def save_protobuf(filename, output_node_names, sess, recreate):
-    graph = tf.get_default_graph()
-    input_graph_def = graph.as_graph_def()
-
-    output_graph = filename + "test.pb"
-
-    directory = os.path.dirname(filename)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-
-    if not os.path.isfile(filename + "test.pbtxt") or recreate:
-        tf.train.write_graph(input_graph_def, "", filename + "test.pbtxt")
-
-    if not os.path.isfile(output_graph) or recreate:
-        output_graph_def = tf.graph_util.convert_variables_to_constants(sess, input_graph_def,
-                                                                        output_node_names.split(","))
-        with tf.gfile.GFile(output_graph, "wb") as f:
-            f.write(output_graph_def.SerializeToString())
-
-        tf.train.write_graph(output_graph_def, "", filename + "test.pbtxt")
-
-
-def get_placeholders():
-    return [t for op in tf.get_default_graph().get_operations() for t in op.values() if 'Placeholder' in op.node_def.op]
-
-
-def run_test(output_name, output_nodes, recreate=True):
-    batch_size = 1
-    source_shapes = {ph.name: [int(d.value) if d.value is not None else batch_size for d in ph.shape.dims]
-                     for ph in get_placeholders()}
-    pb_path = os.path.join('out', 'pb', output_name)
-    network_name = output_name.rstrip('/').replace('/', '_')
-    with tf.Session() as sess:
-        init = tf.global_variables_initializer()
-        sess.run(init)
-        save_protobuf(pb_path, output_nodes, sess, recreate)
-        sess.close()
-
-    activation_testing = int(os.environ.get('NNEF_ACTIVATION_TESTING', '1'))
-    print("Activation testing is", "ON" if activation_testing else "OFF")
-
-    for prefer_nhwc in [True, False]:
-        test_tf_pb(filename=os.path.join(pb_path, 'test.pb'),
-                   source_shapes=source_shapes,
-                   feed_dict={utils.anystr_to_str(k): np.random.random(v)
-                              for k, v in six.iteritems(source_shapes)} if activation_testing else None,
-                   prefer_nhwc=prefer_nhwc,
-                   network_name=network_name,
-                   delete_after_each=False,
-                   export_io_only=True)
-
-    return nnef.parse_file(os.path.join('out', network_name + '_nhwc', 'nnef', network_name + '_nnef', 'graph.nnef'))
-
-
 # Activations Testing
-class TestActivations(unittest.TestCase):
+class TestActivations(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestActivations, self).__init__(*args, **kwargs)
@@ -103,7 +46,7 @@ class TestActivations(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 1, 1, 1], name='x')
         self.sigmoid_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Activations_nn_Sigmoid Test
     def nn_sigmoid_network(self, x):
@@ -116,7 +59,7 @@ class TestActivations(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 1, 1, 1], name='x')
         self.sigmoid_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # ActivationsTanh Test
     def tanh_network(self, x):
@@ -129,7 +72,7 @@ class TestActivations(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 1, 1, 1], name='x')
         self.tanh_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Activations_nn_Tanh Test
     def nn_tanh_network(self, x):
@@ -142,7 +85,7 @@ class TestActivations(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 1, 1, 1], name='x')
         self.nn_tanh_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Activations_nn_Elu Test
     def nn_elu_network(self, x):
@@ -155,7 +98,7 @@ class TestActivations(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 1, 1, 1], name='x')
         self.nn_elu_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Activations_nn_Relu Test
     def nn_relu_network(self, x):
@@ -168,10 +111,10 @@ class TestActivations(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 1, 1, 1], name='x')
         self.nn_relu_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
 
-class TestBasicMath(unittest.TestCase):
+class TestBasicMath(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestBasicMath, self).__init__(*args, **kwargs)
@@ -189,7 +132,7 @@ class TestBasicMath(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 2, 2, 2], name='x')
         self.add_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
         # BasicMathSub Test
 
@@ -204,7 +147,7 @@ class TestBasicMath(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 2, 2, 2], name='x')
         self.sub_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
         # BasicMathMult Test
 
@@ -219,7 +162,7 @@ class TestBasicMath(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 2, 2, 2], name='x')
         self.multiply_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # BasicMathDiv Test
     def div_network(self, x):
@@ -233,7 +176,7 @@ class TestBasicMath(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 1], name='x')
         self.div_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # BasicMathMatMul Test
     def matmul_network(self, x):
@@ -248,7 +191,7 @@ class TestBasicMath(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.matmul_network(x)
 
-        run_test(output_name, "z1,z2")
+        self._test_layer(output_name, "z1,z2")
 
     # BasicMathNeg Test
     def neg_network(self, x):
@@ -261,7 +204,7 @@ class TestBasicMath(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 1], name='x')
         self.neg_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # BasicMathBiasAdd Test
     def bias_add_network(self, x):
@@ -274,10 +217,10 @@ class TestBasicMath(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 1], name='x')
         self.bias_add_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
 
-class TestComparisons(unittest.TestCase):
+class TestComparisons(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestComparisons, self).__init__(*args, **kwargs)
@@ -296,7 +239,7 @@ class TestComparisons(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.greater_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Comparisons_Greater_Equal Test
     def greater_equal_network(self, x):
@@ -311,7 +254,7 @@ class TestComparisons(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.greater_equal_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Comparisons_Less Test
     def less_network(self, x):
@@ -326,7 +269,7 @@ class TestComparisons(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.less_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Comparisons_Less_Equal Test
     def less_equal_network(self, x):
@@ -341,7 +284,7 @@ class TestComparisons(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.less_equal_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Comparisons_Equal Test
     def equal_network(self, x):
@@ -356,7 +299,7 @@ class TestComparisons(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.equal_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Comparisons_Not_Equal Test
     def not_equal_network(self, x):
@@ -371,10 +314,10 @@ class TestComparisons(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.not_equal_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
 
-class TestConvolutions(unittest.TestCase):
+class TestConvolutions(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestConvolutions, self).__init__(*args, **kwargs)
@@ -393,7 +336,7 @@ class TestConvolutions(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 1], name='x')
         self.nn_conv1d_network(x)
 
-        run_test(output_name, "z1/Squeeze")
+        self._test_layer(output_name, "z1/Squeeze")
 
     # Convolutions_nn_conv2d Test
     def nn_conv2d_network(self, x):
@@ -408,7 +351,7 @@ class TestConvolutions(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 5, 5, 1], name='x')
         self.nn_conv2d_network(x)
 
-        run_test(output_name, "z1,z2")
+        self._test_layer(output_name, "z1,z2")
 
     # Convolutions_nn_conv3d Test
     def nn_conv3d_network(self, x):
@@ -422,7 +365,7 @@ class TestConvolutions(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 5, 5, 5, 1], name='x')
         self.nn_conv3d_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Convolutions_nn_convolution Test
     def nn_convolution_network(self, x1):
@@ -443,7 +386,7 @@ class TestConvolutions(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 5, 5, 5, 3], name='x')
         self.nn_convolution_network(x)
 
-        run_test(output_name, "z1,z2,z3/Squeeze", True)
+        self._test_layer(output_name, "z1,z2,z3/Squeeze", True)
 
     # Convolutions_nn_conv2d_transpose Test
     def nn_conv2d_transpose_network(self, x):
@@ -457,7 +400,7 @@ class TestConvolutions(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 5, 5, 3], name='x')
         self.nn_conv2d_transpose_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Convolutions_nn_conv3d_transpose Test
     def nn_conv3d_transpose_network(self, x):
@@ -472,7 +415,7 @@ class TestConvolutions(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 5, 5, 5, 3], name='x')
         self.nn_conv3d_transpose_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Convolutions_nn_depthwise_conv2d Test
     def nn_depthwise_conv2d_network(self, x):
@@ -486,7 +429,7 @@ class TestConvolutions(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 5, 5, 3], name='x')
         self.nn_depthwise_conv2d_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Convolutions_nn_separable_conv2d Test
     def nn_separable_conv2d_network(self, x):
@@ -501,10 +444,10 @@ class TestConvolutions(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 5, 5, 1], name='x')
         self.nn_separable_conv2d_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
 
-class TestLogicals(unittest.TestCase):
+class TestLogicals(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestLogicals, self).__init__(*args, **kwargs)
@@ -525,7 +468,7 @@ class TestLogicals(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.logical_and_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Logicals_logical_or Test
     def logical_or_network(self, x):
@@ -542,7 +485,7 @@ class TestLogicals(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.logical_or_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Logicals_logical_not Test
     def logical_not_network(self, x):
@@ -558,10 +501,10 @@ class TestLogicals(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.logical_not_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
 
-class TestMathFunc(unittest.TestCase):
+class TestMathFunc(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestMathFunc, self).__init__(*args, **kwargs)
@@ -579,7 +522,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.pow_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_abs Test
     def abs_network(self, x):
@@ -592,7 +535,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.abs_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_sign Test
     def sign_network(self, x):
@@ -605,7 +548,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.sign_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_exp Test
     def exp_network(self, x):
@@ -618,7 +561,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.exp_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_log Test
     def log_network(self, x):
@@ -631,7 +574,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.log_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_sqrt Test
     def sqrt_network(self, x):
@@ -644,7 +587,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.sqrt_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_square Test
     def square_network(self, x):
@@ -657,7 +600,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.square_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_floor Test
     def floor_network(self, x):
@@ -670,7 +613,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.floor_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_ceil Test
     def ceil_network(self, x):
@@ -683,7 +626,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.ceil_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_round Test
     def round_network(self, x):
@@ -696,7 +639,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.round_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_minimum Test
     def minimum_network(self, x):
@@ -710,7 +653,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.minimum_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_maximum Test
     def maximum_network(self, x):
@@ -724,7 +667,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.maximum_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # TestMathFunc_reduce_sum Test
     def reduce_sum_network(self, x):
@@ -740,7 +683,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 2], name='x')
         self.reduce_sum_network(x)
 
-        run_test(output_name, "z1,z2,z3,z4")
+        self._test_layer(output_name, "z1,z2,z3,z4")
 
     # TestMathFunc_reduce_mean Test
     def reduce_mean_network(self, x):
@@ -756,7 +699,7 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.reduce_mean_network(x)
 
-        run_test(output_name, "z1,z2,z3,z4")
+        self._test_layer(output_name, "z1,z2,z3,z4")
 
     # TestMathFunc_reduce_max Test
     def reduce_max_network(self, x):
@@ -772,10 +715,10 @@ class TestMathFunc(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.reduce_max_network(x)
 
-        run_test(output_name, "z1,z2,z3,z4")
+        self._test_layer(output_name, "z1,z2,z3,z4")
 
 
-class TestNormalization(unittest.TestCase):
+class TestNormalization(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestNormalization, self).__init__(*args, **kwargs)
@@ -793,7 +736,7 @@ class TestNormalization(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_lrn_network(x)
 
-        run_test(output_name, "z1,z2")
+        self._test_layer(output_name, "z1,z2")
 
     # Normalization_nn_local_response_normalization Test
     def nn_local_response_normalization_network(self, x):
@@ -807,7 +750,7 @@ class TestNormalization(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_local_response_normalization_network(x)
 
-        run_test(output_name, "z1,z2")
+        self._test_layer(output_name, "z1,z2")
 
     # Normalization_nn_batch_normalization Test
     def nn_batch_normalization_network(self, x):
@@ -821,7 +764,7 @@ class TestNormalization(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_batch_normalization_network(x)
 
-        run_test(output_name, "z1/add_1")
+        self._test_layer(output_name, "z1/add_1")
 
     # Normalization_nn_fused_batch_norm Test
     def nn_fused_batch_norm_network(self, x):
@@ -835,7 +778,7 @@ class TestNormalization(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_fused_batch_norm_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Normalization_nn_fused_batch_norm Test
     def nn_fused_batch_norm_network2(self, x):
@@ -852,7 +795,7 @@ class TestNormalization(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_fused_batch_norm_network2(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Normalization_nn_l2_normalize Test
     def nn_l2_normalize_network(self, x):
@@ -865,10 +808,10 @@ class TestNormalization(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_l2_normalize_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
 
-class TestOther(unittest.TestCase):
+class TestOther(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestOther, self).__init__(*args, **kwargs)
@@ -892,7 +835,7 @@ class TestOther(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[1, 4, 4, 1], name='x')
         self.image_resize_images_network(x)
 
-        run_test(output_name, "z1,z2,z3,z4")
+        self._test_layer(output_name, "z1,z2,z3,z4")
 
     def squeeze_network(self, x):
         z1 = tf.squeeze(x, name="z1")
@@ -904,10 +847,10 @@ class TestOther(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[3, 1, 5, 1, 2, 1], name='x')
         self.squeeze_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
 
-class TestPooling(unittest.TestCase):
+class TestPooling(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestPooling, self).__init__(*args, **kwargs)
@@ -925,7 +868,7 @@ class TestPooling(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_max_pool_network(x)
 
-        run_test(output_name, "z1,z2")
+        self._test_layer(output_name, "z1,z2")
 
     # Pooling_nn_max_pool_with_argmax Test
     def nn_max_pool_with_argmax_network(self, x):
@@ -939,7 +882,7 @@ class TestPooling(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_max_pool_with_argmax_network(x)
 
-        run_test(output_name, "z1,z2")
+        self._test_layer(output_name, "z1,z2")
 
     # Pooling_nn_avg_pool Test
     def nn_avg_pool_network(self, x):
@@ -953,10 +896,10 @@ class TestPooling(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_avg_pool_network(x)
 
-        run_test(output_name, "z1,z2")
+        self._test_layer(output_name, "z1,z2")
 
 
-class TestSofts(unittest.TestCase):
+class TestSofts(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestSofts, self).__init__(*args, **kwargs)
@@ -974,7 +917,7 @@ class TestSofts(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_softsign_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Softs_nn_softplus Test
     def nn_softplus_network(self, x):
@@ -987,7 +930,7 @@ class TestSofts(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_softplus_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Softs_nn_softmax Test
     def nn_softmax_network(self, x):
@@ -1000,10 +943,10 @@ class TestSofts(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[1, 4], name='x')
         self.nn_softmax_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
 
-class TestVarOps(unittest.TestCase):
+class TestVarOps(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestVarOps, self).__init__(*args, **kwargs)
@@ -1021,7 +964,7 @@ class TestVarOps(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.concat_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # VarOps_split Test
     def split_network(self, x):
@@ -1035,7 +978,7 @@ class TestVarOps(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.split_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # VarOps_reshape Test
     def reshape_network(self, x):
@@ -1048,7 +991,7 @@ class TestVarOps(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[1, 4, 4, 2], name='x')
         self.reshape_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # VarOps_transpose Test
     def transpose_network(self, x):
@@ -1061,7 +1004,7 @@ class TestVarOps(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[1, 4, 4, 2], name='x')
         self.transpose_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
     # Variable_where Test
     def where_network(self, x):
@@ -1076,10 +1019,10 @@ class TestVarOps(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4, 1], name='x')
         self.where_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
 
-class TestVariables(unittest.TestCase):
+class TestVariables(TFPbTestRunner):
 
     def __init__(self, *args, **kwargs):
         super(TestVariables, self).__init__(*args, **kwargs)
@@ -1100,7 +1043,7 @@ class TestVariables(unittest.TestCase):
         x = tf.placeholder(tf.float32, shape=[4], name='x')
         self.assign_network(x)
 
-        run_test(output_name, "z1")
+        self._test_layer(output_name, "z1")
 
 
 if __name__ == '__main__':

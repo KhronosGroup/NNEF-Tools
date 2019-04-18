@@ -92,6 +92,11 @@ def network_vgg_16():
 
 
 class TFPyNetworkTestCases(TFPyTestRunner):
+
+    def setUp(self):
+        super(TFPyNetworkTestCases, self).setUp()
+        self.delete_dats_and_checkpoints = True
+
     def test_inception_v1(self):
         self._test(network_inception_v1, test_module=TEST_MODULE)
 
