@@ -21,10 +21,10 @@ import numpy as np
 
 from nnef_tools.core import graph_utils, utils
 from nnef_tools.core import matcher
-from nnef_tools.shape_inference import shape_inference
 from nnef_tools.core.graph import Tensor, Graph
 from nnef_tools.io.tensorflow.tf_graph import TFOperation, TFTensor, TFGraph
 from nnef_tools.io.tensorflow.tf_py import tf_py_unify
+from nnef_tools.shape_inference import shape_inference
 
 
 def _is_nhwc(tf_op, default=True):
@@ -364,6 +364,28 @@ def transform_relu_grad(g, op):
                           inputs=(features, const0),
                           outputs=TFTensor(graph=g, name=None, shape=list(op.output.shape), dtype="bool"))
     TFOperation(graph=g, name="tf.where", inputs=(greater.output, gradients, const0), outputs=op.outputs)
+    g.remove_operation(op, unlink=True)
+
+
+def transform_leaky_relu_grad(g, op):
+    # type: (TFGraph, TFOperation)->None
+
+    # def leaky_relu_grad(gradients, features):
+    #     return tf.where(features > 0, gradients, gradients * alpha)
+
+    gradients, features = op.inputs
+
+    const0 = TFTensor(graph=g, shape=list(op.output.shape), dtype=op.output.dtype, data=0.0)
+    const_alpha = TFTensor(graph=g, shape=list(op.output.shape), dtype=op.output.dtype, data=op.attribs['alpha'])
+    greater = TFOperation(graph=g,
+                          name="tf.greater",
+                          inputs=(features, const0),
+                          outputs=TFTensor(graph=g, name=None, shape=list(op.output.shape), dtype="bool"))
+    multiply = TFOperation(graph=g,
+                           name="tf.multiply",
+                           inputs=(gradients, const_alpha),
+                           outputs=TFTensor(graph=g, name=None, shape=list(op.output.shape), dtype=op.output.dtype))
+    TFOperation(graph=g, name="tf.where", inputs=(greater.output, gradients, multiply.output), outputs=op.outputs)
     g.remove_operation(op, unlink=True)
 
 
@@ -955,6 +977,7 @@ def pre_conversion_transform(g):
         "_tf.sqrt_grad": transform_sqrt_grad,
         "_tf.elu_grad": transform_elu_grad,
         "_tf.relu_grad": transform_relu_grad,
+        "_tf.leaky_relu_grad": transform_leaky_relu_grad,
         "_tf.relu6_grad": transform_relu6_grad,
         "_tf.softplus_grad": transform_softplus_grad,
         "_tf.rsqrt_grad": transform_rsqrt_grad,

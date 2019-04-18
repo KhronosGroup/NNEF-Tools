@@ -43,6 +43,7 @@ class _InternalFunctions(object):
         from tensorflow.python.ops import gen_nn_ops as tf_gen_nn_ops
         from tensorflow.python.ops import gen_image_ops as tf_gen_image_ops
         from tensorflow.python.ops import variables as tf_variables
+        from tensorflow.python.framework import constant_op as tf_constant_op
 
         self.RefVariable = _getattr(tf_variables, "RefVariable")
         self.add = _getattr(tf_gen_math_ops, "add")
@@ -90,6 +91,14 @@ class _InternalFunctions(object):
         self.softmax = _getattr(tf_gen_nn_ops, "softmax")
         self.concat_offset = _getattr(tf_gen_array_ops, "concat_offset")
         self.fused_batch_norm_v2 = _getattr(tf_gen_nn_ops, "fused_batch_norm_v2")
+        self.size = _getattr(tf_gen_array_ops, "size")
+        self.sum = _getattr(tf_gen_math_ops, "sum")
+        self.mean = _getattr(tf_gen_math_ops, "mean")
+        self.max = _getattr(tf_gen_math_ops, "max")
+        self.min = _getattr(tf_gen_math_ops, "min")
+        self.any = _getattr(tf_gen_math_ops, "any")
+        self.all = _getattr(tf_gen_math_ops, "all")
+        self.constant = _getattr(tf_constant_op, "constant")
         self.max_pool_grad = _getattr(tf_gen_nn_ops, "max_pool_grad")
         self.max_pool_grad_with_argmax = _getattr(tf_gen_nn_ops, "max_pool_grad_with_argmax")
         self.avg_pool_grad = _getattr(tf_gen_nn_ops, "avg_pool_grad")
@@ -105,6 +114,7 @@ class _InternalFunctions(object):
         self.lrn_grad = _getattr(tf_gen_nn_ops, "lrn_grad")
         self.mirror_pad_grad = _getattr(tf_gen_array_ops, "mirror_pad_grad")
         self.broadcast_gradient_args = _getattr(tf_gen_array_ops, "broadcast_gradient_args")
+        self.leaky_relu_grad = _getattr(tf_gen_nn_ops, "leaky_relu_grad")
 
 
 tf_functions = _Functions()

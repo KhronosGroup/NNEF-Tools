@@ -260,6 +260,12 @@ def evaluate_concat_offset(op, const_value_by_tensor):
         const_value_by_tensor[o] = np.array(r)
 
 
+def evaluate_size(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    if op.input.shape is not None and None not in op.input.shape:
+        const_value_by_tensor[op.output] = np.product(op.input.shape)
+
+
 def try_to_evaluate_operation(op, const_value_by_tensor):
     # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
     if op.name in _DefaultOpEvaluators:
@@ -270,6 +276,7 @@ _DefaultOpEvaluators = {
     "tf.rank": evaluate_rank,
     "tf.shape": evaluate_shape,
     "tf.shape_n": evaluate_shape_n,
+    "tf.size": evaluate_size,
     "tf.subtract": evaluate_subtract,
     "tf.mod": evaluate_mod,
     "tf.add": evaluate_add,

@@ -139,6 +139,11 @@ def evaluate_shape_of_reduce_sum(op):
                                     if keepdims or i not in axis])
 
 
+def evaluate_shape_of_size(op):
+    # type: (TFOperation)->None
+    op.output.shape = []
+
+
 def evaluate_shape_of_operation(op, const_value_by_tensor):
     # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
 
@@ -168,5 +173,6 @@ _DefaultOpShapeEvaluators = {
     "tf.negative": generic_evaluate_shape_of_unary,
     "tf.multiply": generic_evaluate_shape_of_binary,
     "tf.subtract": generic_evaluate_shape_of_binary,
-    "tf.reduce_sum": evaluate_shape_of_reduce_sum
+    "tf.reduce_sum": evaluate_shape_of_reduce_sum,
+    "tf.size": evaluate_shape_of_size,
 }

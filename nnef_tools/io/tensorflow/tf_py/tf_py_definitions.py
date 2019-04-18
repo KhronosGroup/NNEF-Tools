@@ -142,7 +142,7 @@ class TraceableFunction(object):
 
 DefaultTraceableFunctions = [
     TraceableFunction("tf.gradients(xs:T[], ys:T[])", ["tf.gradients"]),
-    TraceableFunction("tf.constant(value, dtype, shape, name)", ["tf.constant"]),
+    TraceableFunction("tf.constant(value, dtype, shape, name)", ["tf.constant", "_tf.constant"]),
     TraceableFunction("tf.placeholder(shape, dtype, name)", ["tf.placeholder"]),
     TraceableFunction("tf.get_variable(shape, dtype, name)", ["tf.get_variable"]),
     TraceableFunction("tf.Variable(initial_value, dtype, name)", ["tf.Variable", "_tf.RefVariable"]),
@@ -192,13 +192,18 @@ DefaultTraceableFunctions = [
     TraceableFunction("tf.nn.sigmoid(x:T)", ["tf.sigmoid", "tf.nn.sigmoid"]),
     TraceableFunction("tf.nn.tanh(x:T)", ["tf.tanh", "tf.nn.tanh"]),
     TraceableFunction("tf.where(condition:T, x:T, y:T)", ["tf.where"]),
-    TraceableFunction("tf.reduce_sum(input_tensor:T, axis/reduction_indices[], keepdims/keep_dims)", ["tf.reduce_sum"]),
-    TraceableFunction("tf.reduce_mean(input_tensor:T, axis/reduction_indices[], keepdims/keep_dims)",
-                      ["tf.reduce_mean"]),
-    TraceableFunction("tf.reduce_max(input_tensor:T, axis/reduction_indices[], keepdims/keep_dims)", ["tf.reduce_max"]),
-    TraceableFunction("tf.reduce_min(input_tensor:T, axis/reduction_indices[], keepdims/keep_dims)", ["tf.reduce_min"]),
-    TraceableFunction("tf.reduce_any(input_tensor:T, axis/reduction_indices[], keepdims/keep_dims)", ["tf.reduce_any"]),
-    TraceableFunction("tf.reduce_all(input_tensor:T, axis/reduction_indices[], keepdims/keep_dims)", ["tf.reduce_all"]),
+    TraceableFunction("tf.reduce_sum(input_tensor/input:T, axis/reduction_indices[], keepdims/keep_dims)",
+                      ["tf.reduce_sum", "_tf.sum"]),
+    TraceableFunction("tf.reduce_mean(input_tensor/input:T, axis/reduction_indices[], keepdims/keep_dims)",
+                      ["tf.reduce_mean", "_tf.mean"]),
+    TraceableFunction("tf.reduce_max(input_tensor/input:T, axis/reduction_indices[], keepdims/keep_dims)",
+                      ["tf.reduce_max", "_tf.max"]),
+    TraceableFunction("tf.reduce_min(input_tensor/input:T, axis/reduction_indices[], keepdims/keep_dims)",
+                      ["tf.reduce_min", "_tf.min"]),
+    TraceableFunction("tf.reduce_any(input_tensor/input:T, axis/reduction_indices[], keepdims/keep_dims)",
+                      ["tf.reduce_any", "_tf.any"]),
+    TraceableFunction("tf.reduce_all(input_tensor/input:T, axis/reduction_indices[], keepdims/keep_dims)",
+                      ["tf.reduce_all", "_tf.all"]),
     TraceableFunction("tf.argmax(input:T, axis/dimension)", ["tf.argmax"]),
     TraceableFunction("tf.argmin(input:T, axis/dimension)", ["tf.argmin"]),
     TraceableFunction("tf.matmul(a:T, b:T, transpose_a, transpose_b, adjoint_a?, adjoint_b?)",
@@ -287,6 +292,7 @@ DefaultTraceableFunctions = [
     TraceableFunction("tf.invert_permutation(x:T)", ["tf.invert_permutation"]),
     TraceableFunction("tf.fill(dims, value)", ["tf.fill"]),
     TraceableFunction("tf.random_uniform(shape, minval, maxval, dtype, seed)", ["tf.random_uniform"]),
+    TraceableFunction("tf.size(input:T)", ["tf.size", "_tf.size"]),
     TraceableFunction("_tf.conv3d_backprop_input_v2(input_sizes, filter:T, out_backprop:T, strides, padding, "
                       "data_format?, dilations?)", ["_tf.conv3d_backprop_input_v2"]),
     TraceableFunction("_tf.concat_offset(concat_dim, shape)", ["_tf.concat_offset"]),
@@ -325,6 +331,7 @@ DefaultTraceableFunctions = [
     TraceableFunction("_tf.resize_bicubic_grad(grads:T, original_image:T, align_corners)",
                       ["_tf.resize_bicubic_grad"]),
     TraceableFunction("_tf.mirror_pad_grad(input:T, paddings, mode)", ["_tf.mirror_pad_grad"]),
+    TraceableFunction("_tf.leaky_relu_grad(gradients:T, features:T, alpha)", ["_tf.leaky_relu_grad"])
 ]
 
 __all__ = [

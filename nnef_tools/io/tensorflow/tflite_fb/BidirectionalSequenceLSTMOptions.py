@@ -46,9 +46,17 @@ class BidirectionalSequenceLSTMOptions(object):
             return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
         return False
 
-def BidirectionalSequenceLSTMOptionsStart(builder): builder.StartObject(4)
+    # BidirectionalSequenceLSTMOptions
+    def TimeMajor(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
+        if o != 0:
+            return bool(self._tab.Get(flatbuffers.number_types.BoolFlags, o + self._tab.Pos))
+        return True
+
+def BidirectionalSequenceLSTMOptionsStart(builder): builder.StartObject(5)
 def BidirectionalSequenceLSTMOptionsAddFusedActivationFunction(builder, fusedActivationFunction): builder.PrependInt8Slot(0, fusedActivationFunction, 0)
 def BidirectionalSequenceLSTMOptionsAddCellClip(builder, cellClip): builder.PrependFloat32Slot(1, cellClip, 0.0)
 def BidirectionalSequenceLSTMOptionsAddProjClip(builder, projClip): builder.PrependFloat32Slot(2, projClip, 0.0)
 def BidirectionalSequenceLSTMOptionsAddMergeOutputs(builder, mergeOutputs): builder.PrependBoolSlot(3, mergeOutputs, 0)
+def BidirectionalSequenceLSTMOptionsAddTimeMajor(builder, timeMajor): builder.PrependBoolSlot(4, timeMajor, 1)
 def BidirectionalSequenceLSTMOptionsEnd(builder): return builder.EndObject()

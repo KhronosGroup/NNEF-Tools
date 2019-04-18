@@ -158,8 +158,7 @@ def network_optimizer_no_io_transpose():
     filter2 = tf.get_variable(dtype=tf.float32, shape=[4, 4, 8, 16], name="filter2")
     conv2 = tf.nn.conv2d(relu, filter2, strides=[1, 1, 1, 1], padding='VALID')
 
-    alpha = tf.get_variable(dtype=tf.float32, shape=[16], name="alpha")
-    leaky_relu = tf.nn.leaky_relu(conv2, alpha=alpha)
+    leaky_relu = tf.nn.leaky_relu(conv2, alpha=0.3)
 
     filter3 = tf.get_variable(dtype=tf.float32, shape=[4, 4, 16, 16], name="filter3")
     conv3 = tf.nn.conv2d(leaky_relu, filter3, strides=[1, 1, 1, 1], padding='VALID')
@@ -256,8 +255,7 @@ def network_optimizer7():
     filter2 = tf.get_variable(dtype=tf.float32, shape=[4, 4, 8, 16], name="filter2")
     conv2 = tf.nn.conv2d(relu, filter2, strides=[1, 1, 1, 1], padding='VALID')
 
-    alpha = tf.get_variable(dtype=tf.float32, shape=[16], name="alpha")
-    leaky_relu = tf.nn.leaky_relu(conv2, alpha=alpha)
+    leaky_relu = tf.nn.leaky_relu(conv2, alpha=0.3)
 
     filter3 = tf.get_variable(dtype=tf.float32, shape=[4, 4, 16, 16], name="filter3")
     conv3 = tf.nn.conv2d(leaky_relu, filter3, strides=[1, 1, 1, 1], padding='VALID')
@@ -854,33 +852,9 @@ def network_activation_relu6():
     return tf.nn.relu6(ph)
 
 
-def network_leaky_relu_tensor1():
-    ph = tf.placeholder(tf.float32, shape=[10, 64, 64, 3], name="features")
-    alpha = tf.get_variable(name="alpha", shape=[], dtype=tf.float32)
-    return tf.nn.leaky_relu(ph, alpha=alpha)
-
-
-def network_leaky_relu_tensor2():
-    ph = tf.placeholder(tf.float32, shape=[10, 64, 64, 3], name="features")
-    alpha = tf.get_variable(name="alpha", shape=[1], dtype=tf.float32)
-    return tf.nn.leaky_relu(ph, alpha=alpha)
-
-
-def network_leaky_relu_tensor_per_channel():
-    ph = tf.placeholder(tf.float32, shape=[10, 64, 64, 3], name="features")
-    alpha = tf.get_variable(name="alpha", shape=[3], dtype=tf.float32)
-
-    return tf.nn.leaky_relu(ph, alpha=alpha)
-
-
 def network_leaky_relu_literal1():
     ph = tf.placeholder(tf.float32, shape=[10, 64, 64, 3], name="features")
     return tf.nn.leaky_relu(ph, alpha=0.3)
-
-
-def network_leaky_relu_literal2():
-    ph = tf.placeholder(tf.float32, shape=[10, 64, 64, 3], name="features")
-    return tf.nn.leaky_relu(ph, alpha=[0.3])
 
 
 def network_activation_softplus():
@@ -2387,20 +2361,8 @@ class TFPyLayerTestCases(TFPyTestRunner):
     def test_activation_relu6(self):
         self._test(network_activation_relu6)
 
-    def test_leaky_relu_tensor1(self):
-        self._test(network_leaky_relu_tensor1)
-
-    def test_leaky_relu_tensor2(self):
-        self._test(network_leaky_relu_tensor2)
-
-    def test_leaky_relu_tensor_per_channel(self):
-        self._test(network_leaky_relu_tensor_per_channel)
-
     def test_leaky_relu_literal1(self):
         self._test(network_leaky_relu_literal1)
-
-    def test_leaky_relu_literal2(self):
-        self._test(network_leaky_relu_literal2)
 
     def test_activation_softplus(self):
         self._test(network_activation_softplus)

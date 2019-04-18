@@ -427,14 +427,6 @@ class TFLiteLayerTestCases(TFLiteTestRunner):
         self._test_model(self.to_tflite(self.pow_network), max_val=1.0)
 
     @staticmethod
-    def prelu_network():
-        input_ = tf.placeholder(tf.float32, shape=[1, 2, 2, 3], name="input")
-        return input_, tf.nn.leaky_relu(input_, input_)
-
-    def test_prelu(self):
-        self._test_model(self.to_tflite(self.prelu_network), max_val=1.0)
-
-    @staticmethod
     def mean_network():
         input_ = tf.placeholder(tf.float32, shape=[1, 2, 2, 3], name="input")
         return input_, tf.reduce_mean(input_, axis=1)

@@ -12,4 +12,5 @@ class TensorType(object):
     BOOL = 6
     INT16 = 7
     COMPLEX64 = 8
+    INT8 = 9
 

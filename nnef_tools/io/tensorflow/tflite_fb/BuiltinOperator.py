@@ -100,4 +100,22 @@ class BuiltinOperator(object):
     FLOOR_MOD = 95
     RANGE = 96
     RESIZE_NEAREST_NEIGHBOR = 97
+    LEAKY_RELU = 98
+    SQUARED_DIFFERENCE = 99
+    MIRROR_PAD = 100
+    ABS = 101
+    SPLIT_V = 102
+    UNIQUE = 103
+    CEIL = 104
+    REVERSE_V2 = 105
+    ADD_N = 106
+    GATHER_ND = 107
+    COS = 108
+    WHERE = 109
+    RANK = 110
+    ELU = 111
+    REVERSE_SEQUENCE = 112
+    MATRIX_DIAG = 113
+    QUANTIZE = 114
+    MATRIX_SET_DIAG = 115
 

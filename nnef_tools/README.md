@@ -18,18 +18,18 @@ You have to install dependencies only for the functionalities that you are using
 
 | Functionality                              | Dependencies                                                        |
 |--------------------------------------------|---------------------------------------------------------------------|
-|  TensorFlow Python code conversion (+tests)| pip install typing six numpy "tensorflow-gpu<1.13                   |
+|  TensorFlow Python code conversion (+tests)| pip install typing six numpy "tensorflow-gpu<1.14                   |
 |  TensorFlow Protobuf conversion            | pip install typing six numpy protobuf                               |
-|  TensorFlow Protobuf conversion tests      | pip install typing six numpy protobuf "tensorflow-gpu<1.13"         |
+|  TensorFlow Protobuf conversion tests      | pip install typing six numpy protobuf "tensorflow-gpu<1.14"         |
 |  TensorFlow Lite conversion                | pip install typing six numpy flatbuffers                            |
-|  TensorFlow Lite conversion tests          | pip install typing six numpy flatbuffers "tensorflow-gpu<1.13"      |
-|  TensorFlow activation export              | pip install typing six numpy scipy matplotlib "tensorflow-gpu<1.13" |
+|  TensorFlow Lite conversion tests          | pip install typing six numpy flatbuffers "tensorflow-gpu<1.14"      |
+|  TensorFlow activation export              | pip install typing six numpy scipy matplotlib "tensorflow-gpu<1.14" |
 |  ONNX conversion                           | pip install typing six numpy protobuf                               |
 |  ONNX conversion tests                     | pip install typing six numpy protobuf onnx torch                    |
 
 All dependencies (just for reference):
 ```
-pip install typing six numpy scipy matplotlib protobuf flatbuffers onnx torch "tensorflow-gpu<1.13"
+pip install typing six numpy scipy matplotlib protobuf flatbuffers onnx torch "tensorflow-gpu<1.14"
 ```
 
 ### Remarks for ONNX activation tests
@@ -39,7 +39,7 @@ Caffe2 is now in `torch`, that's why we need it.
 ### Remarks for TensorFlow export
 
 For TensorFlow Python code conversion and some test cases, a working TensorFlow installation is needed.
-Versions 1.8 - 1.12 should be fine. Prefer the GPU versions as they support more operations.
+Versions 1.8 - 1.13 should be fine. Prefer the GPU versions as they support more operations.
 Some operations are not supported by older versions, but the tools should work in general.
 If you use the CPU version or an older version, some test cases might break. 
 
