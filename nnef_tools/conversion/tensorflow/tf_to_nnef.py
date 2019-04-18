@@ -23,7 +23,7 @@ import typing
 from nnef_tools.conversion import converter
 from nnef_tools.conversion import transforms
 from nnef_tools.conversion.shape_utils import ShapeUtils
-from nnef_tools.conversion.tensorflow import tf_to_nnef_trafos
+from nnef_tools.conversion.tensorflow import tf_to_nnef_passes
 from nnef_tools.core import utils
 from nnef_tools.io.nnef.nnef_graph import *
 from nnef_tools.io.tensorflow.tf_graph import *
@@ -110,7 +110,7 @@ class Converter(converter.Converter[TFTensor, TFOperation, TFGraph,
         # TODO: we dont have to collapse conv/add or conv/pad if we use ext
         if any(t.quantization is not None for t in source_graph.tensors):
             self.is_quantized = True
-        tf_to_nnef_trafos.pre_conversion_transform(source_graph)
+        tf_to_nnef_passes.pre_conversion_pass(source_graph)
         # source_graph.dump()
         target_graph = super(Converter, self).convert_graph(source_graph)
         target_graph.generate_missing_names()

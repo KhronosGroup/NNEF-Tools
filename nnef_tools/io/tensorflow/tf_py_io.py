@@ -497,12 +497,12 @@ def _get_location_summary(stack, max_path_length=32):
 
 
 def _eliminate_named_tuples(data):
-    def trafo(data_):
+    def transform(data_):
         if isinstance(data_, tuple):
             return tuple(data_)
         return data_
 
-    return utils.recursive_transform(data, trafo)
+    return utils.recursive_transform(data, transform)
 
 
 def _eliminate_identities(invocations):
@@ -693,7 +693,7 @@ def _to_tf_graph(name, invocations, output, op_proto_by_name):
         if invocation.function_name == "tf.get_variable" and invocation.result.value() in tensor_by_tf_tensor:
             continue
 
-        def arg_trafo(arg):
+        def arg_transform(arg):
             if isinstance(arg, tf.Variable):
                 arg = arg.value()
 
@@ -702,9 +702,9 @@ def _to_tf_graph(name, invocations, output, op_proto_by_name):
                 return tensor_by_tf_tensor[arg]
             return _normalize_types(arg)
 
-        args = utils.recursive_transform(invocation.args, arg_trafo)
+        args = utils.recursive_transform(invocation.args, arg_transform)
 
-        def result_trafo(result_):
+        def result_transform(result_):
             if isinstance(result_, tf.Variable):
                 result_ = result_.value()
 
@@ -725,7 +725,7 @@ def _to_tf_graph(name, invocations, output, op_proto_by_name):
                 return t
             return result_
 
-        result = utils.recursive_transform(invocation.result, result_trafo)
+        result = utils.recursive_transform(invocation.result, result_transform)
 
         if invocation.function_name == "tf.placeholder":
             assert isinstance(result, TFTensor)

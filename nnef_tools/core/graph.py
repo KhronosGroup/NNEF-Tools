@@ -14,10 +14,10 @@
 
 from __future__ import division, print_function, absolute_import
 
-import typing
 from collections import OrderedDict, Sequence
 
 import six
+import typing
 
 _TensorT = typing.TypeVar('_TensorT', bound='Tensor')
 _OperationT = typing.TypeVar('_OperationT', bound='Operation')
@@ -279,6 +279,16 @@ class Graph(typing.Generic[_TensorT, _OperationT]):
         self._operations = [op for op in self._operations if op not in operations]
         for operation in operations:
             operation._graph = None
+
+    def is_sorted(self):
+        defined = set()
+        for i, op in enumerate(self.operations):
+            for t in op.inputs:
+                for producer in t.producers:
+                    if producer not in defined:
+                        return False
+            defined.add(op)
+        return True
 
     def sort(self):
         # TODO change to iterative

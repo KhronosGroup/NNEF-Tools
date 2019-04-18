@@ -149,7 +149,7 @@ def optimize(g,  # type: TFGraph
              merge_transforms_into_variables=False,  # type: bool
              merge_transforms_into_constants=False,  # type: bool
              custom_transposable_ops=None,  # type: typing.Optional[typing.List[TransposableOperation]]
-             io_transform=None,  # type:typing.Optional[TrafoOrTrafoDictType]
+             io_transform=None,  # type:typing.Optional[TransformOrTransformDictType]
              verbose=False,  # type: bool
              rename_tensors=False,  # type: bool
              ):
@@ -168,7 +168,7 @@ def optimize(g,  # type: TFGraph
 
 class Optimizer(object):
     def __init__(self,
-                 io_transform=None,  # type:typing.Optional[TrafoOrTrafoDictType]
+                 io_transform=None,  # type:typing.Optional[TransformOrTransformDictType]
                  custom_transposable_ops=None,  # type: typing.Optional[typing.List[TransposableOperation]]
                  merge_transforms_into_variables=False,  # type: bool
                  ):

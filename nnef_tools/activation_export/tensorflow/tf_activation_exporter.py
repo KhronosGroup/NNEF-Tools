@@ -15,17 +15,14 @@
 from __future__ import division, print_function, absolute_import
 
 import os
-import typing
 
 import nnef
 import numpy as np
 import tensorflow as tf
+import typing
 
 from nnef_tools.conversion.conversion_info import ConversionInfo
-
-
-class ActivationExporterException(Exception):
-    pass
+from nnef_tools.core import utils
 
 
 class _TensorInfo(object):
@@ -120,4 +117,4 @@ def export(output_path,  # type: str
             if verbose:
                 print("Info: Exported {}/{}".format(start, len(tensor_infos)))
     if has_error:
-        raise ActivationExporterException("There were errors!")
+        raise utils.NNEFToolsException("There were errors!")

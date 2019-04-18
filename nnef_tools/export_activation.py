@@ -31,7 +31,7 @@ import os
 import numpy as np
 import six
 
-from nnef_tools.io.input_source import RandomInput, ImageInput, NNEFTensorInput, create_input
+from nnef_tools.io.input_source import RandomInput, ImageInput, NNEFTensorInput, create_feed_dict
 from nnef_tools.conversion import conversion_info
 from nnef_tools.core import utils
 
@@ -82,7 +82,7 @@ please add its location to PYTHONPATH.
 """)
 
     parser.add_argument("--input-format",
-                        choices=['tensorflow-pb', 'tensorflow-py'],
+                        choices=['tensorflow-pb', 'tensorflow-py', 'caffe'],
                         required=True,
                         help="""Input format""")
 
@@ -149,12 +149,14 @@ Default: Unknown dimensions are set to 1. If the rank is unknown this option can
 """)
 
     parser.add_argument('--tensors-at-once',
-                        default=25,
                         type=int,
                         help="""Number of tensors to evaluate at once.
 On a computer with low (gpu) memory, a lower number is appropriate.
 All tensors will evaluated but in groups of size '--tensors-at-once'.
-Default: 25.""")
+Default: 25.
+
+Not supported for Caffe.
+""")
 
     args = parser.parse_args(args=argv[1:])
     args.input = parse_input(args.input)
@@ -162,6 +164,7 @@ Default: 25.""")
     allowed_input_length = {
         'tensorflow-pb': [1],
         'tensorflow-py': [1, 2],
+        'caffe': [2],
     }
     if not len(args.input_model) in allowed_input_length[args.input_format]:
         print("Error: {} values specified to --input-model, allowed: {}"
@@ -178,6 +181,14 @@ Default: 25.""")
 
     if args.input_format == 'tensorflow-py' and len(args.input_model) < 2:
         args.no_weights = True
+
+    if args.input_format == 'caffe':
+        if args.tensors_at_once is not None:
+            print("Error: --tensors-at-once is not supported for Caffe.")
+            exit(1)
+    else:
+        if args.tensors_at_once is None:
+            args.tensors_at_once = 25
 
     return args
 
@@ -298,19 +309,6 @@ def tf_get_input_shapes(input_shape=None):
     return new_input_shapes
 
 
-def create_feed_dict(input_sources, input_shapes):
-    if not isinstance(input_sources, dict):
-        input_sources = {k: input_sources for k in six.iterkeys(input_shapes)}
-
-    np.random.seed(0)
-    feed_dict = {}
-    for name, (dtype, shape) in six.iteritems(input_shapes):
-        assert name in input_sources
-        feed_dict[name] = create_input(input_source=input_sources[name], np_dtype=dtype, shape=shape)
-
-    return feed_dict
-
-
 def tf_export_activations(input_shapes,
                           input_sources,
                           conversion_info_file_name,
@@ -320,6 +318,7 @@ def tf_export_activations(input_shapes,
                           tensors_per_iter=25):
     from nnef_tools.activation_export.tensorflow.tf_activation_exporter import export
     input_shapes = tf_get_input_shapes(input_shape=input_shapes)
+    np.random.seed(0)
     feed_dict = create_feed_dict(input_sources=input_sources, input_shapes=input_shapes)
     info = conversion_info.load(conversion_info_file_name)
     export(output_path=output_path,
@@ -361,6 +360,14 @@ def export_activation(input_format, input_model, input_shape, input_source, conv
                               output_path=output_path,
                               tensors_per_iter=tensors_per_iter,
                               init_variables=False)
+    elif input_format == 'caffe':
+        from nnef_tools.activation_export.caffe.caffe_activation_exporter import export as caffe_export_activations
+        ensure_dirs(output_path)
+        caffe_export_activations(prototxt_path=input_model[0],
+                                 caffemodel_path=input_model[1],
+                                 input_source=input_source,
+                                 conversion_info_path=conversion_info,
+                                 output_path=output_path)
     else:
         assert False
 

@@ -67,7 +67,7 @@ def download(url, path="", verbose=True):
         if verbose:
             print("\n\nThe file might have been moved on the server! "
                   "Sorry but we can not ensure the correctness of external urls.")
-            raise
+        raise
     try:
         with open(path, "wb+") as g:
             g.write(f.read())

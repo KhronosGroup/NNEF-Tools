@@ -74,7 +74,7 @@ def unify_deconv(op):
                                             deconv=True)[2:]
 
     if not op.attribs['output_shape']:
-        op.attribs['output_shape'] = input.shape[:2] + calculated_output_size
+        op.attribs['output_shape'] = [input.shape[0], output_channels] + calculated_output_size
 
 
 def unify_box_and_pool(op):

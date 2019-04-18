@@ -193,7 +193,7 @@ class IOTransform(object):
     SMART_NCHW_TO_TF_NCHW = _SmartNCHWToTFNCHW()
 
 
-TrafoOrTrafoDictType = typing.Union[Transform, typing.Dict[typing.Union[BaseTensor, str], Transform]]
+TransformOrTransformDictType = typing.Union[Transform, typing.Dict[typing.Union[BaseTensor, str], Transform]]
 
 
 # We need this extended passthrough remover for the onnx graph, because there can be a reshape with multiple inputs
@@ -350,7 +350,7 @@ def _transform_nnef_filter_grad_to_tf(g, tensor, transforms_by_name, driver):
 
 
 def transform_io(g, io_transform, transforms_by_name, driver):
-    # type:(BaseGraph, TrafoOrTrafoDictType, typing.Dict[str, typing.List[Transform]], DataFormatOptimizationDriver)->None
+    # type:(BaseGraph, TransformOrTransformDictType, typing.Dict[str, typing.List[Transform]], DataFormatOptimizationDriver)->None
     io_tensors_by_name = {t.name: t for t in list(g.inputs) + list(g.outputs)}
 
     transform_by_io_tensor = {}
@@ -896,7 +896,7 @@ def optimize_impl(g,  # type: BaseGraph
                   merge_transforms_into_variables=False,  # type: bool
                   merge_transforms_into_constants=False,  # type: bool
                   transposable_ops=None,  # type: typing.Optional[typing.List[TransposableOperation]]
-                  io_transform=None,  # type:typing.Optional[TrafoOrTrafoDictType]
+                  io_transform=None,  # type:typing.Optional[TransformOrTransformDictType]
                   verbose=False,  # type: bool
                   rename_tensors=False,  # type: bool
                   ):
@@ -965,6 +965,6 @@ __all__ = [
     'TransposableOperation',
     'optimize_impl',
     'IOTransform',
-    'TrafoOrTrafoDictType',
+    'TransformOrTransformDictType',
     'Transposer',
 ]

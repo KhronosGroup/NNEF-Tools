@@ -19,6 +19,8 @@ import os
 
 import nnef
 import numpy as np
+import six
+import typing
 
 from nnef_tools.core import utils
 
@@ -153,3 +155,18 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
             return nnef.read_tensor(f)[0]
     else:
         assert False
+
+
+def create_feed_dict(input_sources,  # type: typing.Union[InputSource, typing.Dict[str, InputSource]]
+                     input_shapes,  # type: typing.Dict[str, typing.Tuple[np.dtype, typing.List[int]]]
+                     ):
+    # type: (...)->typing.Dict[str, np.ndarray]
+    if not isinstance(input_sources, dict):
+        input_sources = {k: input_sources for k in six.iterkeys(input_shapes)}
+
+    feed_dict = {}
+    for name, (dtype, shape) in six.iteritems(input_shapes):
+        assert name in input_sources
+        feed_dict[name] = create_input(input_source=input_sources[name], np_dtype=dtype, shape=shape)
+
+    return feed_dict

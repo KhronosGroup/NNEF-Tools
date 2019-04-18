@@ -19,7 +19,7 @@ import unittest
 from nnef_tools.shape_inference import shape_inference as infer
 
 
-class TestShapePropagation(unittest.TestCase):
+class TestShapeInference(unittest.TestCase):
     def test_singleton(self):
         self.assertEqual(infer.singleton(0), [])
         self.assertEqual(infer.singleton(1), [1])
@@ -139,6 +139,9 @@ class TestShapePropagation(unittest.TestCase):
         self.assertEqual([[1, 2, 2], [1, 2, 2], [1, 2, 2]], infer.split([1, 2, 6], -1, num=3))
         self.assertEqual([[1, 2, 2], [1, 2, 4]], infer.split([1, 2, 6], -1, ratios=[1, 2]))
         self.assertEqual([[1, 2, 2], [1, 2, 4]], infer.split([1, 2, 6], -1, sizes=[2, 4]))
+        self.assertEqual([[1, 2, 2], [1, 2, 4]], infer.split([1, 2, 6], -1, split_points=[2]))
+        self.assertEqual([[1, 2, 2], [1, 2, 1], [1, 2, 2], [1, 2, 1]],
+                         infer.split([1, 2, 6], -1, split_points=[2, 3, 5]))
 
     def test_conv(self):
         self.assertEqual([10, 30, 30, 16], infer.conv(input=[10, 32, 32, 3],
@@ -246,6 +249,14 @@ class TestShapePropagation(unittest.TestCase):
                                                       [10, 20, 5, 4],
                                                       transpose_a=True,
                                                       transpose_b=True))
+        self.assertEqual([10, 20, 3, 5], infer.matmul([10, 20, 4, 3],
+                                                      [1, 20, 5, 4],
+                                                      transpose_a=True,
+                                                      transpose_b=True))
+        self.assertEqual([10, 20, 3, 5], infer.matmul([10, 20, 4, 3],
+                                                      [1, 1, 5, 4],
+                                                      transpose_a=True,
+                                                      transpose_b=True))
 
     def test_reduce(self):
         self.assertEqual([1, 1, 1, 1, 5], infer.reduce([1, 2, 3, 4, 5], [1, 2, 3]))
@@ -283,6 +294,8 @@ class TestShapePropagation(unittest.TestCase):
         self.assertEqual([], infer.reshape([1], []))
         self.assertEqual([], infer.reshape([1, 1, 1], []))
         self.assertEqual([0, 1], infer.reshape([0], [0, 1]))
+        self.assertEqual([1, 2, 3, 4], infer.reshape(input=[1, 3, 2, 4], shape=[2, 3], offset=1, count=2))
+        self.assertEqual([1, 2, 3, 4], infer.reshape(input=[1, 24], shape=[2, 3, 4], offset=1, count=-1))
         with self.assertRaises(AssertionError):
             infer.reshape([0], [0, -1])
         self.assertEqual([1, 2, 1, 3], infer.reshape([1, 2, 3], [0, 0, 1, -1], zero_means_same=True))

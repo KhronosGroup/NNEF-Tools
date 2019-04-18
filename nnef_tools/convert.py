@@ -137,12 +137,15 @@ def get_reader(input_format,
         elif output_format in ['onnx']:
             from nnef_tools.conversion.onnx import nnef_to_onnx
             configs.append(nnef_to_onnx.ParserConfig)
+        elif output_format in ['caffe']:
+            from nnef_tools.conversion.caffe import nnef_to_caffe
+            configs.append(nnef_to_caffe.ParserConfig)
         else:
             assert False
 
         configs += NNEFParserConfig.load_configs(custom_converters, load_standard=False)
 
-        return Reader(parser_configs=configs)
+        return Reader(parser_configs=configs, unify=(output_format in ['caffe']))
     elif input_format == 'tensorflow-pb':
         # TODO custom converter
         from nnef_tools.io.tensorflow.tf_pb_io import Reader
@@ -162,6 +165,10 @@ def get_reader(input_format,
         # TODO custom converter
         from nnef_tools.io.onnx.onnx_io import Reader
         return Reader(propagate_shapes=True, input_shape=input_shape)
+    elif input_format == 'caffe':
+        # TODO custom converter
+        from nnef_tools.io.caffe.caffe_io import Reader
+        return Reader()
     else:
         assert False
 
@@ -220,6 +227,20 @@ def get_converter(input_format, output_format, prefer_nchw=False, permissive=Fal
 
         return Converter(enable_imprecise_image_resize=permissive,
                          custom_converter_by_op_name=custom_converter_by_op_name)
+    elif input_format == 'caffe' and output_format == 'nnef':
+        from nnef_tools.conversion.caffe.caffe_to_nnef import Converter
+
+        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
+                                       if custom_converters else None)
+
+        return Converter(custom_converter_by_op_name=custom_converter_by_op_name)
+    elif input_format == 'nnef' and output_format == 'caffe':
+        from nnef_tools.conversion.caffe.nnef_to_caffe import Converter
+
+        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
+                                       if custom_converters else None)
+
+        return Converter(custom_converter_by_op_name=custom_converter_by_op_name)
     else:
         assert False
 
@@ -234,6 +255,8 @@ def get_data_format_optimizer(input_format, output_format, io_transformation):
     elif output_format == 'onnx':
         from nnef_tools.optimization.onnx.onnx_data_format_optimizer import Optimizer
         return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
+    elif output_format == 'caffe':
+        return lambda g: None
     else:
         assert False
 
@@ -263,6 +286,9 @@ def get_writer(input_format, output_format, with_weights=True, custom_converters
     elif output_format == 'onnx':
         from nnef_tools.io.onnx.onnx_io import Writer
         return Writer()
+    elif output_format == 'caffe':
+        from nnef_tools.io.caffe.caffe_io import Writer
+        return Writer()
     else:
         assert False
 
@@ -281,6 +307,8 @@ def get_extension(output_format, compress):
         return ".onnx"
     elif output_format == 'tensorflow-lite':
         return ".tflite"
+    elif output_format == 'caffe':
+        return ".prototxt"
     else:
         assert False
 
@@ -331,7 +359,7 @@ def convert(input_format,
             custom_converters=None,
             conversion_info=False  # type: typing.Union[bool, str, None]
             ):
-    if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef']:
+    if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef', 'caffe']:
         output_prefix = os.path.basename(os.path.abspath(input_model[0]))
     elif input_format == 'tensorflow-py':
         output_prefix = input_model[0].split('.')[-1]
@@ -349,7 +377,7 @@ def convert(input_format,
                                           output_path=output_path,
                                           compress=compress)
     else:
-        if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef']:
+        if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef', 'caffe']:
             output_dir = os.path.dirname(os.path.abspath(input_model[0]))
             if not output_dir:
                 output_dir = '.'
@@ -401,11 +429,11 @@ please add its location to PYTHONPATH.
 - Quote parameters if they contain spaces or special characters.""")
 
     parser.add_argument("--input-format",
-                        choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx'],
+                        choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx', 'caffe'],
                         required=True,
                         help="""Input format""")
     parser.add_argument("--output-format",
-                        choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx'],
+                        choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx', 'caffe'],
                         required=True,
                         help="""Output format""")
     parser.add_argument("--input-model",
@@ -417,6 +445,7 @@ onnx: filename.onnx
 tensorflow-pb: filename.pb
 tensorflow-py: package.module.function [filename.ckpt]
 tensorflow-lite: filename.tflite
+caffe: filename.prototxt filename.caffemodel
 """)
 
     parser.add_argument("--output-model",
@@ -437,6 +466,7 @@ Available transformations:
 - SMART_NCHW_TO_NHWC
 The 'SMART' transformations work like a Transpose for rank >= 3 and IDENTITY otherwise.
 Default: IDENTITY
+Not supported if output-format is caffe
 """)
 
     parser.add_argument('--input-shape',
@@ -484,6 +514,10 @@ With an argument: Write to the path defined by the argument.""")
 
     args = parser.parse_args(args=argv[1:])
 
+    if args.output_format == 'caffe' and args.io_transformation != "IDENTITY":
+        print("Error: --io-transformation is not supported for Caffe", file=sys.stderr)
+        exit(1)
+
     args.io_transformation = parse_io_transform(args.io_transformation)
 
     allowed_input_length = {
@@ -492,6 +526,7 @@ With an argument: Write to the path defined by the argument.""")
         'tensorflow-pb': [1],
         'tensorflow-py': [1, 2],
         'tensorflow-lite': [1],
+        'caffe': [2],
     }
     if not len(args.input_model) in allowed_input_length[args.input_format]:
         print("Error: {} values specified to --input-model, allowed: {}"

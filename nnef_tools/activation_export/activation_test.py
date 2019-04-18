@@ -25,12 +25,12 @@ from nnef_tools.conversion import conversion_info
 
 
 class _ActivationPair(object):
-    def __init__(self, from_, to, trafos, short_from, short_to):
+    def __init__(self, from_, to, transforms, short_from, short_to):
         self.short_from = short_from
         self.short_to = short_to
         self.from_ = from_  # type: str
         self.to = to  # type: str
-        self.trafos = trafos  # type: typing.List[conversion_info.Transform]
+        self.transforms = transforms  # type: typing.List[conversion_info.Transform]
 
 
 _nnef_dtype_by_np_dtype = None
@@ -89,8 +89,8 @@ def _are_activations_close(activation_pair, verbose=False, allowed_bad_pixel_rat
 
     arr1 = _read_nnef_tensor(activation_pair.from_)  # type:np.ndarray
     arr2 = _read_nnef_tensor(activation_pair.to)  # type: np.ndarray
-    for trafo in activation_pair.trafos:
-        arr1 = trafo.apply_np(arr1)
+    for transform in activation_pair.transforms:
+        arr1 = transform.apply_np(arr1)
 
     if arr1.dtype != arr2.dtype:
         print("Warning: different dtypes: {} != {} for {}, {}"
@@ -158,8 +158,8 @@ def transform_feed_dict(feed_dict, conv_info):
         tensor_info = tensor_info_by_source_name[name]  # type: conversion_info.TensorInfo
         new_name = tensor_info.target_name
         new_value = value
-        for trafo in tensor_info.transforms:
-            new_value = trafo.apply_np(new_value)
+        for transform in tensor_info.transforms:
+            new_value = transform.apply_np(new_value)
         assert list(new_value.shape) == tensor_info.target_shape
         feed_dict2[new_name] = new_value
     return feed_dict2
@@ -181,7 +181,7 @@ def compare_activation_dirs(dir0, dir1, conv_info, verbose=False, allowed_bad_pi
         if source in fnset0 and target in fnset1:
             activation_pairs.append(_ActivationPair(from_=os.path.join(dir0, source),
                                                     to=os.path.join(dir1, target),
-                                                    trafos=tensor.transforms,
+                                                    transforms=tensor.transforms,
                                                     short_from=source,
                                                     short_to=target))
             used_source_names.add(source)

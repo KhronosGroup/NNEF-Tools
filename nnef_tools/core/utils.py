@@ -21,10 +21,10 @@ import re
 import shlex
 import shutil
 import sys
-import typing
 from collections import OrderedDict
 
 import six
+import typing
 
 INT32_MAX = 2147483647
 
@@ -406,3 +406,12 @@ def rmtree(path, exist_ok=False):
             shutil.rmtree(path)
     else:
         shutil.rmtree(path)
+
+
+def prefix_sum(iterable, zero=0):
+    sum = zero
+    l = []
+    for elem in iterable:
+        sum = sum + elem
+        l.append(sum)
+    return l

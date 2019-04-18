@@ -22,7 +22,7 @@ import six
 
 from nnef_tools.conversion import converter as _converter
 from nnef_tools.conversion import transforms
-from nnef_tools.conversion.onnx import onnx_to_nnef_trafos
+from nnef_tools.conversion.onnx import onnx_to_nnef_passes
 from nnef_tools.core import graph_utils
 from nnef_tools.core import utils
 from nnef_tools.io.nnef.nnef_graph import *
@@ -79,9 +79,7 @@ class Converter(_converter.Converter[ONNXTensor, ONNXOperation, ONNXGraph,
     def convert_graph(self, source_graph):
         graph_utils.remove_unreachable(source_graph)
         target_graph = super(Converter, self).convert_graph(source_graph)  # type: NNEFGraph
-        # onnx_to_nnef_trafos.small_variables_to_consts(target_graph)
-        onnx_to_nnef_trafos.merge_pads(target_graph)
-        graph_utils.remove_unreachable(target_graph)
+        onnx_to_nnef_passes.post_conversion_pass(target_graph)
         target_graph.generate_missing_names()
         return target_graph
 

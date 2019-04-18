@@ -8,16 +8,16 @@ The following table lists the correspondence between operations in TensorFlow an
 | tf.get_variable | variable
 | tf.placeholder | external
 | tf.constant | constant
-| tf.zeros | zeros
-| tf.ones | ones
-| tf.zeros_like | zeros_like
-| tf.ones_like | ones_like
+| tf.zeros | constant
+| tf.ones | constant
+| tf.zeros_like | constant
+| tf.ones_like | constant
 | tf.concat | concat
 | tf.split | split
 | tf.stack | stack
 | tf.unstack | unstack
 | tf.reshape | reshape
-| tf.squeeze | squueze
+| tf.squeeze | squeeze
 | tf.expand_dims | unsqueeze
 | tf.transpose | transpose
 | tf.add | add
@@ -29,7 +29,7 @@ The following table lists the correspondence between operations in TensorFlow an
 | tf.logical_or | or
 | tf.logical_not | not
 | tf.negative | neg
-| tf.no_op | copy
+| tf.identity | copy
 | tf.abs | abs
 | tf.sign | sign
 | tf.exp | exp
@@ -95,39 +95,65 @@ The following table lists the correspondence between operations in TensorFlow an
 
 
 # Caffe
-
 The following table lists the correspondence between operations in Caffe and NNEF.
 
-| Caffe | NNEF
-| --- | ---
+| Caffe | NNEF | Notes
+| --- | --- | ---
+| Input | external
 | Convolution | conv
-| Deconvolution | deconv
-| InnerProduct | linear
-| Pooling | avg_pool, max_pool
+| Pooling | max_pool | if pool == MAX and not global_pooling
+|         | avg_pool | if pool == AVE and not global_pooling
+|         | max_reduce | if pool == MAX and global_pooling
+|         | mean_reduce | if pool == AVE and global_pooling
+| Crop | slice
+| Deconvolution | multilinear_upsample | if weight_filler.type == 'bilinear' and depth-wise
+|               | deconv | otherwise
+| InnerProduct | linear | if bias_term and not transpose and axis == 1
+|              | add(matmul) | if bias_term and (transpose or axis != 1)
+|              | matmul | if not bias_term
+|              | | + reshape if axis != input-rank - 1 <br> + unsqueeze if axis == 0
+| Dropout | | skipped in inference
 | LRN | local_response_normalization
-| MVN | local_contrast_normalization
-| BatchNorm | batch_normalization
-| ReLU | relu, leaky_relu
-| ELU | elu
+| MVN | local_contrast_normalization | if normalize_variance 
+|     | local_mean_normalization | if not normalize_variance
+| BatchNorm | batch_normalization | scale factor merged into mean and variance if not 1 <br> merged with following scale layer if any
+| ReLU | relu | if negative_slope == 0
+|      | leaky_relu | if negative_slope != 0
+| PReLU | prelu
+| ELU | elu | if alpha == 1
+|     | select(x > 0.0, x, alpha * (exp(x) - 1.0)) | if alpha != 1
 | Sigmoid | sigmoid
 | TanH | tanh
-| Threshold | max
-| Scale | mul
-| Bias | add
+| AbsVal | abs
+| Power(a, b, n) | pow(a * x + b, n) | '*' or '+' omitted if the corresponding parameter is 1 or 0
+| Exp(base, a, b) | exp(a * x + b)       | if base == -1
+|                 | pow(base, a * x + b) | if base != -1
+|                 |                      | '*' or '+' omitted if the corresponding parameter is 1 or 0
+| Log(base, a, b) | log(a * x + b)             | if base == -1
+|                 | log2(a * x + b)            | if base == 2
+|                 | log(a * x + b) / log(base) | otherwise
+|                 |                            | '*' or '+' omitted if the corresponding parameter is 1 or 0
+| BNLL | softplus
+| Threshold(x, t) | select(x > t, 1.0, 0.0)
+| Bias(x) | add(x, weight) | + unsqueeze if axis > 0
+| Scale(x) | mul(x + bias, weight) | '+' omitted if no bias_term <br> + unsqueeze if axis > 0  
 | Flatten | reshape
 | Reshape | reshape
 | Split | copy_n
-| Slice | split
 | Concat | concat
+| Slice | split
+| Eltwise | x_1 * ... * x_n | if operation == PROD
+|         | x_1 + ... + x_n | if operation == SUM and coeff == []
+|         | coeff_1 * x_1 + ... + coeff_n * x_n | if operation == SUM and coeff != []
+|         | max(x_1, ... , x_n) | if operation == MAX
+| Reduction | squeeze(sum_reduce) * coeff | if operation == SUM
+|           | squeeze(sum_reduce(abs)) * coeff | if operation == ASUM
+|           | squeeze(sum_reduce(sqr)) * coeff | if operation == SUMSQ
+|           | squeeze(mean_reduce) * coeff | if operation == MEAN
+|           |                              | '*' omitted if coeff == 1
+| Silence | | skipped in inference
+| ArgMax | argmax_reduce | if top_k == 1 and out_max_val == false
 | Softmax | softmax
-| BNLL | softplus
-| Eltwise | mul, add
-| Power(a,b,n) | pow(a * x + b, n)
-| Exp(base,a,b) | pow(base, a * x + b)
-| Log(base,a,b) | log(a * x + b) / log(base)
-| Reduction | sum_reduce, mean_reduce
-| ArgMax | argmax_reduce
-
 
 # ONNX
 
@@ -175,8 +201,8 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | Gather | -
 | Gemm | matmul
 | GlobalAveragePool | mean_reduce
-| GlobalLpPool | sum_reduce(abs) | if p = 1
-|              | sqrt(sum_reduce(sqr)) | if p = 2
+| GlobalLpPool | sum_reduce(abs) | if p == 1
+|              | sqrt(sum_reduce(sqr)) | if p == 2
 | GlobalMaxPool | max_reduce
 | Greater | gt
 | HardSigmoid | clamp(add(mul))
@@ -194,8 +220,8 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | Loop | -
 | LpNormalization | l1_normalization | if p == 1
 |                 | l2_normalization | if p == 2
-| LpPool | avg_pool(abs) | if p = 1
-|        | sqrt(avg_pool(sqr)) | if p = 2
+| LpPool | avg_pool(abs) | if p == 1
+|        | sqrt(avg_pool(sqr)) | if p == 2
 | MatMul | matmul
 | Max | max
 | MaxPool | max_pool

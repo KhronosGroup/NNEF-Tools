@@ -14,8 +14,9 @@
 
 from __future__ import division, print_function, absolute_import
 
-import typing
 from collections import namedtuple
+
+import typing
 
 
 class Padding(object):
@@ -228,11 +229,12 @@ def split(input,  # type: ShapeType
           axis,  # type: AxisType
           num=None,  # type: typing.Optional[int]
           sizes=None,  # type: typing.Optional[typing.List[DimType]]
-          ratios=None  # type: typing.Optional[typing.List[int]]
+          ratios=None,  # type: typing.Optional[typing.List[int]]
+          split_points=None,  # type: typing.Optional[typing.List[int]]
           ):
     # type: (...)->ShapeListType
 
-    assert sum(arg is not None for arg in (num, sizes, ratios)) == 1
+    assert sum(arg is not None for arg in (num, sizes, ratios, split_points)) == 1
 
     assert -len(input) <= axis < len(input)
     if axis < 0:
@@ -248,6 +250,16 @@ def split(input,  # type: ShapeType
         assert input[axis] % sum(ratios) == 0
         unit_size = input[axis] // sum(ratios)
         return [[unit_size * ratio if i == axis else dim for i, dim in enumerate(input)] for ratio in ratios]
+    elif split_points is not None:
+        prefix_sum = 0
+        sizes = []
+        for point in split_points:
+            size = point - prefix_sum
+            sizes.append(size)
+            prefix_sum += size
+        sizes.append(input[axis] - prefix_sum)
+        assert input[axis] == sum(sizes)
+        return [[size if i == axis else dim for i, dim in enumerate(input)] for size in sizes]
     else:
         assert False
 
@@ -336,7 +348,7 @@ def matmul(a, b, transpose_a=False, transpose_b=False):
     # type: (ShapeType, ShapeType, bool, bool)->ShapeType
     assert len(a) >= 2 and len(b) >= 2
     assert len(a) == len(b)
-    assert a[:-2] == b[:-2]
+    assert all(a_ == b_ or a_ == 1 or b_ == 1 for a_, b_ in zip(a[:-2], b[:-2]))
 
     if transpose_a:
         a = a[:-2] + [a[-1], a[-2]]
@@ -345,7 +357,7 @@ def matmul(a, b, transpose_a=False, transpose_b=False):
 
     assert a[-1] == b[-2]
 
-    return a[:-2] + [a[-2], b[-1]]
+    return [max(a_, b_) for a_, b_ in zip(a[:-2], b[:-2])] + [a[-2], b[-1]]
 
 
 def reduce(input, axes, squeeze=False):

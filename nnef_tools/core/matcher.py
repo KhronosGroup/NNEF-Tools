@@ -215,10 +215,10 @@ class Operation(Pattern):
         return Match(did_match=True, root=op, dict_=dict_)
 
     def _match_attribs(self, op, settings, attrib_patterns):
-        def trafo(arg):
+        def transform(arg):
             return arg if isinstance(arg, Pattern) else _Const(arg)
 
-        attrib_patterns = utils.recursive_transform(attrib_patterns, trafo)  # type: typing.Dict[str, Pattern]
+        attrib_patterns = utils.recursive_transform(attrib_patterns, transform)  # type: typing.Dict[str, Pattern]
 
         dict_ = {self: op}
         for attrib_name, attrib_pattern in six.iteritems(attrib_patterns):

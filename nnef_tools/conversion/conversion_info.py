@@ -58,6 +58,7 @@ def dump(conversion_info, file_name):
 
 
 def load(file_name):
+    # type: (str)->ConversionInfo
     return json_utils.load(file_name, [ConversionInfo, TensorInfo, Transpose, Squeeze, Unsqueeze, Reshape])
 
 

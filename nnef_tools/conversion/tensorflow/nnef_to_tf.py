@@ -23,7 +23,7 @@ import numpy as np
 from nnef_tools.conversion import converter
 from nnef_tools.conversion import transforms
 from nnef_tools.conversion.shape_utils import ShapeUtils
-from nnef_tools.conversion.tensorflow import nnef_to_tf_trafos
+from nnef_tools.conversion.tensorflow import nnef_to_tf_passes
 from nnef_tools.core import utils
 from nnef_tools.io.nnef.nnef_graph import NNEFGraph, NNEFOperation, NNEFTensor
 from nnef_tools.io.nnef.parser_config import NNEFParserConfig
@@ -112,7 +112,7 @@ class Converter(converter.Converter[NNEFTensor, NNEFOperation, NNEFGraph,
 
     def convert_graph(self, source_graph):
         # type: (NNEFGraph)->TFGraph
-        nnef_to_tf_trafos.pre_conversion_transform(source_graph)
+        nnef_to_tf_passes.pre_conversion_pass(source_graph)
         target_graph = super(Converter, self).convert_graph(source_graph)  # type: TFGraph
         target_graph.generate_missing_names()
         return target_graph
