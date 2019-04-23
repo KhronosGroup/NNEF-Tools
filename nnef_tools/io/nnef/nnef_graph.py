@@ -14,9 +14,10 @@
 
 from __future__ import division, print_function, absolute_import
 
+import typing
+
 import numpy as np
 import six
-import typing
 
 from nnef_tools.core import utils
 from nnef_tools.core.base_graph import *

@@ -14,11 +14,18 @@
 
 from __future__ import division, print_function, absolute_import
 
+import glob
+import os
+
 import nnef
 import numpy as np
 
 
-class RandomInput(object):
+class InputSource(object):
+    pass
+
+
+class RandomInput(InputSource):
     def __init__(self, *args):
         assert len(args) in [1, 2, 5]
 
@@ -38,7 +45,7 @@ class RandomInput(object):
             assert False
 
 
-class ImageInput(object):
+class ImageInput(InputSource):
     COLOR_FORMAT_RGB = 'RGB'
     COLOR_FORMAT_BGR = 'BGR'
     DATA_FORMAT_NCHW = 'NCHW'
@@ -52,12 +59,12 @@ class ImageInput(object):
         self.div = div
 
 
-class NNEFTensorInput(object):
+class NNEFTensorInput(InputSource):
     def __init__(self, filename):
         self.filename = filename
 
 
-def create_input(input_source, np_dtype, shape):
+def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
     assert isinstance(input_source, (RandomInput, ImageInput, NNEFTensorInput))
     np_dtype = np.dtype(np_dtype)
     if isinstance(input_source, RandomInput):
@@ -76,36 +83,40 @@ def create_input(input_source, np_dtype, shape):
         else:
             assert False, "Unsupported dtype: {}".format(np_dtype.name)
     elif isinstance(input_source, ImageInput):
-        from matplotlib.image import imread
-        from scipy.misc import imresize
+        import skimage
+        import skimage.io
+        import skimage.transform
 
         assert len(shape) == 4, "ImageInput can only produce tensors with rank=4"
         assert input_source.data_format.upper() in [ImageInput.DATA_FORMAT_NCHW, ImageInput.DATA_FORMAT_NHWC]
         assert input_source.color_format.upper() in [ImageInput.COLOR_FORMAT_RGB, ImageInput.COLOR_FORMAT_BGR]
         imgs = []
-        for filename in input_source.filenames:
-            if input_source.data_format.upper() == ImageInput.DATA_FORMAT_NCHW:
-                target_size = [shape[2], shape[3], shape[1]]
-            else:
-                target_size = [shape[1], shape[2], shape[3]]
-            img = imread(filename)
-            if input_source.color_format.upper() == ImageInput.COLOR_FORMAT_RGB:
-                img = img[..., (0, 1, 2)]  # remove alpha channel if present
-            else:
-                img = img[..., (2, 1, 0)]
-            img = ((img.astype(np.float32) - np.array(input_source.sub)) / np.array(input_source.div))
-            img = imresize(img, target_size).astype(np_dtype)
-            if input_source.data_format.upper() == ImageInput.DATA_FORMAT_NCHW:
-                img = img.transpose((2, 0, 1))
-            img = np.expand_dims(img, 0)
-            imgs.append(img)
+        for pattern in input_source.filenames:
+            filenames = sorted(glob.glob(os.path.expanduser(pattern)))
+            assert filenames, "No files found for path: {}".format(pattern)
+            for filename in filenames:
+                if input_source.data_format.upper() == ImageInput.DATA_FORMAT_NCHW:
+                    target_size = [shape[2], shape[3]]
+                else:
+                    target_size = [shape[1], shape[2]]
+                img = skimage.img_as_ubyte(skimage.io.imread(filename))
+                if input_source.color_format.upper() == ImageInput.COLOR_FORMAT_RGB:
+                    img = img[..., (0, 1, 2)]  # remove alpha channel if present
+                else:
+                    img = img[..., (2, 1, 0)]
 
+                img = ((img.astype(np.float32) - np.array(input_source.sub)) / np.array(input_source.div))
+                img = skimage.transform.resize(img, target_size, anti_aliasing=True, mode='reflect').astype(np_dtype)
+                if input_source.data_format.upper() == ImageInput.DATA_FORMAT_NCHW:
+                    img = img.transpose((2, 0, 1))
+                img = np.expand_dims(img, 0)
+                imgs.append(img)
         if len(imgs) < shape[0]:
             imgs = imgs * ((shape[0] + len(imgs) - 1) / len(imgs))
             imgs = imgs[:shape[0]]
             assert len(imgs) == shape[0]
-
-        return np.concatenate(a_tuple=tuple(imgs), axis=0)
+        assert len(imgs) == shape[0] or allow_bigger_batch
+        return np.concatenate(tuple(imgs), 0)
     elif isinstance(input_source, NNEFTensorInput):
         with open(input_source.filename) as f:
             return nnef.read_tensor(f)[0]

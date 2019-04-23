@@ -29,7 +29,7 @@ import os
 import numpy as np
 import six
 
-from nnef_tools.activation_export.input_source import RandomInput, ImageInput, NNEFTensorInput, create_input
+from nnef_tools.io.input_source import RandomInput, ImageInput, NNEFTensorInput, create_input
 from nnef_tools.conversion import conversion_info
 from nnef_tools.core import utils
 
@@ -82,7 +82,7 @@ def tf_py_has_checkpoint(input_model):
     return len(parts) >= 2 and parts[1]
 
 
-def get_args():
+def get_args(argv):
     parser = argparse.ArgumentParser(description="NNEFTools/export_activation: Neural network activation export tool",
                                      formatter_class=argparse.RawTextHelpFormatter,
                                      epilog="""Tips:
@@ -119,7 +119,7 @@ tensorflow-py: package.module:function or package.module:function:checkpoint_pat
     - Keyword arguments can not be used with Random.
  - Image(filename, color_format='RGB', data_format='NCHW', sub=127.5, div=127.5) for int and float
    - Arguments:
-     - filename: string or list of strings, path(s) of jpg/png images
+     - filename: string or list of strings, path(s) of jpg/png images, can have * in them
      - color_format: RGB or BGR
      - data_format: NCHW or NHWC
      - sub: float
@@ -158,7 +158,7 @@ On a computer with low (gpu) memory, a lower number is appropriate.
 All tensors will evaluated but in groups of size '--tensors-at-once'.
 Default: 25.""")
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=argv[1:])
     args.input = parse_input(args.input)
     if args.input_format == 'tensorflow-py':
         check_tf_py_input_model(args.input_model)
@@ -323,8 +323,8 @@ def tf_export_activations(input_shapes,
            init_variables=init_variables)
 
 
-def export_activations(input_format, input_model, input_shape, input_source, conversion_info, output_path,
-                       tensors_per_iter):
+def export_activation(input_format, input_model, input_shape, input_source, conversion_info, output_path,
+                      tensors_per_iter):
     if output_path is None:
         output_path = conversion_info
         if output_path.endswith('.conversion.json'):
@@ -359,28 +359,29 @@ def export_activations(input_format, input_model, input_shape, input_source, con
         assert False
 
 
-def export_activations_using_command_line_args(args):
-    export_activations(input_format=args.input_format,
-                       input_model=args.input_model,
-                       input_shape=args.input_shape,
-                       input_source=args.input,
-                       conversion_info=args.conversion_info,
-                       output_path=args.output_path,
-                       tensors_per_iter=args.tensors_at_once)
-
-
-def main():
+def export_activation_using_argv(argv):
     if 'TF_CPP_MIN_LOG_LEVEL' not in os.environ:
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-    args = get_args()
+    args = get_args(argv=argv)
 
     try:
-        export_activations_using_command_line_args(args)
+        export_activation(input_format=args.input_format,
+                          input_model=args.input_model,
+                          input_shape=args.input_shape,
+                          input_source=args.input,
+                          conversion_info=args.conversion_info,
+                          output_path=args.output_path,
+                          tensors_per_iter=args.tensors_at_once)
     except utils.NNEFToolsException as e:
         print("Error: " + str(e), file=sys.stderr)
         exit(1)
 
 
+# Call this if you don't want to reload the whole program for each run
+def export_activation_using_command(command):
+    return export_activation_using_argv(utils.command_to_argv(command))
+
+
 if __name__ == '__main__':
-    main()
+    export_activation_using_argv(sys.argv)

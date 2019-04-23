@@ -22,7 +22,6 @@ import sys
 if len(sys.path) == 0 or sys.path[0] != '':
     sys.path.insert(0, '')
 
-import shlex
 import argparse
 import importlib
 import os
@@ -400,21 +399,6 @@ def tf_py_has_checkpoint(input_model):
     return len(parts) >= 2 and parts[1]
 
 
-def convert_using_args(args):
-    convert(input_format=args.input_format,
-            output_format=args.output_format,
-            input_model=args.input_model,
-            output_path=args.output_model,
-            input_shape=args.input_shape,
-            prefer_nchw=args.prefer_nchw,
-            io_transformation=args.io_transformation,
-            compress=args.compress,
-            permissive=args.permissive,
-            with_weights=not args.no_weights,
-            custom_converters=args.custom_converters,
-            conversion_info=args.conversion_info)
-
-
 def get_args(argv):
     parser = argparse.ArgumentParser(description="NNEFTools/convert: Neural network conversion tool",
                                      formatter_class=argparse.RawTextHelpFormatter,
@@ -544,7 +528,18 @@ def convert_using_argv(argv):
                   file=sys.stderr)
 
     try:
-        convert_using_args(args)
+        convert(input_format=args.input_format,
+                output_format=args.output_format,
+                input_model=args.input_model,
+                output_path=args.output_model,
+                input_shape=args.input_shape,
+                prefer_nchw=args.prefer_nchw,
+                io_transformation=args.io_transformation,
+                compress=args.compress,
+                permissive=args.permissive,
+                with_weights=not args.no_weights,
+                custom_converters=args.custom_converters,
+                conversion_info=args.conversion_info)
     except utils.NNEFToolsException as e:
         print("Error: " + str(e), file=sys.stderr)
         exit(1)
@@ -552,10 +547,7 @@ def convert_using_argv(argv):
 
 # Call this if you don't want to reload the whole program for each run
 def convert_using_command(command):
-    def command_to_argv(command):
-        return shlex.split(command.replace('\\', ' ').replace('\n', ' ').replace('\r', ' '))
-
-    return convert_using_argv(command_to_argv(command))
+    return convert_using_argv(utils.command_to_argv(command))
 
 
 if __name__ == '__main__':

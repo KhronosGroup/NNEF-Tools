@@ -23,13 +23,13 @@ You have to install dependencies only for the functionalities that you are using
 |  TensorFlow Protobuf conversion tests      | pip install typing six numpy protobuf "tensorflow-gpu<1.14"         |
 |  TensorFlow Lite conversion                | pip install typing six numpy flatbuffers                            |
 |  TensorFlow Lite conversion tests          | pip install typing six numpy flatbuffers "tensorflow-gpu<1.14"      |
-|  TensorFlow activation export              | pip install typing six numpy scipy matplotlib "tensorflow-gpu<1.14" |
+|  TensorFlow activation export              | pip install typing six numpy scikit-image "tensorflow-gpu<1.14" |
 |  ONNX conversion                           | pip install typing six numpy protobuf                               |
 |  ONNX conversion tests                     | pip install typing six numpy protobuf onnx torch                    |
 
 All dependencies (just for reference):
 ```
-pip install typing six numpy scipy matplotlib protobuf flatbuffers onnx torch "tensorflow-gpu<1.14"
+pip install typing six numpy scikit-image protobuf flatbuffers onnx torch "tensorflow-gpu<1.14"
 ```
 
 ### Remarks for ONNX activation tests

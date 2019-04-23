@@ -17,6 +17,7 @@ from __future__ import division, print_function, absolute_import
 import inspect
 import itertools
 import re
+import shlex
 import sys
 import typing
 from collections import OrderedDict
@@ -326,3 +327,14 @@ def compatible_shapes(orig_shape, shape):
         if o != s and o != -1:
             return False
     return True
+
+
+def product(list_, default=1):
+    prod = default
+    for val in list_:
+        prod *= val
+    return prod
+
+
+def command_to_argv(command):
+    return shlex.split(command.replace('\\', ' ').replace('\n', ' ').replace('\r', ' '))
