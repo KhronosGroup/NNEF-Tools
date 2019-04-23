@@ -243,6 +243,8 @@ def reshape_shape(input, shape):
     assert all(s >= -1 for s in shape), "items in 'shape' must be >= -1, found {}".format(shape)
     assert sum(1 for s in shape if s == -1) <= 1, "at most one item may be -1 in 'shape', found {}".format(shape)
 
+    shape = list(shape)  # don't modify original list
+
     for i in range(len(shape)):
         if shape[i] == 0:
             shape[i] = input[i]
