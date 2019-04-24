@@ -879,6 +879,8 @@ def transform_bts_conv_stb(g):
         # type: (matcher.Match)->TFOperation
         block_shape = (m[stb].attribs["block_shape"] if m[stb].name.endswith("_nd")
                        else [m[stb].attribs["block_size"]] * len(m[stb].attribs["paddings"]))
+        if len(block_shape) > m[conv].output.rank - 2:  # In the NCHW case there might be a leading 1
+            block_shape = block_shape[-(m[conv].output.rank - 2):]
         if m[conv].name == "_conv":
             padding = "SAME" if utils.recursive_any(m[stb].attribs["paddings"], lambda x: x > 0) else "VALID"
 

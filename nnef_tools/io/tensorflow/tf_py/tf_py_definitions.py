@@ -293,6 +293,7 @@ DefaultTraceableFunctions = [
     TraceableFunction("tf.fill(dims, value)", ["tf.fill"]),
     TraceableFunction("tf.random_uniform(shape, minval, maxval, dtype, seed)", ["tf.random_uniform"]),
     TraceableFunction("tf.size(input:T)", ["tf.size", "_tf.size"]),
+    TraceableFunction("tf.nn.l2_loss(t:T)", ["tf.nn.l2_loss"]),
     TraceableFunction("_tf.conv3d_backprop_input_v2(input_sizes, filter:T, out_backprop:T, strides, padding, "
                       "data_format?, dilations?)", ["_tf.conv3d_backprop_input_v2"]),
     TraceableFunction("_tf.concat_offset(concat_dim, shape)", ["_tf.concat_offset"]),
