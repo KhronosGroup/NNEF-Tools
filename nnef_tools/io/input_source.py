@@ -106,7 +106,10 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
                     img = img[..., (2, 1, 0)]
 
                 img = ((img.astype(np.float32) - np.array(input_source.sub)) / np.array(input_source.div))
-                img = skimage.transform.resize(img, target_size, anti_aliasing=True, mode='reflect').astype(np_dtype)
+                img = skimage.transform.resize(img, target_size,
+                                               preserve_range=True,
+                                               anti_aliasing=True,
+                                               mode='reflect').astype(np_dtype)
                 if input_source.data_format.upper() == ImageInput.DATA_FORMAT_NCHW:
                     img = img.transpose((2, 0, 1))
                 img = np.expand_dims(img, 0)
