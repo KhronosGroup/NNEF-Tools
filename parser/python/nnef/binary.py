@@ -95,7 +95,7 @@ def _fromfile(file, dtype, count):
 
 def write_tensor(file, tensor, version=(1,0), quantization={}):
     if isinstance(file, str):
-        raise ValueError('file paramater must be a file object not a file name')
+        raise ValueError('file parameter must be a file object not a file name')
 
     _tofile(np.asarray([0x4E, 0xEF, version[0], version[1]], dtype=np.uint8), file)
 
@@ -135,7 +135,7 @@ def write_tensor(file, tensor, version=(1,0), quantization={}):
 
 def read_tensor(file):
     if isinstance(file, str):
-        raise ValueError('file paramater must be a file object not a file name')
+        raise ValueError('file parameter must be a file object not a file name')
 
     [magic1, magic2, major, minor] = _fromfile(file, dtype=np.uint8, count=4)
     if magic1 != 0x4E or magic2 != 0xEF:

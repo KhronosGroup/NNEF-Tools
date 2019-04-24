@@ -338,3 +338,9 @@ def product(list_, default=1):
 
 def command_to_argv(command):
     return shlex.split(command.replace('\\', ' ').replace('\n', ' ').replace('\r', ' '))
+
+
+def without_slash(path):
+    while len(path) > 1 and (path[-1] == '/' or path[-1] == '\\'):
+        path = path[:-1]
+    return path
