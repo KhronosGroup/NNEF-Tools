@@ -1413,8 +1413,6 @@ _DefaultConverters = {
     "min_reduce": partial(generic_convert_reduce, target_name="tf.reduce_min"),
     "max_reduce": partial(generic_convert_reduce, target_name="tf.reduce_max"),
     "mean_reduce": partial(generic_convert_reduce, target_name="tf.reduce_mean"),
-    "any_reduce": partial(generic_convert_reduce, target_name="tf.reduce_any"),
-    "all_reduce": partial(generic_convert_reduce, target_name="tf.reduce_all"),
     "argmax_reduce": partial(generic_convert_argminmax_reduce, target_name="tf.argmax"),
     "argmin_reduce": partial(generic_convert_argminmax_reduce, target_name="tf.argmin"),
     "moments": convert_moments,

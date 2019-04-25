@@ -876,7 +876,7 @@ _DefaultConverters = {
     'slice': convert_slice,
     'squeeze': partial(generic_convert_unary, target_name='Squeeze', copy_attribs=['axes']),
     'unsqueeze': partial(generic_convert_unary, target_name='Unsqueeze', copy_attribs=['axes']),
-    'stack': convert_stack,  # TODO handle these as atomic now
+    'stack': convert_stack,
     'unstack': convert_unstack,
     'add': partial(generic_convert_binary, target_name='Add'),
     'sub': partial(generic_convert_binary, target_name='Sub'),
@@ -915,8 +915,8 @@ _DefaultConverters = {
     'conv': partial(generic_convert_conv_deconv, is_deconv=False),
     'deconv': partial(generic_convert_conv_deconv, is_deconv=True),
     'box': convert_box,
-    'debox': UNSUPPORTED,  # TODO maybe support
-    'argmax_pool': partial(generic_convert_pool, target_name='MaxPool'),
+    'debox': UNSUPPORTED,
+    'argmax_pool': partial(generic_convert_pool, target_name='MaxPool'),  # not typo
     'sample': UNSUPPORTED,
     'desample': convert_desample,
     'nearest_downsample': NONATOMIC,
@@ -961,9 +961,6 @@ _DefaultConverters = {
     'linear_quantize': NONATOMIC,
     'logarithmic_quantize': NONATOMIC,
     'copy_n': convert_copy_n,
-    # extensions:
-    'any_reduce': UNSUPPORTED,
-    'all_reduce': UNSUPPORTED,
 }
 
 # TODO add to class as static(?) method
