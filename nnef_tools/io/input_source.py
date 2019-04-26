@@ -53,12 +53,12 @@ class ImageInput(InputSource):
     DATA_FORMAT_NCHW = 'NCHW'
     DATA_FORMAT_NHWC = 'NHWC'
 
-    def __init__(self, filename, color_format='RGB', data_format='NCHW', sub=127.5, div=127.5):
+    def __init__(self, filename, color_format='RGB', data_format='NCHW', range=None, norm=None):
         self.filenames = filename if isinstance(filename, (list, tuple)) else [filename]
         self.color_format = color_format
         self.data_format = data_format
-        self.sub = sub
-        self.div = div
+        self.range = range
+        self.norm = norm
 
 
 class NNEFTensorInput(InputSource):
@@ -107,20 +107,39 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
                         raise utils.NNEFToolsException(
                             'NHWC image is specified as input, but channel dimension of input tensor is not 3.')
                     target_size = [shape[1], shape[2]]
+
                 img = skimage.img_as_ubyte(skimage.io.imread(filename))
+                img = img.astype(np.float32)
+
                 if input_source.color_format.upper() == ImageInput.COLOR_FORMAT_RGB:
                     img = img[..., (0, 1, 2)]  # remove alpha channel if present
                 else:
                     img = img[..., (2, 1, 0)]
 
-                img = ((img.astype(np.float32) - np.array(input_source.sub)) / np.array(input_source.div))
+                if input_source.range:
+                    min_ = np.array(input_source.range[0], dtype=np.float32)
+                    max_ = np.array(input_source.range[1], dtype=np.float32)
+                    scale = (max_ - min_) / 255.0
+                    bias = min_
+                    img = img / scale + bias
+
+                if input_source.norm:
+                    mean = np.array(input_source.norm[0], dtype=np.float32)
+                    std = np.array(input_source.norm[1], dtype=np.float32)
+                    img = (img - mean) / std
+
                 img = skimage.transform.resize(img, target_size,
                                                preserve_range=True,
                                                anti_aliasing=True,
-                                               mode='reflect').astype(np_dtype)
+                                               mode='reflect')
+
+                img = img.astype(np_dtype)
+
                 if input_source.data_format.upper() == ImageInput.DATA_FORMAT_NCHW:
                     img = img.transpose((2, 0, 1))
+
                 img = np.expand_dims(img, 0)
+
                 imgs.append(img)
         if len(imgs) < shape[0]:
             print("Info: Network batch size bigger than supplied data, repeating it")

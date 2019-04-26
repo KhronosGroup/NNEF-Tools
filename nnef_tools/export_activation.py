@@ -117,15 +117,21 @@ tensorflow-py: package.module:function or package.module:function:checkpoint_pat
  - Random(true_prob) for bool
  - Random(float_min, float_max, int_min, int_max, true_prob) for all types
     - Keyword arguments can not be used with Random.
- - Image(filename, color_format='RGB', data_format='NCHW', sub=127.5, div=127.5) for int and float
+ - Image(filename, color_format='RGB', data_format='NCHW', range=None, norm=None) for int and float
    - Arguments:
      - filename: string or list of strings, path(s) of jpg/png images, can have * in them
      - color_format: RGB or BGR
      - data_format: NCHW or NHWC
-     - sub: float
-     - div: float
-   - The applied image preprocessing is the following in pseudocode (where input_size and input_dtype comes from the network or --input-shape):
-       image = ((uint8_image.astype(float)-sub)/div).resize(input_size).astype(input_dtype)
+     - range: [start, end] closed range
+     - norm: [mean, std] or [[mean0, mean1, mean2], [std0, std1, std2]]
+   - The image is processed as follows:
+     - The image is loaded to float32[width, height, channels], values ranging from 0 to 255.
+     - The image is reordered to RGB or BGR, as requested.
+     - If range is not None, the image is transformed to the specified range. 
+       (The transform does not depend on the content of the image.)
+     - If norm is not None: image = (image - mean) / std
+     - The image is transformed to NCHW or NHWC as requested. 
+     - The image is casted to the target data type.
  - Tensor(filename) for all types
    - filename must be the path of an NNEF tensor file (.dat)
  Default: Random(0.0, 1.0, 0, 255, 0.5).""")
