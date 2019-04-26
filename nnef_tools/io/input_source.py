@@ -20,6 +20,8 @@ import os
 import nnef
 import numpy as np
 
+from nnef_tools.core import utils
+
 
 class InputSource(object):
     pass
@@ -96,8 +98,14 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
             assert filenames, "No files found for path: {}".format(pattern)
             for filename in filenames:
                 if input_source.data_format.upper() == ImageInput.DATA_FORMAT_NCHW:
+                    if shape[1] != 3:
+                        raise utils.NNEFToolsException(
+                            'NCHW image is specified as input, but channel dimension of input tensor is not 3.')
                     target_size = [shape[2], shape[3]]
                 else:
+                    if shape[3] != 3:
+                        raise utils.NNEFToolsException(
+                            'NHWC image is specified as input, but channel dimension of input tensor is not 3.')
                     target_size = [shape[1], shape[2]]
                 img = skimage.img_as_ubyte(skimage.io.imread(filename))
                 if input_source.color_format.upper() == ImageInput.COLOR_FORMAT_RGB:
@@ -115,7 +123,8 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
                 img = np.expand_dims(img, 0)
                 imgs.append(img)
         if len(imgs) < shape[0]:
-            imgs = imgs * ((shape[0] + len(imgs) - 1) / len(imgs))
+            print("Info: Network batch size bigger than supplied data, repeating it")
+            imgs = imgs * ((shape[0] + len(imgs) - 1) // len(imgs))
             imgs = imgs[:shape[0]]
             assert len(imgs) == shape[0]
         assert len(imgs) == shape[0] or allow_bigger_batch
