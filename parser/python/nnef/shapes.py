@@ -424,9 +424,9 @@ def roi_shape(input, rois, batch_index, output_size, **kwargs):
     return [rois[0], input[1]] + output_size
 
 
-def quantize_shape(input, **kwargs):
+def quantize_shape(input, *args, **kwargs):
     bits = kwargs.get('bits')
-    if bits:
+    if bits is not None:
         assert bits > 0, "'bits' must be positive, found {}".format(bits)
 
     return input
