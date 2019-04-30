@@ -23,7 +23,11 @@ class Empty(object):
 
 
 class CustomEncoder(json.JSONEncoder):
+    def default(self, o):
+        return o.__dict__
 
+
+class CustomEncoderWithClass(json.JSONEncoder):
     def default(self, o):
         d = dict(o.__dict__)
         d["__class__"] = o.__class__.__name__
@@ -45,11 +49,11 @@ class CustomDecoder(object):
         return d
 
 
-def dump(obj, file_name):
+def dump(obj, file_name, add_class_name=True):
     if not os.path.exists(os.path.dirname(file_name)):
         os.makedirs(os.path.dirname(file_name))
     with open(file_name, 'w') as f:
-        json.dump(obj, f, indent=4, sort_keys=True, cls=CustomEncoder)
+        json.dump(obj, f, indent=4, sort_keys=True, cls=CustomEncoderWithClass if add_class_name else CustomEncoder)
 
 
 def load(file_name, classes=None):
@@ -59,8 +63,8 @@ def load(file_name, classes=None):
         return json.load(f, object_hook=CustomDecoder({class_.__name__: class_ for class_ in classes}))
 
 
-def dumps(obj):
-    return json.dumps(obj, indent=4, sort_keys=True, cls=CustomEncoder)
+def dumps(obj, add_class_name=True):
+    return json.dumps(obj, indent=4, sort_keys=True, cls=CustomEncoderWithClass if add_class_name else CustomEncoder)
 
 
 def loads(s, classes=None):

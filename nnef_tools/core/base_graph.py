@@ -106,7 +106,7 @@ class BaseTensor(Tensor[_GraphT, _OperationT]):
         elif isinstance(self.data, list):
             data_str = "list("
             if len(self.data) <= max_data_length_to_print:
-                data_str += str(list)
+                data_str += str(self.data)
             else:
                 data_str += "..."
             data_str += ")"
