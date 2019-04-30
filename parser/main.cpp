@@ -133,21 +133,16 @@ int main( int argc, const char * argv[] )
     nnef::Graph graph;
     std::string error;
     
-    bool ok = nnef::load_graph(path, graph, error, stdlib, lowered);
-    
-    if ( !ok )
+    if ( !nnef::load_graph(path, graph, error, stdlib, lowered) )
     {
         std::cerr << error << std::endl;
         return -1;
     }
     
-    if ( infer_shapes )
+    if ( infer_shapes && !nnef::infer_shapes(graph, error) )
     {
-        if ( !nnef::infer_shapes(graph, error) )
-        {
-            std::cerr << error << std::endl;
-            return -1;
-        }
+		std::cerr << error << std::endl;
+		return -1;
     }
     
     std::cout << "graph " << graph.name << "( " << graph.inputs << " ) -> ( " << graph.outputs << " )" << std::endl;
