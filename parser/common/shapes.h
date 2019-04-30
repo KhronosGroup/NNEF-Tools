@@ -267,7 +267,7 @@ namespace nnef
     
     inline Shape asymmetric_binary_shape( const Shape& shape1, const Shape& shape2 )
     {
-        check(broadcast_compatible(shape2, shape1),
+        check(broadcastable(shape2, shape1),
               "cannot broadcast second argument shape (%s) to first argument shape (%s)",
               to_string(shape2).c_str(), to_string(shape1).c_str());
         
@@ -580,13 +580,13 @@ namespace nnef
 
     inline Shape batchnorm_shape( const Shape& input, const Shape& mean, const Shape& variance, const Shape& offset, const Shape& scale, const Value& epsilon )
     {
-        check(broadcast_compatible(mean, input), "cannot broadcast 'mean' shape (%s) to 'input' shape (%s)",
+        check(broadcastable(mean, input), "cannot broadcast 'mean' shape (%s) to 'input' shape (%s)",
               to_string(mean).c_str(), to_string(input).c_str());
-        check(broadcast_compatible(variance, input), "cannot broadcast 'variance' shape (%s) to 'input' shape (%s)",
+        check(broadcastable(variance, input), "cannot broadcast 'variance' shape (%s) to 'input' shape (%s)",
               to_string(variance).c_str(), to_string(input).c_str());
-        check(broadcast_compatible(offset, input), "cannot broadcast 'offset' shape (%s) to 'input' shape (%s)",
+        check(broadcastable(offset, input), "cannot broadcast 'offset' shape (%s) to 'input' shape (%s)",
               to_string(offset).c_str(), to_string(input).c_str());
-        check(broadcast_compatible(scale, input), "cannot broadcast 'scale' shape (%s) to 'input' shape (%s)",
+        check(broadcastable(scale, input), "cannot broadcast 'scale' shape (%s) to 'input' shape (%s)",
               to_string(scale).c_str(), to_string(input).c_str());
         
         return input;
@@ -922,6 +922,28 @@ namespace nnef
         }
         return shape;
     }
+	
+	inline Shape quantize_shape( const Shape& input, const Shape& min, const Shape& max, const Value& bits )
+	{
+		check(broadcastable(min, input), "cannot broadcast 'min' shape (%s) to 'input' shape (%s)",
+			  to_string(min).c_str(), to_string(input).c_str());
+		check(broadcastable(max, input), "cannot broadcast 'max' shape (%s) to 'input' shape (%s)",
+			  to_string(max).c_str(), to_string(input).c_str());
+		
+		check_range("bits", bits, 0);
+		
+		return input;
+	}
+	
+	inline Shape linear_quantize_shape( const Shape& input, const Shape& min, const Shape& max, const Value& bits )
+	{
+		return quantize_shape(input, min, max, bits);
+	}
+	
+	inline Shape logarithmic_quantize_shape( const Shape& input, const Shape& max, const Value& bits )
+	{
+		return quantize_shape(input, Shape(), max, bits);
+	}
     
 }   // namespace nnef
 

@@ -505,10 +505,10 @@ namespace nnef
         { "softabs", make_shape_func(unary_shape) },
         { "softplus", make_shape_func(unary_shape) },
         { "leaky_relu", make_shape_func(unary_shape) },
-        { "prelu", make_shape_func(unary_shape) },
+        { "prelu", make_shape_func(asymmetric_binary_shape) },
         
-        { "linear_quantize", make_shape_func(unary_shape) },
-        { "logarithmic_quantize", make_shape_func(unary_shape) },
+        { "linear_quantize", make_shape_func(linear_quantize_shape) },
+        { "logarithmic_quantize", make_shape_func(logarithmic_quantize_shape) },
         
         { "add", make_shape_func(binary_shape) },
         { "sub", make_shape_func(binary_shape) },

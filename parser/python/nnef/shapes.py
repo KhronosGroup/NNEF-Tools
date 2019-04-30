@@ -425,6 +425,10 @@ def roi_shape(input, rois, batch_index, output_size, **kwargs):
 
 
 def quantize_shape(input, *args, **kwargs):
+    for arg in args:
+        assert _broadcastable(arg, input), \
+            "'min/max' shape {} cannot be broadcast to 'input' shape {}".format(arg, input)
+
     bits = kwargs.get('bits')
     if bits is not None:
         assert bits > 0, "'bits' must be positive, found {}".format(bits)
