@@ -75,7 +75,7 @@ class NNEFTensor(BaseTensor["NNEFGraph", "NNEFOperation"]):
 
     # experimental
     def get_numpy_array(self):
-        # type: (NNEFTensor)->typing.Optional[np.ndarray]
+        # type: ()->typing.Optional[np.ndarray]
         if self.data is None:
             return None
 
@@ -93,7 +93,7 @@ class NNEFTensor(BaseTensor["NNEFGraph", "NNEFOperation"]):
 
     # experimental
     def get_numpy_dtype(self):
-        # type: (NNEFTensor)->typing.Optional[typing.Any]
+        # type: ()->typing.Optional[typing.Any]
         if isinstance(self.data, np.ndarray):
             return self.data.dtype
         if self.dtype is not None:
