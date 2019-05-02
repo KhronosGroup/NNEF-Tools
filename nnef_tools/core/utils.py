@@ -344,3 +344,8 @@ def without_slash(path):
     while len(path) > 1 and (path[-1] == '/' or path[-1] == '\\'):
         path = path[:-1]
     return path
+
+
+def rreplace(s, old, new, count=-1):
+    li = s.rsplit(old, count)
+    return new.join(li)

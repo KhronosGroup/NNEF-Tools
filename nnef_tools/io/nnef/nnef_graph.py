@@ -73,6 +73,33 @@ class NNEFTensor(BaseTensor["NNEFGraph", "NNEFOperation"]):
         _dict.update([('quant', self.quantization)])
         return _dict
 
+    # experimental
+    def get_numpy_array(self):
+        # type: (NNEFTensor)->typing.Optional[np.ndarray]
+        if self.data is None:
+            return None
+
+        if isinstance(self.data, np.ndarray):
+            assert list(self.shape) == list(self.data.shape)
+            return self.data
+        else:
+            assert self.shape is not None
+            assert self.dtype is not None
+
+            if len(self.data) == 1:
+                return np.full(shape=self.shape, fill_value=self.data[0]).astype(self.get_numpy_dtype())
+            else:
+                return np.array(self.data).reshape(self.shape).astype(self.get_numpy_dtype())
+
+    # experimental
+    def get_numpy_dtype(self):
+        # type: (NNEFTensor)->typing.Optional[typing.Any]
+        if isinstance(self.data, np.ndarray):
+            return self.data.dtype
+        if self.dtype is not None:
+            return {'scalar': np.float32, 'integer': np.int32, 'logical': np.bool}[self.dtype]
+        return None
+
 
 _OptTensorOrListOrTuple = typing.Union[None, NNEFTensor, typing.List[NNEFTensor], typing.Tuple[NNEFTensor, ...]]
 
@@ -93,26 +120,28 @@ class NNEFOperation(BaseOperation["NNEFGraph", "NNEFTensor"]):
 class NNEFGraph(BaseGraph["NNEFTensor", "NNEFOperation"]):
 
     def generate_missing_names(self):
-        # type: ()->None
-        # assert self.is_unique
-
-        ng = utils.NameGenerator(used_names=set(t.name for t in self.tensors if t.name))
+        name_generator = utils.NameGenerator(used_names=set(t.name for t in self.tensors if t.name))
 
         for t in self.tensors:
-            if t.name:
-                pass
-            elif self.input_ids is not None and t in self.inputs:
-                t.name = ng.get_new_name(self.input_ids[list(self.inputs).index(t)])
-            elif self.output_ids is not None and t in self.outputs:
-                t.name = ng.get_new_name(self.output_ids[list(self.outputs).index(t)])
-            elif t.is_variable:
-                t.name = ng.get_new_name('variable')
-            elif t.is_constant:
-                t.name = ng.get_new_name('constant')
-            elif t.producer is None:
-                t.name = ng.get_new_name('external')
-            else:
-                t.name = ng.get_new_name(t.producer.name.split('.')[-1])
+            if not t.name:
+                if self.input_ids is not None and t in self.inputs:
+                    t.name = name_generator.get_new_name(self.input_ids[list(self.inputs).index(t)])
+                elif self.output_ids is not None and t in self.outputs:
+                    t.name = name_generator.get_new_name(self.output_ids[list(self.outputs).index(t)])
+                elif t.is_variable:
+                    t.name = name_generator.get_new_name('variable')
+                elif t.is_constant:
+                    t.name = name_generator.get_new_name('constant')
+                elif t.producer is None:
+                    t.name = name_generator.get_new_name('external')
+                else:
+                    t.name = name_generator.get_new_name(t.producer.name.split('.')[-1])
+
+    def generate_missing_labels(self):
+        label_generator = utils.NameGenerator(used_names=set(t.label for t in self.tensors if t.label))
+        for t in self.tensors:
+            if t.is_variable and not t.label:
+                t.label = label_generator.get_new_name('variable')
 
 
 __all__ = [

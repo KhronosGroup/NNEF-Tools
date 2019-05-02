@@ -71,7 +71,8 @@ class Tensor(Pattern):
 
 
 def tensors(n):
-    return tuple(Tensor() for _ in range(n))
+    assert n >= 1
+    return tuple(Tensor() for _ in range(n)) if n > 1 else Tensor()
 
 
 class _Const(Pattern):
