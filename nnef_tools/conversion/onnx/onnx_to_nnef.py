@@ -61,12 +61,20 @@ class Converter(_converter.Converter[ONNXTensor, ONNXOperation, ONNXGraph,
 
     def convert_tensor(self, source_tensor, target_graph):
         # type: (ONNXTensor, NNEFGraph)->NNEFTensor
-        return NNEFTensor(graph=target_graph,
-                          name=self._to_identifier_or_none(source_tensor.name),
-                          shape=list(source_tensor.shape),
-                          dtype=self.nnef_dtype(source_tensor.dtype),
-                          data=copy.copy(source_tensor.data),
-                          label=source_tensor.name if source_tensor.is_variable else None)
+        if source_tensor.is_null:
+            return NNEFTensor(graph=target_graph,
+                              name=None,
+                              shape=[0],
+                              dtype=None,
+                              data=[],
+                              label=None)
+        else:
+            return NNEFTensor(graph=target_graph,
+                              name=self._to_identifier_or_none(source_tensor.name),
+                              shape=list(source_tensor.shape),
+                              dtype=self.nnef_dtype(source_tensor.dtype),
+                              data=copy.copy(source_tensor.data),
+                              label=source_tensor.name if source_tensor.is_variable else None)
 
     def convert_graph(self, source_graph):
         graph_utils.remove_unreachable(source_graph)
@@ -121,6 +129,19 @@ class Converter(_converter.Converter[ONNXTensor, ONNXOperation, ONNXGraph,
             if shape[-1 - i] != 1 and other_shape[-1 - i] != 1 and shape[-1 - i] != other_shape[-1 - i]:
                 return False
         return True
+
+    @staticmethod
+    def add_flatten(nnef_graph, nnef_tensor):
+        # type: (NNEFGraph, NNEFTensor)->NNEFTensor
+        assert nnef_tensor.rank >= 3
+        flat_shape = [nnef_tensor.shape[0], utils.product(nnef_tensor.shape[1:])]
+        return NNEFOperation(graph=nnef_graph,
+                             name="reshape",
+                             inputs=nnef_tensor,
+                             attribs=dict(shape=list(flat_shape)),
+                             outputs=NNEFTensor(graph=nnef_graph,
+                                                shape=list(flat_shape),
+                                                dtype=nnef_tensor.dtype)).output
 
     @staticmethod
     def add_squeeze(nnef_graph, nnef_tensor, axes):
@@ -298,20 +319,12 @@ def convert_conv_transpose(converter, onnx_op, nnef_graph):
     dilation = onnx_op.attribs.get('dilations', [1] * len(filter_size))
     output_padding = onnx_op.attribs.get('output_padding', [0] * len(filter_size))
 
-    if 'output_shape' in onnx_op.attribs:
-        padding = _get_reverse_sliding_window_padding(input_size=input.shape[2:],
-                                                      filter_size=filter_size,
-                                                      stride=stride,
-                                                      output_padding=output_padding,
-                                                      output_shape=onnx_op.attribs['output_shape'],
-                                                      left_bigger=onnx_op.attribs.get('auto_pad') == 'SAME_LOWER')
-    else:
-        padding = converter.nnef_padding_ex(auto_padding=onnx_op.attribs.get('auto_pad'),
-                                            custom_padding=onnx_op.attribs.get('pads'),
-                                            upscaled_shape=input.shape[2:],
-                                            filter_shape=filter_size,
-                                            stride=stride,
-                                            dilation=dilation)
+    padding = _get_reverse_sliding_window_padding(input_size=input.shape[2:],
+                                                  filter_size=filter_size,
+                                                  stride=stride,
+                                                  output_padding=output_padding,
+                                                  output_shape=onnx_op.attribs['output_shape'][2:],
+                                                  left_bigger=onnx_op.attribs.get('auto_pad') == 'SAME_LOWER')
 
     NNEFOperation(graph=nnef_graph,
                   name='deconv',
@@ -486,23 +499,12 @@ def convert_global_lp_pool(converter, onnx_op, nnef_graph):
 def convert_reshape(converter, onnx_op, nnef_graph):
     # type: (Converter, ONNXOperation, NNEFGraph)->None
 
-    if 'shape' in onnx_op.attribs:
-        input, output = converter.converted_tensors((onnx_op.input, onnx_op.output))
-        NNEFOperation(graph=nnef_graph,
-                      name='reshape',
-                      inputs=input,
-                      attribs=dict(shape=onnx_op.attribs['shape']),
-                      outputs=output)
-    else:
-        onnx_input, onnx_shape = onnx_op.inputs
-        input = converter.converted_tensor(onnx_input)
-        output = converter.converted_tensor(onnx_op.output)
-
-        NNEFOperation(graph=nnef_graph,
-                      name='reshape',
-                      inputs=input,
-                      attribs=dict(shape=onnx_shape_inference.evaluate_shape_tensor_simple(onnx_shape)),
-                      outputs=output)
+    input, output = converter.converted_tensors((onnx_op.input, onnx_op.output))
+    NNEFOperation(graph=nnef_graph,
+                  name='reshape',
+                  inputs=input,
+                  attribs=dict(shape=onnx_op.attribs['shape']),
+                  outputs=output)
 
 
 def generic_convert_pool(converter, onnx_op, nnef_graph, target_name, before='', after=''):
@@ -567,10 +569,12 @@ def convert_matmul(converter, onnx_op, nnef_graph):
     # type: (Converter, ONNXOperation, NNEFGraph)->None
 
     A, B = converter.converted_tensors(onnx_op.inputs)
+
+    # The flattening seems to be an undocumented ONNX feature
     if A.rank > 2:
-        A = converter.add_squeeze(nnef_graph, A, list(range(2, A.rank)))
+        A = converter.add_flatten(nnef_graph, A)
     if B.rank > 2:
-        B = converter.add_squeeze(nnef_graph, B, list(range(2, B.rank)))
+        B = converter.add_flatten(nnef_graph, B)
     Y = converter.converted_tensor(onnx_op.output)
     NNEFOperation(graph=nnef_graph,
                   name='matmul',
@@ -582,12 +586,14 @@ def convert_gemm(converter, onnx_op, nnef_graph):
     # type: (Converter, ONNXOperation, NNEFGraph)->None
 
     A, B, C = converter.converted_tensors(onnx_op.inputs)
+
+    # The flattening seems to be an undocumented ONNX feature
     if A.rank > 2:
-        A = converter.add_squeeze(nnef_graph, A, list(range(2, A.rank)))
+        A = converter.add_flatten(nnef_graph, A)
     if B.rank > 2:
-        B = converter.add_squeeze(nnef_graph, B, list(range(2, B.rank)))
+        B = converter.add_flatten(nnef_graph, B)
     if C.rank > 2:
-        C = converter.add_squeeze(nnef_graph, C, list(range(2, C.rank)))
+        C = converter.add_flatten(nnef_graph, C)
 
     Y = converter.converted_tensor(onnx_op.output)
     alpha_tensor = converter.create_constant_nnef_tensor(nnef_graph=nnef_graph,
@@ -920,14 +926,12 @@ def convert_elu(converter, onnx_op, nnef_graph):
 
 def convert_expand(converter, onnx_op, nnef_graph):
     # type: (Converter, ONNXOperation, NNEFGraph)->None
-    onnx_input, onnx_shape = onnx_op.inputs
-    input = converter.converted_tensor(onnx_input)
-    shape = onnx_shape_inference.evaluate_shape_tensor_simple(onnx_shape)
+    input = converter.converted_tensor(onnx_op.input)
     output = converter.converted_tensor(onnx_op.output)
 
     zero_tensor = NNEFTensor(graph=nnef_graph,
                              name=None,
-                             shape=list(shape),
+                             shape=list(onnx_op.attribs['shape']),
                              dtype=input.dtype,
                              data=[converter.nnef_zero_value(input.dtype)])
     NNEFOperation(
@@ -944,23 +948,18 @@ def convert_max_unpool(converter, onnx_op, nnef_graph):
     # type: (Converter, ONNXOperation, NNEFGraph)->None
 
     input, index = converter.converted_tensors(onnx_op.inputs[:2])
-    output_shape = (onnx_shape_inference.evaluate_shape_tensor_simple(onnx_op.inputs[2])
-                    if len(onnx_op.inputs) >= 3 and not onnx_op.inputs[2].is_null else None)
     output = converter.converted_tensor(onnx_op.output)
 
     filter_size = onnx_op.attribs['kernel_shape']
     stride = onnx_op.attribs.get('strides', [1] * len(filter_size))
     dilation = [1] * len(filter_size)
 
-    if output_shape is not None:
-        padding = _get_reverse_sliding_window_padding(input_size=input.shape[2:],
-                                                      filter_size=filter_size,
-                                                      stride=stride,
-                                                      output_padding=[0] * len(filter_size),
-                                                      output_shape=output_shape,
-                                                      left_bigger=False)
-    else:
-        padding = converter.nnef_padding(onnx_op.attribs.get('pads', [0] * 2 * len(filter_size)))
+    padding = _get_reverse_sliding_window_padding(input_size=input.shape[2:],
+                                                  filter_size=filter_size,
+                                                  stride=stride,
+                                                  output_padding=[0] * len(filter_size),
+                                                  output_shape=onnx_op.attribs['output_shape'][2:],
+                                                  left_bigger=False)
 
     NNEFOperation(graph=nnef_graph,
                   name='desample',
@@ -1045,25 +1044,9 @@ def convert_unsqueeze(converter, onnx_op, nnef_graph):
 def convert_tile(converter, onnx_op, nnef_graph):
     # type: (Converter, ONNXOperation, NNEFGraph)->None
 
-    if len(onnx_op.inputs) == 3:
-        onnx_input, onnx_tiles, onnx_axis = onnx_op.inputs
-
-        input = converter.converted_tensor(onnx_input)
-        output = converter.converted_tensor(onnx_op.output)
-        tiles = onnx_shape_inference.evaluate_scalar_int_tensor_simple(onnx_tiles)
-        axis = onnx_shape_inference.evaluate_scalar_int_tensor_simple(onnx_axis)
-
-        repeats = [1] * input.rank
-        repeats[axis] = tiles
-
-    elif len(onnx_op.inputs) == 2:
-        onnx_input, onnx_repeats = onnx_op.inputs
-
-        input = converter.converted_tensor(onnx_input)
-        output = converter.converted_tensor(onnx_op.output)
-        repeats = onnx_shape_inference.evaluate_shape_tensor_simple(onnx_repeats)
-    else:
-        assert False, 'Tile is only supported with 2 or 3 inputs'
+    input = converter.converted_tensor(onnx_op.input)
+    output = converter.converted_tensor(onnx_op.output)
+    repeats = onnx_op.attribs['repeats']
 
     input_shape = input.shape
     input_dtype = input.dtype
@@ -1137,13 +1120,10 @@ def convert_tile(converter, onnx_op, nnef_graph):
 def convert_upsample(converter, onnx_op, nnef_graph):
     # type: (Converter, ONNXOperation, NNEFGraph)->None
 
-    input = converter.converted_tensor(onnx_op.inputs[0])
+    input = converter.converted_tensor(onnx_op.input)
     output = converter.converted_tensor(onnx_op.output)
 
-    if 'scales' in onnx_op.attribs:
-        scales = onnx_op.attribs['scales']
-    else:
-        scales = onnx_shape_inference.evaluate_float_list_tensor_simple(onnx_op.inputs[1])
+    scales = onnx_op.attribs['scales']
 
     assert all(s == int(s) for s in scales), 'Only integer scales are supported'
     assert scales[:2] == [1, 1], 'Scale is only supported in spatial dimensions'
@@ -1349,6 +1329,34 @@ def convert_log_softmax(converter, onnx_op, nnef_graph):
                   outputs=output)
 
 
+def convert_gather(converter, onnx_op, nnef_graph):
+    # type: (Converter, ONNXOperation, NNEFGraph)->None
+
+    data, indices = converter.converted_tensors(onnx_op.inputs)
+    output = converter.converted_tensor(onnx_op.output)
+    axis = onnx_op.attribs['axis']
+    if axis < 0:
+        axis += data.rank
+
+    if indices.rank == 0 and indices.get_numpy_array() is not None:
+        index = int(indices.get_numpy_array())
+
+        slice_output = NNEFTensor(graph=nnef_graph, shape=[1] + output.shape, dtype=output.dtype)
+        NNEFOperation(graph=nnef_graph,
+                      name='slice',
+                      inputs=data,
+                      attribs=dict(axes=[axis], begin=[index], end=[index + 1]),
+                      outputs=slice_output)
+        NNEFOperation(graph=nnef_graph,
+                      name='squeeze',
+                      inputs=slice_output,
+                      attribs=dict(axes=[axis]),
+                      outputs=output)
+    else:
+        raise utils.NNEFToolsException(
+            "ONNX to NNEF: {} is only supported when 'indices' is a constant integer".format(onnx_op.name))
+
+
 def UNSUPPORTED(converter, onnx_op, nnef_graph):
     # type: (Converter, ONNXOperation, NNEFGraph)->None
 
@@ -1395,7 +1403,7 @@ _StandardConverters = {
     'Flatten': convert_flatten,
     'Floor': partial(generic_convert_unary, target_name='floor'),
     'GRU': UNSUPPORTED,
-    'Gather': UNSUPPORTED,
+    'Gather': convert_gather,
     'Gemm': convert_gemm,
     'GlobalAveragePool': partial(generic_convert_global_pooling, target_name='mean_reduce'),
     'GlobalLpPool': convert_global_lp_pool,

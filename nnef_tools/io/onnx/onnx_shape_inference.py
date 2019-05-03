@@ -21,7 +21,7 @@ import math
 import numpy as np
 
 from nnef_tools.conversion import shape_fixer
-from nnef_tools.core import utils
+from nnef_tools.core import utils, graph_utils
 from nnef_tools.io.onnx.onnx_graph import *
 from nnef_tools.shape_inference import shape_inference as infer
 
@@ -46,6 +46,8 @@ def propagate(graph, source_shapes=None):
             tensor.shape = new_shape
             assert tensor.dtype is None or tensor.dtype == new_dtype
             tensor.dtype = new_dtype
+
+    graph_utils.remove_unreachable(graph)
 
 
 def to_nnef_padding(onnx_padding):
@@ -78,6 +80,44 @@ def get_concrete_padding(auto_padding, custom_padding, upscaled_shape, filter_sh
             assert False, "Unexpected padding type: {}".format(auto_padding)
 
 
+class CantEvaluate(Exception):
+    pass
+
+
+def unsqueeze(tensor, axes):
+    for axis in sorted(axes):
+        tensor = np.expand_dims(tensor, axis)
+    return tensor
+
+
+def evaluate_tensor(tensor):
+    # type: (ONNXTensor)->np.ndarray
+    if tensor.is_null:
+        raise CantEvaluate("null")
+    elif tensor.is_constant:
+        if len(tensor.data) == 1:
+            return np.full(tensor.shape, tensor.data[0])
+        else:
+            return np.array(tensor.data).reshape(tensor.shape)
+    elif tensor.is_variable:
+        return tensor.data
+    elif tensor.producer is None:
+        raise CantEvaluate("external")
+    elif tensor.producer.name == 'Concat':
+        return np.concatenate(tuple(evaluate_tensor(t) for t in tensor.producer.inputs))
+    elif tensor.producer.name == 'Unsqueeze':
+        return unsqueeze(evaluate_tensor(tensor.producer.input),
+                         axes=tensor.producer.attribs['axes'])
+    elif tensor.producer.name == 'Gather':
+        return np.take(evaluate_tensor(tensor.producer.inputs[0]),
+                       evaluate_tensor(tensor.producer.inputs[1]),
+                       axis=tensor.producer.attribs['axis'])
+    elif tensor.producer.name == 'Shape':
+        return tensor.producer.input.shape
+    else:
+        raise CantEvaluate(tensor.producer.name)
+
+
 def evaluate_shape_tensor_simple(tensor):
     # type:(ONNXTensor)->typing.List[int]
     if tensor.data is not None:
@@ -85,7 +125,11 @@ def evaluate_shape_tensor_simple(tensor):
     elif tensor.producer is not None and tensor.producer.name == 'Shape':
         return list(tensor.producer.input.shape)
     else:
-        assert False, "Shape tensors must be constant tensors or results of Shape for now."
+        try:
+            return [utils.anyint_to_int(dim) for dim in evaluate_tensor(tensor).astype(np.int64).tolist()]
+        except CantEvaluate as e:
+            assert False, "Shape tensors must be constant tensors or results of Shape for now. " \
+                          "Some other operations can also be evaluated, but not {}".format(e.args[0])
 
 
 def evaluate_scalar_int_tensor_simple(tensor):
@@ -166,55 +210,56 @@ def propagate_conv_transpose(op):
 
     input, filter = op.inputs[:2]
 
-    if 'output_shape' in op.attribs:
-        return [infer.copy(op.attribs['output_shape'])], [input.dtype]
+    if 'output_shape' not in op.attribs:
+        filter_size = filter.shape[2:]
+        stride = op.attribs.get('strides', [1] * len(filter_size))
+        dilation = op.attribs.get('dilations', [1] * len(filter_size))
+        padding = get_concrete_padding(auto_padding=op.attribs.get('auto_pad'),
+                                       custom_padding=op.attribs.get('pads'),
+                                       upscaled_shape=input.shape[2:],
+                                       filter_shape=filter_size,
+                                       stride=stride,
+                                       dilation=dilation)
+        groups = op.attribs.get('group', 1)
+        output_padding = op.attribs.get('output_padding', [0] * len(filter_size))
 
-    filter_size = filter.shape[2:]
-    stride = op.attribs.get('strides', [1] * len(filter_size))
-    dilation = op.attribs.get('dilations', [1] * len(filter_size))
-    padding = get_concrete_padding(auto_padding=op.attribs.get('auto_pad'),
-                                   custom_padding=op.attribs.get('pads'),
-                                   upscaled_shape=input.shape[2:],
-                                   filter_shape=filter_size,
-                                   stride=stride,
-                                   dilation=dilation)
-    groups = op.attribs.get('group', 1)
-    output_padding = op.attribs.get('output_padding', [0] * len(filter_size))
+        op.attribs['output_shape'] = infer.conv(input=input.shape,
+                                                filter=filter_size,
+                                                padding=padding,
+                                                stride=stride,
+                                                dilation=dilation,
+                                                groups=groups,
+                                                output_channels=filter.shape[1] * groups,
+                                                format=infer.Format.NCHW,
+                                                output_padding=list(zip([0] * len(filter_size), output_padding)),
+                                                deconv=True)
 
-    return [infer.conv(input=input.shape,
-                       filter=filter_size,
-                       padding=padding,
-                       stride=stride,
-                       dilation=dilation,
-                       groups=groups,
-                       output_channels=filter.shape[1] * groups,
-                       format=infer.Format.NCHW,
-                       output_padding=list(zip([0] * len(filter_size), output_padding)),
-                       deconv=True)], [input.dtype]
+    return [op.attribs['output_shape']], [input.dtype]
 
 
 def propagate_max_unpool(op):
     # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
 
     input, index = op.inputs[:2]
+    op.inputs = (input, index)
     output_shape = (evaluate_shape_tensor_simple(op.inputs[2])
                     if len(op.inputs) >= 3 and not op.inputs[2].is_null else None)
 
-    if output_shape is not None:
-        return [infer.copy(output_shape)], [input.dtype]
+    if output_shape is None:
+        filter_size = op.attribs['kernel_shape']
+        stride = op.attribs.get('strides', [1] * len(filter_size))
+        dilation = [1] * len(filter_size)
+        padding = to_nnef_padding(op.attribs.get('pads', [0] * 2 * len(filter_size)))
+        output_shape = infer.sliding_window(input=input.shape,
+                                            filter=[1, 1] + filter_size,
+                                            padding=[(0, 0), (0, 0)] + padding,
+                                            stride=[1, 1] + stride,
+                                            dilation=[1, 1] + dilation,
+                                            upscale=True)
 
-    filter_size = op.attribs['kernel_shape']
-    stride = op.attribs.get('strides', [1] * len(filter_size))
-    dilation = [1] * len(filter_size)
-    padding = to_nnef_padding(op.attribs.get('pads', [0] * 2 * len(filter_size)))
-    output_shape = infer.sliding_window(input=input.shape,
-                                        filter=[1, 1] + filter_size,
-                                        padding=[(0, 0), (0, 0)] + padding,
-                                        stride=[1, 1] + stride,
-                                        dilation=[1, 1] + dilation,
-                                        upscale=True)
+    op.attribs["output_shape"] = output_shape
 
-    return [output_shape], [input.dtype]
+    return [infer.copy(output_shape)], [input.dtype]
 
 
 def propagate_batch_normalization(op):
@@ -263,22 +308,23 @@ def propagate_global_pool(op):
 def propagate_reshape(op):
     # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
 
-    if 'shape' in op.attribs:
-        return [infer.reshape(input=op.input.shape, shape=op.attribs['shape'], zero_means_same=True)], [op.input.dtype]
-    else:
+    if 'shape' not in op.attribs:
         input, shape = op.inputs
+        op.inputs = (input,)
+        op.attribs['shape'] = evaluate_shape_tensor_simple(shape)
 
-        return [infer.reshape(input=input.shape,
-                              shape=evaluate_shape_tensor_simple(shape),
-                              zero_means_same=True)], [input.dtype]
+    return [infer.reshape(input=op.input.shape, shape=op.attribs['shape'], zero_means_same=True)], [op.input.dtype]
 
 
 def propagate_gemm(op):
     # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
     A, B = op.inputs[:2]
-    assert all(s == 1 for s in A.shape[2:]) and all(s == 1 for s in B.shape[2:])
-    return [infer.matmul(a=A.shape[:2],
-                         b=B.shape[:2],
+
+    assert A.rank >= 2 and B.rank >= 2
+    A_shape = [A.shape[0], utils.product(A.shape[1:])]
+    B_shape = [B.shape[0], utils.product(B.shape[1:])]
+    return [infer.matmul(a=A_shape,
+                         b=B_shape,
                          transpose_a=bool(op.attribs.get('transA', False)),
                          transpose_b=bool(op.attribs.get('transB', False)))], [A.dtype]
 
@@ -333,7 +379,11 @@ def propagate_constant_of_shape(op):
     # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
     # value has been changed to int/bool/float type by the io module
     # dtype has been added to attribs by the io module
-    return [evaluate_shape_tensor_simple(op.input)], [op.attribs['dtype']]
+
+    op.attribs['shape'] = evaluate_shape_tensor_simple(op.input)
+    op.inputs = tuple()
+
+    return [op.attribs['shape']], [op.attribs['dtype']]
 
 
 def propagate_size(op):
@@ -344,8 +394,10 @@ def propagate_size(op):
 def propagate_expand(op):
     # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
     input, shape = op.inputs
+    op.attribs['shape'] = evaluate_shape_tensor_simple(shape)
+    op.inputs = (input,)
 
-    return [infer.elementwise(inputs=[input.shape, evaluate_shape_tensor_simple(shape)],
+    return [infer.elementwise(inputs=[input.shape, op.attribs['shape']],
                               broadcast=infer.Broadcast.FROM_RIGHT)], [input.dtype]
 
 
@@ -428,10 +480,14 @@ def propagate_dynamic_slice(op):
     # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
 
     data, starts, ends, axes = op.inputs
+    op.attribs['starts'] = evaluate_shape_tensor_simple(starts)
+    op.attribs['ends'] = evaluate_shape_tensor_simple(ends)
+    op.attribs['axes'] = evaluate_shape_tensor_simple(axes)
+    op.inputs = (data,)
     return [infer.slice(input=data.shape,
-                        axes=evaluate_shape_tensor_simple(axes),
-                        begin=evaluate_shape_tensor_simple(starts),
-                        end=evaluate_shape_tensor_simple(ends))], [data.dtype]
+                        axes=op.attribs['axes'],
+                        begin=op.attribs['starts'],
+                        end=op.attribs['ends'])], [data.dtype]
 
 
 def propagate_split(op):
@@ -459,17 +515,20 @@ def propagate_tile(op):
 
         tiles = evaluate_scalar_int_tensor_simple(tiles)
         axis = evaluate_scalar_int_tensor_simple(axis)
+        repeats = [1] * input.rank
+        repeats[axis] = tiles
 
-        output_shape = list(input.shape)
-        output_shape[axis] *= tiles
-
-        return [output_shape], [op.input.dtype]
-
+        op.inputs = (input,)
+        op.attribs['repeats'] = repeats
     elif len(op.inputs) == 2:
         input, repeats = op.inputs
-        return [infer.tile(input=input.shape, repeat=evaluate_shape_tensor_simple(repeats))], [input.dtype]
+
+        op.inputs = (input,)
+        op.attribs['repeats'] = evaluate_shape_tensor_simple(repeats)
     else:
         assert False, 'Tile must have 2 or 3 inputs'
+
+    return [infer.tile(input=input.shape, repeat=op.attribs['repeats'])], [input.dtype]
 
 
 def propagate_transpose(op):
@@ -487,12 +546,14 @@ def propagate_unsqueeze(op):
 def propagate_upsample(op):
     # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
 
-    if 'scales' in op.attribs:
-        scales = op.attribs['scales']
-    else:
-        scales = evaluate_float_list_tensor_simple(op.inputs[1])
+    if 'scales' not in op.attribs:
+        assert len(op.inputs) == 2
+        op.attribs['scales'] = evaluate_float_list_tensor_simple(op.inputs[1])
 
-    return [[utils.anyint_to_int(math.floor(i * s)) for i, s in zip(op.inputs[0].shape, scales)]], [op.inputs[0].dtype]
+    op.inputs = (op.inputs[0],)
+
+    return [[utils.anyint_to_int(math.floor(i * s)) for i, s in zip(op.inputs[0].shape, op.attribs['scales'])]], \
+           [op.inputs[0].dtype]
 
 
 def propagate_crop(op):
@@ -512,6 +573,22 @@ def propagate_depth_to_space(op):
     n, c, h, w = op.input.shape
     block_size = op.attribs['blocksize']
     return [[n, c // (block_size ** 2), h * block_size, w * block_size]], [op.input.dtype]
+
+
+def propagate_lstm(op):
+    # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
+    seq_length, batch_size, input_size = op.inputs[0].shape
+    num_directions, hidden_size_mul_4, input_size = op.inputs[1].shape
+    assert hidden_size_mul_4 % 4 == 0
+    hidden_size = hidden_size_mul_4 // 4
+
+    shapes = [[seq_length, num_directions, batch_size, hidden_size],
+              [num_directions, batch_size, hidden_size],
+              [num_directions, batch_size, hidden_size]]
+
+    dtypes = [op.inputs[0].dtype, op.inputs[0].dtype, op.inputs[0].dtype]
+
+    return shapes[:len(op.outputs)], dtypes[:len(op.outputs)]
 
 
 def UNSUPPORTED(op):
@@ -569,7 +646,7 @@ _DefaultPropagators = {
     'InstanceNormalization': propagate_first,
     'IsNan': partial(propagate_first, dtype='BOOL'),
     'LRN': propagate_first,
-    'LSTM': UNSUPPORTED,
+    'LSTM': propagate_lstm,
     'LeakyRelu': propagate_first,
     'Less': partial(propagate_broadcast_with_axis, dtype='BOOL'),
     'Log': propagate_first,

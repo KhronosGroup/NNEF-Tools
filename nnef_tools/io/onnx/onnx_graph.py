@@ -39,7 +39,7 @@ class ONNXTensor(BaseTensor['ONNXGraph', 'ONNXOperation']):
 
     @staticmethod
     def create_null(graph):
-        return ONNXTensor(graph=graph, name=None, shape=[0], dtype=None, data=None)
+        return ONNXTensor(graph=graph, name=None, shape=[0], dtype=None, data=[])
 
 
 class ONNXOperation(BaseOperation['ONNXGraph', 'ONNXTensor']):
