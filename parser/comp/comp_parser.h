@@ -94,16 +94,13 @@ namespace nnef
 
             Dictionary<Value> values;
             Dictionary<Typename> dtypes;
+			std::set<std::string> vars;
 
             Evaluation evaluation(assignments, fragments, _lowered);
             for ( auto& assignment : assignments )
             {
-                if ( assignment.rhs().kind() == Expr::Invocation )
-                {
-                    auto& target = static_cast<const InvocationExpr&>(assignment.rhs()).target();
-                    checkGraphParam(assignment.lhs(), graph, fragments.at(target).prototype().name());
-                }
-
+				checkExternalsAndVariables(assignment.lhs(), assignment.rhs(), graph, vars);
+				
                 const Value context = evaluation.evaluateLvalue(assignment.lhs(), Dictionary<Value>(), true);
                 evaluation.evaluateAssign(assignment.lhs(), assignment.rhs(), values, dtypes, callback, nullptr, context);
             }
@@ -357,6 +354,10 @@ namespace nnef
                 lexer.readToken(';');
 
                 declare(*lhs, rhs->type(), decls);
+				if ( !graph )
+				{
+					checkOperationsAllowed(*rhs);
+				}
 
                 assignments.emplace_back(lhs, rhs);
             }
@@ -394,50 +395,160 @@ namespace nnef
 
             return assignments;
         }
-
-        static bool checkGraphParam( const Expr& expr, const Prototype& graph, const std::string& target )
-        {
-            switch ( expr.kind() )
-            {
-                case Expr::Identifier:
-                {
-                    auto& identifier = static_cast<const IdentifierExpr&>(expr);
-
-                    if ( target == "external" )
-                    {
-                        if ( !graph.param(identifier.name()) )
-                        {
-                            throw Error(identifier.position(), "identifiers assigned by operation 'external' must be graph parameters");
-                        }
-                    }
-                    else
-                    {
-                        if ( graph.param(identifier.name()) )
-                        {
-                            throw Error(identifier.position(), "graph parameter '%s' can only be assigned by operation 'external'",
-                                  identifier.name().c_str());
-                        }
-                    }
-                    return true;
-                }
-                case Expr::Array:
-                case Expr::Tuple:
-                {
-                    bool valid = true;
-                    auto& items = static_cast<const ItemExpr&>(expr);
-                    for ( size_t i = 0; i < items.size(); ++i )
-                    {
-                        valid &= checkGraphParam(items.item(i), graph, target);
-                    }
-                    return valid;
-                }
-                default:
-                {
-                    assert(false);
-                    return false;
-                }
-            }
-        }
+		
+		static void checkOperationsAllowed( const Expr& rhs )
+		{
+			traverse(rhs, []( const Expr& expr )
+			{
+				if ( expr.kind() == Expr::Invocation )
+				{
+					auto& invocation = static_cast<const InvocationExpr&>(expr);
+					
+					if ( invocation.target() == "external" || invocation.target() == "variable" || invocation.target() == "update" )
+					{
+						throw Error(invocation.position(), "operation '%s' not allowed inside fragments", invocation.target().c_str());
+					}
+				}
+			});
+		}
+		
+		void checkExternalsAndVariables( const Expr& lhs, const Expr& rhs, const Prototype& graph, std::set<std::string>& vars )
+		{
+			if ( (lhs.kind() == Expr::Array || lhs.kind() == Expr::Tuple) && rhs.kind() == lhs.kind() )
+			{
+				auto& left = static_cast<const ItemExpr&>(lhs);
+				auto& right = static_cast<const ItemExpr&>(rhs);
+				
+				for ( size_t i = 0; i < left.size(); ++i )
+				{
+					checkExternalsAndVariables(left.item(i), right.item(i), graph, vars);
+				}
+			}
+			else if ( rhs.kind() == Expr::Invocation && lhs.kind() == Expr::Identifier )
+			{
+				auto& identifier = static_cast<const IdentifierExpr&>(lhs);
+				auto& invocation = static_cast<const InvocationExpr&>(rhs);
+				
+				if ( invocation.target() == "external" )
+				{
+					if ( !graph.param(identifier.name()) )
+					{
+						throw Error(identifier.position(), "identifiers assigned by operation 'external' must be graph parameters");
+					}
+				}
+				else
+				{
+					if ( graph.param(identifier.name()) )
+					{
+						throw Error(identifier.position(), "graph parameter '%s' can only be assigned by operation 'external'",
+									identifier.name().c_str());
+					}
+				}
+				
+				if ( invocation.target() == "variable" )
+				{
+					vars.insert(identifier.name());
+				}
+				
+				if ( invocation.target() == "update" )
+				{
+					auto& arg = *invocation.arg("variable");
+					
+					if ( arg.kind() != Expr::Identifier || !vars.count(static_cast<const IdentifierExpr&>(arg).name()) )
+					{
+						throw Error(arg.position(), "first argument to operation 'update' must be a variable");
+					}
+				}
+			}
+		}
+		
+		static void traverse( const Expr& expr, std::function<void(const Expr&)> func )
+		{
+			func(expr);
+			switch ( expr.kind() )
+			{
+				case Expr::Literal:
+				case Expr::Identifier:
+				{
+					break;
+				}
+				case Expr::Builtin:
+				{
+					auto& builtin = static_cast<const BuiltinExpr&>(expr);
+					traverse(builtin.arg(), func);
+					break;
+				}
+				case Expr::Array:
+				case Expr::Tuple:
+				{
+					auto& items = static_cast<const ItemExpr&>(expr);
+					for ( size_t i = 0; i < items.size(); ++i )
+					{
+						traverse(items.item(i), func);
+					}
+					break;
+				}
+				case Expr::Subscript:
+				{
+					auto& subscript = static_cast<const SubscriptExpr&>(expr);
+					traverse(subscript.sequence(), func);
+					if ( subscript.begin() )
+					{
+						traverse(*subscript.begin(), func);
+					}
+					if ( subscript.end() )
+					{
+						traverse(*subscript.end(), func);
+					}
+					break;
+				}
+				case Expr::Comprehension:
+				{
+					auto& comprehension = static_cast<const ComprehensionExpr&>(expr);
+					for ( size_t i = 0; i < comprehension.iteratorCount(); ++i )
+					{
+						traverse(comprehension.iterator(i), func);
+						traverse(comprehension.iterable(i), func);
+					}
+					if ( comprehension.condition() )
+					{
+						traverse(*comprehension.condition(), func);
+					}
+					traverse(comprehension.item(), func);
+					break;
+				}
+				case Expr::Unary:
+				{
+					auto& unary = static_cast<const UnaryExpr&>(expr);
+					traverse(unary.right(), func);
+					break;
+				}
+				case Expr::Binary:
+				{
+					auto& binary = static_cast<const BinaryExpr&>(expr);
+					traverse(binary.left(), func);
+					traverse(binary.right(), func);
+					break;
+				}
+				case Expr::Select:
+				{
+					auto& select = static_cast<const SelectExpr&>(expr);
+					traverse(select.condition(), func);
+					traverse(select.trueValue(), func);
+					traverse(select.falseValue(), func);
+					break;
+				}
+				case Expr::Invocation:
+				{
+					auto& invocation = static_cast<const InvocationExpr&>(expr);
+					for ( auto it = invocation.begin(); it != invocation.end(); ++it )
+					{
+						traverse(*it->second, func);
+					}
+					break;
+				}
+			}
+		}
 
     private:
 
@@ -1083,6 +1194,8 @@ namespace nnef
                 }
 
                 auto idx = static_cast<const IntegerExpr&>(*beg).value();
+				
+				lexer.readToken(']');
 
                 type = static_cast<const TupleType*>(sequence->type())->itemType(idx);
             }

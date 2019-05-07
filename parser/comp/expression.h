@@ -640,6 +640,10 @@ namespace nnef
 
     class InvocationExpr : public Expr
     {
+	public:
+		
+		typedef Dictionary<Shared<Expr>>::const_iterator const_iterator;
+		
     public:
 
         InvocationExpr( const Position& position, const std::string& target, Dictionary<Shared<Expr>>& args, const Type* type,
@@ -663,6 +667,16 @@ namespace nnef
             auto it = _args.find(name);
             return it != _args.end() ? it->second.get() : nullptr;
         }
+		
+		const_iterator begin() const
+		{
+			return _args.begin();
+		}
+		
+		const_iterator end() const
+		{
+			return _args.end();
+		}
 
         virtual Kind kind() const
         {

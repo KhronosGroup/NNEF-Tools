@@ -320,7 +320,7 @@ namespace nnef
                 }
                 else
                 {
-                    auto it = sequence.array().begin();
+                    auto it = sequence.items().begin();
                     Value::items_t items(it + i, it + j);
                     return Value::array(items);
                 }

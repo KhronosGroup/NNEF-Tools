@@ -266,19 +266,19 @@ namespace nnef
 
         const items_t& items() const
         {
-            checkNested();
+            checkItems();
             return _items;
         }
 
         size_t size() const
         {
-            checkNested();
+            checkItems();
             return _items.size();
         }
 
         const Value& operator[]( const size_t i ) const
         {
-            checkNested();
+            checkItems();
             return _items[i];
         }
 
@@ -306,17 +306,17 @@ namespace nnef
 #if CHECKS_SHOULD_THROW
             if ( _kind != kind )
             {
-                throw std::invalid_argument("argument kind mismatch");
+				throw std::invalid_argument("Value: kind mismatch");
             }
 #endif
         }
         
-        void checkNested() const
+        void checkItems() const
         {
 #if CHECKS_SHOULD_THROW
             if ( _kind != Array && _kind != Tuple )
             {
-                throw std::invalid_argument("argument kind mismatch");
+				throw std::invalid_argument("Value: expected items");
             }
 #endif
         }
