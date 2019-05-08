@@ -87,28 +87,28 @@ class ONNXTestRunner(unittest.TestCase):
         network_name = filename.rsplit('/', 1)[1].rsplit('.', 1)[0].replace('.', '_').replace('-', '_')
         print(filename)
         command = """
-        ./nnef_tools/convert.py --input-format=onnx \\
-                                --output-format=nnef \\
-                                --input-model={} \\
-                                --output-model=out/nnef/{}.nnef \\
-                                --input-shape="{}" \\
-                                --custom-converters="{}" \\
+        ./nnef_tools/convert.py --input-format onnx \\
+                                --output-format nnef \\
+                                --input-model {} \\
+                                --output-model out/nnef/{}.nnef \\
+                                --input-shape "{}" \\
+                                --custom-converters {} \\
                                 --permissive \\
                                 --conversion-info
-        """.format(filename, network_name, source_shape, ','.join(convs))
+        """.format(filename, network_name, source_shape, ' '.join(convs))
         print(command)
         convert.convert_using_command(command)
 
         convs = ["custom.nnef_to_onnx_" + conv for conv in custom_converters]
         command = """
-        ./nnef_tools/convert.py --input-format=nnef \\
-                                --output-format=onnx \\
-                                --input-model=out/nnef/{}.nnef \\
-                                --output-model=out/onnx/{}.onnx \\
-                                --custom-converters="{}" \\
+        ./nnef_tools/convert.py --input-format nnef \\
+                                --output-format onnx \\
+                                --input-model out/nnef/{}.nnef \\
+                                --output-model out/onnx/{}.onnx \\
+                                --custom-converters {} \\
                                 --permissive \\
                                 --conversion-info
-        """.format(network_name, network_name, ','.join(convs))
+        """.format(network_name, network_name, ' '.join(convs))
         print(command)
         convert.convert_using_command(command)
 

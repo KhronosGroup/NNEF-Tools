@@ -392,12 +392,16 @@ def volume(shape):
     return p
 
 
-def reshape(input, shape, zero_means_same=False):
-    # type: (ShapeType, ShapeType, bool)->ShapeType
+def reshape(input, shape, offset=0, count=-1, zero_means_same=False):
+    # type: (ShapeType, ShapeType, int, int, bool)->ShapeType
     if zero_means_same:
-        assert all(i < len(input) for i, dim in enumerate(shape) if dim == 0)
-    shape = [input[i] if shape[i] == 0 and zero_means_same else shape[i]
-             for i in range(len(shape))]
+        assert all(i + offset < len(input) for i, dim in enumerate(shape) if dim == 0)
+
+    last = offset + count if count != -1 else len(input)
+
+    shape = input[:offset] + [input[i + offset] if shape[i] == 0 and zero_means_same else shape[i]
+                              for i in range(len(shape))] + input[last:]
+
     assert sum(dim == -1 for dim in shape) <= 1
     if -1 in shape:
         idx = shape.index(-1)

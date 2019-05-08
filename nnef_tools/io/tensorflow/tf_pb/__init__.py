@@ -18,7 +18,15 @@ import os
 import sys
 
 try:
-    sys.path.insert(0, os.path.dirname(__file__))
+    import tensorflow
+
+    has_tensorflow_installed = True
+except ImportError:
+    has_tensorflow_installed = False
+
+try:
+    if not has_tensorflow_installed:
+        sys.path.insert(0, os.path.dirname(__file__))
     from tensorflow.core.framework.graph_pb2 import GraphDef
     from tensorflow.core.framework.node_def_pb2 import NodeDef
     from tensorflow.core.framework.attr_value_pb2 import AttrValue
@@ -35,4 +43,5 @@ try:
         'TensorShapeProto',
     ]
 finally:
-    sys.path.pop(0)
+    if not has_tensorflow_installed:
+        sys.path.pop(0)

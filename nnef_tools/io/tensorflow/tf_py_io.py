@@ -1017,22 +1017,8 @@ class Reader(object):
         self._expand_gradients = expand_gradients
         self._custom_traceable_functions = custom_traceable_functions
 
-    def __call__(self, filename):
-        """
-
-        :param filename: "package.module.function" or "package.module.function:checkpoint_path.ckpt"
-        :return: TFGraph
-        """
-
-        parts = filename.split(':')
-
-        assert len(parts) in [1, 2]
-        if len(parts) == 1 or not parts[1]:
-            package_and_module, function_name = parts[0].rsplit('.', 1)
-            checkpoint_path = None
-        else:
-            package_and_module, function_name = parts[0].rsplit('.', 1)
-            checkpoint_path = parts[1]
+    def __call__(self, function_path, checkpoint_path=None):
+        package_and_module, function_name = function_path.rsplit('.', 1)
 
         sys.path.insert(0, '.')
         try:

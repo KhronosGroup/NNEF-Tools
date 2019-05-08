@@ -142,18 +142,18 @@ class TFPyTestRunner(unittest.TestCase):
 
             compress_nnef = False
             command = """
-                ./nnef_tools/convert.py --input-format=tensorflow-py \\
-                                        --output-format=nnef \\
-                                        --input-model={module}.{network}{checkpoint} \\
-                                        --output-model=out/{network}/{network}.nnef{tgz} \\
-                                        --custom-converters="{custom}" \\
+                ./nnef_tools/convert.py --input-format tensorflow-py \\
+                                        --output-format nnef \\
+                                        --input-model {module}.{network} {checkpoint} \\
+                                        --output-model out/{network}/{network}.nnef{tgz} \\
+                                        --custom-converters {custom} \\
                                         --permissive \\
-                                        --io-transformation=SMART_TF_NHWC_TO_NCHW \\
+                                        --io-transformation SMART_TF_NHWC_TO_NCHW \\
                                         --conversion-info \\
                                         {compress}
-                """.format(checkpoint=':' + checkpoint_path if checkpoint_path else "",
+                """.format(checkpoint=checkpoint_path if checkpoint_path else "",
                            network=fun.__name__,
-                           custom=custom_tf_to_nnef_converters,
+                           custom=" ".join(custom_tf_to_nnef_converters),
                            compress="--compress" if compress_nnef else "",
                            module=test_module,
                            tgz=".tgz" if compress_nnef else "")
@@ -182,16 +182,16 @@ class TFPyTestRunner(unittest.TestCase):
                 data_format_str = ("nhwc" if prefer_nhwc else "nchw")
                 tf_output_path = os.path.join("out", fun.__name__, fun.__name__ + '_' + data_format_str + '.py')
                 command = """
-                    ./nnef_tools/convert.py --input-format=nnef \\
-                                            --output-format=tensorflow-py \\
-                                            --input-model=out/{network}/{network}.nnef{tgz} \\
-                                            --output-model={output} \\
-                                            --io-transformation=SMART_NCHW_TO_TF_NHWC \\
-                                            --custom-converters="{custom}" \\
+                    ./nnef_tools/convert.py --input-format nnef \\
+                                            --output-format tensorflow-py \\
+                                            --input-model out/{network}/{network}.nnef{tgz} \\
+                                            --output-model {output} \\
+                                            --io-transformation SMART_NCHW_TO_TF_NHWC \\
+                                            --custom-converters {custom} \\
                                             --permissive \\
                                             --conversion-info
                     """.format(network=fun.__name__,
-                               custom=custom_nnef_to_tf_converters,
+                               custom=" ".join(custom_nnef_to_tf_converters),
                                tgz=".nnef.tgz" if compress_nnef else "",
                                output=tf_output_path)
                 convert.convert_using_command(command)
@@ -216,19 +216,18 @@ class TFPyTestRunner(unittest.TestCase):
                 tf.set_random_seed(0)
 
                 command = """
-                    ./nnef_tools/convert.py --input-format=tensorflow-py \\
-                                            --output-format=nnef \\
-                                            --input-model={input}{checkpoint} \\
-                                            --output-model={output} \\
-                                            --custom-converters="{custom}" \\
+                    ./nnef_tools/convert.py --input-format tensorflow-py \\
+                                            --output-format nnef \\
+                                            --input-model {input} {checkpoint} \\
+                                            --output-model {output} \\
+                                            --custom-converters {custom} \\
                                             --permissive \\
-                                            --io-transformation=SMART_TF_NHWC_TO_NCHW \\
+                                            --io-transformation SMART_TF_NHWC_TO_NCHW \\
                                             --conversion-info \\
                                             {compress}
-                    """.format(checkpoint=(':' + (os.path.join(tf_output_path + ".checkpoint")
-                                                                            if checkpoint_path else "")),
+                    """.format(checkpoint=(os.path.join(tf_output_path + ".checkpoint") if checkpoint_path else ""),
                                input=tf_output_path.replace('/', '.')[:-len('.py')] + "." + fun.__name__,
-                               custom=custom_tf_to_nnef_converters,
+                               custom=" ".join(custom_tf_to_nnef_converters),
                                compress="--compress" if compress_nnef else "",
                                output=nnef2_out_dir)
 

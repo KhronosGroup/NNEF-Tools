@@ -19,6 +19,7 @@ import shutil
 import sys
 import tarfile
 import tempfile
+import typing
 
 if sys.version_info > (3, 0):
     import urllib.error
@@ -99,14 +100,30 @@ def download_once(url, path="", verbose=True):
     return path
 
 
-def download_and_untar_once(url, member, path, verbose=True):
-    assert path and not path.endswith('/'), "Please specify full path"
+def download_and_untar_once(url,  # type: str
+                            member,  # type: typing.Union[str, typing.List[str]]
+                            path,  # type: typing.Union[str, typing.List[str]]
+                            verbose=True  # type: bool
+                            ):
+    # type: (...)->typing.Union[str, typing.List[str]]
 
-    dirname = os.path.dirname(path)
-    if dirname and not os.path.exists(dirname):
-        os.makedirs(dirname)
+    has_list_input = isinstance(member, (list, tuple))
+    assert has_list_input == isinstance(path, (list, tuple))
 
-    if not os.path.exists(path):
+    if not has_list_input:
+        path = [path]
+        member = [member]
+
+    assert len(path) == len(member)
+    # noinspection PyUnresolvedReferences
+    assert all(p and not p.endswith('/') for p in path), "Please specify file path(s)"
+
+    for p in path:
+        dirname = os.path.dirname(p)
+        if dirname and not os.path.exists(dirname):
+            os.makedirs(dirname)
+
+    if not all(os.path.exists(p) for p in path):
         temp_dir = tempfile.mkdtemp()
         try:
             tar_path = os.path.join(temp_dir, 'downloaded.tar')
@@ -117,10 +134,15 @@ def download_and_untar_once(url, member, path, verbose=True):
                                or ':' in name
                                or '..' in name
                                for name in tar.getnames()), "Tar file has unsafe items, not extracting it."
-                if member and member[0] == '*':
-                    members = [name for name in tar.getnames() if name.endswith(member[1:])]
-                    assert len(members) == 1, "Number of members matching {} must be 1".format(member)
-                    member = members[0]
+
+                def resolve_member(member):
+                    if member and member[0] == '*':
+                        ms = [name for name in tar.getnames() if name.endswith(member[1:])]
+                        assert len(ms) == 1, "Number of members matching {} must be 1".format(member)
+                        return ms[0]
+                    return member
+
+                member = [resolve_member(m) for m in member]
 
                 extract_dir = os.path.join(temp_dir, 'extracted')
                 if verbose:
@@ -130,11 +152,14 @@ def download_and_untar_once(url, member, path, verbose=True):
                 if verbose:
                     print("done.")
                     sys.stdout.flush()
-                extracted_path = os.path.join(extract_dir, member)
-                if verbose:
-                    print("Moving {} to {}: ".format(extracted_path, path), end='')
-                    sys.stdout.flush()
-                shutil.move(extracted_path, path)
+
+                for m, p in zip(member, path):
+                    extracted_path = os.path.join(extract_dir, m)
+                    if verbose:
+                        print("Moving {} to {}: ".format(extracted_path, p), end='')
+                        sys.stdout.flush()
+                    shutil.move(extracted_path, p)
+
                 if verbose:
                     print("done.")
                     sys.stdout.flush()
@@ -149,4 +174,9 @@ def download_and_untar_once(url, member, path, verbose=True):
     if verbose:
         print()
         sys.stdout.flush()
-    return path
+
+    if has_list_input:
+        return path
+    else:
+        assert len(path) == 1
+        return path[0]
