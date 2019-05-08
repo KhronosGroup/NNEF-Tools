@@ -66,6 +66,29 @@ std::ostream& operator<<( std::ostream& os, const std::vector<T>& v )
 	return print(os, v);
 }
 
+std::ostream& print_shapes( std::ostream& os, const nnef::Value& result, const nnef::Graph& graph )
+{
+	if ( result.kind() == nnef::Value::Identifier )
+	{
+		auto& tensor = graph.tensors.at(result.identifier());
+		os << tensor.dtype << "[";
+		print(os, tensor.shape, ",");
+		os << "]";
+	}
+	else
+	{
+		for ( size_t i = 0; i < result.size(); ++i )
+		{
+			if ( i )
+			{
+				os << ", ";
+			}
+			print_shapes(os, result[i], graph);
+		}
+	}
+	return os;
+}
+
 
 int main( int argc, const char * argv[] )
 {
@@ -174,10 +197,7 @@ int main( int argc, const char * argv[] )
 				{
 					std::cout << ", ";
 				}
-				auto& tensor = graph.tensors.at(it->second.identifier());
-				std::cout << tensor.dtype << "[";
-				print(std::cout, tensor.shape, ",");
-				std::cout << "]";
+				print_shapes(std::cout, it->second, graph);
 			}
 		}
 		std::cout << std::endl;
