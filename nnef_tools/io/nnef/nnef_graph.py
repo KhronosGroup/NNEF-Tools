@@ -135,9 +135,8 @@ class NNEFGraph(BaseGraph["NNEFTensor", "NNEFOperation"]):
                 elif t.producer is None:
                     t.name = name_generator.get_new_name('external')
                 else:
-                    t.name = name_generator.get_new_name(t.producer.name.split('.')[-1])
+                    t.name = name_generator.get_new_name(t.producer.name)
 
-    def generate_missing_labels(self):
         label_generator = utils.NameGenerator(used_names=set(t.label for t in self.tensors if t.label))
         for t in self.tensors:
             if t.is_variable and not t.label:

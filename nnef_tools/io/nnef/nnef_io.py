@@ -14,12 +14,12 @@
 
 from __future__ import division, print_function, absolute_import
 
-import typing
 import os
 import shutil
 import sys
 import tarfile
 import tempfile
+import typing
 from collections import OrderedDict
 
 import nnef
@@ -27,6 +27,7 @@ import numpy as np
 import six
 
 from nnef_tools.core import utils
+from nnef_tools.io.nnef import nnef_unifier
 from nnef_tools.io.nnef.nnef_graph import *
 from nnef_tools.io.nnef.parser_config import NNEFParserConfig
 
@@ -425,11 +426,15 @@ fragment tflite_quantize(x: tensor<scalar>, min: scalar, max: scalar, scale: sca
 
 class Reader(object):
 
-    def __init__(self, parser_configs=None):
+    def __init__(self, parser_configs=None, unify=False):
         self._parser_configs = parser_configs
+        self._unify = unify
 
     def __call__(self, filename):
-        return read(filename, parser_configs=self._parser_configs)
+        g = read(filename, parser_configs=self._parser_configs)
+        if self._unify:
+            nnef_unifier.unify(g)
+        return g
 
 
 class Writer(object):

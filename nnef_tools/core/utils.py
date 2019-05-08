@@ -16,8 +16,10 @@ from __future__ import division, print_function, absolute_import
 
 import inspect
 import itertools
+import os
 import re
 import shlex
+import shutil
 import sys
 import typing
 from collections import OrderedDict
@@ -349,3 +351,58 @@ def without_slash(path):
 def rreplace(s, old, new, count=-1):
     li = s.rsplit(old, count)
     return new.join(li)
+
+
+class EnvVars(object):
+    def __init__(self, **kwargs):
+        self.desired = kwargs
+        self.save = dict()
+
+    def __enter__(self):
+        self.save.clear()
+        for key, value in six.iteritems(self.desired):
+            self.save[key] = os.environ.get(key, None)
+            os.environ[key] = str(value)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        for key, value in six.iteritems(self.save):
+            if value is None:
+                del os.environ[key]
+            else:
+                os.environ[key] = value
+
+
+def split_path(path):
+    return path.replace('\\', '/').split('/')
+
+
+# python2 does not have exist_ok
+def makedirs(path, mode=0o777, exist_ok=False):
+    if os.path.exists(path):
+        if not exist_ok:
+            raise RuntimeError("'{}' already exists".format(path))
+        if not os.path.isdir(path):
+            raise RuntimeError("'{}' exists but is not a directory".format(path))
+    else:
+        os.makedirs(path, mode)
+
+
+# python2 interoperability
+def unify_int_and_str_types(value):
+    def unify(val):
+        if is_anyint(val):
+            return anyint_to_int(val)
+        elif is_anystr(val):
+            return anystr_to_str(val)
+        else:
+            return val
+
+    return recursive_transform(value, unify)
+
+
+def rmtree(path, exist_ok=False):
+    if exist_ok:
+        if os.path.exists(path):
+            shutil.rmtree(path)
+    else:
+        shutil.rmtree(path)

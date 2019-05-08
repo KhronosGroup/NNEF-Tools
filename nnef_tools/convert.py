@@ -18,9 +18,11 @@ from __future__ import division, print_function, absolute_import
 
 import sys
 
-# python2 ensure that load from current directory is enabled
-if len(sys.path) == 0 or sys.path[0] != '':
-    sys.path.insert(0, '')
+# Python2: Ensure that load from current directory is enabled, but load from the directory of the script is disabled
+if len(sys.path) == 0:
+    sys.path.append('')
+if sys.path[0] != '':
+    sys.path[0] = ''
 
 import argparse
 import importlib
@@ -32,13 +34,6 @@ from nnef_tools.conversion import conversion_info
 from nnef_tools.core import utils
 from nnef_tools.io.nnef.parser_config import NNEFParserConfig
 from nnef_tools.optimization.data_format_optimizer import IOTransform
-
-
-def check_tf_py_input_model(s):
-    parts = s.split(':')
-    if len(parts) not in [1, 2] or not parts[0] or '.' not in parts[0]:
-        print('Error: Can not parse the --input-model parameter: {}.'.format(s), file=sys.stderr)
-        exit(1)
 
 
 def parse_io_transform(s):
@@ -89,9 +84,8 @@ def try_import(__import):
     return False
 
 
-def get_tf_py_custom_traceable_functions(module_names_comma_sep):
+def get_tf_py_custom_traceable_functions(module_names):
     from nnef_tools.io.tensorflow.tf_py.tf_py_definitions import TraceableFunction
-    module_names = [n.strip() for n in module_names_comma_sep.split(',')] if module_names_comma_sep else []
     custom_traceable_functions = []
     for module_name in module_names:
         module = importlib.import_module(module_name)
@@ -108,8 +102,7 @@ def get_tf_py_custom_traceable_functions(module_names_comma_sep):
     return custom_traceable_functions
 
 
-def get_tf_py_imports_and_op_protos(module_names_comma_sep):
-    module_names = [n.strip() for n in module_names_comma_sep.split(',')] if module_names_comma_sep else []
+def get_tf_py_imports_and_op_protos(module_names):
     imports = []
     op_protos = []
     for module_name in module_names:
@@ -173,8 +166,7 @@ def get_reader(input_format,
         assert False
 
 
-def get_custom_converters(input_format, output_format, custom_converters):
-    module_names = [n.strip() for n in custom_converters.split(',')] if custom_converters else []
+def get_custom_converters(input_format, output_format, module_names):
     custom_converter_by_op_name = {}
 
     for module_name in module_names:
@@ -229,13 +221,13 @@ def get_converter(input_format, output_format, prefer_nchw=False, permissive=Fal
 
 
 def get_data_format_optimizer(input_format, output_format, io_transformation):
-    if input_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite', 'onnx'] and output_format == 'nnef':
+    if output_format == 'nnef':
         from nnef_tools.optimization.nnef.nnef_data_format_optimizer import Optimizer
         return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
-    elif input_format == 'nnef' and output_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite']:
+    elif output_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite']:
         from nnef_tools.optimization.tensorflow.tf_data_format_optimizer import Optimizer
         return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
-    elif input_format == 'nnef' and output_format == 'onnx':
+    elif output_format == 'onnx':
         from nnef_tools.optimization.onnx.onnx_data_format_optimizer import Optimizer
         return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
     else:
@@ -307,7 +299,7 @@ def ensure_dirs(dir):
 
 def convert_using_premade_objects(in_filename, out_filename, out_info_filename, reader, converter,
                                   data_format_optimizer, writer):
-    source_graph = reader(in_filename)
+    source_graph = reader(*in_filename)
     target_graph, conv_info = converter(source_graph)
     opt_info = data_format_optimizer(target_graph) if data_format_optimizer is not None else None
     ensure_dirs(os.path.dirname(out_filename))
@@ -333,10 +325,9 @@ def convert(input_format,
             conversion_info=False  # type: typing.Union[bool, str, None]
             ):
     if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef']:
-        output_prefix = os.path.basename(os.path.abspath(input_model))
+        output_prefix = os.path.basename(os.path.abspath(input_model[0]))
     elif input_format == 'tensorflow-py':
-        assert '.' in input_model
-        output_prefix = input_model.split(':')[0].split('.')[1]
+        output_prefix = input_model[0].split('.')[-1]
     else:
         assert False
 
@@ -352,7 +343,7 @@ def convert(input_format,
                                           compress=compress)
     else:
         if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef']:
-            output_dir = os.path.dirname(os.path.abspath(input_model))
+            output_dir = os.path.dirname(os.path.abspath(input_model[0]))
             if not output_dir:
                 output_dir = '.'
         else:
@@ -394,11 +385,6 @@ def convert(input_format,
                                                     custom_converters=custom_converters))
 
 
-def tf_py_has_checkpoint(input_model):
-    parts = input_model.split(':')
-    return len(parts) >= 2 and parts[1]
-
-
 def get_args(argv):
     parser = argparse.ArgumentParser(description="NNEFTools/convert: Neural network conversion tool",
                                      formatter_class=argparse.RawTextHelpFormatter,
@@ -416,13 +402,15 @@ please add its location to PYTHONPATH.
                         required=True,
                         help="""Output format""")
     parser.add_argument("--input-model",
+                        nargs='+',
                         required=True,
                         help="""nnef: path of NNEF file, directory or nnef.tgz file.
     In case of a single NNEF file, no weights are loaded.
-onnx: path of ONNX file
-tensorflow-pb: path of pb file
-tensorflow-py: package.module.function or package.module.function:checkpoint_path.ckpt
-tensorflow-lite: path of tflite file""")
+onnx: filename.onnx
+tensorflow-pb: filename.pb
+tensorflow-py: package.module.function [filename.ckpt]
+tensorflow-lite: filename.tflite
+""")
 
     parser.add_argument("--output-model",
                         help="""Path of output file.
@@ -476,7 +464,8 @@ Default: Unknown dimensions are set to 1. If the rank is unknown this option can
                         help="""Allow some imprecise conversions""")
 
     parser.add_argument('--custom-converters',
-                        help="""Module(s) of custom converters: e.g. "package.module", "package.module1,package.module2""")
+                        nargs='*',
+                        help="""Modules of custom converters, e.g. package1.module1 [package2.module2 ...]""")
 
     parser.add_argument("--conversion-info",
                         nargs='?',
@@ -487,9 +476,22 @@ Without an argument: Write to {output path}.conversion.json.
 With an argument: Write to the path defined by the argument.""")
 
     args = parser.parse_args(args=argv[1:])
+
     args.io_transformation = parse_io_transform(args.io_transformation)
-    if args.input_format == 'tensorflow-py':
-        check_tf_py_input_model(args.input_model)
+
+    allowed_input_length = {
+        'nnef': [1],
+        'onnx': [1],
+        'tensorflow-pb': [1],
+        'tensorflow-py': [1, 2],
+        'tensorflow-lite': [1],
+    }
+    if not len(args.input_model) in allowed_input_length[args.input_format]:
+        print("Error: {} values specified to --input-model, allowed: {}"
+              .format(len(args.input_model), ', '.join(str(i) for i in allowed_input_length[args.input_format])),
+              file=sys.stderr)
+        exit(1)
+
     if args.input_format == 'tensorflow-pb':
         args.input_shape = parse_input_shapes(args.input_shape)
     elif args.input_format == 'onnx':
@@ -503,14 +505,16 @@ With an argument: Write to the path defined by the argument.""")
         print("Error: Either input or output framework must be nnef.", file=sys.stderr)
         exit(1)
 
-    if args.input_format == 'tensorflow-py' and not tf_py_has_checkpoint(args.input_model):
+    if args.input_format == 'tensorflow-py' and len(args.input_model) < 2:
         args.no_weights = True
 
     if args.compress and args.output_format != 'nnef':
         print("Error: --compress can now be only used with NNEF as output framework.")
         exit(1)
 
-    if args.input_format == "nnef" and not os.path.isdir(args.input_model) and not args.input_model.endswith('.tgz'):
+    if (args.input_format == "nnef"
+            and not os.path.isdir(args.input_model[0])
+            and not args.input_model[0].endswith('.tgz')):
         args.no_weights = True
 
     return args

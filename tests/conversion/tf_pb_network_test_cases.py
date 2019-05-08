@@ -19,7 +19,7 @@ from __future__ import division, print_function, absolute_import
 import os
 import unittest
 
-from tests.conversion.file_downloader import download_and_untar_once
+from tests.file_downloader import download_and_untar_once
 from tests.conversion.tf_pb_test_runner import TFPbTestRunner
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
