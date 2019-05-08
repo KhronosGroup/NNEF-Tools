@@ -15,6 +15,7 @@
 from __future__ import division, print_function, absolute_import
 
 import os
+import re
 import shutil
 import sys
 import tarfile
@@ -75,6 +76,23 @@ def read(path, parser_configs=None):
         else:
             assert False
 
+        # If there are fragments in the graph and also in parser_config
+        # we remove the non-standard fragments from parser_config to avoid duplicate fragment definition
+        if parser_config.fragments:
+            re_graph = re.compile(r"^graph\s|\sgraph\s")
+            re_fragment = re.compile(r"^fragment\s|\sfragment\s")
+            graph_nnef_path = os.path.join(path_to_load, 'graph.nnef') if os.path.isdir(path_to_load) else path_to_load
+            with open(graph_nnef_path, 'r') as f:
+                while True:
+                    line = f.readline()
+                    if not line:
+                        break
+                    if re_fragment.search(line):
+                        parser_config.fragments = NNEFParserConfig.STANDARD_CONFIG.fragments
+                        break
+                    if re_graph.search(line):
+                        break
+
         return _read(parser_graph=parser_config.infer_shapes(parser_config.load_graph(path_to_load)),
                      with_weights=with_weights)
 
@@ -88,7 +106,8 @@ def write(nnef_graph,  # type: NNEFGraph
           write_weights=True,  # type: bool
           raise_on_missing_weight=True,  # type: bool
           extensions=None,  # type: typing.Optional[typing.List[str]]
-          fragments=None  # type: typing.Optional[str]
+          fragments=None,  # type: typing.Optional[str]
+          only_print_used_fragments=False,  # type: bool
           ):
     # type: (...) -> None
 
@@ -104,7 +123,11 @@ def write(nnef_graph,  # type: NNEFGraph
                 os.makedirs(dir_path)
 
         with open(os.path.join(dir_path, "graph.nnef"), "w") as f:
-            _print(nnef_graph, file_handle=f, extensions=extensions, fragments=fragments)
+            _print(nnef_graph,
+                   file_handle=f,
+                   extensions=extensions,
+                   fragments=fragments,
+                   only_print_used_fragments=only_print_used_fragments)
 
         if any(t.quantization is not None for t in nnef_graph.tensors):
             with open(os.path.join(dir_path, "graph.quant"), "w") as f:
@@ -216,10 +239,27 @@ def _read(parser_graph, with_weights=True):
     return g
 
 
+def get_used_fragments(nnef_graph, fragments):
+    # type: (NNEFGraph, str)->str
+    ops = {op.name for op in nnef_graph.operations}
+    ops.update(tensor.quantization.name for tensor in nnef_graph.tensors if tensor.quantization)
+
+    fragment_list = [f.strip() for f in re.split(r"^fragment\s|\sfragment\s", fragments) if f.strip()]
+    used_fragment_list = []
+    for fragment in fragment_list:
+        fragment_name = fragment.split('(')[0].split('<')[0].strip()
+        if fragment_name in ops:
+            used_fragment_list.append(fragment)
+    if used_fragment_list:
+        return 'fragment ' + '\nfragment '.join(used_fragment_list)
+    return ""
+
+
 def _print(nnef_graph,  # type: NNEFGraph
            file_handle,  # type: typing.TextIO
            extensions=None,  # type: typing.Optional[typing.List[str]]
-           fragments=None  # type: typing.Optional[str]
+           fragments=None,  # type: typing.Optional[str]
+           only_print_used_fragments=False,  # type: bool
            ):
     # type: (...)->None
 
@@ -228,6 +268,20 @@ def _print(nnef_graph,  # type: NNEFGraph
     try:
         if extensions is None:
             extensions = []
+
+        if fragments is None:
+            fragments = ""
+
+        fragments = add_tflite_quantization_fragment_if_needed(nnef_graph, fragments)
+
+        if only_print_used_fragments:
+            fragments = get_used_fragments(nnef_graph, fragments)
+
+        if fragments:
+            if "KHR_enable_fragment_definitions" not in extensions:
+                extensions.append("KHR_enable_fragment_definitions")
+            if "KHR_enable_operator_expressions" not in extensions:
+                extensions.append("KHR_enable_operator_expressions")
 
         f = file_handle
         indent = 4 * " "
@@ -243,8 +297,6 @@ def _print(nnef_graph,  # type: NNEFGraph
         graph_name = _recursive_check_str(nnef_graph.name) if nnef_graph.name is not None else "network"
         graph_inputs = _recursive_check_str([input_.name for input_ in nnef_graph.inputs])
         graph_outputs = _recursive_check_str([output_.name for output_ in nnef_graph.outputs])
-
-        add_tflite_quantization_fragment_if_needed(nnef_graph, f)
 
         print("graph {}({}) -> ({})".format(graph_name, ', '.join(graph_inputs), ', '.join(graph_outputs)), file=f)
         print("{", file=f)
@@ -406,22 +458,27 @@ def remove_source_operations(nnef_graph):
                                  unlink=True)
 
 
-def add_tflite_quantization_fragment_if_needed(nnef_graph, file):
-    # type:(NNEFGraph, typing.TextIO)->None
-    if (any(tensor.quantization is not None and tensor.quantization.name == "tflite_quantize"
-            and any(item != 0 for item in six.itervalues(tensor.quantization.attribs))
-            for tensor in nnef_graph.tensors)):
-        print("""extension KHR_enable_fragment_definitions;
-extension KHR_enable_operator_expressions;
-
+TFLITE_QUANTIZATION_FRAGMENT = """\
 fragment tflite_quantize(x: tensor<scalar>, min: scalar, max: scalar, scale: scalar, zero_point: integer, bits: integer)
 -> ( y: tensor<scalar> )
 {
     rounded = round(x / scale + scalar(zero_point));
     q = clamp(rounded, 0.0, 255.0) if bits == 8 else clamp(rounded, -2147483648.0, 2147483647.0);
     y = (q - scalar(zero_point)) * scale;
-}
-""", file=file)
+}\
+"""
+
+
+def add_tflite_quantization_fragment_if_needed(nnef_graph, fragments):
+    # type:(NNEFGraph, str)->str
+    if (any(tensor.quantization is not None and tensor.quantization.name == "tflite_quantize"
+            and any(item != 0 for item in six.itervalues(tensor.quantization.attribs))
+            for tensor in nnef_graph.tensors)):
+        if fragments:
+            return fragments + '\n' + TFLITE_QUANTIZATION_FRAGMENT
+        else:
+            return TFLITE_QUANTIZATION_FRAGMENT
+    return fragments
 
 
 class Reader(object):
@@ -439,12 +496,13 @@ class Reader(object):
 
 class Writer(object):
 
-    def __init__(self, write_weights=True, extensions=None, fragments=None):
+    def __init__(self, write_weights=True, extensions=None, fragments=None, only_print_used_fragments=False):
         self._write_weights = write_weights
         self._extensions = extensions
         self._fragments = fragments
+        self._only_print_used_fragments = only_print_used_fragments
 
     def __call__(self, graph, filename):
         write(graph, filename, write_weights=self._write_weights, extensions=self._extensions,
-              fragments=self._fragments)
+              fragments=self._fragments, only_print_used_fragments=self._only_print_used_fragments)
         return None

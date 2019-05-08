@@ -89,8 +89,8 @@ def get_tf_py_custom_traceable_functions(module_names):
     custom_traceable_functions = []
     for module_name in module_names:
         module = importlib.import_module(module_name)
-        if hasattr(module, "TENSORFLOW_PY_OP_DEFINITIONS"):
-            opdefs = module.TENSORFLOW_PY_OP_DEFINITIONS
+        if hasattr(module, "TENSORFLOW_PY_SIGNATURES"):
+            opdefs = module.TENSORFLOW_PY_SIGNATURES
             for opdef in opdefs:
                 funs = []
                 for import_, fun_name in zip(opdef.imports, opdef.op_names):
@@ -107,8 +107,8 @@ def get_tf_py_imports_and_op_protos(module_names):
     op_protos = []
     for module_name in module_names:
         module = importlib.import_module(module_name)
-        if hasattr(module, "TENSORFLOW_PY_OP_DEFINITIONS"):
-            opdefs = module.TENSORFLOW_PY_OP_DEFINITIONS
+        if hasattr(module, "TENSORFLOW_PY_SIGNATURES"):
+            opdefs = module.TENSORFLOW_PY_SIGNATURES
             for opdef in opdefs:
                 imports_for_this_op = []
                 for import_, fun_name in zip(opdef.imports, opdef.op_names):
@@ -167,11 +167,15 @@ def get_reader(input_format,
 
 
 def get_custom_converters(input_format, output_format, module_names):
+
+    format = input_format if input_format != "nnef" else output_format
+    direction = "exporters" if input_format != "nnef" else "importers"
+    attrname = (format + '_' + direction).replace('-', '_').upper()
+
     custom_converter_by_op_name = {}
 
     for module_name in module_names:
         module = importlib.import_module(module_name)
-        attrname = (input_format + "_to_" + output_format + "_converters").replace('-', '_').upper()
         if hasattr(module, attrname):
             custom_converter_by_op_name.update(getattr(module, attrname))
 
@@ -237,7 +241,10 @@ def get_data_format_optimizer(input_format, output_format, io_transformation):
 def get_writer(input_format, output_format, with_weights=True, custom_converters=None):
     if output_format == 'nnef':
         from nnef_tools.io.nnef.nnef_io import Writer
-        return Writer(write_weights=with_weights)
+        fragments = NNEFParserConfig.combine_configs(
+            NNEFParserConfig.load_configs(custom_converters, load_standard=False)
+        ).fragments
+        return Writer(write_weights=with_weights, fragments=fragments, only_print_used_fragments=True)
     elif output_format == 'tensorflow-py':
         from nnef_tools.io.tensorflow.tf_py_io import Writer
 

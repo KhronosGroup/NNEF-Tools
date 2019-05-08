@@ -26,7 +26,7 @@ _StrOrStrs = typing.Union[str, typing.List[str], typing.Tuple[str, ...]]
 _Type = typing.Any
 
 
-class OpDef(object):
+class Signature(object):
     @staticmethod
     def _type_to_string(t):
         # type: (object)->str
@@ -40,25 +40,25 @@ class OpDef(object):
     @staticmethod
     def _unify_type(t):
         # type: (object)->object
-        assert t in OpDef._AllowedTypes or isinstance(t, OpDef._CompoundType), "Type not allowed: {}".format(t)
+        assert t in Signature._AllowedTypes or isinstance(t, Signature._CompoundType), "Type not allowed: {}".format(t)
 
         if t is list:
-            return OpDef.List[OpDef.Any]
+            return Signature.List[Signature.Any]
         if t is tuple:
-            return OpDef.Tuple[OpDef.Any, ...]
+            return Signature.Tuple[Signature.Any, ...]
 
-        if t is OpDef.Tensor:
-            return OpDef.Tensor[OpDef.Any]
-        if t is OpDef.List:
-            return OpDef.List[OpDef.Any]
-        if t is OpDef.Tuple:
-            return OpDef.Tuple[OpDef.Any, ...]
-        if t is OpDef.Optional:
-            return OpDef.Optional[OpDef.Any]
+        if t is Signature.Tensor:
+            return Signature.Tensor[Signature.Any]
+        if t is Signature.List:
+            return Signature.List[Signature.Any]
+        if t is Signature.Tuple:
+            return Signature.Tuple[Signature.Any, ...]
+        if t is Signature.Optional:
+            return Signature.Optional[Signature.Any]
 
-        if isinstance(t, OpDef._CompoundType):
-            return OpDef._CompoundType(t.main,
-                                       [OpDef._unify_type(inner) for inner in t.inner])
+        if isinstance(t, Signature._CompoundType):
+            return Signature._CompoundType(t.main,
+                                           [Signature._unify_type(inner) for inner in t.inner])
 
         return t
 
@@ -68,8 +68,8 @@ class OpDef(object):
             self.inner = inner
 
         def __repr__(self):
-            return "{}[{}]".format(OpDef._type_to_string(self.main),
-                                   ', '.join([OpDef._type_to_string(t) for t in self.inner]))
+            return "{}[{}]".format(Signature._type_to_string(self.main),
+                                   ', '.join([Signature._type_to_string(t) for t in self.inner]))
 
     class _CompoundTypeCreator(object):
         def __init__(self, main, min_args=0, max_args=1000):
@@ -80,10 +80,10 @@ class OpDef(object):
         def __getitem__(self, item):
             items = item if isinstance(item, tuple) else (item,)
             assert self.min_args <= len(items) <= self.max_args
-            return OpDef._CompoundType(self.main, items)
+            return Signature._CompoundType(self.main, items)
 
         def __repr__(self):
-            return "{}[?]".format(OpDef._type_to_string(self.main))
+            return "{}[?]".format(Signature._type_to_string(self.main))
 
     class _Tensor(object):
         pass
@@ -139,7 +139,7 @@ class OpDef(object):
 
 
 __all__ = [
-    'OpDef',
+    'Signature',
     'TFToNNEFConverter',
     'NNEFToTFConverter',
     'NNEFGraph',

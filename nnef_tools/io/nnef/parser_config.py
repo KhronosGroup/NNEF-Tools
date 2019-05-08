@@ -25,38 +25,38 @@ from nnef_tools.core import utils
 class NNEFParserConfig(object):
     STANDARD_CONFIG = None  # It is loaded after the class definition
 
-    def __init__(self, source=None, shapes=None, expand=None):
-        if source is None:
-            source = ""
+    def __init__(self, fragments=None, shapes=None, lowered=None):
+        if fragments is None:
+            fragments = ""
         if shapes is None:
             shapes = {}
-        if expand is None:
-            expand = list()
-        if not isinstance(expand, list):
-            expand = list(expand)
+        if lowered is None:
+            lowered = list()
+        if not isinstance(lowered, list):
+            lowered = list(lowered)
 
-        self._source = source
-        self._shapes = shapes
-        self._expand = expand
+        self.fragments = fragments
+        self.shapes = shapes
+        self.lowered = lowered
 
     def parse_string(self, graph_str, quant_str=None):
         return nnef.parse_string(graph_str=graph_str,
                                  quant_str=quant_str,
-                                 stdlib=self._source,
-                                 lowered=self._expand)
+                                 stdlib=self.fragments,
+                                 lowered=self.lowered)
 
     def load_graph(self, path):
         return nnef.load_graph(path=path,
-                               stdlib=self._source,
-                               lowered=self._expand)
+                               stdlib=self.fragments,
+                               lowered=self.lowered)
 
     def infer_shapes(self, graph):
-        nnef.infer_shapes(graph=graph, custom_shapes=self._shapes)
+        nnef.infer_shapes(graph=graph, custom_shapes=self.shapes)
         return graph
 
     @property
     def empty(self):
-        return not self._source and not self._shapes and not self._expand
+        return not self.fragments and not self.shapes and not self.lowered
 
     @staticmethod
     def load_config(module_name):
@@ -71,16 +71,16 @@ class NNEFParserConfig(object):
         module = importlib.import_module(module_name)
 
         custom_fragments = ""
-        if hasattr(module, "NNEF_OP_DEFINITIONS"):
-            custom_fragments = module.NNEF_OP_DEFINITIONS
-        custom_expands = []
-        if hasattr(module, "NNEF_LOWERED_OPS"):
-            custom_expands = module.NNEF_LOWERED_OPS
+        if hasattr(module, "NNEF_FRAGMENTS"):
+            custom_fragments = module.NNEF_FRAGMENTS
+        custom_lowered = []
+        if hasattr(module, "NNEF_LOWERED"):
+            custom_lowered = module.NNEF_LOWERED
         custom_shapes = {}
-        if hasattr(module, "NNEF_SHAPE_FUNCTIONS"):
-            custom_shapes = module.NNEF_SHAPE_FUNCTIONS
+        if hasattr(module, "NNEF_SHAPES"):
+            custom_shapes = module.NNEF_SHAPES
 
-        return NNEFParserConfig(source=custom_fragments, shapes=custom_shapes, expand=custom_expands)
+        return NNEFParserConfig(fragments=custom_fragments, shapes=custom_shapes, lowered=custom_lowered)
 
     @staticmethod
     def load_configs(module_names="", load_standard=True):
@@ -111,18 +111,14 @@ class NNEFParserConfig(object):
         assert all(isinstance(config, NNEFParserConfig) for config in configs)
 
         shapes = {}
+        lowered = []
         for config in configs:
-            shapes.update(config._shapes)
+            shapes.update(config.shapes)
+            lowered += config.lowered
 
-        expand = []
-        for config in configs:
-            expand += config._expand
-
-        expand = utils.unique(expand)
-
-        return NNEFParserConfig(source='\n\n'.join(config._source for config in configs),
+        return NNEFParserConfig(fragments='\n\n'.join(config.fragments for config in configs),
                                 shapes=shapes,
-                                expand=expand)
+                                lowered=utils.unique(lowered))
 
 
 NNEFParserConfig.STANDARD_CONFIG = NNEFParserConfig.load_config("nnef_tools.io.nnef.parser_config_std")

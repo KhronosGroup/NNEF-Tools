@@ -965,4 +965,4 @@ _DefaultConverters = {
 
 # TODO add to class as static(?) method
 # NNEF must be parsed with this before calling nnef_to_tf.Converter on it
-ParserConfig = NNEFParserConfig(expand=[k for k, v in six.iteritems(_DefaultConverters) if v is NONATOMIC])
+ParserConfig = NNEFParserConfig(lowered=[k for k, v in six.iteritems(_DefaultConverters) if v is NONATOMIC])

@@ -14,7 +14,7 @@
 
 from __future__ import division, print_function, absolute_import
 
-NNEF_OP_DEFINITIONS = """
+NNEF_FRAGMENTS = """
 # tensor declaration operations
 
 fragment external<? = scalar>( shape: integer[] ) -> ( output: tensor<?> );

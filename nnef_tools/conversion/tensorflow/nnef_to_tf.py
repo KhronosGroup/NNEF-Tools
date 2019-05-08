@@ -30,7 +30,7 @@ from nnef_tools.io.nnef.parser_config import NNEFParserConfig
 from nnef_tools.io.tensorflow.tf_graph import TFGraph, TFTensor, TFOperation
 
 # NNEF must be parsed with this before calling nnef_to_tf.Converter on it
-ParserConfig = NNEFParserConfig(expand=[
+ParserConfig = NNEFParserConfig(lowered=[
     "rms_pool",
     "softabs",
     "log2",
