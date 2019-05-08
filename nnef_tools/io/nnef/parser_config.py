@@ -77,8 +77,8 @@ class NNEFParserConfig(object):
         if hasattr(module, "NNEF_LOWERED_OPS"):
             custom_expands = module.NNEF_LOWERED_OPS
         custom_shapes = {}
-        if hasattr(module, "NNEF_SHAPE_PROPAGATORS"):
-            custom_shapes = module.NNEF_SHAPE_PROPAGATORS
+        if hasattr(module, "NNEF_SHAPE_FUNCTIONS"):
+            custom_shapes = module.NNEF_SHAPE_FUNCTIONS
 
         return NNEFParserConfig(source=custom_fragments, shapes=custom_shapes, expand=custom_expands)
 
