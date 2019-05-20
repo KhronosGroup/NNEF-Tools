@@ -57,7 +57,9 @@ def _get_paddings(nnefop):
     nnefpadding = nnefop.attribs["padding"]
     nnefborder = nnefop.attribs["border"].lower()
 
-    if len(nnefpadding) == 0 and (nnefborder == "constant" or nnefborder == "ignore"):
+    if len(nnefpadding) == 0 and "pool" in nnefop.name and nnefborder == "ignore":
+        return _InOpAndOutOfOpPadding(_InOpPadding.SAME, None)
+    elif len(nnefpadding) == 0 and "conv" in nnefop.name and nnefborder == "constant":
         return _InOpAndOutOfOpPadding(_InOpPadding.SAME, None)
     elif not utils.recursive_any(nnefpadding, lambda x: x > 0):
         return _InOpAndOutOfOpPadding(_InOpPadding.VALID, None)
@@ -85,7 +87,7 @@ def _get_paddings(nnefop):
                     strides=nnefop.attribs["stride"],
                     dilations=nnefop.attribs["dilation"]
                 )
-            else:
+            elif nnefop.name in ["argmax_pool", "max_pool_with_index", "max_pool", "avg_pool"]:
                 nnefpadding = _calculate_padding(
                     upscaled_shape=nnefop.input.shape,
                     downscaled_shape=nnefop.output.shape,
@@ -93,9 +95,45 @@ def _get_paddings(nnefop):
                     strides=nnefop.attribs["stride"],
                     dilations=nnefop.attribs["dilation"]
                 )
+            elif nnefop.name == "conv_grad_filter":
+                orig_input, output_grad = tuple(nnefop.inputs)[:2]
+
+                nnefpadding = _calculate_padding(
+                    upscaled_shape=orig_input.shape[2:],
+                    downscaled_shape=output_grad.shape[2:],
+                    filter_shape=nnefop.attribs['orig_filter_shape'],
+                    strides=nnefop.attribs["stride"],
+                    dilations=nnefop.attribs["dilation"]
+                )
+            elif nnefop.name == "avg_pool_grad":
+                output_grad = nnefop.inputs[0]
+                nnefpadding = _calculate_padding(
+                    upscaled_shape=nnefop.attribs['orig_input_shape'],
+                    downscaled_shape=output_grad.shape,
+                    filter_shape=nnefop.attribs["size"],
+                    strides=nnefop.attribs["stride"],
+                    dilations=nnefop.attribs["dilation"])
+            elif nnefop.name == "max_pool_grad":
+                orig_input, orig_output = nnefop.inputs[:2]
+                nnefpadding = _calculate_padding(
+                    upscaled_shape=orig_input.shape,
+                    downscaled_shape=orig_output.shape,
+                    filter_shape=nnefop.attribs["size"],
+                    strides=nnefop.attribs["stride"],
+                    dilations=nnefop.attribs["dilation"])
+            elif nnefop.name == "max_pool_grad_with_index":
+                orig_input, orig_index, output_grad = nnefop.inputs[:3]
+                nnefpadding = _calculate_padding(
+                    upscaled_shape=orig_input.shape,
+                    downscaled_shape=output_grad.shape,
+                    filter_shape=nnefop.attribs["size"],
+                    strides=nnefop.attribs["stride"],
+                    dilations=nnefop.attribs["dilation"])
+            else:
+                assert False
 
         if utils.recursive_any(nnefpadding, lambda x: x > 0):
-            if nnefop.name in ["conv", "deconv"]:
+            if "conv" in nnefop.name:
                 return _InOpAndOutOfOpPadding(_InOpPadding.VALID, [(0, 0), (0, 0)] + nnefpadding)
             else:
                 return _InOpAndOutOfOpPadding(_InOpPadding.VALID, nnefpadding)
@@ -116,7 +154,8 @@ def _transform_extract_padding(g):
             in_op_padding, separate_padding = _get_paddings(nnefop)
             nnefop.attribs["padding"] = in_op_padding
 
-            assert separate_padding is None if nnefop.name in backward_ops else True
+            if nnefop.name in backward_ops:
+                assert separate_padding is None
 
             if separate_padding is not None:
                 input = nnefop.inputs[0]

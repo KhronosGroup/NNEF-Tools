@@ -581,7 +581,7 @@ def generic_convert_pool(converter, tf_op, nnef_graph, target_name):
 
     size = list(tf_op.attribs["size"])
     padding = converter.nnef_padding(tf_op.attribs["padding"], input.rank, is_nhwc, out_spatial=False)
-    border = converter.nnef_border(tf_op.attribs.get('_border', 'constant'))
+    border = converter.nnef_border(tf_op.attribs.get('_border', 'ignore'))
     stride = converter.nnef_stride(tf_op.attribs.get('stride'), input.rank, is_nhwc, out_spatial=False)
 
     nnef_op = NNEFOperation(

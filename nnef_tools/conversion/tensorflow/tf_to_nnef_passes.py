@@ -856,16 +856,16 @@ def _transform_add_conv(g):
 
 def _transform_pad(g):
     # type: (TFGraph)->None
-    input, filter, pad_output = matcher.tensors(3)
+    input, pad_output = matcher.tensors(2)
     pad = matcher.Operation(name="tf.pad", inputs=input, outputs=pad_output)
     conv = matcher.Operation(name=["_conv", "_planewise_conv", "_separable_conv",
                                    "_max_pool", "_max_pool_with_index", "_avg_pool"],
-                             inputs=(pad_output, filter))
+                             inputs={0: pad_output})
     matcher.replace(
         g, conv,
         lambda m: TFOperation(graph=g,
                               name=m[conv].name,
-                              inputs=(m[input], m[filter]),
+                              inputs=(m[input],) + tuple(m[conv].inputs[1:]),
                               attribs=utils.updated_dict(m[conv].attribs,
                                                          padding=[tuple(p) for p in m[pad].attribs["paddings"]],
                                                          _border=m[pad].attribs["mode"]),
