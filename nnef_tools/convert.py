@@ -359,8 +359,10 @@ def convert(input_format,
             custom_converters=None,
             conversion_info=False  # type: typing.Union[bool, str, None]
             ):
-    if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef', 'caffe']:
+    if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef']:
         output_prefix = os.path.basename(os.path.abspath(input_model[0]))
+    elif input_format == 'caffe':
+        output_prefix = os.path.basename(os.path.abspath(input_model[1]))
     elif input_format == 'tensorflow-py':
         output_prefix = input_model[0].split('.')[-1]
     else:
@@ -377,8 +379,12 @@ def convert(input_format,
                                           output_path=output_path,
                                           compress=compress)
     else:
-        if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef', 'caffe']:
+        if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef']:
             output_dir = os.path.dirname(os.path.abspath(input_model[0]))
+            if not output_dir:
+                output_dir = '.'
+        elif input_format == 'caffe':
+            output_dir = os.path.dirname(os.path.abspath(input_model[1]))
             if not output_dir:
                 output_dir = '.'
         else:
