@@ -2013,9 +2013,15 @@ class Caffe2Importer(Caffe2Logger, ImporterExporter):
 
         output_shape = node_list[0].output_shape[:]
 
-        nnef_node = node.AddN(x=node_list,
-                              _uid=self.gen_node_name(caffe2node.output[0]),
-                              _output_shape=output_shape)
+        if len(node_list) == 2:
+            nnef_node = node.Add(x=node_list[0],
+                                 y=node_list[1],
+                                 _uid=self.gen_node_name(caffe2node.output[0]),
+                                 _output_shape=output_shape)
+        else:
+            nnef_node = node.AddN(x=node_list,
+                                  _uid=self.gen_node_name(caffe2node.output[0]),
+                                  _output_shape=output_shape)
 
         return nnef_node, caffe2_inputs, attrs
 
