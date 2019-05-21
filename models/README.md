@@ -14,6 +14,7 @@ _Floating point models_
 
 Name | Size | Original | Converted
 --- | --- | --- | ---
+BVLC AlexNet | 244 Mb | [Caffe](https://github.com/BVLC/caffe/tree/master/models/bvlc_alexnet) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/bvlc_alexnet.caffemodel.nnef.tgz)
 BVLC AlexNet | 244 Mb | [ONNX](https://s3.amazonaws.com/download.onnx/models/opset_9/bvlc_alexnet.tar.gz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/bvlc_alexnet.onnx.nnef.tgz)
 
 
@@ -24,6 +25,8 @@ _Floating point models_
 
 Name | Size | Original | Converted
 --- | --- | --- | ---
+VGG-16 | 553.6 MB Mb | [Caffe](https://gist.github.com/ksimonyan/211839e770f7b538e2d8) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/vgg16.caffemodel.nnef.tgz)
+VGG-19 | 574.8 MB Mb | [Caffe](https://gist.github.com/ksimonyan/3785162f95cd2d5fee77) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/vgg19.caffemodel.nnef.tgz)
 VGG-16 | 527.8 MB Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/vgg/vgg16/vgg16.onnx) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/vgg16.onnx.nnef.tgz)
 VGG-19 | 548.1 MB Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/vgg/vgg19/vgg19.onnx) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/vgg19.onnx.nnef.tgz)
 
@@ -39,6 +42,7 @@ Inception v1 | 28 Mb | [ONNX](https://s3.amazonaws.com/download.onnx/models/opse
 Inception v2 | 45 Mb | [ONNX](https://s3.amazonaws.com/download.onnx/models/opset_9/inception_v2.tar.gz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/inception_v2.onnx.nnef.tgz)
 Inception v3 | 95.3 Mb | [TensorFlow](https://storage.googleapis.com/download.tensorflow.org/models/tflite/model_zoo/upload_20180427/inception_v3_2018_04_27.tgz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/inception_v3.tfpb.nnef.tgz)
 Inception v4 | 170.7 Mb | [TensorFlow](https://storage.googleapis.com/download.tensorflow.org/models/tflite/model_zoo/upload_20180427/inception_v4_2018_04_27.tgz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/inception_v4.tfpb.nnef.tgz)
+BVLC GoogleNet | 28 Mb | [Caffe](https://github.com/BVLC/caffe/tree/master/models/bvlc_googlenet) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/bvlc_googlenet.caffemodel.nnef.tgz)
 BVLC GoogleNet | 28 Mb | [ONNX](https://s3.amazonaws.com/download.onnx/models/opset_9/bvlc_googlenet.tar.gz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/bvlc_googlenet.onnx.nnef.tgz)
 
 
@@ -63,6 +67,7 @@ Resnet v1-18 | 44.7 Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/resnet/r
 Resnet v1-34 | 83.3 Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/resnet/resnet34v1/resnet34v1.onnx) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/resnet_v1_34.onnx.nnef.tgz)
 Resnet v1-50 | 97.8 Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/resnet/resnet50v1/resnet50v1.onnx) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/resnet_v1_50.onnx.nnef.tgz)
 Resnet v1-101 | 170.6 MB Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/resnet/resnet101v1/resnet101v1.onnx) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/resnet_v1_101.onnx.nnef.tgz)
+Resnet v1-152 | 242.3 Mb | [Caffe](https://github.com/KaimingHe/deep-residual-networks) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/resnet_v1_152.caffemodel.nnef.tgz)
 Resnet v2-18 | 44.6 Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/resnet/resnet18v2/resnet18v2.onnx) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/resnet_v2_18.onnx.nnef.tgz)
 Resnet v2-34 | 83.2 Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/resnet/resnet34v2/resnet34v2.onnx) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/resnet_v2_34.onnx.nnef.tgz)
 Resnet v2-50 | 97.7 Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/resnet/resnet50v2/resnet50v2.onnx) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/resnet_v2_50.onnx.nnef.tgz)
