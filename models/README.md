@@ -83,8 +83,11 @@ _Floating point models_
 Name | Size | Original | Converted
 --- | --- | --- | ---
 MobileNet v1-1.0 | 16.9 Mb | [TensorFlow](http://download.tensorflow.org/models/mobilenet_v1_2018_02_22/mobilenet_v1_1.0_224.tgz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/mobilenet_v1_1.0.tfpb.nnef.tgz)
+MobileNet v1-1.0 | 17.2 Mb | [Caffe](https://github.com/shicai/MobileNet-Caffe) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/mobilenet_v1_1.0.caffemodel.nnef.tgz)
 MobileNet v2-1.0 | 14.0 Mb | [TensorFlow](http://download.tensorflow.org/models/tflite_11_05_08/mobilenet_v2_1.0_224.tgz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/mobilenet_v2_1.0.tfpb.nnef.tgz)
+MobileNet v2-1.0 | 14.4 Mb | [Caffe](https://github.com/shicai/MobileNet-Caffe) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/mobilenet_v2_1.0.caffemodel.nnef.tgz)
 MobileNet v2-1.0 | 13.6 Mb | [ONNX](https://s3.amazonaws.com/onnx-model-zoo/mobilenet/mobilenetv2-1.0/mobilenetv2-1.0.onnx) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/mobilenet_v2_1.0.onnx.nnef.tgz)
+
 
 
 _Quantized models_
