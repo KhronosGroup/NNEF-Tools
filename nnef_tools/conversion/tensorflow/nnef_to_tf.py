@@ -28,6 +28,7 @@ from nnef_tools.core import utils
 from nnef_tools.io.nnef.nnef_graph import NNEFGraph, NNEFOperation, NNEFTensor
 from nnef_tools.io.nnef.parser_config import NNEFParserConfig
 from nnef_tools.io.tensorflow.tf_graph import TFGraph, TFTensor, TFOperation
+from nnef_tools.shape_inference import shape_inference as infer
 
 # NNEF must be parsed with this before calling nnef_to_tf.Converter on it
 ParserConfig = NNEFParserConfig(lowered=[
@@ -408,6 +409,43 @@ class Converter(converter.Converter[NNEFTensor, NNEFOperation, NNEFGraph,
             return "tf.logical_or"
         assert False, "Unsupported TF dtype: {}".format(tf_dtype)
 
+    def decompose_padding(
+            self,
+            upscaled_shape,
+            kernel_size,
+            padding,
+            border,
+            stride,
+            dilation,
+            auto_padding_border,
+            constant_value_of_ignore=None,
+    ):
+        # Returns in_op_padding, out_of_op_padding, out_of_op_padding_mode, out_of_op_padding_constant
+
+        if not stride:
+            stride = [1] * len(upscaled_shape)
+        if not dilation:
+            dilation = [1] * len(upscaled_shape)
+
+        auto_padding = infer.same_padding(upscaled_input=upscaled_shape,
+                                          filter=kernel_size,
+                                          stride=stride,
+                                          dilation=dilation)
+        padding = list(padding if padding else auto_padding)
+
+        if padding == auto_padding and border == auto_padding_border:
+            return "SAME", None, None, None
+        elif all((p, q) == (0, 0) for p, q in padding):
+            return "VALID", None, None, None
+        else:
+            if border == 'ignore' and constant_value_of_ignore is not None:
+                tf_pad_mode = "CONSTANT"
+                constant = constant_value_of_ignore
+            else:
+                tf_pad_mode = self.tf_border_mode(border, self.enable_imprecise_padding_border)
+                constant = 0
+            return "VALID", padding, tf_pad_mode, constant
+
 
 def convert_default(converter, nnef_op, tf_graph):
     # type: (Converter, NNEFOperation, TFGraph)->None
@@ -666,25 +704,50 @@ def convert_conv(converter, nnef_op, tf_graph):
     # type: (Converter, NNEFOperation, TFGraph)->None
 
     groups = nnef_op.attribs["groups"]
-    input = nnef_op.inputs[0]
+    input, filter = converter.converted_tensors(nnef_op.inputs[:2])
+
+    stride, padding, border, dilation = \
+        utils.get_dict_items(nnef_op.attribs, "stride", "padding", "border", "dilation")
+
+    in_op_padding, out_of_op_padding, out_of_op_padding_mode, out_of_op_padding_constant = \
+        converter.decompose_padding(upscaled_shape=input.shape[2:],
+                                    kernel_size=filter.shape[2:],
+                                    padding=padding,
+                                    border=border,
+                                    stride=stride,
+                                    dilation=dilation,
+                                    auto_padding_border='constant')
+
+    if out_of_op_padding is not None:
+        out_of_op_padding = [(0, 0), (0, 0)] + out_of_op_padding
+        input = TFOperation(graph=tf_graph,
+                            name="tf.pad",
+                            inputs=input,
+                            attribs=dict(paddings=out_of_op_padding,
+                                         mode=out_of_op_padding_mode,
+                                         constant_values=out_of_op_padding_constant),
+                            outputs=TFTensor(graph=tf_graph,
+                                             shape=[d + p + q for d, (p, q) in zip(input.shape, out_of_op_padding)],
+                                             dtype=input.dtype)).output
+
     d = input.rank - 2
 
     if groups == 1:
         if d in [2, 3]:
-            partial_convert_conv_to_conv2d_or_conv3d(converter, nnef_op, tf_graph)
+            partial_convert_conv_to_conv2d_or_conv3d(converter, nnef_op, tf_graph, input, in_op_padding)
         else:
-            partial_convert_conv_to_convolution(converter, nnef_op, tf_graph)
+            partial_convert_conv_to_convolution(converter, nnef_op, tf_graph, input, in_op_padding)
     else:
         if groups in [0, input.shape[1]] and d == 2:
-            partial_convert_conv_to_deptwise_conv2d(converter, nnef_op, tf_graph)
+            partial_convert_conv_to_deptwise_conv2d(converter, nnef_op, tf_graph, input, in_op_padding)
         else:
             assert False, "Grouped convolutions are only supported if they can be converted to tf.nn.depthwise_conv2d."
 
 
-def partial_convert_conv_to_conv2d_or_conv3d(converter, nnef_op, tf_graph):
-    # type: (Converter, NNEFOperation, TFGraph)->None
+def partial_convert_conv_to_conv2d_or_conv3d(converter, nnef_op, tf_graph, input, in_op_padding):
+    # type: (Converter, NNEFOperation, TFGraph, TFTensor, str)->None
 
-    input, filter = converter.converted_tensors(nnef_op.inputs)
+    filter = converter.converted_tensor(nnef_op.inputs[1])
     output = converter.converted_tensor(nnef_op.output)
 
     d = input.rank - 2
@@ -707,7 +770,7 @@ def partial_convert_conv_to_conv2d_or_conv3d(converter, nnef_op, tf_graph):
                 in_format=converter.FORMAT_SPATIAL,
                 out_format=converter.preferred_format,
                 default_elem=1),
-            padding=nnef_op.attribs["padding"]),
+            padding=in_op_padding),
         outputs=(converter.create_nhwc_intermediate_for_nchw_output(tf_graph, output)
                  if converter.prefer_nhwc else output))
 
@@ -715,10 +778,10 @@ def partial_convert_conv_to_conv2d_or_conv3d(converter, nnef_op, tf_graph):
         converter.add_nhwc_to_nchw_transpose(tf_graph, tf_op.output, nchw_tensor=output)
 
 
-def partial_convert_conv_to_convolution(converter, nnef_op, tf_graph):
-    # type: (Converter, NNEFOperation, TFGraph)->None
+def partial_convert_conv_to_convolution(converter, nnef_op, tf_graph, input, in_op_padding):
+    # type: (Converter, NNEFOperation, TFGraph, TFTensor, str)->None
 
-    input, filter = converter.converted_tensors(nnef_op.inputs)
+    filter = converter.converted_tensor(nnef_op.inputs[1])
     output = converter.converted_tensor(nnef_op.output)
 
     assert not (converter.has_gt_1(nnef_op.attribs["stride"]) and converter.has_gt_1(nnef_op.attribs["dilation"])), \
@@ -730,7 +793,7 @@ def partial_convert_conv_to_convolution(converter, nnef_op, tf_graph):
         inputs=(converter.add_nchw_to_nhwc_transpose(tf_graph, input) if converter.prefer_nhwc else input,
                 converter.add_nchw_to_hwcn_transpose(tf_graph, filter)),
         attribs=dict(data_format=converter.tf_data_format(converter.preferred_format, input.rank),
-                     padding=nnef_op.attribs["padding"]),
+                     padding=in_op_padding),
         outputs=(converter.create_nhwc_intermediate_for_nchw_output(tf_graph, output)
                  if converter.prefer_nhwc else output))
 
@@ -744,10 +807,10 @@ def partial_convert_conv_to_convolution(converter, nnef_op, tf_graph):
         tf_op.attribs["dilation_rate"] = list(nnef_op.attribs["dilation"])
 
 
-def partial_convert_conv_to_deptwise_conv2d(converter, nnef_op, tf_graph):
-    # type: (Converter, NNEFOperation, TFGraph)->None
+def partial_convert_conv_to_deptwise_conv2d(converter, nnef_op, tf_graph, input, in_op_padding):
+    # type: (Converter, NNEFOperation, TFGraph, TFTensor, str)->None
 
-    input, filter = converter.converted_tensors(nnef_op.inputs)
+    filter = converter.converted_tensor(nnef_op.inputs[1])
     output = converter.converted_tensor(nnef_op.output)
     in_channels = input.shape[1]
     d = input.rank - 2
@@ -766,7 +829,7 @@ def partial_convert_conv_to_deptwise_conv2d(converter, nnef_op, tf_graph):
         inputs=(input, filter),
         attribs=dict(
             data_format=converter.tf_data_format(converter.preferred_format, input.rank),
-            padding=nnef_op.attribs["padding"],
+            padding=in_op_padding,
             strides=converter.convert_format(nnef_op.attribs["stride"] if nnef_op.attribs["stride"] else [1] * d,
                                              in_format=converter.FORMAT_SPATIAL,
                                              out_format=converter.preferred_format,
@@ -788,30 +851,48 @@ def convert_deconv(converter, nnef_op, tf_graph):
     # type: (Converter, NNEFOperation, TFGraph)->None
 
     groups = nnef_op.attribs["groups"]
-    input = nnef_op.inputs[0]
+    input, filter = nnef_op.inputs[:2]
+    output = nnef_op.output
     d = input.rank - 2
 
-    is_dilated = utils.has_gt_1(nnef_op.attribs["dilation"])
+    stride, padding, border, dilation = \
+        utils.get_dict_items(nnef_op.attribs, "stride", "padding", "border", "dilation")
+
+    is_dilated = utils.has_gt_1(dilation)
+
+    in_op_padding, out_of_op_padding, out_of_op_padding_mode, out_of_op_padding_constant = \
+        converter.decompose_padding(upscaled_shape=output.shape[2:],
+                                    kernel_size=filter.shape[2:],
+                                    padding=padding,
+                                    border=border,
+                                    stride=stride,
+                                    dilation=dilation,
+                                    auto_padding_border='constant')
+
+    assert out_of_op_padding is None, "Only auto or valid padding is supported for deconv"
 
     if groups == 1:
         if not is_dilated and d in [2, 3]:
-            partial_convert_deconv_to_conv2d_transpose_or_conv3d_transpose(converter, nnef_op, tf_graph)
+            partial_convert_deconv_to_conv2d_transpose_or_conv3d_transpose(
+                converter, nnef_op, tf_graph, in_op_padding)
         elif is_dilated and d == 2:
-            partial_convert_deconv_to_atrous_conv2d_transpose(converter, nnef_op, tf_graph)
+            partial_convert_deconv_to_atrous_conv2d_transpose(
+                converter, nnef_op, tf_graph, in_op_padding)
         else:
             assert False, \
                 "{} dimensional{} deconv is not supported by TensorFlow.".format(d, " dilated" if is_dilated else "")
     else:
         if groups in [0, input.shape[1]] and d == 2:
-            partial_convert_deconv_to_depthwise_conv2d_native_backprop_input(converter, nnef_op, tf_graph)
+            partial_convert_deconv_to_depthwise_conv2d_native_backprop_input(
+                converter, nnef_op, tf_graph, in_op_padding)
         else:
             assert False, \
                 "Grouped deconvolutions are only supported if they can be " \
                 "converted to tf.nn.depthwise_conv2d_native_backprop_input."
 
 
-def partial_convert_deconv_to_conv2d_transpose_or_conv3d_transpose(converter, nnef_op, tf_graph):
-    # type: (Converter, NNEFOperation, TFGraph)->None
+def partial_convert_deconv_to_conv2d_transpose_or_conv3d_transpose(converter, nnef_op, tf_graph, in_op_padding):
+    # type: (Converter, NNEFOperation, TFGraph, str)->None
 
     input, filter = converter.converted_tensors(nnef_op.inputs)
     output = converter.converted_tensor(nnef_op.output)
@@ -834,7 +915,7 @@ def partial_convert_deconv_to_conv2d_transpose_or_conv3d_transpose(converter, nn
                                              in_format=converter.FORMAT_SPATIAL,
                                              out_format=target_format,
                                              default_elem=1),
-            padding=nnef_op.attribs["padding"],
+            padding=in_op_padding,
             output_shape=(converter.shape_nchw_to_nhwc(output.shape)
                           if target_format == converter.FORMAT_NHWC else list(output.shape))),
         outputs=(converter.create_nhwc_intermediate_for_nchw_output(tf_graph, output)
@@ -844,8 +925,8 @@ def partial_convert_deconv_to_conv2d_transpose_or_conv3d_transpose(converter, nn
         converter.add_nhwc_to_nchw_transpose(tf_graph, tf_op.output, nchw_tensor=output)
 
 
-def partial_convert_deconv_to_atrous_conv2d_transpose(converter, nnef_op, tf_graph):
-    # type: (Converter, NNEFOperation, TFGraph)->None
+def partial_convert_deconv_to_atrous_conv2d_transpose(converter, nnef_op, tf_graph, in_op_padding):
+    # type: (Converter, NNEFOperation, TFGraph, str)->None
 
     # Only NHWC is supported
 
@@ -867,15 +948,16 @@ def partial_convert_deconv_to_atrous_conv2d_transpose(converter, nnef_op, tf_gra
         inputs=(converter.add_nchw_to_nhwc_transpose(tf_graph, input),
                 converter.add_nchw_to_hwcn_transpose(tf_graph, filter)),
         attribs=dict(rate=nnef_op.attribs["dilation"][0] if nnef_op.attribs["dilation"] else 1,
-                     padding=nnef_op.attribs["padding"],
+                     padding=in_op_padding,
                      output_shape=converter.shape_nchw_to_nhwc(output.shape)),
         outputs=converter.create_nhwc_intermediate_for_nchw_output(tf_graph, output))
 
     converter.add_nhwc_to_nchw_transpose(tf_graph, tf_op.output, nchw_tensor=output)
 
 
-def partial_convert_deconv_to_depthwise_conv2d_native_backprop_input(converter, nnef_op, tf_graph):
-    # type: (Converter, NNEFOperation, TFGraph)->None
+def partial_convert_deconv_to_depthwise_conv2d_native_backprop_input(
+        converter, nnef_op, tf_graph, in_op_padding):
+    # type: (Converter, NNEFOperation, TFGraph, str)->None
 
     input, filter = converter.converted_tensors(nnef_op.inputs)
     output = converter.converted_tensor(nnef_op.output)
@@ -901,7 +983,7 @@ def partial_convert_deconv_to_depthwise_conv2d_native_backprop_input(converter, 
                                              in_format=converter.FORMAT_SPATIAL,
                                              out_format=converter.preferred_format,
                                              default_elem=1),
-            padding=nnef_op.attribs["padding"],
+            padding=in_op_padding,
             input_sizes=converter.shape_nchw_to_nhwc(output.shape) if converter.prefer_nhwc else list(output.shape)),
         outputs=(converter.create_nhwc_intermediate_for_nchw_output(tf_graph, output)
                  if converter.prefer_nhwc else output))
@@ -925,8 +1007,28 @@ def generic_convert_pooling(converter, nnef_op, tf_graph, target_name):
     input = converter.converted_tensor(nnef_op.input)
     outputs = converter.converted_tensors(nnef_op.outputs)
 
-    size, stride, padding = utils.get_dict_items(nnef_op.attribs, "size", "stride", "padding")
+    padding, border, size, stride, dilation = utils.get_dict_items(
+        nnef_op.attribs, "padding", "border", "size", "stride", "dilation")
 
+    in_op_padding, out_of_op_padding, out_of_op_padding_mode, out_of_op_padding_constant = \
+        converter.decompose_padding(upscaled_shape=input.shape,
+                                    kernel_size=size,
+                                    padding=padding,
+                                    border=border,
+                                    stride=stride,
+                                    dilation=dilation,
+                                    auto_padding_border='ignore')
+
+    if out_of_op_padding is not None:
+        input = TFOperation(graph=tf_graph,
+                            name="tf.pad",
+                            inputs=input,
+                            attribs=dict(paddings=out_of_op_padding,
+                                         mode=out_of_op_padding_mode,
+                                         constant_values=out_of_op_padding_constant),
+                            outputs=TFTensor(graph=tf_graph,
+                                             shape=[d + p + q for d, (p, q) in zip(input.shape, out_of_op_padding)],
+                                             dtype=input.dtype)).output
     tf_op = TFOperation(
         graph=tf_graph,
         name=target_name,
@@ -938,7 +1040,7 @@ def generic_convert_pooling(converter, nnef_op, tf_graph, target_name):
                                              in_format=converter.FORMAT_NCHW,
                                              out_format=converter.preferred_format,
                                              default_elem=1),
-            padding=padding),
+            padding=in_op_padding),
         outputs=tuple(converter.create_nhwc_intermediate_for_nchw_output(tf_graph, output)
                       if converter.prefer_nhwc else output
                       for output in outputs))
@@ -953,10 +1055,31 @@ def convert_max_pool_with_index(converter, nnef_op, tf_graph):
     # always nhwc
     assert not utils.has_gt_1(nnef_op.attribs["dilation"]), "Dilated pool is not supported in TensorFlow"
 
-    size, stride, padding = utils.get_dict_items(nnef_op.attribs, "size", "stride", "padding")
+    size, stride, padding, border, dilation = \
+        utils.get_dict_items(nnef_op.attribs, "size", "stride", "padding", "border", "dilation")
 
     input = converter.converted_tensor(nnef_op.input)
     outputs = converter.converted_tensors(nnef_op.outputs)
+
+    in_op_padding, out_of_op_padding, out_of_op_padding_mode, out_of_op_padding_constant = \
+        converter.decompose_padding(upscaled_shape=input.shape,
+                                    kernel_size=size,
+                                    padding=padding,
+                                    border=border,
+                                    stride=stride,
+                                    dilation=dilation,
+                                    auto_padding_border='ignore')
+
+    if out_of_op_padding is not None:
+        input = TFOperation(graph=tf_graph,
+                            name="tf.pad",
+                            inputs=input,
+                            attribs=dict(paddings=out_of_op_padding,
+                                         mode=out_of_op_padding_mode,
+                                         constant_values=out_of_op_padding_constant),
+                            outputs=TFTensor(graph=tf_graph,
+                                             shape=[d + p + q for d, (p, q) in zip(input.shape, out_of_op_padding)],
+                                             dtype=input.dtype)).output
 
     tf_op = TFOperation(
         graph=tf_graph,
@@ -965,7 +1088,7 @@ def convert_max_pool_with_index(converter, nnef_op, tf_graph):
         attribs=dict(
             ksize=converter.shape_nchw_to_nhwc(size),
             strides=converter.shape_nchw_to_nhwc(stride) if stride else [1] * input.rank,
-            padding=padding),
+            padding=in_op_padding),
         outputs=tuple(converter.create_nhwc_intermediate_for_nchw_output(tf_graph, output) for output in outputs))
 
     for op_output, output in zip(tf_op.outputs, outputs):
@@ -978,22 +1101,43 @@ def convert_argmax_pool(converter, nnef_op, tf_graph):
     # always nhwc
     assert not utils.has_gt_1(nnef_op.attribs["dilation"]), "Dilated pool is not supported in TensorFlow"
 
-    size, stride, padding = utils.get_dict_items(nnef_op.attribs, "size", "stride", "padding")
-
     input = converter.converted_tensor(nnef_op.input)
     index = converter.converted_tensor(nnef_op.output)
+
+    size, stride, padding, border, dilation = \
+        utils.get_dict_items(nnef_op.attribs, "size", "stride", "padding", "border", "dilation")
+
+    in_op_padding, out_of_op_padding, out_of_op_padding_mode, out_of_op_padding_constant = \
+        converter.decompose_padding(upscaled_shape=input.shape,
+                                    kernel_size=size,
+                                    padding=padding,
+                                    border=border,
+                                    stride=stride,
+                                    dilation=dilation,
+                                    auto_padding_border='ignore')
+
+    if out_of_op_padding is not None:
+        input = TFOperation(graph=tf_graph,
+                            name="tf.pad",
+                            inputs=input,
+                            attribs=dict(paddings=out_of_op_padding,
+                                         mode=out_of_op_padding_mode,
+                                         constant_values=out_of_op_padding_constant),
+                            outputs=TFTensor(graph=tf_graph,
+                                             shape=[d + p + q for d, (p, q) in zip(input.shape, out_of_op_padding)],
+                                             dtype=input.dtype)).output
 
     index_tmp = converter.create_nhwc_intermediate_for_nchw_output(tf_graph, index)
     output_tmp = TFTensor(graph=tf_graph, shape=index_tmp.shape, dtype="float32")
 
-    tf_op = TFOperation(
+    TFOperation(
         graph=tf_graph,
         name="tf.nn.max_pool_with_argmax",
         inputs=converter.add_nchw_to_nhwc_transpose(tf_graph, input),
         attribs=dict(
             ksize=converter.shape_nchw_to_nhwc(size),
             strides=converter.shape_nchw_to_nhwc(stride) if stride else [1] * input.rank,
-            padding=padding),
+            padding=in_op_padding),
         outputs=(output_tmp, index_tmp))
 
     converter.add_nhwc_to_nchw_transpose(tf_graph, index_tmp, index)
@@ -1295,27 +1439,6 @@ def convert_unstack(converter, nnef_op, tf_graph):
                 outputs=outputs)
 
 
-def convert_box(converter, nnef_op, tf_graph):
-    # type: (Converter, NNEFOperation, TFGraph)->None
-
-    input, output = converter.converted_tensors((nnef_op.input, nnef_op.output))
-
-    if (all(s == 1 for s in nnef_op.attribs["size"])
-            and all(s == 1 for s in nnef_op.attribs["stride"])
-            and all(d == 1 for d in nnef_op.attribs["dilation"])):
-        tf_op = TFOperation(graph=tf_graph,
-                            name="tf.pad",
-                            inputs=input,
-                            outputs=output)
-
-        tf_border_mode = converter.tf_border_mode(nnef_op.attribs["border"],
-                                                  converter.enable_imprecise_padding_border)
-        if tf_border_mode != 'CONSTANT':
-            tf_op.attribs["mode"] = tf_border_mode
-    else:
-        assert False, "Box is not yet fully supported, only for padding"
-
-
 def convert_copy(converter, nnef_op, tf_graph):
     # type: (Converter, NNEFOperation, TFGraph)->None
 
@@ -1409,7 +1532,9 @@ _DefaultConverters = {
     "multilinear_upsample": partial(generic_convert_upsample_downsample,
                                     target_name="tf.image.resize_bilinear",
                                     is_downsample=False),
-    "sum_reduce": partial(generic_convert_reduce, target_name="tf.reduce_sum", target_name_if_normalize="tf.reduce_mean"),
+    "sum_reduce": partial(generic_convert_reduce,
+                          target_name="tf.reduce_sum",
+                          target_name_if_normalize="tf.reduce_mean"),
     "min_reduce": partial(generic_convert_reduce, target_name="tf.reduce_min"),
     "max_reduce": partial(generic_convert_reduce, target_name="tf.reduce_max"),
     "mean_reduce": partial(generic_convert_reduce, target_name="tf.reduce_mean"),
