@@ -286,7 +286,6 @@ def _generate_name(op, tensors):
 
 def _change_blob_to_rank(tensor, rank):
     if tensor.rank != rank:
-        print(tensor, rank)
         assert all(dim == 1 for dim in tensor.shape[:-rank])
         tensor.shape = tensor.shape[-rank:]
         tensor.data = tensor.data.reshape(tensor.shape)
@@ -442,14 +441,14 @@ def _read_blobs_from_caffemodel(filename, graph):
             utils.unify_int_and_str_types(layers_not_in_prototxt)))
 
 
-def _to_numpy(repeated_scalar_container, dtype=None):
+def _to_numpy(repeated_scalar_container, dtype):
     # Creating a list before conversion makes it much faster
     return np.array(list(repeated_scalar_container), dtype=dtype)
 
 
 def _decode_blob(name, idx, blob, graph):
     shape = list(blob.shape.dim) if blob.HasField('shape') else [blob.num, blob.channels, blob.height, blob.width]
-    data = _to_numpy(blob.data if blob.data else blob.double_data)
+    data = _to_numpy(blob.data if blob.data else blob.double_data, dtype=np.float32 if blob.data else np.float64)
     if data.size == 1 and shape == [0, 0, 0, 0]:
         shape = []
     return CaffeTensor(graph=graph,
