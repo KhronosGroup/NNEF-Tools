@@ -25,7 +25,6 @@ if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
 
 
 # From https://github.com/BVLC/caffe/wiki/Model-Zoo
-# Must have upgrader for these
 class CaffeNetworkTestCases(CaffeTestRunner):
 
     # Official models

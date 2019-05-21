@@ -55,8 +55,6 @@ def set_random_weights(net):
                 variable.data[...] = 0.1 + 0.1 * np.random.random(list(variable.data.shape))
 
 
-# From https://github.com/BVLC/caffe/wiki/Model-Zoo
-# Must have upgrader for these
 class CaffeLayerTestCases(CaffeTestRunner):
     def _netspec_to_model(self, netspec, name, random_weights=True):
         caffemodel_path = os.path.join('out', 'caffe-orig', name, name + '.caffemodel')
