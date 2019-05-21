@@ -261,13 +261,16 @@ def get_data_format_optimizer(input_format, output_format, io_transformation):
         assert False
 
 
-def get_writer(input_format, output_format, with_weights=True, custom_converters=None):
+def get_writer(input_format, output_format, compress, with_weights=True, custom_converters=None):
     if output_format == 'nnef':
         from nnef_tools.io.nnef.nnef_io import Writer
         fragments = NNEFParserConfig.combine_configs(
             NNEFParserConfig.load_configs(custom_converters, load_standard=False)
         ).fragments
-        return Writer(write_weights=with_weights, fragments=fragments, only_print_used_fragments=True)
+        return Writer(write_weights=with_weights,
+                      fragments=fragments,
+                      only_print_used_fragments=True,
+                      compression_level=compress if compress >= 0 else 0)
     elif output_format == 'tensorflow-py':
         from nnef_tools.io.tensorflow.tf_py_io import Writer
 
@@ -295,7 +298,7 @@ def get_writer(input_format, output_format, with_weights=True, custom_converters
 
 def get_extension(output_format, compress):
     if output_format == 'nnef':
-        if compress:
+        if compress >= 0:
             return ".nnef.tgz"
         else:
             return ".nnef"
@@ -422,6 +425,7 @@ def convert(input_format,
                                                                                   io_transformation=io_transformation),
                                   writer=get_writer(input_format=input_format,
                                                     output_format=output_format,
+                                                    compress=compress,
                                                     with_weights=with_weights,
                                                     custom_converters=custom_converters))
 
@@ -499,8 +503,13 @@ Default: Unknown dimensions are set to 1. If the rank is unknown this option can
                         help="""tensorflow-py/pb: Generate the NCHW version of operations where both NHWC and NCHW is available""")
 
     parser.add_argument("--compress",
-                        action="store_true",
-                        help="""nnef: Create a compressed model.nnef.tgz file""")
+                        nargs='?',
+                        default=-1,
+                        const=0,
+                        type=int,
+                        help="""nnef: Create a compressed model.nnef.tgz file.
+Optionally a number can be specified between 0-9 to set the compression level (default=0).
+Stronger compression is slower.""")
 
     parser.add_argument("--permissive",
                         action="store_true",
@@ -556,7 +565,11 @@ With an argument: Write to the path defined by the argument.""")
     if args.input_format == 'tensorflow-py' and len(args.input_model) < 2:
         args.no_weights = True
 
-    if args.compress and args.output_format != 'nnef':
+    if not (-1 <= args.compress <= 9):
+        print("Error: If --compress is set, it must be in the range [0-9].")
+        exit(1)
+
+    if args.compress >= 0 and args.output_format != 'nnef':
         print("Error: --compress can now be only used with NNEF as output framework.")
         exit(1)
 

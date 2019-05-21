@@ -108,6 +108,7 @@ def write(nnef_graph,  # type: NNEFGraph
           extensions=None,  # type: typing.Optional[typing.List[str]]
           fragments=None,  # type: typing.Optional[str]
           only_print_used_fragments=False,  # type: bool
+          compression_level=0,  # type: int
           ):
     # type: (...) -> None
 
@@ -137,7 +138,7 @@ def write(nnef_graph,  # type: NNEFGraph
             _write_weights(nnef_graph, dir_path=dir_path, raise_on_missing_weight=raise_on_missing_weight)
 
         if compressed:
-            _tgz_compress(dir_path, tgz_or_dir_path)
+            _tgz_compress(dir_path, tgz_or_dir_path, compression_level=compression_level)
     finally:
         if compressed and dir_path:
             shutil.rmtree(dir_path)
@@ -496,13 +497,23 @@ class Reader(object):
 
 class Writer(object):
 
-    def __init__(self, write_weights=True, extensions=None, fragments=None, only_print_used_fragments=False):
+    def __init__(self,
+                 write_weights=True,
+                 extensions=None,
+                 fragments=None,
+                 only_print_used_fragments=False,
+                 compression_level=0):
         self._write_weights = write_weights
         self._extensions = extensions
         self._fragments = fragments
         self._only_print_used_fragments = only_print_used_fragments
+        self._compression_level = compression_level
 
     def __call__(self, graph, filename):
-        write(graph, filename, write_weights=self._write_weights, extensions=self._extensions,
-              fragments=self._fragments, only_print_used_fragments=self._only_print_used_fragments)
+        write(graph, filename,
+              write_weights=self._write_weights,
+              extensions=self._extensions,
+              fragments=self._fragments,
+              only_print_used_fragments=self._only_print_used_fragments,
+              compression_level=self._compression_level)
         return None
