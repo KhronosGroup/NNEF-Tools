@@ -31,7 +31,7 @@ from tensorflow.contrib.slim.python.slim.nets.inception_v2 import inception_v2
 from nnef_tools.core import utils
 from nnef_tools.convert import convert_using_command
 from nnef_tools.export_activation import export_activation_using_command
-from tests.conversion.tf_py_test_runner import save_random_checkpoint, get_feed_dict
+from nnef_tests.conversion.tf_py_test_runner import save_random_checkpoint, get_feed_dict
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')
@@ -75,7 +75,7 @@ class TFPyNetworkTestCases(unittest.TestCase):
             command = """
             ./nnef_tools/convert.py 
                 --input-format tensorflow-py \\
-                --input-model tests.activation_export.tf_py_network_test_cases.{fun_name} {cp_path}\\
+                --input-model nnef_tests.activation_export.tf_py_network_test_cases.{fun_name} {cp_path}\\
                 --output-format nnef \\
                 --output-model out/nnef/{fun_name}.nnef.tgz \\
                 --compress \\
@@ -86,7 +86,7 @@ class TFPyNetworkTestCases(unittest.TestCase):
             command = """
             ./nnef_tools/export_activation.py
                 --input-format tensorflow-py \\
-                --input-model tests.activation_export.tf_py_network_test_cases.{fun_name} {cp_path} \\
+                --input-model nnef_tests.activation_export.tf_py_network_test_cases.{fun_name} {cp_path} \\
                 --conversion-info out/nnef/{fun_name}.nnef.tgz.conversion.json
             """.format(fun_name=fun_name, cp_path=checkpoint_path)
             print(command)

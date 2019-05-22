@@ -22,7 +22,7 @@ import unittest
 import numpy as np
 import tensorflow as tf
 
-from tests.conversion.tf_pb_test_runner import TFPbTestRunner
+from nnef_tests.conversion.tf_pb_test_runner import TFPbTestRunner
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')

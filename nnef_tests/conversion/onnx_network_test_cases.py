@@ -17,8 +17,8 @@ from __future__ import division, print_function, absolute_import
 import os
 import unittest
 
-from tests.file_downloader import download_once, download_and_untar_once
-from tests.conversion.onnx_test_runner import ONNXTestRunner
+from nnef_tests.file_downloader import download_once, download_and_untar_once
+from nnef_tests.conversion.onnx_test_runner import ONNXTestRunner
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')

@@ -17,8 +17,8 @@ from __future__ import division, print_function, absolute_import
 import os
 import unittest
 
-from tests.file_downloader import download_and_untar_once
-from tests.conversion.tflite_test_runner import TFLiteTestRunner
+from nnef_tests.file_downloader import download_and_untar_once
+from nnef_tests.conversion.tflite_test_runner import TFLiteTestRunner
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')

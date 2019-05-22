@@ -20,7 +20,7 @@ import unittest
 from nnef_tools.core import utils
 from nnef_tools.io.onnx import onnx_io
 from nnef_tools.io.onnx.onnx_graph import *
-from tests.conversion.onnx_test_runner import ONNXTestRunner
+from nnef_tests.conversion.onnx_test_runner import ONNXTestRunner
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')

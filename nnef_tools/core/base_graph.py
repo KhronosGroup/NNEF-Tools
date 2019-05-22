@@ -14,15 +14,18 @@
 
 from __future__ import division, print_function, absolute_import
 
+import typing
 from collections import OrderedDict
+
 import numpy as np
 import six
-import typing
 
 from nnef_tools.core import utils
 from nnef_tools.core.graph import *
 # noinspection PyProtectedMember
 from nnef_tools.core.graph import _hex_id, _TensorT, _GraphT, _OperationT, _TensorListOrTuple
+
+MAX_ARRAY_LENGTH_TO_PRINT = 8
 
 
 class BaseTensor(Tensor[_GraphT, _OperationT]):
@@ -99,25 +102,18 @@ class BaseTensor(Tensor[_GraphT, _OperationT]):
         return _str_format(self, 'Tensor')
 
     def _str_dict(self):
-        max_data_length_to_print = 8
-
         if self.data is None:
             data_str = "None"
         elif isinstance(self.data, list):
             data_str = "list("
-            if len(self.data) <= max_data_length_to_print:
+            if len(self.data) <= MAX_ARRAY_LENGTH_TO_PRINT:
                 data_str += str(self.data)
             else:
                 data_str += "..."
             data_str += ")"
         else:
             assert isinstance(self.data, np.ndarray)
-            data_str = "ndarray("
-            if self.data.size <= max_data_length_to_print:
-                data_str += str(self.data.tolist())
-            else:
-                data_str += "..."
-            data_str += ")"
+            data_str = _ndarray_to_str(self.data, MAX_ARRAY_LENGTH_TO_PRINT)
 
         return OrderedDict([('shape', self.shape), ('dtype', self.dtype),
                             ('producers', self._producers), ('consumers', self._consumers),
@@ -151,7 +147,14 @@ class BaseOperation(Operation[_GraphT, _TensorT]):
         return _str_format(self, 'Operation')
 
     def _str_dict(self):
-        return OrderedDict([('inputs', self._inputs), ('outputs', self._outputs), ('attribs', self.attribs)])
+        if any(isinstance(value, np.ndarray) for value in six.itervalues(self.attribs)):
+            def arr_to_str(x):
+                return _ndarray_to_str(x, MAX_ARRAY_LENGTH_TO_PRINT) if isinstance(x, np.ndarray) else x
+
+            attribs = utils.recursive_transform(self.attribs, arr_to_str)
+        else:
+            attribs = self.attribs
+        return OrderedDict([('inputs', self._inputs), ('outputs', self._outputs), ('attribs', attribs)])
 
 
 class BaseGraph(Graph[_TensorT, _OperationT]):
@@ -186,6 +189,16 @@ def _name_or_id(obj):
 def _str_format(obj, kind):
     attribs = ', '.join('{}={}'.format(key, value) for key, value in six.iteritems(obj._str_dict()))
     return '{}({}, {})'.format(kind, _name_or_id(obj), attribs)
+
+
+def _ndarray_to_str(arr, max_size_to_print):
+    data_str = "ndarray("
+    if arr.size <= max_size_to_print:
+        data_str += str(arr.tolist())
+    else:
+        data_str += "..."
+    data_str += ")"
+    return data_str
 
 
 __all__ = [

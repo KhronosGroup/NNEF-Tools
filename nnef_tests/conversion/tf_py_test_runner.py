@@ -122,7 +122,7 @@ class TFPyTestRunner(unittest.TestCase):
               cmp=True,
               custom_tf_to_nnef_converters="",
               custom_nnef_to_tf_converters="",
-              test_module="tests.conversion.tf_py_layer_test_cases"):
+              test_module="nnef_tests.conversion.tf_py_layer_test_cases"):
 
         activation_testing = int(os.environ.get('NNEF_ACTIVATION_TESTING', '1'))
         print("Activation testing is", "ON" if activation_testing else "OFF")

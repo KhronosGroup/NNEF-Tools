@@ -21,7 +21,7 @@ import unittest
 import numpy as np
 
 from nnef_tools.core import utils
-from tests.conversion.caffe_test_runner import CaffeTestRunner
+from nnef_tests.conversion.caffe_test_runner import CaffeTestRunner
 
 with utils.EnvVars(GLOG_minloglevel=3):
     import caffe

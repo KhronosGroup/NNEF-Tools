@@ -127,14 +127,14 @@ Example:
 These tests convert the model to NNEF and then convert it back to the original framework. 
 They compare the activations (heatmaps) of the original and the converted graph.
 
-- ```./tests/conversion/*layer_test_cases.py```: Test cases for simple layers.
+- ```./nnef_tests/conversion/*layer_test_cases.py```: Test cases for simple layers.
 
-- ```./tests/conversion/*network_test_cases.py```: Test cases for full networks.
+- ```./nnef_tests/conversion/*network_test_cases.py```: Test cases for full networks.
 
 
 How to run all layer tests (about 5 minutes on i7-7700 + GTX 1050 Ti)?
 ```
-python -m unittest discover -s 'tests/conversion' -p '*layer_test_cases.py'
+python -m unittest discover -s 'nnef_tests/conversion' -p '*layer_test_cases.py'
 ```
 
 ### Conversion testing without running the networks

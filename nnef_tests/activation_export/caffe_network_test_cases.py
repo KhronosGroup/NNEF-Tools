@@ -22,7 +22,7 @@ import unittest
 from nnef_tools.convert import convert_using_command
 from nnef_tools.core import utils
 from nnef_tools.export_activation import export_activation_using_command
-from tests.file_downloader import download_once
+from nnef_tests.file_downloader import download_once
 
 try:
     with utils.EnvVars(GLOG_minloglevel=3):

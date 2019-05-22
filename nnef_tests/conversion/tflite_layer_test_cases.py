@@ -20,7 +20,7 @@ import unittest
 
 import tensorflow as tf
 
-from tests.conversion.tflite_test_runner import TFLiteTestRunner
+from nnef_tests.conversion.tflite_test_runner import TFLiteTestRunner
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')

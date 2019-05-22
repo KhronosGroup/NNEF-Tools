@@ -27,12 +27,12 @@ from tensorflow.contrib.slim.python.slim.nets.resnet_v1 import resnet_v1_50
 from tensorflow.contrib.slim.python.slim.nets.resnet_v2 import resnet_v2_50
 from tensorflow.contrib.slim.python.slim.nets.vgg import vgg_16
 
-from tests.conversion.tf_py_test_runner import TFPyTestRunner
+from nnef_tests.conversion.tf_py_test_runner import TFPyTestRunner
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')
 
-TEST_MODULE = "tests.conversion.tf_py_network_test_cases"
+TEST_MODULE = "nnef_tests.conversion.tf_py_network_test_cases"
 
 
 def network_alexnet_v2():
