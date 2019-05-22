@@ -142,6 +142,9 @@ class NNEFGraph(BaseGraph["NNEFTensor", "NNEFOperation"]):
             if t.is_variable and not t.label:
                 t.label = label_generator.get_new_name('variable')
 
+        if not self.name:
+            self.name = "network"
+
 
 __all__ = [
     'NNEFTensor',

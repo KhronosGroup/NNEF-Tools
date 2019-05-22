@@ -85,7 +85,7 @@ class Converter(_converter.Converter[ONNXTensor, ONNXOperation, ONNXGraph,
 
     @staticmethod
     def _to_identifier_or_none(s):
-        if not any(c.isalpha() for c in s):
+        if s is None or not any(c.isalpha() for c in s):
             return None
         cc = []
         for c in s:

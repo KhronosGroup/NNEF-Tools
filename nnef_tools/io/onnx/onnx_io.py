@@ -165,10 +165,8 @@ def _get_attribute(attribute_proto):
         value = utils.anystr_to_str(attribute_proto.s)
     elif attribute_proto.HasField('t'):
         value = _get_tensor(attribute_proto.t)
-        # raise ParseException("Attribute '{}' with type TENSOR in unsupported".format(name))
     elif attribute_proto.HasField('g'):
         value = _get_graph(attribute_proto.g)
-        # raise ParseException("Attribute '{}' with type GRAPH in unsupported".format(name))
     elif attribute_proto.floats:
         value = [float(f) for f in attribute_proto.floats]
     elif attribute_proto.ints:
@@ -176,10 +174,8 @@ def _get_attribute(attribute_proto):
     elif attribute_proto.strings:
         value = [utils.anystr_to_str(s) for s in attribute_proto.strings]
     elif attribute_proto.tensors:
-        # raise ParseException("Attribute '{}' with type TENSOR LIST in unsupported".format(name))
         value = [_get_tensor(t) for t in attribute_proto.tensors]
     elif attribute_proto.graphs:
-        # raise ParseException("Attribute '{}' with type GRAPH LIST in unsupported".format(name))
         value = [_get_graph(g) for g in attribute_proto.graphs]
     else:
         value = []
