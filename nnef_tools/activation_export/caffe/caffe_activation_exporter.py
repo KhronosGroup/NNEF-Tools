@@ -16,13 +16,13 @@ from __future__ import division, print_function, absolute_import
 
 import os
 
-import nnef
 import numpy as np
 import six
 
 from nnef_tools.conversion import conversion_info
 from nnef_tools.core import utils
 from nnef_tools.io.input_source import create_feed_dict
+from nnef_tools.io.nnef.nnef_io import write_nnef_tensor
 
 with utils.EnvVars(GLOG_minloglevel=3):
     import caffe
@@ -30,15 +30,6 @@ with utils.EnvVars(GLOG_minloglevel=3):
 
 def _get_input_dtypes_and_shapes(net):
     return {i: (np.float32, list(net.blobs[i].shape)) for i in net.inputs}
-
-
-def _write_nnef_tensor(filename, tensor):
-    directory = os.path.dirname(filename)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-
-    with open(filename, "wb") as file:
-        nnef.write_tensor(file, tensor, version=(1, 0))
 
 
 def export(prototxt_path,
@@ -67,7 +58,7 @@ def export(prototxt_path,
             try:
                 for transform in tensor_info.transforms:
                     arr = transform.apply_np(arr)
-                _write_nnef_tensor(filename, np.asarray(arr, order='C'))
+                write_nnef_tensor(filename, np.asarray(arr, order='C'))
             except ValueError as e:
                 print("Error: Can not export '{}': {}".format(tensor_info.target_name, e))
     if has_error:

@@ -15,14 +15,14 @@
 from __future__ import division, print_function, absolute_import
 
 import os
+import typing
 
-import nnef
 import numpy as np
 import tensorflow as tf
-import typing
 
 from nnef_tools.conversion.conversion_info import ConversionInfo
 from nnef_tools.core import utils
+from nnef_tools.io.nnef.nnef_io import write_nnef_tensor
 
 
 class _TensorInfo(object):
@@ -32,15 +32,6 @@ class _TensorInfo(object):
         self.transforms = transforms
         self.tensor = tensor
         self.target_shape = target_shape
-
-
-def _write_nnef_tensor(filename, tensor):
-    directory = os.path.dirname(filename)
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-
-    with open(filename, "wb") as file:
-        nnef.write_tensor(file, tensor, version=(1, 0))
 
 
 def export(output_path,  # type: str
@@ -108,7 +99,7 @@ def export(output_path,  # type: str
                 try:
                     for transform in info.transforms:
                         arr = transform.apply_np(arr)
-                    _write_nnef_tensor(filename, np.asarray(arr, order='C'))
+                    write_nnef_tensor(filename, np.asarray(arr, order='C'))
                 except ValueError as e:
                     print("Error: Can not export '{}': {}".format(info.external_name, e))
 

@@ -77,14 +77,6 @@ def save_random_checkpoint(network_outputs, checkpoint_path, feed_dict):
             return None
 
 
-def recursive_glob(dir, glob):
-    matches = []
-    for root, dir_names, file_names in os.walk(dir):
-        for filename in fnmatch.filter(file_names, glob):
-            matches.append(os.path.join(root, filename))
-    return matches
-
-
 def tf_call_silently(fun, *args):
     if 'TF_CPP_MIN_LOG_LEVEL' in os.environ:
         old_value = os.environ['TF_CPP_MIN_LOG_LEVEL']
@@ -258,7 +250,7 @@ class TFPyTestRunner(unittest.TestCase):
                             verbose=False)
         finally:
             if self.delete_dats_and_checkpoints:
-                dat_files = recursive_glob(out_dir, "*.dat")
-                checkpoints = recursive_glob(out_dir, "*ckpt*")
+                dat_files = utils.recursive_glob(out_dir, "*.dat")
+                checkpoints = utils.recursive_glob(out_dir, "*ckpt*")
                 for file_name in set(dat_files + checkpoints):
                     os.remove(file_name)

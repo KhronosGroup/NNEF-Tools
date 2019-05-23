@@ -14,6 +14,7 @@
 
 from __future__ import division, print_function, absolute_import
 
+import fnmatch
 import inspect
 import itertools
 import os
@@ -21,10 +22,11 @@ import re
 import shlex
 import shutil
 import sys
+import tarfile
+import typing
 from collections import OrderedDict
 
 import six
-import typing
 
 INT32_MAX = 2147483647
 
@@ -415,3 +417,29 @@ def prefix_sum(iterable, zero=0):
         sum = sum + elem
         l.append(sum)
     return l
+
+
+def recursive_glob(dir, glob):
+    matches = []
+    for root, dir_names, file_names in os.walk(dir):
+        for filename in fnmatch.filter(file_names, glob):
+            matches.append(os.path.join(root, filename))
+    return matches
+
+
+def tgz_compress(dir_path, file_path, compression_level=0):
+    target_directory = os.path.dirname(file_path)
+    if target_directory and not os.path.exists(target_directory):
+        os.makedirs(target_directory)
+
+    with tarfile.open(file_path, 'w:gz', compresslevel=compression_level) as tar:
+        for file_ in os.listdir(dir_path):
+            tar.add(dir_path + '/' + file_, file_)
+
+
+def tgz_extract(file_path, dir_path):
+    if dir_path and not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+    with tarfile.open(file_path, 'r:gz') as tar:
+        tar.extractall(dir_path)

@@ -17,11 +17,11 @@ from __future__ import division, print_function, absolute_import
 import os
 import typing
 
-import nnef
 import numpy as np
 import six
 
 from nnef_tools.conversion import conversion_info
+from nnef_tools.io.nnef.nnef_io import read_nnef_tensor
 
 
 class _ActivationPair(object):
@@ -78,17 +78,12 @@ def _are_np_dtypes_compatible_in_nnef(t1, t2):
     return t1 is not None and t2 is not None and t1 == t2
 
 
-def _read_nnef_tensor(filename):
-    with open(filename, "rb") as file:
-        return nnef.read_tensor(file)[0]
-
-
 # noinspection PyProtectedMember
 def _are_activations_close(activation_pair, verbose=False, allowed_bad_pixel_ratio=0.0):
     # type: (_ActivationPair, bool, float)->bool
 
-    arr1 = _read_nnef_tensor(activation_pair.from_)  # type:np.ndarray
-    arr2 = _read_nnef_tensor(activation_pair.to)  # type: np.ndarray
+    arr1 = read_nnef_tensor(activation_pair.from_)  # type:np.ndarray
+    arr2 = read_nnef_tensor(activation_pair.to)  # type: np.ndarray
     for transform in activation_pair.transforms:
         arr1 = transform.apply_np(arr1)
 

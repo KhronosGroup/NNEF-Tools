@@ -51,8 +51,8 @@ NNEFDTypeByNumpyDType = {
 def read(path, parser_configs=None):
     # type: (str, typing.Optional[typing.List[NNEFParserConfig]])->NNEFGraph
 
-    assert path.endswith('.tgz') or path.endswith('.nnef') or os.path.isdir(path), \
-        "Only .tgz or .nnef files or directories are supported"
+    if not (path.endswith('.tgz') or path.endswith('.nnef') or path.endswith('.txt') or os.path.isdir(path)):
+        raise utils.NNEFToolsException("Only .tgz or .nnef or .txt files or directories are supported")
 
     parser_config = NNEFParserConfig.combine_configs(parser_configs if parser_configs else [])
 
@@ -68,8 +68,8 @@ def read(path, parser_configs=None):
             compressed = True
             with_weights = True
             path_to_load = tempfile.mkdtemp(prefix="nnef_")
-            _tgz_extract(path, path_to_load)
-        elif path.endswith('.nnef'):
+            utils.tgz_extract(path, path_to_load)
+        elif path.endswith('.nnef') or path.endswith('.txt'):
             compressed = False
             with_weights = False
             path_to_load = path
@@ -138,7 +138,7 @@ def write(nnef_graph,  # type: NNEFGraph
             _write_weights(nnef_graph, dir_path=dir_path, raise_on_missing_weight=raise_on_missing_weight)
 
         if compressed:
-            _tgz_compress(dir_path, tgz_or_dir_path, compression_level=compression_level)
+            utils.tgz_compress(dir_path, tgz_or_dir_path, compression_level=compression_level)
     finally:
         if compressed and dir_path:
             shutil.rmtree(dir_path)
@@ -342,18 +342,18 @@ def _write_weights(nnef_graph, dir_path, raise_on_missing_weight=True):
     for tensor in nnef_graph.tensors:
         if tensor.is_variable:
             if tensor.data.size != 0:
-                _write_nnef_tensor(filename=os.path.join(dir_path, tensor.label + ".dat"),
-                                   array=np.asarray(tensor.data, order='C'))
+                write_nnef_tensor(filename=os.path.join(dir_path, tensor.label + ".dat"),
+                                  array=np.asarray(tensor.data, order='C'))
             elif raise_on_missing_weight:
                 assert False, "Missing value for variable: {}".format(tensor.name)
 
 
-def _read_nnef_tensor(filename):
+def read_nnef_tensor(filename):
     with open(filename, "rb") as file:
         return nnef.read_tensor(file)[0]
 
 
-def _write_nnef_tensor(filename, array):
+def write_nnef_tensor(filename, array):
     directory = os.path.dirname(filename)
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -401,24 +401,6 @@ def _recursive_check_str(data):
 
         utils.recursive_visit(data, check)
     return data
-
-
-def _tgz_compress(dir_path, file_path, compression_level=0):
-    target_directory = os.path.dirname(file_path)
-    if target_directory and not os.path.exists(target_directory):
-        os.makedirs(target_directory)
-
-    with tarfile.open(file_path, 'w:gz', compresslevel=compression_level) as tar:
-        for file_ in os.listdir(dir_path):
-            tar.add(dir_path + '/' + file_, file_)
-
-
-def _tgz_extract(file_path, dir_path):
-    if dir_path and not os.path.exists(dir_path):
-        os.makedirs(dir_path)
-
-    with tarfile.open(file_path, 'r:gz') as tar:
-        tar.extractall(dir_path)
 
 
 def generate_source_operations(nnef_graph, gen_for_rank0_also=False):
