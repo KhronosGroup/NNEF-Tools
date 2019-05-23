@@ -31,7 +31,7 @@ import os
 import numpy as np
 import six
 
-from nnef_tools.io.input_source import RandomInput, ImageInput, NNEFTensorInput, create_feed_dict
+from nnef_tools.io.input_source import InputSources
 from nnef_tools.conversion import conversion_info
 from nnef_tools.core import utils
 
@@ -44,26 +44,6 @@ def parse_input_shapes(s):
         return eval(s)
     except Exception:
         print('Error: Can not evaluate the --input-shape parameter: {}.'.format(s), file=sys.stderr)
-        exit(1)
-
-
-def parse_input(s):
-    if not s:
-        return None
-
-    locals()['Random'] = RandomInput
-    locals()['Image'] = ImageInput
-    locals()['Tensor'] = NNEFTensorInput
-    # allow parsing without quotes
-    locals()['RGB'] = 'RGB'
-    locals()['BGR'] = 'BGR'
-    locals()['NCHW'] = 'NCHW'
-    locals()['NHWC'] = 'NHWC'
-
-    try:
-        return eval(s)
-    except Exception as e:
-        print('Error: Can not evaluate the --input parameter: {}.'.format(s), file=sys.stderr)
         exit(1)
 
 
@@ -103,6 +83,7 @@ please add its location to PYTHONPATH.
     parser.add_argument('--input',
                         default=None,
                         help="""An input_source or a tensor_name->input_source dict in Python syntax.
+The dictionary can also have "*" or a tuple of names as key, "*" meaning "for all other".
 Tensor names should be the names in the input model (not the converted names if different).
 The following input sources are supported:
 - Random(algo, *args) for all types:
@@ -128,6 +109,7 @@ The following input sources are supported:
     - The image is casted to the target data type.
 - Tensor(filename) for all types:
   Filename must be the path of an NNEF tensor file (.dat).
+The tokens [RGB, BGR, NCHW, NHWC, uniform, normal, binomial, bernoulli] can be written without quotes.
 Default: 
   - float: Random('normal', 0.0, 1.0) 
   - int: Random('binomial', 255, 0.5) 
@@ -164,7 +146,7 @@ Not supported for Caffe.
 """)
 
     args = parser.parse_args(args=argv[1:])
-    args.input = parse_input(args.input)
+    args.input = InputSources(args.input)
 
     allowed_input_length = {
         'tensorflow-pb': [1],
@@ -324,7 +306,7 @@ def tf_export_activations(input_shapes,
     from nnef_tools.activation_export.tensorflow.tf_activation_exporter import export
     input_shapes = tf_get_input_shapes(input_shape=input_shapes)
     np.random.seed(0)
-    feed_dict = create_feed_dict(input_sources=input_sources, input_shapes=input_shapes)
+    feed_dict = input_sources.create_feed_dict(input_shapes=input_shapes)
     info = conversion_info.load(conversion_info_file_name)
     export(output_path=output_path,
            feed_dict=feed_dict,
@@ -334,7 +316,7 @@ def tf_export_activations(input_shapes,
            init_variables=init_variables)
 
 
-def export_activation(input_format, input_model, input_shape, input_source, conversion_info, output_path,
+def export_activation(input_format, input_model, input_shape, input_sources, conversion_info, output_path,
                       tensors_per_iter):
     if output_path is None:
         output_path = conversion_info
@@ -349,7 +331,7 @@ def export_activation(input_format, input_model, input_shape, input_source, conv
         ensure_dirs(output_path)
         checkpoint_path = input_model[1] if len(input_model) >= 2 else None
         tf_export_activations(input_shapes=input_shape,
-                              input_sources=input_source,
+                              input_sources=input_sources,
                               conversion_info_file_name=conversion_info,
                               output_path=output_path,
                               checkpoint_path=checkpoint_path,
@@ -360,7 +342,7 @@ def export_activation(input_format, input_model, input_shape, input_source, conv
         tf_set_default_graph_from_pb(input_model[0])
         ensure_dirs(output_path)
         tf_export_activations(input_shapes=input_shape,
-                              input_sources=input_source,
+                              input_sources=input_sources,
                               conversion_info_file_name=conversion_info,
                               output_path=output_path,
                               tensors_per_iter=tensors_per_iter,
@@ -370,7 +352,7 @@ def export_activation(input_format, input_model, input_shape, input_source, conv
         ensure_dirs(output_path)
         caffe_export_activations(prototxt_path=input_model[0],
                                  caffemodel_path=input_model[1],
-                                 input_source=input_source,
+                                 input_sources=input_sources,
                                  conversion_info_path=conversion_info,
                                  output_path=output_path)
     else:
@@ -381,13 +363,12 @@ def export_activation_using_argv(argv):
     if 'TF_CPP_MIN_LOG_LEVEL' not in os.environ:
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-    args = get_args(argv=argv)
-
     try:
+        args = get_args(argv=argv)
         export_activation(input_format=args.input_format,
                           input_model=args.input_model,
                           input_shape=args.input_shape,
-                          input_source=args.input,
+                          input_sources=args.input,
                           conversion_info=args.conversion_info,
                           output_path=args.output_path,
                           tensors_per_iter=args.tensors_at_once)

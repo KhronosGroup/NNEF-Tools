@@ -15,19 +15,24 @@
 from __future__ import division, print_function, absolute_import
 
 import glob
-import math
 import os
+import typing
 
+import math
 import nnef
 import numpy as np
 import six
-import typing
 
 from nnef_tools.core import utils
 
 
 class InputSource(object):
     pass
+
+
+class DefaultInput(InputSource):
+    def __repr__(self):
+        return "Default()"
 
 
 class RandomInput(InputSource):
@@ -53,6 +58,14 @@ class RandomInput(InputSource):
         self.algo = algo
         self.args = args
 
+    def __repr__(self):
+        if len(self.args) == 1:
+            return "Random({}, {})".format(self.algo, self.args[0])
+        elif len(self.args) == 2:
+            return "Random({}, {}, {})".format(self.algo, self.args[0], self.args[1])
+        else:
+            assert False
+
 
 class ImageInput(InputSource):
     COLOR_FORMAT_RGB = 'RGB'
@@ -67,16 +80,27 @@ class ImageInput(InputSource):
         self.range = range
         self.norm = norm
 
+    def __repr__(self):
+        if len(self.filenames) == 1:
+            filename_str = self.filenames[0]
+        else:
+            filename_str = '[' + ', '.join("'{}'".format(fn) for fn in self.filenames) + ']'
+        return "Image(filename_str={}, color_format={}, data_format={}, range={}, norm={})".format(
+            filename_str, self.color_format, self.data_format, self.range, self.norm)
+
 
 class NNEFTensorInput(InputSource):
     def __init__(self, filename):
         self.filename = filename
 
+    def __repr__(self):
+        return "Tensor('{}')".format(self.filename)
+
 
 def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
-    assert input_source is None or isinstance(input_source, (RandomInput, ImageInput, NNEFTensorInput))
+    assert isinstance(input_source, (DefaultInput, RandomInput, ImageInput, NNEFTensorInput))
     np_dtype = np.dtype(np_dtype)
-    if input_source is None:
+    if isinstance(input_source, DefaultInput):
         if 'float' in np_dtype.name:
             input_source = RandomInput('normal', 0.0, 1.0)
         elif 'int' in np_dtype.name:
@@ -183,16 +207,62 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
         assert False
 
 
-def create_feed_dict(input_sources,  # type: typing.Union[None, InputSource, typing.Dict[str, InputSource]]
-                     input_shapes,  # type: typing.Dict[str, typing.Tuple[np.dtype, typing.List[int]]]
-                     ):
-    # type: (...)->typing.Dict[str, np.ndarray]
-    if not isinstance(input_sources, dict):
-        input_sources = {k: input_sources for k in six.iterkeys(input_shapes)}
+class InputSources(object):
+    def __init__(self, input_sources):
+        if utils.is_anystr(input_sources):
+            input_sources = self._parse(input_sources)
+        if isinstance(input_sources, dict):
+            input_sources = self._resolve_multikey(input_sources)
+        if input_sources is None:
+            input_sources = DefaultInput()
+        self.input_sources = input_sources
 
-    feed_dict = {}
-    for name, (dtype, shape) in six.iteritems(input_shapes):
-        assert name in input_sources
-        feed_dict[name] = create_input(input_source=input_sources[name], np_dtype=dtype, shape=shape)
+    def __getitem__(self, name):
+        if isinstance(self.input_sources, dict):
+            if name in self.input_sources:
+                return self.input_sources[name]
+            elif '*' in self.input_sources:
+                return self.input_sources['*']
+            else:
+                raise utils.NNEFToolsException("Input source not defined for: {}".format(name))
+        else:
+            return self.input_sources
 
-    return feed_dict
+    def create_input(self, name, np_dtype, shape, allow_bigger_batch=False):
+        return create_input(self[name], np_dtype=np_dtype, shape=shape, allow_bigger_batch=allow_bigger_batch)
+
+    def create_feed_dict(self, input_shapes):
+        # type: (typing.Dict[str, typing.Tuple[np.dtype, typing.List[int]]])->typing.Dict[str, np.ndarray]
+        feed_dict = {}
+        for name, (dtype, shape) in six.iteritems(input_shapes):
+            feed_dict[name] = self.create_input(name, np_dtype=dtype, shape=shape)
+        return feed_dict
+
+    @staticmethod
+    def _parse(str_):
+        if not str_:
+            return None
+
+        locals()['Random'] = RandomInput
+        locals()['Image'] = ImageInput
+        locals()['Tensor'] = NNEFTensorInput
+
+        # allow parsing without quotes
+        for token_ in ('RGB', 'BGR', 'NCHW', 'NHWC', 'uniform', 'normal', 'binomial', 'bernoulli'):
+            locals()[token_] = token_
+
+        try:
+            return eval(str_)
+        except Exception:
+            raise utils.NNEFToolsException('Error: Can not evaluate input sources: {}.'.format(str_))
+
+    @staticmethod
+    def _resolve_multikey(dict_):
+        dict2 = {}
+        for k, v in six.iteritems(dict_):
+            if isinstance(k, (list, tuple, set)):
+                for kk in k:
+                    dict2[kk] = v
+            else:
+                dict2[k] = v
+        return dict2

@@ -21,7 +21,6 @@ import six
 
 from nnef_tools.conversion import conversion_info
 from nnef_tools.core import utils
-from nnef_tools.io.input_source import create_feed_dict
 from nnef_tools.io.nnef.nnef_io import write_nnef_tensor
 
 with utils.EnvVars(GLOG_minloglevel=3):
@@ -34,14 +33,14 @@ def _get_input_dtypes_and_shapes(net):
 
 def export(prototxt_path,
            caffemodel_path,
-           input_source,
+           input_sources,
            conversion_info_path,
            output_path):
     conv_info = conversion_info.load(conversion_info_path)
     tensor_info_by_caffe_name = {t.source_name: t for t in conv_info.tensors}
     np.random.seed(0)
     net = caffe.Net(prototxt_path, caffemodel_path, caffe.TEST)
-    net.forward(**create_feed_dict(input_source, _get_input_dtypes_and_shapes(net)))
+    net.forward(**input_sources.create_feed_dict(_get_input_dtypes_and_shapes(net)))
     has_error = False
 
     for k, v in six.iteritems(net.blobs):
