@@ -49,7 +49,7 @@ def parse_input_shapes(s):
 
 def parse_input(s):
     if not s:
-        return RandomInput(0.0, 1.0, 0, 255, 0.5)
+        return None
 
     locals()['Random'] = RandomInput
     locals()['Image'] = ImageInput
@@ -101,32 +101,37 @@ please add its location to PYTHONPATH.
                         help="""Path of output directory. Default: {model_name}.activations where --conversion-info={model_name}.conversion.json """)
 
     parser.add_argument('--input',
-                        default="Random(0.0, 1.0, 0, 255, 0.5)",
+                        default=None,
                         help="""An input_source or a tensor_name->input_source dict in Python syntax.
- Tensor names should be the names in the input model (not the converted names if different).
- The following input sources are supported:
- - Random(min, max) for int and float
- - Random(true_prob) for bool
- - Random(float_min, float_max, int_min, int_max, true_prob) for all types
-    - Keyword arguments can not be used with Random.
- - Image(filename, color_format='RGB', data_format='NCHW', range=None, norm=None) for int and float
-   - Arguments:
-     - filename: string or list of strings, path(s) of jpg/png images, can have * in them
-     - color_format: RGB or BGR
-     - data_format: NCHW or NHWC
-     - range: [start, end] closed range
-     - norm: [mean, std] or [[mean0, mean1, mean2], [std0, std1, std2]]
-   - The image is processed as follows:
-     - The image is loaded to float32[width, height, channels], values ranging from 0 to 255.
-     - The image is reordered to RGB or BGR, as requested.
-     - If range is not None, the image is transformed to the specified range. 
-       (The transform does not depend on the content of the image.)
-     - If norm is not None: image = (image - mean) / std
-     - The image is transformed to NCHW or NHWC as requested. 
-     - The image is casted to the target data type.
- - Tensor(filename) for all types
-   - filename must be the path of an NNEF tensor file (.dat)
- Default: Random(0.0, 1.0, 0, 255, 0.5).""")
+Tensor names should be the names in the input model (not the converted names if different).
+The following input sources are supported:
+- Random(algo, *args) for all types:
+    - Random('uniform', min, max) for int and float, range: [min, max]
+    - Random('normal', mean, std) for float
+    - Random('binomial', num, true_prob) for int, range: [0, num]
+    - Random('bernoulli', true_prob) for bool
+    Keyword arguments can not be used with Random.
+- Image(filename, color_format='RGB', data_format='NCHW', range=None, norm=None) for int and float:
+  Arguments:
+    - filename: string or list of strings, path(s) of jpg/png images, can have * in them
+    - color_format: RGB or BGR
+    - data_format: NCHW or NHWC
+    - range: [start, end] closed range
+    - norm: [mean, std] or [[mean0, mean1, mean2], [std0, std1, std2]]
+  The image is processed as follows:
+    - The image is loaded to float32[height, width, channels], values ranging from 0 to 255.
+    - The image is reordered to RGB or BGR, as requested.
+    - If range is not None, the image is transformed to the specified range. 
+      (The transform does not depend on the content of the image.)
+    - If norm is not None: image = (image - mean) / std
+    - The image is transformed to NCHW or NHWC as requested. 
+    - The image is casted to the target data type.
+- Tensor(filename) for all types:
+  Filename must be the path of an NNEF tensor file (.dat).
+Default: 
+  - float: Random('normal', 0.0, 1.0) 
+  - int: Random('binomial', 255, 0.5) 
+  - bool: Random('bernoulli', 0.5)""")
 
     parser.add_argument('--input-shape',
                         default="",

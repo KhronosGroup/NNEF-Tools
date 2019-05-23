@@ -15,6 +15,7 @@
 from __future__ import division, print_function, absolute_import
 
 import glob
+import math
 import os
 
 import nnef
@@ -30,23 +31,27 @@ class InputSource(object):
 
 
 class RandomInput(InputSource):
-    def __init__(self, *args):
-        assert len(args) in [1, 2, 5]
-
-        if len(args) == 1:
-            self.float_min = None
-            self.float_max = None
-            self.int_min = None
-            self.int_max = None
-            self.true_prob = args[0]
-        elif len(args) == 2:
-            self.float_min, self.float_max = args
-            self.int_min, self.int_max = args
-            self.true_prob = None
-        elif len(args) == 5:
-            self.float_min, self.float_max, self.int_min, self.int_max, self.true_prob = args
+    def __init__(self, algo, *args):
+        algo = algo.lower()
+        if algo == 'uniform':
+            if len(args) != 2:
+                raise utils.NNEFToolsException("Random 'uniform' must have two parameters: min, max.")
+        elif algo == 'normal':
+            if len(args) != 2:
+                raise utils.NNEFToolsException("Random 'normal' must have two parameters: mean, std.")
+        elif algo == 'binomial':
+            if len(args) != 2:
+                raise utils.NNEFToolsException("Random 'binomial' must have two parameters: num, true_prob.")
+        elif algo == 'bernoulli':
+            if len(args) != 1:
+                raise utils.NNEFToolsException("Random 'bernoulli' must have one parameter: true_prob.")
+            if not (0.0 <= args[0] <= 1.0):
+                raise utils.NNEFToolsException("Random 'bernoulli': true_prob must be between 0.0 and 1.0.")
         else:
-            assert False
+            raise utils.NNEFToolsException("Unknown random algo: {}".format(algo))
+
+        self.algo = algo
+        self.args = args
 
 
 class ImageInput(InputSource):
@@ -69,23 +74,44 @@ class NNEFTensorInput(InputSource):
 
 
 def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
-    assert isinstance(input_source, (RandomInput, ImageInput, NNEFTensorInput))
+    assert input_source is None or isinstance(input_source, (RandomInput, ImageInput, NNEFTensorInput))
     np_dtype = np.dtype(np_dtype)
-    if isinstance(input_source, RandomInput):
+    if input_source is None:
         if 'float' in np_dtype.name:
-            assert input_source.float_min is not None and input_source.float_max is not None, \
-                "float_min or float_max is not set on the input source"
-            return ((input_source.float_max - input_source.float_min)
-                    * np.random.random(shape) + input_source.float_min).astype(np_dtype)
+            input_source = RandomInput('normal', 0.0, 1.0)
         elif 'int' in np_dtype.name:
-            assert input_source.int_min is not None and input_source.int_max is not None, \
-                "int_min or int_max is not set on the input source"
-            return np.random.randint(low=input_source.int_min, high=input_source.int_max, size=shape, dtype=np_dtype)
-        elif np_dtype.name == 'bool':
-            assert input_source.true_prob is not None, "true_prob is not set on the input source"
-            return np.random.random(shape) <= input_source.true_prob
+            input_source = RandomInput('binomial', 255, 0.5)
+        elif 'bool' == np_dtype.name:
+            input_source = RandomInput('bernoulli', 0.5)
         else:
-            assert False, "Unsupported dtype: {}".format(np_dtype.name)
+            raise utils.NNEFToolsException("Random does not support this dtype: {}".format(np_dtype.name))
+    if isinstance(input_source, RandomInput):
+        if input_source.algo == 'uniform':
+            if 'float' in np_dtype.name:
+                return np.random.uniform(input_source.args[0], input_source.args[1], shape).astype(np_dtype)
+            elif 'int' in np_dtype.name:
+                return np.random.randint(int(math.ceil(input_source.args[0])),
+                                         int(math.floor(input_source.args[1])) + 1,
+                                         shape, np_dtype)
+            else:
+                raise Exception("Random 'uniform' can not be applied to: {}".format(np_dtype.name))
+        elif input_source.algo == 'normal':
+            if 'float' in np_dtype.name:
+                return np.random.normal(input_source.args[0], input_source.args[1], shape).astype(np_dtype)
+            else:
+                raise Exception("Random 'normal' can not be applied to: {}".format(np_dtype.name))
+        elif input_source.algo == 'binomial':
+            if 'int' in np_dtype.name:
+                return np.random.binomial(input_source.args[0], input_source.args[1], shape).astype(np_dtype)
+            else:
+                raise Exception("Random 'normal' can not be applied to: {}".format(np_dtype.name))
+        elif input_source.algo == 'bernoulli':
+            if 'bool' == np_dtype.name:
+                return np.random.uniform(0.0, 1.0, shape) <= input_source.args[0]
+            else:
+                raise Exception("Random 'bernoulli' can not be applied to: {}".format(np_dtype.name))
+        else:
+            assert False
     elif isinstance(input_source, ImageInput):
         import skimage
         import skimage.io
@@ -157,7 +183,7 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
         assert False
 
 
-def create_feed_dict(input_sources,  # type: typing.Union[InputSource, typing.Dict[str, InputSource]]
+def create_feed_dict(input_sources,  # type: typing.Union[None, InputSource, typing.Dict[str, InputSource]]
                      input_shapes,  # type: typing.Dict[str, typing.Tuple[np.dtype, typing.List[int]]]
                      ):
     # type: (...)->typing.Dict[str, np.ndarray]
