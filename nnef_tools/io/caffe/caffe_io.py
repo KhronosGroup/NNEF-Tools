@@ -241,18 +241,14 @@ def _decode_graph(net_param, custom_shapes):
 
         shapes.infer_shape(op, custom_shapes)
 
-    # Resolve inplace operations
-    for op in graph.operations:
-        if len(op.outputs) == 1 and op.output in op.inputs:
-            tensor = CaffeTensor(graph=graph,
-                                 name=_generate_name(op.name, tensors),
-                                 shape=copy.copy(op.output.shape))
-            tensors[tensor.name] = tensor
-            for consumer in list(op.output.consumers):
-                if consumer is not op:
-                    consumer.inputs = [tensor if input is op.output else input for input in consumer.inputs]
-                    consumer.outputs = [tensor if output is op.output else output for output in consumer.outputs]
-            op.outputs = [tensor]
+    def duplicate(tensor):
+        tensor = CaffeTensor(graph=graph,
+                             name=utils.get_numbered_name(tensor.name, tensors),
+                             shape=copy.copy(tensor.shape))
+        tensors[tensor.name] = tensor
+        return tensor
+
+    graph_utils.resolve_tensor_overwrite(graph, duplicate)
 
     graph.inputs = OrderedDict([(op.output.name, op.output) for op in graph.operations if op.name == 'Input'])
     graph.outputs = OrderedDict([(tensor.name, tensor) for tensor in graph.tensors if not tensor.consumers])
@@ -275,13 +271,6 @@ def _build_caffemodel_from_graph(graph, net_param, with_weights=True):
                 if tensor.data is not None:
                     blob = layer.blobs.add()
                     _build_blob(tensor, blob)
-
-
-def _generate_name(op, tensors):
-    idx = 1
-    while op + str(idx) in tensors:
-        idx += 1
-    return op + str(idx)
 
 
 def _change_blob_to_rank(tensor, rank):

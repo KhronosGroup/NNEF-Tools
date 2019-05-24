@@ -129,3 +129,29 @@ def remove_passthroughs(g, is_passthrough):
     for op in list(g.operations):
         if is_passthrough(op):
             remove_passthrough(g, op)
+
+
+def _with_tensor_replaced(tuple_or_listlike, old, new):
+    is_tuple = isinstance(tuple_or_listlike, tuple)
+    list_ = [new if t is old else t for t in tuple_or_listlike]
+    return tuple(list_) if is_tuple else list_
+
+
+def resolve_tensor_overwrite(g, duplicate):
+    # type: (Graph, typing.Callable[[Tensor], Tensor])->None
+    for op in g.operations:
+        assert len(op.outputs) == len(set(id(output) for output in op.outputs))
+    outputs_of_earlier_ops = set()
+    for i, op in enumerate(g.operations):
+        for tensor in list(op.outputs):
+            if tensor in op.inputs or tensor in outputs_of_earlier_ops:
+                new_tensor = duplicate(tensor)
+                op.outputs = _with_tensor_replaced(op.outputs, tensor, new_tensor)
+                for op2 in g.operations[i + 1:]:
+                    if tensor in op2.inputs:
+                        op2.inputs = _with_tensor_replaced(op2.inputs, tensor, new_tensor)
+                    if tensor in op2.outputs:
+                        new_tensor = duplicate(tensor)
+                        op2.outputs = _with_tensor_replaced(op2.outputs, tensor, new_tensor)
+                replace_tensor_in_outputs(g, tensor, new_tensor)
+        outputs_of_earlier_ops.update(list(op.outputs))

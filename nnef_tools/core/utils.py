@@ -443,3 +443,10 @@ def tgz_extract(file_path, dir_path):
 
     with tarfile.open(file_path, 'r:gz') as tar:
         tar.extractall(dir_path)
+
+
+def get_numbered_name(name, names_so_far):
+    idx = 1
+    while name + str(idx) in names_so_far:
+        idx += 1
+    return name + str(idx)
