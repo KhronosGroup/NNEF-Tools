@@ -33,7 +33,7 @@ PRODUCER_NAME = 'NNEF Tools'
 PRODUCER_VERSION = 'v0.0.1'
 
 
-class ParseException(Exception):
+class ParseException(utils.NNEFToolsException):
     pass
 
 

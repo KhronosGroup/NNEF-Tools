@@ -222,6 +222,7 @@ def _reshaped_shape(input_shape, reshape_shape):
     return reshape_shape
 
 
+# This will not escape the module, we catch it
 class _TransformException(Exception):
     pass
 
