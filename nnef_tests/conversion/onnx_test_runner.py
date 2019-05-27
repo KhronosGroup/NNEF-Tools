@@ -153,7 +153,7 @@ class ONNXTestRunner(unittest.TestCase):
                     elif input_dtype == 'BOOL':
                         inputs.append(np.random.random(input_shape) > 0.5)
                     elif input_dtype == 'INT64':
-                        inputs.append((np.random.random(input_shape) * 1000).astype(np.int32))
+                        inputs.append((np.random.random(input_shape) * 1000).astype(np.int64))
                     else:
                         assert False
 
