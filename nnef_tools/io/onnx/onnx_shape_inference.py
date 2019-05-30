@@ -386,6 +386,22 @@ def propagate_constant_of_shape(op):
     return [op.attribs['shape']], [op.attribs['dtype']]
 
 
+def propagate_constant_fill(op):
+    # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
+
+    if len(op.inputs) == 0:
+        shape = op.attribs['shape']
+    elif len(op.inputs) == 1:
+        op.attribs['shape'] = evaluate_shape_tensor_simple(op.input)
+        op.inputs = tuple()
+        extra_shape = op.attribs.get('extra_shape', [])
+        shape = op.attribs['shape'] + extra_shape
+    else:
+        assert False
+
+    return [shape], [op.attribs['dtype']]
+
+
 def propagate_size(op):
     # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
     return [[]], ['INT64']
@@ -721,7 +737,7 @@ _DefaultPropagators = {
     # Experimental ONNX ops
     'ATen': UNSUPPORTED,
     'Affine': propagate_first,
-    'ConstantFill': UNSUPPORTED,
+    'ConstantFill': propagate_constant_fill,
     'Crop': propagate_crop,
     'DynamicSlice': propagate_dynamic_slice,
     'GRUUnit': UNSUPPORTED,

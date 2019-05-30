@@ -260,6 +260,8 @@ def _get_graph(graph_proto):
                 else:
                     attributes['dtype'] = 'FLOAT'
                     attributes['value'] = 0.0
+            elif op_type == 'ConstantFill':
+                attributes['dtype'] = _get_dtype(attributes['dtype'])
             ONNXOperation(
                 graph=graph,
                 name=op_type,

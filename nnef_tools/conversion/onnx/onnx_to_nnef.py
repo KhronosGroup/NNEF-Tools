@@ -886,6 +886,12 @@ def convert_constant_of_shape(converter, onnx_op, nnef_graph):
     converter.converted_tensor(onnx_op.output).data = [onnx_op.attribs['value']]
 
 
+def convert_constant_fill(converter, onnx_op, nnef_graph):
+    # type: (Converter, ONNXOperation, NNEFGraph)->None
+    # Not creating an operation for this
+    converter.converted_tensor(onnx_op.output).data = [onnx_op.attribs['value']]
+
+
 def convert_shape(converter, onnx_op, nnef_graph):
     # type: (Converter, ONNXOperation, NNEFGraph)->None
     # Not creating an operation for this
@@ -1491,4 +1497,5 @@ _StandardConverters = {
     # Experimental ONNX ops (We will not support these in general!)
     # It appears in model zoo, so we support it. But the order of add and mul is not sure.
     'ImageScaler': convert_image_scaler,
+    'ConstantFill': convert_constant_fill,
 }
