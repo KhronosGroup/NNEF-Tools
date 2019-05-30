@@ -95,8 +95,9 @@ class Converter(typing.Generic[_SourceTensorT, _SourceOperationT, _SourceGraphT,
         assert hasattr(source_op, "name"), \
             "If the source operations do not have names, you have to override this method"
 
-        if source_op.name in self._op_converter_by_name:
-            self._op_converter_by_name[source_op.name](self, source_op, target_graph)
+        op_converter = self._op_converter_by_name.get(source_op.name)
+        if op_converter is not None:
+            op_converter(self, source_op, target_graph)
         elif self._default_op_converter is not None:
             self._default_op_converter(self, source_op, target_graph)
         else:
