@@ -121,6 +121,10 @@ def unique(arr, key=None):
     return arr2
 
 
+def is_unique(arr, key=None):
+    return len(list(arr)) == len(unique(arr, key=key))
+
+
 def flatten(x):
     def flatten_(x_, out_arr_):
         if isinstance(x_, (list, tuple)):
@@ -229,10 +233,15 @@ def updated_dict_(d, u):
 
 
 def without(iterable, x):
-    list_ = list(iterable)
-    if x in list_:
-        list_.remove(x)
-    return list_
+    result = []
+    for elem in iterable:
+        if elem != x:
+            result.append(elem)
+    return result
+
+
+def without_none(iterable):
+    return without(iterable, None)
 
 
 def zip_inverse(output_count, iterable):
@@ -344,7 +353,7 @@ def command_to_argv(command):
     return shlex.split(command.replace('\\', ' ').replace('\n', ' ').replace('\r', ' '))
 
 
-def without_slash(path):
+def path_without_trailing_separator(path):
     while len(path) > 1 and (path[-1] == '/' or path[-1] == '\\'):
         path = path[:-1]
     return path

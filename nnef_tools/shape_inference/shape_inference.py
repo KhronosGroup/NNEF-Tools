@@ -14,9 +14,8 @@
 
 from __future__ import division, print_function, absolute_import
 
-from collections import namedtuple
-
 import typing
+from collections import namedtuple
 
 
 class Padding(object):
@@ -151,6 +150,7 @@ def sliding_window(input,  # type: ShapeType
                    output_padding=None  # type: typing.Optional[ConcretePaddingType]
                    ):
     # type: (...)->ShapeType
+    assert upscale or output_padding is None
     assert len(input) == len(filter) == len(stride) == len(dilation)
     assert output_padding is None or len(output_padding) == len(filter)
     assert Padding.allowed(padding) or len(padding) == len(filter)
@@ -183,9 +183,9 @@ def sliding_window(input,  # type: ShapeType
                 for (i, s, df, (p, q), (op, oq))
                 in zip(input, stride, dilated_filter, padding, output_padding)]
     else:
-        return [((p + i + q - df + ((s - 1) if ceil else 0)) // s) + 1 + op + oq
-                for (i, s, df, (p, q), (op, oq))
-                in zip(input, stride, dilated_filter, padding, output_padding)]
+        return [((p + i + q - df + ((s - 1) if ceil else 0)) // s) + 1
+                for (i, s, df, (p, q))
+                in zip(input, stride, dilated_filter, padding)]
 
 
 def valid_padding(rank):
