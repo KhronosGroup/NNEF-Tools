@@ -320,6 +320,35 @@ def conv(input,  # type: ShapeType
     return output
 
 
+def get_deconv_output_padding(
+        output,  # type: ShapeType
+        input,  # type: ShapeType
+        filter,  # type: ShapeType
+        padding,  # type: PaddingType
+        stride,  # type: ShapeType
+        dilation,  # type: ShapeType
+        groups,  # type: int # just for check
+        format=None,  # type: typing.Optional[Format]
+        spatial_begin=None,  # type: typing.Optional[AxisType]
+        channel_axis=None,  # type: typing.Optional[AxisType]
+        ceil=False,  # type: bool
+):
+    # type: (...)->ConcretePaddingType
+    if format is not None:
+        spatial_begin = _spatial_begin(format)
+        channel_axis = _channel_axis(format)
+    calculated_shape = conv(input=input, filter=filter,
+                            padding=padding, stride=stride, dilation=dilation, groups=groups,
+                            output_channels=output[channel_axis],
+                            spatial_begin=spatial_begin, channel_axis=channel_axis,
+                            deconv=True, ceil=ceil)
+    output_size = output[spatial_begin:spatial_begin + len(filter)]
+    calculated_size = calculated_shape[spatial_begin:spatial_begin + len(filter)]
+    output_padding = [(0, o - c) for o, c in zip(output_size, calculated_size)]
+    assert all(p >= 0 and q >= 0 for p, q in output_padding)
+    return output_padding
+
+
 def squeeze(input, axes=None):
     # type: (ShapeType, typing.Optional[AxisListType])->ShapeType
     if axes is None:

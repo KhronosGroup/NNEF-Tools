@@ -494,6 +494,25 @@ class TestShapeInference(unittest.TestCase):
                                                              end_mask=0,
                                                              ellipsis_mask=2))
 
+    def test_get_deconv_output_padding(self):
+        self.assertEqual([(0, 0), (0, 0)], infer.get_deconv_output_padding(output=[1, 6, 15, 15],
+                                                                           input=[1, 3, 15, 15],
+                                                                           filter=[2, 2],
+                                                                           padding=[(0, 1), (1, 0)],
+                                                                           stride=[1, 1],
+                                                                           dilation=[1, 1],
+                                                                           groups=1,
+                                                                           format=infer.Format.NCHW))
+
+        self.assertEqual([(0, 3), (0, 2)], infer.get_deconv_output_padding(output=[1, 6, 64, 63],
+                                                                           input=[1, 3, 15, 15],
+                                                                           filter=[6, 6],
+                                                                           padding=[(0, 1), (1, 0)],
+                                                                           stride=[4, 4],
+                                                                           dilation=[1, 1],
+                                                                           groups=1,
+                                                                           format=infer.Format.NCHW))
+
     def test_tile(self):
         self.assertEqual([4, 6, 6, 4], infer.tile(input=[1, 2, 3, 4], repeat=[4, 3, 2, 1]))
 
