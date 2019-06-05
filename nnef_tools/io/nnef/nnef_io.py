@@ -18,7 +18,6 @@ import os
 import re
 import shutil
 import sys
-import tarfile
 import tempfile
 import typing
 from collections import OrderedDict
@@ -341,11 +340,17 @@ def _write_weights(nnef_graph, dir_path, raise_on_missing_weight=True):
 
     for tensor in nnef_graph.tensors:
         if tensor.is_variable:
-            if tensor.data.size != 0:
+            if tensor.data.size == tensor.count:
                 write_nnef_tensor(filename=os.path.join(dir_path, tensor.label + ".dat"),
                                   array=np.asarray(tensor.data, order='C'))
-            elif raise_on_missing_weight:
-                assert False, "Missing value for variable: {}".format(tensor.name)
+            elif tensor.data.size == 0:
+                if raise_on_missing_weight:
+                    utils.NNEFToolsException("Missing value for variable: {}".format(tensor.name))
+            else:
+                utils.NNEFToolsException(
+                    "Invalid data size for variable: {}, expected: {}, got: {}".format(tensor.name,
+                                                                                       tensor.count,
+                                                                                       tensor.data.size))
 
 
 def read_nnef_tensor(filename):

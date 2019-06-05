@@ -364,7 +364,7 @@ def generic_convert_variadic(converter, onnx_op, nnef_graph, target_name, normal
 
     assert len(inputs) >= 1
     if len(inputs) == 1:
-        NNEFOperation(graph=nnef_graph, name='copy', inputs=inputs, outputs=output)
+        NNEFOperation(graph=nnef_graph, name='copy', inputs=inputs[0], outputs=output)
     else:
         left = inputs[0]
 
