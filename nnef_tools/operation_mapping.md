@@ -174,8 +174,9 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | Atanh | -
 | AveragePool | avg_pool
 | BatchNormalization | batch_normalization
-| Cast | select | logical to integer/scalar
-|      | ne | integer/scalar to logical
+| Cast | select | logical to scalar or integer
+|      | ne | scalar to logical
+|      | copy | to same type
 | Ceil | ceil
 | Clip | clamp
 | Compress | -
