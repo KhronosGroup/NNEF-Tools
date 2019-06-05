@@ -141,29 +141,6 @@ def _get_default_transposable_ops():
 _DefaultTransposableOps = _get_default_transposable_ops()  # type: typing.List[TransposableOperation]
 
 
-def optimize(g,  # type: ONNXGraph
-             remove_unneeded_copies=False,  # type: bool
-             remove_inverse_transposes=False,  # type: bool
-             merge_transforms_into_variables=False,  # type: bool
-             merge_transforms_into_constants=False,  # type: bool
-             custom_transposable_ops=None,  # type: typing.Optional[typing.List[TransposableOperation]]
-             io_transform=None,  # type:typing.Optional[TransformOrTransformDictType]
-             verbose=False,  # type: bool
-             rename_tensors=False,  # type: bool
-             ):
-    transposable_ops = _DefaultTransposableOps + (custom_transposable_ops if custom_transposable_ops else [])
-    return optimize_impl(g=g,
-                         driver=ONNXDataFormatOptimizationDriver(),
-                         remove_unneeded_copies=remove_unneeded_copies,
-                         remove_inverse_transposes=remove_inverse_transposes,
-                         merge_transforms_into_variables=merge_transforms_into_variables,
-                         merge_transforms_into_constants=merge_transforms_into_constants,
-                         transposable_ops=transposable_ops,
-                         io_transform=io_transform,
-                         verbose=verbose,
-                         rename_tensors=rename_tensors)
-
-
 class Optimizer(object):
     def __init__(self,
                  io_transform=None,  # type:typing.Optional[TransformOrTransformDictType]
