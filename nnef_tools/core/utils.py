@@ -459,3 +459,21 @@ def get_numbered_name(name, names_so_far):
     while name + str(idx) in names_so_far:
         idx += 1
     return name + str(idx)
+
+
+def filter_multi(condition, *args):
+    return zip_inverse(len(args), [tuple for tuple in zip(*args) if condition(*tuple)])
+
+
+def without_consecutive_repetitions(iterable):
+    res = []
+    last_written = None
+    for elem in iterable:
+        if not res or elem != last_written:
+            res.append(elem)
+            last_written = elem
+    if isinstance(iterable, tuple):
+        return tuple(res)
+    if is_anystr(iterable):
+        return ''.join(res)
+    return res
