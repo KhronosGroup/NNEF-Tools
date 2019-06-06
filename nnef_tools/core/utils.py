@@ -477,3 +477,12 @@ def without_consecutive_repetitions(iterable):
     if is_anystr(iterable):
         return ''.join(res)
     return res
+
+
+def starts_with(iterable, prefix):
+    a = list(iterable)
+    b = list(prefix)
+    if len(a) < len(b):
+        return False
+
+    return all(aa == bb for aa, bb in zip(a, b))
