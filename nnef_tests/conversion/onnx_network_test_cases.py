@@ -17,8 +17,8 @@ from __future__ import division, print_function, absolute_import
 import os
 import unittest
 
-from nnef_tests.file_downloader import download_once, download_and_untar_once
 from nnef_tests.conversion.onnx_test_runner import ONNXTestRunner
+from nnef_tests.file_downloader import download_once, download_and_untar_once
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')
@@ -40,7 +40,7 @@ class ONNXNetworkTestCases(ONNXTestRunner):
     def test_resnet101v2(self):
         self._test_model(
             download_once(url="https://s3.amazonaws.com/onnx-model-zoo/resnet/resnet101v2/resnet101v2.onnx",
-                          path="_models/onnx/"), run=False)
+                          path="_models/onnx/"))
 
     def test_mnist(self):
         self._test_model(
@@ -76,7 +76,7 @@ class ONNXNetworkTestCases(ONNXTestRunner):
                 url="https://onnxzoo.blob.core.windows.net/models/opset_7/tiny_yolov2/tiny_yolov2.tar.gz",
                 member="*.onnx",
                 path="_models/onnx/tiny_yolov2_opset7.onnx"),
-            compare=False)
+            compare=False)  # can't run the legacy ImageScaler op in original ONNX
 
     def test_emotion_ferplus_opset1(self):
         self._test_model(
@@ -84,7 +84,7 @@ class ONNXNetworkTestCases(ONNXTestRunner):
                 url="https://onnxzoo.blob.core.windows.net/models/opset_2/emotion_ferplus/emotion_ferplus.tar.gz",
                 member="*.onnx",
                 path="_models/onnx/emotion_ferplus_opset1.onnx"),
-            compare=False)
+            compare=False)  # original ONNX graph is not runnable
 
     def test_tiny_yolo_v2_opset8(self):
         self._test_model(
@@ -92,7 +92,7 @@ class ONNXNetworkTestCases(ONNXTestRunner):
                 url="https://onnxzoo.blob.core.windows.net/models/opset_8/tiny_yolov2/tiny_yolov2.tar.gz",
                 member="*.onnx",
                 path="_models/onnx/tiny_yolov2_opset8.onnx"),
-            compare=False)
+            compare=False)  # can't run the legacy ImageScaler op in original ONNX
 
     def test_shufflenet(self):
         self._test_model(
@@ -114,14 +114,15 @@ class ONNXNetworkTestCases(ONNXTestRunner):
                 url="https://onnxzoo.blob.core.windows.net/models/opset_1/tiny_yolov2/tiny_yolov2.tar.gz",
                 member="*.onnx",
                 path="_models/onnx/tiny_yolov2_opset1.onnx"),
-            compare=False)
+            compare=False)  # original ONNX is not runnable
 
     def test_resnet18v1(self):
-        # ONNX has some problem with running the BatchNorm version 7 and it cannot convert it to newer version
+        # ONNX has some problem with running the BatchNorm version 7
         self._test_model(download_once(url="https://s3.amazonaws.com/onnx-model-zoo/resnet/resnet18v1/resnet18v1.onnx",
-                                       path="_models/onnx/"), run=False)
+                                       path="_models/onnx/"), compare=False)
 
     def test_arcface(self):
+        # original ONNX is not runnable
         self._test_model(download_once(url="https://s3.amazonaws.com/onnx-model-zoo/arcface/resnet100/resnet100.onnx",
                                        path="_models/onnx/arcface_resnet100.onnx"), compare=False)
 

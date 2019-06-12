@@ -17,10 +17,12 @@ from __future__ import division, print_function, absolute_import
 import os
 import unittest
 
+import numpy as np
+
+from nnef_tests.conversion.onnx_test_runner import ONNXTestRunner
 from nnef_tools.core import utils
 from nnef_tools.io.onnx import onnx_io
 from nnef_tools.io.onnx.onnx_graph import *
-from nnef_tests.conversion.onnx_test_runner import ONNXTestRunner
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')
@@ -85,6 +87,20 @@ class ONNXLayerTestCases(ONNXTestRunner):
         ONNXOperation(graph=g, name='BatchNormalization', inputs=(x, scale, bias, mean, var), outputs=(y,),
                       attribs=dict(epsilon=1e-6))
         g.inputs = (x, scale, bias, mean, var)
+        g.outputs = (y,)
+        self._test_from_graph(g)
+
+    def test_BatchNormalization2(self):
+        g = ONNXGraph(self._graph_name('BatchNormalization2'))
+        x = ONNXTensor(graph=g, name='x', shape=[2, 2, 5, 5], dtype='FLOAT')
+        scale = ONNXTensor(graph=g, name='1', shape=[2], dtype='FLOAT', data=np.random.random([2]))
+        bias = ONNXTensor(graph=g, name='2', shape=[2], dtype='FLOAT', data=np.random.random([2]))
+        mean = ONNXTensor(graph=g, name='3', shape=[2], dtype='FLOAT', data=np.random.random([2]))
+        var = ONNXTensor(graph=g, name='4', shape=[2], dtype='FLOAT', data=np.random.random([2]))
+        y = ONNXTensor(graph=g, name='y', shape=[2, 2, 5, 5], dtype='FLOAT')
+        ONNXOperation(graph=g, name='BatchNormalization', inputs=(x, scale, bias, mean, var), outputs=(y,),
+                      attribs=dict(epsilon=1e-6))
+        g.inputs = (x,)
         g.outputs = (y,)
         self._test_from_graph(g)
 
