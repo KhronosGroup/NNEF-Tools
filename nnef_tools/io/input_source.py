@@ -17,6 +17,7 @@ from __future__ import division, print_function, absolute_import
 import glob
 import os
 import typing
+from collections import OrderedDict
 
 import math
 import nnef
@@ -232,8 +233,8 @@ class InputSources(object):
         return create_input(self[name], np_dtype=np_dtype, shape=shape, allow_bigger_batch=allow_bigger_batch)
 
     def create_feed_dict(self, input_shapes):
-        # type: (typing.Dict[str, typing.Tuple[np.dtype, typing.List[int]]])->typing.Dict[str, np.ndarray]
-        feed_dict = {}
+        # type: (typing.Dict[str, typing.Tuple[np.dtype, typing.List[int]]])->OrderedDict[str, np.ndarray]
+        feed_dict = OrderedDict()
         for name, (dtype, shape) in six.iteritems(input_shapes):
             feed_dict[name] = self.create_input(name, np_dtype=dtype, shape=shape)
         return feed_dict
