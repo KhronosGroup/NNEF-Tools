@@ -249,6 +249,13 @@ def postconvert_slice(op):
     op.attribs['Index'] = 'DT_INT32'
 
 
+def convert_cast(op):
+    # type: (TFOperation)->None
+    op.name = 'Cast'
+    op.attribs['SrcT'] = _tf_py_dtype_to_tf_pb_dtype[op.input.dtype]
+    op.attribs['DstT'] = _tf_py_dtype_to_tf_pb_dtype[op.output.dtype]
+
+
 def converter_sequence(fun1, fun2):
     def f(op):
         fun1(op)
@@ -268,5 +275,6 @@ _DefaultConverters.update({
     'tf.concat': converter_sequence(_DefaultConverters['tf.concat'], postconvert_concat),
     'tf.nn.depthwise_conv2d': _DefaultConverters['tf.nn.depthwise_conv2d_native'],
     'tf.split': convert_split,
-    'tf.slice': converter_sequence(_DefaultConverters['tf.slice'], postconvert_slice)
+    'tf.slice': converter_sequence(_DefaultConverters['tf.slice'], postconvert_slice),
+    'tf.cast': convert_cast,
 })

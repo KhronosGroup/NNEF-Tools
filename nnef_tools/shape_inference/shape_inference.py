@@ -669,8 +669,8 @@ def decompose_strided_slice(input,  # type: ShapeType
         if new_axis_mask[i] == 1:
             shape_before_shrink[i] = 1
         else:
-            shape_before_shrink[i] = (end[i] - begin[i]) // abs(stride[i])
-            ssl_shape[strided_slice_result_shape_index] = (end[i] - begin[i]) // abs(stride[i])
+            shape_before_shrink[i] = (end[i] - begin[i] + abs(stride[i]) - 1) // abs(stride[i])
+            ssl_shape[strided_slice_result_shape_index] = (end[i] - begin[i] + abs(stride[i]) - 1) // abs(stride[i])
             strided_slice_result_shape_index += 1
 
         if new_axis_mask[i] == 0:

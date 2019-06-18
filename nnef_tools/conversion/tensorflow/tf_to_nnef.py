@@ -15,10 +15,10 @@
 from __future__ import division, print_function, absolute_import
 
 import copy
+import typing
 from functools import partial
 
 import numpy as np
-import typing
 
 from nnef_tools.conversion import converter
 from nnef_tools.conversion import transforms
@@ -1269,7 +1269,7 @@ def convert_tile_to_copy_add_or_concat(converter, tf_op, nnef_graph):
     multiples = tf_op.attribs["multiples"]
     assert input.rank == len(multiples)
 
-    if "float" in input_dtype:
+    if input_dtype == 'scalar':
         broadcasts = [m if s == 1 and m != 1 else 1 for m, s in zip(multiples, input_shape)]
         concats = [m if s != 1 and m != 1 else 1 for m, s in zip(multiples, input_shape)]
     else:
@@ -1284,13 +1284,7 @@ def convert_tile_to_copy_add_or_concat(converter, tf_op, nnef_graph):
         return
 
     if needs_broadcast:
-        zeros = NNEFOperation(graph=nnef_graph,
-                              name="constant",
-                              inputs=input,
-                              attribs=dict(shape=list(broadcasts), value=[0.0]),
-                              outputs=NNEFTensor(graph=nnef_graph,
-                                                 shape=list(broadcasts),
-                                                 dtype=input_dtype))
+        zeros = NNEFTensor(graph=nnef_graph, shape=list(broadcasts), dtype=input_dtype, data=[0.0])
 
         if needed_concats:
             add_output = NNEFTensor(graph=nnef_graph,
@@ -1301,7 +1295,7 @@ def convert_tile_to_copy_add_or_concat(converter, tf_op, nnef_graph):
 
         NNEFOperation(graph=nnef_graph,
                       name="add",
-                      inputs=(input, zeros.output),
+                      inputs=(input, zeros),
                       outputs=add_output)
         input = add_output
 

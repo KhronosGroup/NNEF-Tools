@@ -65,9 +65,6 @@ def evaluate_and_convert(tf_graph, source_shapes=None):
 
     tf_graph.sort()
 
-    for tensor in tf_graph.tensors:
-        tensor.dtype = _tf_py_dtype_by_tf_pb_dtype.get(tensor.dtype, None)
-
     if isinstance(source_shapes, dict):
         source_shapes = {(k + ':0' if ':' not in k else k): v for k, v in six.iteritems(source_shapes)}
     shape_fixer.fix_input_shapes(tf_graph, source_shapes)
@@ -91,6 +88,7 @@ def evaluate_and_convert(tf_graph, source_shapes=None):
             assert utils.compatible_shapes(tensor.shape, new_shape)
             tensor.shape = new_shape
             assert tensor.dtype is None or tensor.dtype == new_dtype
+            tensor.dtype = new_dtype
 
         # Evaluation
         if op.name in tf_pb_eval._DefaultOpEvaluators:
@@ -99,6 +97,9 @@ def evaluate_and_convert(tf_graph, source_shapes=None):
         # Conversion
         assert op.name in _DefaultConverters, "No tf_pb_to_tf_py converter for {}".format(op.name)
         _DefaultConverters[op.name](op, const_value_by_tensor)
+
+    for tensor in tf_graph.tensors:
+        tensor.dtype = _tf_py_dtype_by_tf_pb_dtype.get(tensor.dtype, None)
 
     for tensor in tf_graph.tensors:
         if tensor.is_variable:
@@ -124,6 +125,7 @@ def generic_converter(op,  # type: TFOperation
                       input_to_attrib_dict=None,  # type: typing.Optional[typing.Dict[int, str]]
                       revert_inputs=False,  # type: bool
                       new_attribs=None,  # type: typing.Optional[typing.Dict[str, typing.Any]]
+                      list_attribs=None,  # type: typing.List[str]
                       ):
     # type: (...)->None
 
@@ -154,6 +156,16 @@ def generic_converter(op,  # type: TFOperation
         op.inputs = tuple(reversed(op.inputs))
     if new_attribs:
         op.attribs.update(new_attribs)
+    if list_attribs:
+        op.attribs = {k: [v] if k in list_attribs and not isinstance(v, (list, tuple)) else v
+                      for k, v in six.iteritems(op.attribs)}
+
+
+def convert_cast(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+
+    op.name = "tf.cast"
+    op.attribs['dtype'] = _tf_py_dtype_by_tf_pb_dtype[op.attribs['DstT']]
 
 
 # See: https://www.tensorflow.org/api_docs/cc/
@@ -229,11 +241,11 @@ _DefaultConverters = {
     "ArgMin": partial(generic_converter, target_name="tf.argmin", input_to_attrib_dict={1: "axis"}),
     "ArgMax": partial(generic_converter, target_name="tf.argmax", input_to_attrib_dict={1: "axis"}),
     "Max": partial(generic_converter, target_name="tf.reduce_max", attrib_name_dict={"keep_dims": "keepdims"},
-                   input_to_attrib_dict={1: "axis"}),
+                   input_to_attrib_dict={1: "axis"}, list_attribs=['axis']),
     "Min": partial(generic_converter, target_name="tf.reduce_min", attrib_name_dict={"keep_dims": "keepdims"},
-                   input_to_attrib_dict={1: "axis"}),
+                   input_to_attrib_dict={1: "axis"}, list_attribs=['axis']),
     "Mean": partial(generic_converter, target_name="tf.reduce_mean", attrib_name_dict={"keep_dims": "keepdims"},
-                    input_to_attrib_dict={1: "axis"}),
+                    input_to_attrib_dict={1: "axis"}, list_attribs=['axis']),
     "ConcatV2": partial(generic_converter, target_name="tf.concat", input_to_attrib_dict={-1: "axis"}),
     "Pad": partial(generic_converter,
                    target_name="tf.pad",
@@ -260,6 +272,8 @@ _DefaultConverters = {
                             target_name="tf.strided_slice",
                             input_to_attrib_dict={1: "begin", 2: "end", 3: "strides"}),
     "Sum": partial(generic_converter, target_name="tf.reduce_sum", input_to_attrib_dict={1: "axis"},
-                   attrib_name_dict={"keep_dims": "keepdims"}),
+                   attrib_name_dict={"keep_dims": "keepdims"}, list_attribs=['axis']),
     "Transpose": partial(generic_converter, target_name="tf.transpose", input_to_attrib_dict={1: "perm"}),
+    "Tile": partial(generic_converter, target_name="tf.tile", input_to_attrib_dict={1: "multiples"}),
+    "Cast": convert_cast,
 }

@@ -464,7 +464,8 @@ class TestShapeInference(unittest.TestCase):
                                                            begin_mask=[0, 0, 0, 0, 0],
                                                            end_mask=[0, 0, 0, 0, 0],
                                                            ellipsis_mask=[0, 0, 0, 0, 0]))
-        self.assertEqual([10, 32, 10, 1], infer.strided_slice(input=[10, 32, 32, 3],
+
+        self.assertEqual([10, 32, 11, 2], infer.strided_slice(input=[10, 32, 32, 3],
                                                               begin=[anything, anything, anything, anything],
                                                               end=[anything, anything, anything, anything],
                                                               stride=[1, -1, 3, -2],
@@ -493,6 +494,26 @@ class TestShapeInference(unittest.TestCase):
                                                              begin_mask=0,
                                                              end_mask=0,
                                                              ellipsis_mask=2))
+
+        self.assertEqual([13], infer.strided_slice(input=[26],
+                                                   begin=[0],
+                                                   end=[anything],
+                                                   stride=[2],
+                                                   new_axis_mask=[0],
+                                                   shrink_axis_mask=[0],
+                                                   begin_mask=[0],
+                                                   end_mask=[1],
+                                                   ellipsis_mask=[0]))
+
+        self.assertEqual([13], infer.strided_slice(input=[26],
+                                                   begin=[1],
+                                                   end=[anything],
+                                                   stride=[2],
+                                                   new_axis_mask=[0],
+                                                   shrink_axis_mask=[0],
+                                                   begin_mask=[0],
+                                                   end_mask=[1],
+                                                   ellipsis_mask=[0]))
 
     def test_get_deconv_output_padding(self):
         self.assertEqual([(0, 0), (0, 0)], infer.get_deconv_output_padding(output=[1, 6, 15, 15],

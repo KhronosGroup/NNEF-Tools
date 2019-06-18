@@ -18,8 +18,8 @@ import typing
 
 import numpy as np
 
-from nnef_tools.shape_inference import shape_inference as infer
 from nnef_tools.io.tensorflow.tf_graph import *
+from nnef_tools.shape_inference import shape_inference as infer
 
 
 def _evaluate_constant(tf_tensor):
@@ -47,6 +47,14 @@ def evaluate_add(op, const_value_by_tensor):
     a, b = op.inputs
     if a in const_value_by_tensor and b in const_value_by_tensor:
         const_value_by_tensor[op.output] = const_value_by_tensor[a] + const_value_by_tensor[b]
+
+
+def evaluate_concat_v2(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    if all(input in const_value_by_tensor for input in op.inputs):
+        inputs = tuple(const_value_by_tensor[input] for input in op.inputs[:-1])
+        axis = const_value_by_tensor[op.inputs[-1]]
+        const_value_by_tensor[op.output] = np.concatenate(inputs, axis.item())
 
 
 def evaluate_sub(op, const_value_by_tensor):
@@ -110,5 +118,6 @@ _DefaultOpEvaluators = {
     "StridedSlice": evaluate_strided_slice,
     "Pack": evaluate_pack,
     "Add": evaluate_add,
-    "Sub": evaluate_sub
+    "Sub": evaluate_sub,
+    "ConcatV2": evaluate_concat_v2,
 }

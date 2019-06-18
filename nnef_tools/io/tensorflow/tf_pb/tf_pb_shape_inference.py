@@ -56,12 +56,12 @@ def propagate_deconv(op, const_value_by_tensor):
     return [list(const_value_by_tensor[input_sizes].tolist())], [op.attribs['T']]
 
 
-def propagate_broadcast(op, const_value_by_tensor):
-    # type: (TFOperation, _ConstValueByTensorT)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
+def propagate_broadcast(op, const_value_by_tensor, dtype=''):
+    # type: (TFOperation, _ConstValueByTensorT, str)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
 
     return ([infer.elementwise(inputs=[input.shape for input in op.inputs],
                                broadcast=infer.Broadcast.FROM_RIGHT)],
-            [get_op_t(op)])
+            [dtype if dtype else get_op_t(op)])
 
 
 def propagate_first(op, const_value_by_tensor):
@@ -142,6 +142,8 @@ def propagate_reduce(op, const_value_by_tensor):
     # type: (TFOperation, _ConstValueByTensorT)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
     input, axis = op.inputs
     axis = const_value_by_tensor[axis].tolist()  # type: typing.List[int]
+    if not isinstance(axis, list):
+        axis = [axis]
     return [infer.reduce(input=input.shape, axes=axis, squeeze=not op.attribs["keep_dims"])], [op.attribs['T']]
 
 
@@ -236,20 +238,29 @@ def propagate_strided_slice(op, const_value_by_tensor):
                                 end_mask=op.attribs['end_mask'])], [op.attribs['T']]
 
 
+def propagate_tile(op, const_value_by_tensor):
+    # type: (TFOperation, _ConstValueByTensorT)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
+    input, multiples = op.inputs
+    multiples = const_value_by_tensor[multiples].tolist()  # type: typing.List[int]
+
+    return [infer.tile(input=input.shape,
+                       repeat=multiples)], [op.attribs['T']]
+
+
 _DefaultPropagators = {
     "Abs": propagate_first,
     "Add": propagate_broadcast,
     "BiasAdd": propagate_first,
     "Ceil": propagate_first,
     "Elu": propagate_first,
-    "Equal": propagate_broadcast,
+    "Equal": partial(propagate_broadcast, dtype='DT_BOOL'),
     "Exp": propagate_first,
     "Floor": propagate_first,
-    "Greater": propagate_broadcast,
-    "GreaterEqual": propagate_broadcast,
+    "Greater": partial(propagate_broadcast, dtype='DT_BOOL'),
+    "GreaterEqual": partial(propagate_broadcast, dtype='DT_BOOL'),
     "Identity": propagate_first,
-    "Less": propagate_broadcast,
-    "LessEqual": propagate_broadcast,
+    "Less": partial(propagate_broadcast, dtype='DT_BOOL'),
+    "LessEqual": partial(propagate_broadcast, dtype='DT_BOOL'),
     "Log": propagate_first,
     "LogicalAnd": propagate_broadcast,
     "LogicalNot": propagate_first,
@@ -258,7 +269,7 @@ _DefaultPropagators = {
     "Minimum": propagate_broadcast,
     "Mul": propagate_broadcast,
     "Neg": propagate_first,
-    "NotEqual": propagate_broadcast,
+    "NotEqual": partial(propagate_broadcast, dtype='DT_BOOL'),
     "Pow": propagate_first,
     "RealDiv": propagate_broadcast,
     "Relu": propagate_first,
@@ -315,4 +326,6 @@ _DefaultPropagators = {
 
     "Slice": propagate_slice,
     "StridedSlice": propagate_strided_slice,
+    "Tile": propagate_tile,
+    "Cast": propagate_first,
 }

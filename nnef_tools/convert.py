@@ -558,8 +558,8 @@ With an argument: Write to the path defined by the argument.""")
 
     args.no_weights = False
 
-    if sum(framework == 'nnef' for framework in [args.input_format, args.output_format]) != 1:
-        print("Error: Either input or output framework must be nnef.", file=sys.stderr)
+    if sum(format == 'nnef' for format in [args.input_format, args.output_format]) != 1:
+        print("Error: Either input or output format must be nnef.", file=sys.stderr)
         exit(1)
 
     if args.input_format == 'tensorflow-py' and len(args.input_model) < 2:
@@ -570,7 +570,7 @@ With an argument: Write to the path defined by the argument.""")
         exit(1)
 
     if args.compress >= 0 and args.output_format != 'nnef':
-        print("Error: --compress can now be only used with NNEF as output framework.")
+        print("Error: --compress can now be only used with NNEF as output format.")
         exit(1)
 
     if (args.input_format == "nnef"
