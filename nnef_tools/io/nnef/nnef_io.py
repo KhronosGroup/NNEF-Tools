@@ -360,7 +360,7 @@ def read_nnef_tensor(filename):
 
 def write_nnef_tensor(filename, array):
     directory = os.path.dirname(filename)
-    if not os.path.exists(directory):
+    if directory and not os.path.exists(directory):
         os.makedirs(directory)
 
     with open(filename, "wb") as file:
