@@ -16,7 +16,6 @@ import os
 import shutil
 from setuptools import setup, Extension
 
-
 if os.path.isdir('build'):
     shutil.rmtree('build')
 if os.path.isdir('dist'):
@@ -24,38 +23,28 @@ if os.path.isdir('dist'):
 if os.path.isdir('nnef.egg-info'):
     shutil.rmtree('nnef.egg-info')
 
-
 module = Extension('_nnef',
-                   sources = ['nnef.cpp'],
+                   sources=['nnef.cpp'],
+                   include_dirs=['../include'],
                    language='c++',
                    extra_compile_args=['-std=c++11'])
 
-include_path = 'include'
-include_subdirs = ['common', 'comp', 'flat']
-
-if not os.path.isdir(include_path):
-    os.makedirs(include_path)
-    for subdir in include_subdirs:
-        shutil.copytree('../' + subdir, include_path + '/' + subdir)
-
-setup(name = 'nnef',
-	  version = '0.2',
-	  description = 'A package for parsing NNEF files',
-      url = 'https://github.com/KhronosGroup/NNEF-Tools',
-      author = 'Viktor Gyenes',
-      author_email = 'viktor.gyenes@aimotive.com',
-      license = 'Apache 2.0',
-      classifiers =
+setup(name='nnef',
+      version='0.3',
+      description='A package for parsing NNEF files',
+      url='https://github.com/KhronosGroup/NNEF-Tools',
+      author='Viktor Gyenes',
+      author_email='viktor.gyenes@aimotive.com',
+      license='Apache 2.0',
+      classifiers=
       [
-            'Development Status :: 4 - Beta',
-            'Intended Audience :: Developers',
-            'License :: OSI Approved :: Apache Software License',
-            'Programming Language :: Python :: 2',
-            'Programming Language :: Python :: 3',
+          'Development Status :: 4 - Beta',
+          'Intended Audience :: Developers',
+          'License :: OSI Approved :: Apache Software License',
+          'Programming Language :: Python :: 2',
+          'Programming Language :: Python :: 3',
       ],
       keywords='nnef',
       packages=['nnef'],
       ext_modules=[module]
-)
-
-shutil.rmtree(include_path)
+      )

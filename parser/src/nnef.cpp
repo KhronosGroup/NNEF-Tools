@@ -16,10 +16,10 @@
 
 #include <fstream>
 #include "nnef.h"
-#include "comp/comp_parser.h"
-#include "flat/quant_parser.h"
-#include "common/binary.h"
-#include "common/shapes.h"
+#include "nnef/comp/comp_parser.h"
+#include "nnef/flat/quant_parser.h"
+#include "nnef/common/binary.h"
+#include "nnef/common/shapes.h"
 
 
 namespace nnef
