@@ -433,8 +433,8 @@ class TestShapeInference(unittest.TestCase):
         self.assertEqual([0, 0, 0, 0], ssl_begin)
         self.assertEqual([10, 32, 32, 3], ssl_end)
         self.assertEqual([1, -1, 3, -2], ssl_stride)
-        self.assertEqual([10, 32, 10, 1], ssl_shape)
-        self.assertEqual([10, 32, 10, 1], reshape_shape)
+        self.assertEqual([10, 32, 11, 2], ssl_shape)
+        self.assertEqual([10, 32, 11, 2], reshape_shape)
         self.assertIsNot(ssl_shape, reshape_shape)
 
         decomposed = infer.decompose_strided_slice(input=[10, 32, 32, 3],
