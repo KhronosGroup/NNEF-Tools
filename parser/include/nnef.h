@@ -22,7 +22,8 @@
 #include <string>
 #include <functional>
 #include <algorithm>
-#include "common/value.h"
+#include "nnef/common/value.h"
+#include "nnef/common/shapes.h"
 
 
 namespace nnef

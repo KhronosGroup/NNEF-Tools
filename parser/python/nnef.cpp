@@ -15,9 +15,9 @@
  */
 
 #include "Python.h"
-#include "include/flat/flat_parser.h"
-#include "include/comp/comp_parser.h"
-#include "include/flat/quant_parser.h"
+#include "nnef/flat/flat_parser.h"
+#include "nnef/comp/comp_parser.h"
+#include "nnef/flat/quant_parser.h"
 #include <initializer_list>
 #include <exception>
 #include <fstream>
