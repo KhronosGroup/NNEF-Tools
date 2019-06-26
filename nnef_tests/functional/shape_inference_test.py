@@ -129,6 +129,8 @@ class TestShapeInference(unittest.TestCase):
 
         self.assertEqual([(2, 3)], infer.same_padding(upscaled_input=[32], filter=[3], stride=[2], dilation=[3]))
 
+        self.assertEqual([(0, 0)], infer.same_padding(upscaled_input=[2], filter=[1], stride=[2], dilation=[1]))
+
     def test_concat(self):
         self.assertEqual([3, 2, 3, 4], infer.concat([[1, 2, 3, 4], [2, 2, 3, 4]], 0))
         self.assertEqual([3, 2, 3, 4], infer.concat([[1, 2, 3, 4], [2, 2, 3, 4]], -4))

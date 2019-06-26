@@ -202,7 +202,7 @@ def same_padding(upscaled_input, filter, stride, dilation, left_bigger=False):
     downscaled_input = [(ui + (s - 1)) // s for ui, s in zip(upscaled_input, stride)]
     dilated_filter = [(f - 1) * d + 1 for f, d in zip(filter, dilation)]
 
-    total_padding = [(di - 1) * s + df - ui
+    total_padding = [max(0, (di - 1) * s + df - ui)
                      for di, s, df, ui
                      in zip(downscaled_input, stride, dilated_filter, upscaled_input)]
 
