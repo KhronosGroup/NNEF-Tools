@@ -135,6 +135,13 @@ class ONNXNetworkTestCases(ONNXTestRunner):
         self._test_model(download_once(url="https://s3.amazonaws.com/onnx-model-zoo/resnet/resnet18v2/resnet18v2.onnx",
                                        path="_models/onnx/"))
 
+    def test_resnet50(self):
+        self._test_model(
+            download_and_untar_once(
+                url="https://s3.amazonaws.com/download.onnx/models/opset_9/resnet50.tar.gz",
+                member="*.onnx",
+                path="_models/onnx/resnet50.onnx"))
+
 
 if __name__ == '__main__':
     unittest.main()
