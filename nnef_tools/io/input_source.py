@@ -174,7 +174,7 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
                     max_ = np.array(input_source.range[1], dtype=np.float32)
                     scale = (max_ - min_) / 255.0
                     bias = min_
-                    img = img / scale + bias
+                    img = img * scale + bias
 
                 if input_source.norm:
                     mean = np.array(input_source.norm[0], dtype=np.float32)
