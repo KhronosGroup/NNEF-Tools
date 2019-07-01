@@ -39,4 +39,4 @@ graph = nnef.parse_string(
 
 nnef.infer_shapes(graph, custom_shapes={'shuffle': shuffle_shape})
 
-print(nnef.format_graph(graph.name, graph.inputs, graph.outputs, graph.operations))
+print(nnef.format_graph(graph.name, graph.inputs, graph.outputs, graph.operations, graph.tensors))

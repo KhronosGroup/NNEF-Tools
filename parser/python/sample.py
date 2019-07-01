@@ -27,4 +27,4 @@ graph = nnef.parse_string(
     """
 )
 
-print(nnef.format_graph(graph.name, graph.inputs, graph.outputs, graph.operations))
+print(nnef.format_graph(graph.name, graph.inputs, graph.outputs, graph.operations, graph.tensors))

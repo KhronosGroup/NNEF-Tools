@@ -87,11 +87,16 @@ def format_invocation(name, attribs, inputs, outputs=None, dtype=None):
     return string
 
 
-def format_graph(name, inputs, outputs, operations):
+def format_graph(name, inputs, outputs, operations, tensors, annotate_shapes=False):
     string = 'graph ' + name + '( ' + ', '.join(inputs) + ' ) -> ( ' + ', '.join(outputs) + ' )\n'
     string += '{\n'
     for operation in operations:
-        invocation = format_invocation(operation.name, operation.attribs, operation.inputs.values(), operation.outputs.values(), operation.dtype)
-        string += '\t' + invocation + ';\n'
+        inputs = operation.inputs.values()
+        outputs = operation.outputs.values()
+        invocation = format_invocation(operation.name, operation.attribs, inputs, outputs, operation.dtype)
+        string += '\t' + invocation + ';'
+        if annotate_shapes:
+            string += '\t# ' + ', '.join(str(tensors[name].shape) for name in outputs)
+        string += '\n'
     string += '}\n'
     return string

@@ -17,6 +17,7 @@ from .parser import *
 from .printer import *
 from .binary import read_tensor, write_tensor
 from .shapes import infer_shapes
+import os
 
 
 Identifier = _nnef.Identifier   # subclass of str
@@ -28,3 +29,59 @@ Tensor = _nnef.Tensor           # namedtuple('Tensor', ['name': str, 'dtype': st
                                 #                       'compression': typing.Dict[str, object], 'quantization': Dict[str, object]])
 Operation = _nnef.Operation     # namedtuple('Operation', ['name': str, 'attribs': OrderedDict[str, object], 'inputs': OrderedDict[str, object],
                                 #                           'outputs': OrderedDict[str, object], 'dtype': str])
+
+
+Tensor.__new__.__defaults__ = (None, None, None, None)
+Operation.__new__.__defaults__ = (None,)
+
+
+def load_graph(path, stdlib=None, lowered=[]):
+    if os.path.isfile(path):
+        return parse_file(path, stdlib=stdlib, lowered=lowered)
+
+    graph_fn = os.path.join(path, 'graph.nnef')
+    quant_fn = os.path.join(path, 'graph.quant')
+
+    graph = parse_file(graph_fn, quant_fn if os.path.isfile(quant_fn) else None, stdlib=stdlib, lowered=lowered)
+
+    for operation in graph.operations:
+        if operation.name == 'variable':
+            variable_filename = os.path.join(path, operation.attribs['label'] + '.dat')
+            tensor_name = operation.outputs['output']
+            with open(variable_filename) as variable_file:
+                data, compression = read_tensor(variable_file)
+
+            data_shape = list(data.shape)
+            shape = operation.attribs['shape']
+            if data_shape != shape:
+                raise _nnef.Error('shape {} in variable file does not match shape {} defined in network structure'
+                                  .format(data_shape, shape))
+
+            tensor = graph.tensors[tensor_name]
+            graph.tensors[tensor_name] = _nnef.Tensor(tensor.name, tensor.dtype, data_shape, data, compression, tensor.quantization)
+
+    return graph
+
+
+def save_graph(graph, path, annotate_shapes=False):
+    if os.path.exists(path):
+        raise RuntimeError("folder already exists: '{}'".format(path))
+
+    os.makedirs(path)
+
+    text = format_graph(graph.name, graph.inputs, graph.outputs, graph.operations, graph.tensors, annotate_shapes=annotate_shapes)
+
+    with open(os.path.join(path, 'graph.nnef'), mode='w') as file:
+        file.write('version 1.0;\n\n')
+        file.write(text)
+
+    for operation in graph.operations:
+        if operation.name == 'variable':
+            variable_filename = os.path.join(path, operation.attribs['label'] + '.dat')
+            os.makedirs(os.path.split(variable_filename)[0])
+
+            tensor_name = operation.outputs['output']
+            tensor = graph.tensors[tensor_name]
+            if tensor.data is not None:
+                with open(variable_filename, 'wb') as variable_file:
+                    write_tensor(variable_file, tensor.data)

@@ -49,5 +49,6 @@ if __name__ == '__main__':
             print('Shape error: ' + str(err))
             exit(-1)
 
-    print(nnef.format_graph(graph.name, graph.inputs, graph.outputs, graph.operations))
+    print(nnef.format_graph(graph.name, graph.inputs, graph.outputs, graph.operations, graph.tensors,
+                            annotate_shapes=args.shapes))
     print('Validation succeeded')
