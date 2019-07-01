@@ -14,18 +14,14 @@
 
 cmake_minimum_required(VERSION 3.0)
 
-project(nnef-validator CXX)
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+project(nnef CXX)
 
 # build information
 message(STATUS "Build Configuration: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Build executables in: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
-add_definitions(-std=c++11)
-
 # nnef library
-add_library(nnef
+add_library(${PROJECT_NAME}
         include/nnef.h
         include/nnef/common/binary.h
         include/nnef/common/dictionary.h
@@ -47,8 +43,34 @@ add_library(nnef
         include/nnef/flat/stdlib_protos.h
         src/nnef.cpp
         )
-target_include_directories(nnef PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-# nnef-validator application
-add_executable(nnef-validator src/main.cpp)
-target_link_libraries(nnef-validator PUBLIC nnef)
+# build interface include dir is used when this cmake is included into
+# a larger project
+# install interface include dir will be put into the generated cmake config file
+# during install step
+target_include_directories(${PROJECT_NAME}
+        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        PUBLIC $<INSTALL_INTERFACE:include>)
+
+target_compile_options(${PROJECT_NAME} PUBLIC -std=c++11)
+
+set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX _d)
+
+target_link_libraries(${PROJECT_NAME})
+
+# install the library
+install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin)
+
+# then the headers
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include DESTINATION .)
+
+# generate and install cmake config file for find_package
+install(EXPORT ${PROJECT_NAME} DESTINATION lib/cmake/${PROJECT_NAME})
+
+# generate an auxiliary config file also needed by find_package
+# it just includes the previously generated nnef.cmake
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake "include(\${CMAKE_CURRENT_LIST_DIR}/${PROJECT_NAME}.cmake)")
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake DESTINATION lib/cmake/${PROJECT_NAME})

@@ -25,7 +25,7 @@ if os.path.isdir('nnef.egg-info'):
 
 module = Extension('_nnef',
                    sources=['nnef.cpp'],
-                   include_dirs=['../include'],
+                   include_dirs=['../cpp/include'],
                    language='c++',
                    extra_compile_args=['-std=c++11'])
 
