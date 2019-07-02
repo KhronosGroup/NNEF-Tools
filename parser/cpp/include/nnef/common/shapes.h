@@ -344,7 +344,7 @@ namespace nnef
     }
 
     inline Shape conv_like_shape( const Shape& input, const Shape& filter, const Shape& bias,
-                                 const Value& border, const Value& padding, const Value& stride, const Value& dilation,
+                                 const Value& /*border*/, const Value& padding, const Value& stride, const Value& dilation,
                                  const Value& groups, const Value& output_shape, const bool transposed )
     {
         auto rank = input.size();
@@ -479,7 +479,7 @@ namespace nnef
         return separable_conv_like_shape(input, plane_filter, point_filter, bias, border, padding, stride, dilation, groups, output_shape, true);
     }
     
-    inline Shape pool_like_shape( const Shape& input, const Value& size, const Value& border, const Value& padding,
+    inline Shape pool_like_shape( const Shape& input, const Value& size, const Value& /*border*/, const Value& padding,
                                  const Value& stride, const Value& dilation, const Value& output_shape, const bool transposed )
     {
         auto rank = input.size();
@@ -578,7 +578,7 @@ namespace nnef
         return input;
     }
 
-    inline Shape batchnorm_shape( const Shape& input, const Shape& mean, const Shape& variance, const Shape& offset, const Shape& scale, const Value& epsilon )
+    inline Shape batchnorm_shape( const Shape& input, const Shape& mean, const Shape& variance, const Shape& offset, const Shape& scale, const Value& /*epsilon*/ )
     {
         check(broadcastable(mean, input), "cannot broadcast 'mean' shape (%s) to 'input' shape (%s)",
               to_string(mean).c_str(), to_string(input).c_str());
@@ -710,7 +710,7 @@ namespace nnef
 
     inline Shape concat_shape( const std::vector<Shape>& valuesShape, const Value& axis )
     {
-        check(valuesShape.size(), "input array must be non-empty");
+        check(valuesShape.size() != 0, "input array must be non-empty");
         
         Shape outputShape = valuesShape[0];
         

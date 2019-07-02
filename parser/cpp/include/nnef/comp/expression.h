@@ -354,7 +354,7 @@ namespace nnef
         {
         }
         
-        const size_t iteratorCount() const
+        size_t iteratorCount() const
         {
             return _iterators.size();
         }
