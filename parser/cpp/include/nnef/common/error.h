@@ -47,7 +47,7 @@ namespace nnef
         
         template<class... Args>
         Error( const char* format, Args&&... args )
-        : _position({0,0,nullptr}), _message(formatString(format, std::forward<Args>(args)...))
+        : _position({0,0,nullptr,nullptr}), _message(formatString(format, std::forward<Args>(args)...))
         {
         }
         
