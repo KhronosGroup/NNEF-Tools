@@ -66,7 +66,8 @@ class Caffe2TestRunner(unittest.TestCase):
         return op_name + str(self.op_num[op_name])
 
     def _test_model(self, predict_net_path, init_net_path, value_info_path,
-                    feed_dict_override=None, test_shapes=True, test_outputs=True, can_run=True, can_convert=True):
+                    feed_dict_override=None, test_shapes=True, test_outputs=True,
+                    can_run=True, can_compare=True, can_convert=True):
         print("")
         network_name = utils.split_path(predict_net_path)[-2]
         print('Testing {}: {}, {}, {}'.format(network_name, predict_net_path, init_net_path, value_info_path))
@@ -100,17 +101,18 @@ class Caffe2TestRunner(unittest.TestCase):
                                         os.path.join(our_dir, 'init_net.pb'),
                                         feed_dict)
 
-            self.assertEqual(json_utils.load(value_info_path),
-                             json_utils.load(os.path.join(our_dir, 'value_info.json')))
+            if can_compare:
+                self.assertEqual(json_utils.load(value_info_path),
+                                 json_utils.load(os.path.join(our_dir, 'value_info.json')))
 
-            for output, output2, output_shape in zip(outputs, outputs2, output_shapes):
-                if test_shapes:
-                    self.assertEqual(tuple(output_shape), output.shape)
-                    self.assertEqual(tuple(output_shape), output2.shape)
-                if test_outputs:
-                    self.assertTrue(np.all(np.isfinite(output)))
-                    self.assertTrue(np.all(np.isfinite(output2)))
-                    self.assertTrue(np.allclose(output, output2, atol=1e-5))
+                for output, output2, output_shape in zip(outputs, outputs2, output_shapes):
+                    if test_shapes:
+                        self.assertEqual(tuple(output_shape), output.shape)
+                        self.assertEqual(tuple(output_shape), output2.shape)
+                    if test_outputs:
+                        self.assertTrue(np.all(np.isfinite(output)))
+                        self.assertTrue(np.all(np.isfinite(output2)))
+                        self.assertTrue(np.allclose(output, output2, atol=1e-5))
             print('Done.')
 
     def _debug_model_outputs(self, predict_net_path, init_net_path, value_info_path, feed_dict_override=None):

@@ -53,18 +53,13 @@ class Caffe2Tensor(BaseTensor['Caffe2Graph', 'Caffe2Operation']):
 
 class Caffe2Operation(BaseOperation['Caffe2Graph', 'Caffe2Tensor']):
 
-    def __init__(self, graph, name=None, inputs=None, outputs=None, attribs=None,
-                 label=None, engine=None, device_option=None):
+    def __init__(self, graph, name=None, inputs=None, outputs=None, attribs=None, label=None):
         super(Caffe2Operation, self).__init__(graph, name=name, inputs=inputs, outputs=outputs, attribs=attribs)
         self.label = label
-        self.engine = engine
-        self.device_option = device_option
 
     def _str_dict(self):
         _dict = super(Caffe2Operation, self)._str_dict()
         _dict.update([('label', self.label)])
-        _dict.update([('engine', self.engine)])
-        _dict.update([('device_option', self.device_option)])
         return _dict
 
 

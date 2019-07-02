@@ -190,7 +190,7 @@ def compute_pad(in_size, stride, kernel, dilation, legacy_pad, pad_head=0, pad_t
         assert False
 
 
-def unify_hw_attrib(new_attribs, op, name_base, length, default):
+def unify_hw_attrib(op, new_attribs, name_base, length, default):
     old_attribs = op.attribs
     name = name_base
     names = name_base + 's'
@@ -211,43 +211,48 @@ def unify_hw_attrib(new_attribs, op, name_base, length, default):
 
 def unify_conv_pool_base_ops(op, tensor_names):
     # type: (Caffe2Operation, typing.Set[str])->None
-    is_upscale = 'Transpose' in op.name
-    is_gradient = op.name.endswith('Gradient')
+
     is_nhwc = op.attribs.get('order', 'NCHW').upper() == 'NHWC'
+    is_gradient = op.name.endswith('Gradient')
     spatial_dims = op.inputs[0].rank - 2
     new_attribs = {}
 
-    # unify 1D, 2D, 3D versions
+    # unify op name (remove 1D, 2D, 3D, etc.)
     if op.name.startswith('AveragePool'):
         op.name = 'AveragePool' + ('Gradient' if is_gradient else '')
+    elif op.name.startswith('MaxPool') and not op.name.startswith('MaxPoolWithIndex'):
+        op.name = 'MaxPool' + ('Gradient' if is_gradient else '')
     elif op.name.startswith('Conv') and not op.name.startswith('ConvTranspose'):
         op.name = 'Conv' + ('Gradient' if is_gradient else '')
     elif op.name.startswith('MaxPool') and not op.name.startswith('MaxPoolWithIndex'):
         op.name = 'MaxPool' + ('Gradient' if is_gradient else '')
 
+    # unify order
     new_attribs['order'] = 'NHWC' if is_nhwc else 'NCHW'
 
-    legacy_pad = op.attribs.get('legacy_pad', LEGACY_PAD_NOTSET)
-    if (legacy_pad in [LEGACY_PAD_VALID, LEGACY_PAD_SAME]
-            and (any(k.startswith('pad') for k in six.iterkeys(op.attribs)))):
-        raise ReadException("Padding should not be specified when legacy_pad is VALID or SAME")
-
+    # unify global_pooling
     if 'Pool' in op.name:
-        new_attribs['global_pooling'] = int(op.attribs.get('global_pooling', 0))
+        new_attribs['global_pooling'] = op.attribs.get('global_pooling', 0)
 
-    if 'Conv' in op.name or 'Pool' in op.name:
+    # unify kernels
+    if 'Pool' in op.name or 'Conv' in op.name:
         if op.attribs.get('global_pooling', 0):
             new_attribs['kernels'] = op.inputs[0].shape[1:-1] if is_nhwc else op.inputs[0].shape[2:]
         else:
-            unify_hw_attrib(new_attribs, op, 'kernel', length=spatial_dims, default=None)
+            unify_hw_attrib(op, new_attribs, 'kernel', length=spatial_dims, default=None)
 
-        unify_hw_attrib(new_attribs, op, 'stride', length=spatial_dims, default=1)
+    # unify strides
+    if 'Pool' in op.name or 'Conv' in op.name:
+        unify_hw_attrib(op, new_attribs, 'stride', length=spatial_dims, default=1)
 
-        if is_upscale:
+    # unify dilations
+    if 'Pool' in op.name or 'Conv' in op.name:
+        if 'Transpose' in op.name:
             assert not any((k.startswith('dilation')) for k in six.iterkeys(op.attribs))
         else:
-            unify_hw_attrib(new_attribs, op, 'dilation', length=spatial_dims, default=1)
+            unify_hw_attrib(op, new_attribs, 'dilation', length=spatial_dims, default=1)
 
+    # unify pads
     if op.attribs.get('pads'):
         new_attribs['pads'] = op.attribs['pads']
     elif 'pad' in op.attribs:
@@ -257,12 +262,15 @@ def unify_conv_pool_base_ops(op, tensor_names):
     else:
         new_attribs['pads'] = [0] * (2 * spatial_dims)
 
-    if is_upscale:
-        unify_hw_attrib(new_attribs, op, 'adj', length=spatial_dims, default=0)
-
+    # resolve legacy padding
     if 'Conv' in op.name or 'Pool' in op.name:
+        legacy_pad = op.attribs.get('legacy_pad', LEGACY_PAD_NOTSET)
+        if (legacy_pad in [LEGACY_PAD_VALID, LEGACY_PAD_SAME]
+                and (any(k.startswith('pad') for k in six.iterkeys(op.attribs)))):
+            raise ReadException("Padding should not be specified when legacy_pad is VALID or SAME")
+
         if legacy_pad != LEGACY_PAD_NOTSET:
-            if is_upscale:
+            if 'Transpose' in op.name:
                 assert legacy_pad in [LEGACY_PAD_SAME, LEGACY_PAD_VALID]
                 # from https://github.com/pytorch/pytorch/blob/master/caffe2/operators/conv_transpose_unpool_op_base.h
                 new_attribs['pads'] = [0] * (2 * spatial_dims)  # They do it for same too
@@ -280,21 +288,26 @@ def unify_conv_pool_base_ops(op, tensor_names):
                 if legacy_in_effect[0]:
                     print('Legacy Caffe size calculation is in effect for {} = {}()'
                           .format(', '.join(t.name for t in op.outputs), op.name))
+
+    # unify adjs (adjustment a.k.a. output padding)
+    if 'Transpose' in op.name:
+        unify_hw_attrib(op, new_attribs, 'adj', length=spatial_dims, default=0)
+
+    # unify group
     if 'Conv' in op.name:
         new_attribs['group'] = op.attribs.get('group', 1)
 
-    if op.attribs.get('float16_compute'):
-        new_attribs['float16_compute'] = True
-    if op.attribs.get('shared_buffer'):
-        new_attribs['shared_buffer'] = 1
-
+    # unify mode
     if op.name == 'PadImage':
         new_attribs['mode'] = op.attribs.get('mode', 'constant')
         for k, v in six.iteritems(op.attribs):
             if 'stride' in k or 'dilation' in k:
                 assert v == 1 or all(vv == 1 for vv in v), "Padding cannot have stride/dilation"
-    elif op.name == 'LpPool':
+    # unify p
+    if op.name == 'LpPool':
         new_attribs['p'] = float(op.attribs.get('p', 2.0))
+
+    # set unified attribs
     op.attribs = new_attribs
 
 
@@ -478,19 +491,12 @@ def get_operation(op_def, graph, tensor_by_name):
         k, v = get_attribute(type, arg)
         attribs[k] = v
 
-    engine = op_def.engine if op_def.engine else None
-    device_option = get_device_option(op_def.device_option) if op_def.HasField('device_option') else None
-    if not device_option:
-        device_option = None
-
     return Caffe2Operation(graph=graph,
                            name=type,
                            label=name if name else None,
                            inputs=[tensor_by_name[input] for input in inputs],
                            outputs=[tensor_by_name[output] for output in outputs],
-                           attribs=attribs,
-                           engine=engine,
-                           device_option=device_option)
+                           attribs=attribs)
 
 
 def get_attribute(op_type, arg):
@@ -724,11 +730,6 @@ def build_op_def(op, op_def):
         argument = op_def.arg.add()
         build_attribute(k, v, argument)
 
-    if op.engine:
-        op_def.engine = op.engine
-    if op.device_option:
-        build_device_option(op.device_option, op_def.device_option)
-
 
 def build_attribute(key, value, argument):
     # type: (str, typing.Any, caffe2_pb.Argument)->None
@@ -772,14 +773,6 @@ def build_attribute(key, value, argument):
 
     else:
         assert False, "Unsupported attribute: {}: {} of type: {}".format(key, value, type(value).__name__)
-
-
-def build_device_option(device_option, device_option_proto):
-    for field in device_option_proto.DESCRIPTOR.fields:
-        if field.label != field.LABEL_REPEATED and field.name in device_option:
-            setattr(device_option_proto, field.name, device_option[field.name])
-        elif field.label == field.LABEL_REPEATED and field.name in device_option:
-            getattr(device_option_proto, field.name).extend(device_option[field.name])
 
 
 def write_value_info(graph, filename):

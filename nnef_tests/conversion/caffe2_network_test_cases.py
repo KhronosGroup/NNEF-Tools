@@ -170,7 +170,8 @@ class Caffe2NetworkTestCases(Caffe2TestRunner):
             download_once(
                 'https://media.githubusercontent.com/media/caffe2/models/master/style_transfer/watercolor/init_net.pb',
                 '_models/caffe2/style_transfer_watercolor/'),
-            '_models/caffe2/style_transfer_watercolor/value_info.json')
+            '_models/caffe2/style_transfer_watercolor/value_info.json',
+            can_compare=False)  # Can not compare because we don't preserve device-option and engine
 
     def test_vgg19(self):
         self._test_model(*download_caffe2_model('vgg19'))
