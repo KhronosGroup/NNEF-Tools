@@ -19,9 +19,9 @@ from collections import namedtuple
 
 
 class Padding(object):
-    VALID = 0
-    SAME_UPPER = 1
-    SAME_LOWER = 2
+    VALID = 0  # No padding
+    SAME_UPPER = 1  # Same padding, add more padding to the end (NNEF uses this one)
+    SAME_LOWER = 2  # Same padding, add more padding to the beginning
 
     @staticmethod
     def allowed(value):
