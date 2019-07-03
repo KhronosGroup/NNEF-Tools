@@ -162,9 +162,11 @@ def get_reader(input_format,
         from nnef_tools.io.tensorflow.tflite_io import Reader
         return Reader(convert_to_tf_py=True)
     elif input_format == 'onnx':
-        # TODO custom converter
         from nnef_tools.io.onnx.onnx_io import Reader
-        return Reader(propagate_shapes=True, input_shape=input_shape)
+        custom_shapes = get_custom_shape_functions(input_format, custom_converters) if custom_converters else None
+        return Reader(infer_shapes=True,
+                      input_shape=input_shape,
+                      custom_shapes=custom_shapes)
     elif input_format == 'caffe':
         # TODO custom converter
         from nnef_tools.io.caffe.caffe_io import Reader
@@ -174,7 +176,6 @@ def get_reader(input_format,
 
 
 def get_custom_converters(input_format, output_format, module_names):
-
     format = input_format if input_format != "nnef" else output_format
     direction = "exporters" if input_format != "nnef" else "importers"
     attrname = (format + '_' + direction).replace('-', '_').upper()
@@ -187,6 +188,17 @@ def get_custom_converters(input_format, output_format, module_names):
             custom_converter_by_op_name.update(getattr(module, attrname))
 
     return custom_converter_by_op_name
+
+
+def get_custom_shape_functions(input_format, module_names):
+    attrname = "{}_SHAPES".format(input_format.upper())
+    custom_shapes = {}
+    for module_name in module_names:
+        module = importlib.import_module(module_name)
+        if hasattr(module, attrname):
+            custom_shapes.update(getattr(module, attrname))
+
+    return custom_shapes
 
 
 def get_converter(input_format, output_format, prefer_nchw=False, permissive=False, custom_converters=None):

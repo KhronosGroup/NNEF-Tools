@@ -15,15 +15,15 @@
 from __future__ import division, print_function, absolute_import
 
 import sys
+import typing
 
 import numpy as np
 import six
-import typing
 
 from nnef_tools.core import utils
+from nnef_tools.io.onnx import onnx_shape_inference
 from nnef_tools.io.onnx.onnx_graph import *
 from nnef_tools.io.onnx.onnx_pb import onnx_pb2
-from nnef_tools.io.onnx import onnx_shape_inference
 
 OUTPUT_IR_VERSION = 3
 OUTPUT_OPSET_VERSION = 9
@@ -500,18 +500,23 @@ _DTypeShapeTuple = typing.Tuple[str, typing.List[int]]
 
 class Reader(object):
 
-    def __init__(self, propagate_shapes=False, input_shape=None):
-        # type: (bool, typing.Union[typing.Dict[str, _DTypeShapeTuple], _DTypeShapeTuple, None])->None
-        self._propagate_shapes = propagate_shapes
+    def __init__(self,
+                 infer_shapes=False,  # type: bool
+                 input_shape=None,  # type: typing.Union[typing.Dict[str, _DTypeShapeTuple], _DTypeShapeTuple, None]
+                 custom_shapes=None,  # type: typing.Dict[str, typing.Callable]
+                 ):
+        # type: (...)->None
+        self._infer_shapes = infer_shapes
         self._input_shape = input_shape
+        self._custom_shapes = custom_shapes
 
     def __call__(self, filename):
         # type: (str)->ONNXGraph
 
         g = read_onnx_from_protobuf(filename)
 
-        if self._propagate_shapes:
-            onnx_shape_inference.propagate(g, source_shapes=self._input_shape)
+        if self._infer_shapes:
+            onnx_shape_inference.infer_shapes(g, source_shapes=self._input_shape, custom_shapes=self._custom_shapes)
 
         return g
 

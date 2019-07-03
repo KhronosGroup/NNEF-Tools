@@ -28,8 +28,16 @@ from nnef_tools.shape_inference import shape_inference as infer
 _ConstValueByTensorT = typing.Dict[ONNXTensor, np.ndarray]
 
 
-def propagate(graph, source_shapes=None):
-    # type: (ONNXGraph, typing.Union[typing.Dict[str, typing.List[int]], typing.List[int], int, None])->None
+def infer_shapes(graph,  # type: ONNXGraph
+                 source_shapes=None,
+                 # type: typing.Union[typing.Dict[str, typing.List[int]], typing.List[int], int, None]
+                 custom_shapes=None,  # type: typing.Optional[typing.Dict[str, typing.Callable]]
+                 ):
+    # type: (...)->None
+
+    shape_functions = dict(_DefaultShapes)
+    if custom_shapes:
+        shape_functions.update(custom_shapes)
 
     graph.sort()
 
@@ -37,11 +45,11 @@ def propagate(graph, source_shapes=None):
 
     for op in graph.operations:
         # Shape prop
-        assert op.name in _DefaultPropagators, "No shape propagator for {}".format(op.name)
-        propagated_shapes, propagated_dtypes = _DefaultPropagators[op.name](op)
-        assert not utils.has_le_0(propagated_shapes)
-        assert len(propagated_shapes) == len(propagated_dtypes) == len(op.outputs)
-        for new_shape, new_dtype, tensor in zip(propagated_shapes, propagated_dtypes, op.outputs):
+        assert op.name in shape_functions, "No shape function for {}".format(op.name)
+        inferred_shapes, inferred_dtypes = shape_functions[op.name](op)
+        assert not utils.has_le_0(inferred_shapes)
+        assert len(inferred_shapes) == len(inferred_dtypes) == len(op.outputs)
+        for new_shape, new_dtype, tensor in zip(inferred_shapes, inferred_dtypes, op.outputs):
             assert utils.compatible_shapes(tensor.shape, new_shape)
             tensor.shape = new_shape
             assert tensor.dtype is None or tensor.dtype == new_dtype
@@ -624,7 +632,7 @@ def UNSUPPORTED(op):
     raise utils.NNEFToolsException('ONNX shape prop: Unsupported op: {}'.format(op.name))
 
 
-_DefaultPropagators = {
+_DefaultShapes = {
     'Abs': propagate_first,
     'Acos': propagate_first,
     'Acosh': propagate_first,
