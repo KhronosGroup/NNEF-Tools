@@ -229,6 +229,36 @@ class ONNXLayerTestCases(ONNXTestRunner):
         g.outputs = (y,)
         self._test_from_graph(g)
 
+    def test_Expand2(self):
+        g = ONNXGraph(self._graph_name('Expand'))
+        x = ONNXTensor(graph=g, name='x', shape=[1, 2, 3], dtype='FLOAT')
+        y = ONNXTensor(graph=g, name='y', shape=[6, 2, 3], dtype='FLOAT')
+        shape = ONNXTensor(graph=g, name='shape', shape=[3], data=[6, -1, -1], dtype='INT64')
+        ONNXOperation(graph=g, name='Expand', inputs=(x, shape), outputs=y)
+        g.inputs = (x,)
+        g.outputs = (y,)
+        self._test_from_graph(g)
+
+    def test_Expand3(self):
+        g = ONNXGraph(self._graph_name('Expand'))
+        x = ONNXTensor(graph=g, name='x', shape=[1, 2, 3], dtype='FLOAT')
+        y = ONNXTensor(graph=g, name='y', shape=[5, 6, 2, 3], dtype='FLOAT')
+        shape = ONNXTensor(graph=g, name='shape', shape=[4], data=[5, 6, -1, -1], dtype='INT64')
+        ONNXOperation(graph=g, name='Expand', inputs=(x, shape), outputs=y)
+        g.inputs = (x,)
+        g.outputs = (y,)
+        self._test_from_graph(g)
+
+    def test_Expand4(self):
+        g = ONNXGraph(self._graph_name('Expand'))
+        x = ONNXTensor(graph=g, name='x', shape=[1, 2, 3], dtype='FLOAT')
+        y = ONNXTensor(graph=g, name='y', shape=[1, 2, 3], dtype='FLOAT')
+        shape = ONNXTensor(graph=g, name='shape', shape=[2], data=[-1, -1], dtype='INT64')
+        ONNXOperation(graph=g, name='Expand', inputs=(x, shape), outputs=y)
+        g.inputs = (x,)
+        g.outputs = (y,)
+        self._test_from_graph(g)
+
     def test_Flatten(self):
         g = ONNXGraph(self._graph_name('Flatten'))
         x = ONNXTensor(graph=g, name='x', shape=[2, 4, 5, 5], dtype='FLOAT')

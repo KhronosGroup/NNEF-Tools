@@ -410,11 +410,23 @@ def propagate_size(op):
 def propagate_expand(op):
     # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
     input, shape = op.inputs
-    op.attribs['shape'] = evaluate_shape_tensor_simple(shape)
+
+    input_shape = list(input.shape)
+    other_shape = evaluate_shape_tensor_simple(shape)
+
+    if len(other_shape) > len(input_shape):
+        input_shape = [1] * (len(other_shape) - len(input_shape)) + input_shape
+    if len(input_shape) > len(other_shape):
+        other_shape = [1] * (len(input_shape) - len(other_shape)) + other_shape
+
+    # undocumented feature in ONNX, probably comes from pytorch
+    other_shape = [i if o == -1 else o for i, o in zip(input_shape, other_shape)]
+
+    op.attribs['shape'] = other_shape
     op.inputs = (input,)
 
-    return [infer.elementwise(inputs=[input.shape, op.attribs['shape']],
-                              broadcast=infer.Broadcast.FROM_RIGHT)], [input.dtype]
+    return [infer.elementwise(inputs=[input_shape, other_shape],
+                              broadcast=infer.Broadcast.SAME_RANK)], [input.dtype]
 
 
 def propagate_flatten(op):
