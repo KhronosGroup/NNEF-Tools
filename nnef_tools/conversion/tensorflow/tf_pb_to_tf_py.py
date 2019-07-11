@@ -79,9 +79,10 @@ def evaluate_and_convert(tf_graph, source_shapes=None):
 
     for op in tf_graph.operations:
         # Shape prop
-        assert op.name in tf_pb_shape_inference._DefaultPropagators, "No shape propagator for {}".format(op.name)
-        propagated_shapes, propagated_dtypes = tf_pb_shape_inference._DefaultPropagators[op.name](op,
-                                                                                                  const_value_by_tensor)
+        if op.name not in tf_pb_shape_inference._DefaultPropagators:
+            raise utils.NNEFToolsException("No shape propagator for {}".format(op.name))
+        propagated_shapes, propagated_dtypes = \
+            tf_pb_shape_inference._DefaultPropagators[op.name](op, const_value_by_tensor)
         assert not utils.has_le_0(propagated_shapes)
         assert len(propagated_shapes) == len(propagated_dtypes) == len(op.outputs)
         for new_shape, new_dtype, tensor in zip(propagated_shapes, propagated_dtypes, op.outputs):

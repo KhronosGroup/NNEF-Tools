@@ -285,25 +285,48 @@ def _build_graph(graph, names):
     return graph_def
 
 
+def _detect_output_counts(graph_def):
+    detected_output_count = {}
+    used_tensor_names = [name
+                         for node in graph_def.node
+                         for name in node.input]
+    node_type_by_name = {node.name: node.op
+                         for node in graph_def.node}
+    for name in used_tensor_names:  # type: str
+        if ':' in name:
+            op_name, index = name.rsplit(':', 1)
+            index = int(index)
+        else:
+            op_name, index = name, 0
+        if op_name.startswith('^'):
+            op_name = op_name[1:]
+        if op_name not in node_type_by_name:
+            print("Warning: Tensor {} does not belong to any op?".format(name))
+        else:
+            node_type = node_type_by_name[op_name]
+            detected_output_count[node_type] = max(detected_output_count.get(node_type, 1),
+                                                   index + 1)
+    return detected_output_count
+
+
 def read_tf_graph_from_protobuf(filename):
     graph_def = tf_pb.GraphDef()
     with open(filename, 'rb') as file:
         graph_def.ParseFromString(file.read())
 
     graph = TFGraph()
-    # just a graph to contain the tensors that are in attributes
-    # no need to return this
-    attrib_graph = TFGraph()
+    attrib_graph = TFGraph()  # just a graph to contain the tensors that are in attributes, no need to return this
 
-    attributes_by_node_id = {}
-    outputs_by_node_id = {}
-
+    attributes_by_node_name = {}
+    outputs_by_node_name = {}
+    detected_output_count = _detect_output_counts(graph_def)
     for node in graph_def.node:
         outputs = []
         attributes = _get_attributes(node.attr, attrib_graph)
         output_count = _OutputCount.get(node.op, 1)
         if isinstance(output_count, str):
             output_count = attributes[output_count]
+        output_count = max(output_count, detected_output_count.get(node.op, 1))
         assert isinstance(output_count, int)
         if output_count >= 1:
             output = TFTensor(graph, utils.anystr_to_str(node.name))
@@ -312,16 +335,18 @@ def read_tf_graph_from_protobuf(filename):
                 tensor_name = utils.anystr_to_str(node.name) + ':' + str(i)
                 output = TFTensor(graph, tensor_name)
                 outputs.append(output)
-        outputs_by_node_id[id(node)] = outputs
-        attributes_by_node_id[id(node)] = attributes
+
+        outputs_by_node_name[node.name] = outputs
+        attributes_by_node_name[node.name] = attributes
 
     tensor_by_name = {tensor.name: tensor
-                      for outputs in six.itervalues(outputs_by_node_id)
+                      for outputs in six.itervalues(outputs_by_node_name)
                       for tensor in outputs}
+
     placeholders = []
     for node in graph_def.node:
-        attributes = attributes_by_node_id[id(node)]
-        outputs = outputs_by_node_id[id(node)]
+        attributes = attributes_by_node_name[node.name]
+        outputs = outputs_by_node_name[node.name]
 
         if node.op == 'Placeholder':
             assert len(outputs) == 1
@@ -340,7 +365,17 @@ def read_tf_graph_from_protobuf(filename):
             else:
                 tensor.data = value
         else:
-            inputs = tuple([tensor_by_name[name] for name in node.input])
+            input_names = [name[:-2] if name.endswith(':0') else name for name in node.input]
+            input_names = [name[1:] if name.startswith('^') else name for name in input_names]
+            for name in input_names:
+                if name not in tensor_by_name:
+                    print('Info: List of node types in graph: {}\n'.format(
+                        sorted(list({node.op for node in graph_def.node}))))
+
+                    raise utils.NNEFToolsException(
+                        "Tensor {} is used, but it is not clear which operation produced it. "
+                        "Probably the graph has unsupported dynamic operations.".format(name))
+            inputs = tuple([tensor_by_name[name] for name in input_names])
             TFOperation(graph,
                         name=utils.anystr_to_str(node.op),
                         inputs=inputs,
