@@ -78,6 +78,7 @@ class Caffe2TestRunner(unittest.TestCase):
 
         our_dir = os.path.join('out', 'caffe2_ours', network_name)
         if can_convert:
+            print("Converting...")
             nnef_path = os.path.join('out', 'nnef', network_name + '.nnef')
             command = """
             ./nnef_tools/convert.py --input-format caffe2 \\
@@ -97,12 +98,14 @@ class Caffe2TestRunner(unittest.TestCase):
             print(command)
             convert_using_command(command)
         else:
+            print("Writing out model without conversion...")
             writer = Writer()
             writer(g, our_dir)
             del g
 
         activation_testing = int(os.environ.get('NNEF_ACTIVATION_TESTING', '1'))
-        print("Activation testing is", "ON" if activation_testing else "OFF")
+        if not activation_testing:
+            print("Activation testing is OFF")
         if can_run and activation_testing:
 
             from caffe2.python import workspace
@@ -112,16 +115,17 @@ class Caffe2TestRunner(unittest.TestCase):
             if feed_dict_override:
                 feed_dict.update(feed_dict_override)
 
-            print('Running original Caffe2:')
+            print('Running original Caffe2 model...')
             outputs = run_caffe2_model(predict_net_path, init_net_path, feed_dict)
 
-            print('Running our Caffe2:')
+            print('Running our Caffe2 model...')
             feed_dict2 = {k.replace('/', '_'): v for k, v in six.iteritems(feed_dict)}
             outputs2 = run_caffe2_model(os.path.join(our_dir, 'predict_net.pb'),
                                         os.path.join(our_dir, 'init_net.pb'),
                                         feed_dict2)
 
             if can_compare:
+                print("Comparing...")
                 self.assertEqual({k.replace('/', '_'): v for k, v in six.iteritems(json_utils.load(value_info_path))},
                                  json_utils.load(os.path.join(our_dir, 'value_info.json')))
 
@@ -133,7 +137,7 @@ class Caffe2TestRunner(unittest.TestCase):
                         self.assertTrue(np.all(np.isfinite(output)))
                         self.assertTrue(np.all(np.isfinite(output2)))
                         self.assertTrue(np.allclose(output, output2, atol=1e-5))
-            print('Done.')
+        print('Passed.\n\n')
 
     def _debug_model_outputs(self, predict_net_path, init_net_path, value_info_path, feed_dict_override=None):
         value_info = json_utils.load(value_info_path)
