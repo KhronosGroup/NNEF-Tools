@@ -29,6 +29,8 @@ You have to install dependencies only for the functionalities that you are using
 |  Caffe conversion                             | pip install typing six numpy protobuf
 |  Caffe conversion tests                       | pip install typing six numpy protobuf, Caffe
 |  Caffe activation export                      | pip install typing six numpy protobuf, Caffe
+|  Caffe2 conversion                            | pip install typing six numpy protobuf
+|  Caffe2 conversion tests                      | pip install typing six numpy protobuf torch
 
 
 All pip dependencies (just for reference):
@@ -62,6 +64,7 @@ Supported frameworks:
 - Tensorflow Lite FlatBuffers model
 - ONNX
 - Caffe
+- Caffe2
 
 In all conversions either the input or the output framework must be NNEF.
 
@@ -154,5 +157,6 @@ In this case the following tests can run with reduced dependencies:
 |  tf_pb_network_test_cases.py               | pip install typing six numpy protobuf   |
 |  tflite_network_test_cases.py              | pip install typing six numpy protobuf   |
 |  caffe_network_test_cases.py               | pip install typing six numpy protobuf   |
+|  caffe2_network_test_cases.py              | pip install typing six numpy protobuf   |
 
 
