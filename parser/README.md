@@ -1,35 +1,27 @@
 NNEF Parser Project
 ==========================
 
-This repository C++ source code for a sample NNEF parser.
+This repository contains C++ and Python source code for a sample NNEF parser.
 
 Introduction
 ------------
 
 The code consists of a C++ library that contains two example parsers (one for
 flat and one for compositional NNEF syntax). This library can be used to build tools
-that require parsing NNEF files. It requires a C++11 compatible compiler.
+that require parsing NNEF files. It requires a C++11 compatible compiler. The `sample.cpp` 
+contains a minimal example that showcases the use of the parser.
 
-The code also contains an example main.cpp that showcases the usage of the parser library.
-
-The tool itself parses and validates an NNEF graph structure document, and echoes an
-optionally flattened version of it. The arguments required to the tool are as follows
-* \<path>: the path to the NNEF folder or the standalone graph file
-* --stdlib \<file-name>: an alternate definition of standard operations (defaults to all-primitive definitions)
-* --lower \<op-name>: the name of the operation to be lowered (if defined as compound)
-* --shapes: turn on shape inference and shape validity checking
-
-If the tool encounters an invalid document, it prints the first error and stops parsing.
+The Python code wraps the C++ parser and adds some further utilities to load and save NNEF documents easily. It also contains a script to validate NNEF documents (`validate.py`) and optionally print a lowered version of the graph. If the tool encounters an invalid document, it prints the first error and stops parsing. Type `python validate.py -h` to show the usage help.
 
 
-Building with CMake
--------------------
+Building the C++ library
+------------------------
 
-The example can be compiled with cmake.
+The C++ library can be compiled with cmake.
 
 Example of build commands under Linux:
 ````
-$ cd <NNEF parser root directory>
+$ cd NNEF-Tools/parser/cpp
 $ mkdir build && cd build
 $ cmake ..
 $ make
@@ -62,8 +54,10 @@ Building the Python module
 --------------------------
 
 The python folder contains a Python wrapper for the C++ parser code. To build the python module, move into the python folder and run
-
-`python setup.py install`
+```
+cd NNEF-Tools/parser/python
+python setup.py install
+```
 
 This invokes the system compiler for C++ (e.g. gcc, g++, clang depending on the operating system), 
 builds and installs an 'nnef' python module. If that command succeeds, the nnef module can be used
@@ -98,5 +92,3 @@ graph = nnef.parse_string("version 1.0; graph ...", quantization = "...")
 can be used to parse a graph and optional quantization info from files or strings.
 
 After invocation, `graph` is a data structure (named tuple) containing the name, tensors, operations, inputs and outputs of the graph. See `nnef.py` and `python/sample.py` for more details. If shape information is also required, it can be obtained by calling `nnef.infer_shapes(graph)`, which updates the shape information on the graph structure in place.
-
-The script `validate.py` is a Python implementation of the NNEF validator. Its command line arguments are the same as listed above.
