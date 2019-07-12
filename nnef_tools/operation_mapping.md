@@ -155,6 +155,150 @@ The following table lists the correspondence between operations in Caffe and NNE
 | ArgMax | argmax_reduce | if top_k == 1 and out_max_val == false
 | Softmax | softmax
 
+# Caffe2
+
+The following tables show the correspondence between operations in Caffe2 and NNEF.
+
+All operations without outputs (e.g. Assert) are stripped from the graph.
+
+Only the NCHW version of the operations are supported (as opposed to NHWC). 
+
+**Normal operations:**
+
+| Caffe2 | NNEF | Notes
+| --- | --- | ---
+| Abs | abs
+| Add | add | + unsqueeze if axis != 0
+| And | and | + unsqueeze if axis != 0
+| ArgMax | argmax_reduce | + squeeze if not keepdims
+| ArgMin | argmin_reduce | + squeeze if not keepdims
+| AveragePool <br> AveragePool1D <br> AveragePool2D <br> AveragePool3D | avg_pool | if not global_pooling
+| | mean_reduce | if global_pooling
+| BatchMatMul | matmul | + reshape if input ranks are not equal or less than 2
+| Cast | select | logical to scalar or integer
+|      | ne | scalar to logical
+|      | copy | cast to same type, may be optimized away
+| Ceil | ceil
+| ChannelShuffle | reshape(transpose(reshape))
+| Clip | clamp | if both min and max is given
+| | min | if only max is given
+| | max | if only min is given
+| | copy | if neither min nor max is given, may be optimized away
+| Concat <br> DepthConcat <br> Append | concat
+| Conditional | select
+| Conv <br> Conv1D <br> Conv2D <br> Conv3D | conv
+| ConvTranspose | deconv
+| Copy <br> CopyFromCPUInput <br> CopyOnDeviceLike <br> EnsureCPUOutput <br> StopGradient | copy | may be optimized away
+| Div | div | + unsqueeze if axis != 0
+| DotProduct | mul | + sum_reduce + squeeze if input-rank > 1
+| Dropout | copy | may be optimized away
+| ElementwiseLinear(x, w, b) | x * w + b | + reshape if X.rank != 2 or axis != 1
+| EQ | eq | + unsqueeze if axis != 0
+| FC | linear | + reshape if X.rank != 2 or W.rank != 2 or axis != 1 or axis_w != 1
+| FCTransposed | add(matmul) | + reshape if X.rank != 2 or W.rank != 2 or axis != 1 or axis_w != 1
+| Flatten | reshape
+| FlattenToVec | reshape
+| Floor | floor
+| GE | ge | + unsqueeze if axis != 0
+| GT | gt | + unsqueeze if axis != 0
+| L1Distance(a, b) | abs(a-b) | + sum_reduce + squeeze if input-rank > 1
+| LE | le | + unsqueeze if axis != 0
+| LT | lt | + unsqueeze if axis != 0
+| LayerNorm(x) | mean_, std_ = moments(x);<br> y = (x - mean_) / sqrt(std_ + epsilon);<br> mean=squeeze(mean_);<br> std=squeeze(sqrt(std_ + epsilon))
+| LeakyRelu | leaky_relu
+| Log | log
+| Logit(x) | x_ = clamp(x, eps, 1.0-eps);<br> y = log(x_ / (1 - x_))
+| LpNorm | sum_reduce(abs) | if p = 1 and not average
+| | mean_reduce(abs) | if p = 1 and average
+| | sum_reduce(sqr) | if p = 2 and not average
+| | mean_reduce(sqr) | if p = 2 and average
+| | | + reshape if input-rank != 1
+| LpPool(x) | pow(box(pow(abs(x), p)), 1.0/p)
+| MatMul | matmul | + reshape if A.rank != 2 or B.rank != 2 or axis_a != 1 or axis_b != 1
+| Max | max, \[max, ...\] | if input-count >= 2
+| | copy | if input-count == 1, may be optimized away
+| MaxPool <br> MaxPool1D <br> MaxPool2D <br> MaxPool3D | max_pool | if not global_pooling
+| | max_reduce | if global_pooling
+| MaxPoolWithIndex | max_pool_with_index | Caffe2 supports it only on GPU
+| Mean | div(add_n) | if input-count >= 3
+| | div(add) | if input-count == 2
+| | copy | if input-count == 1, may be optimized away
+| MergeDim | reshape
+| Min | min, \[min, ...\] | if input-count >= 2
+| | copy | if input-count == 1, may be optimized away
+| Mul | mul | + unsqueeze if axis != 0
+| NE | ne | + unsqueeze if axis != 0
+| Negative | neg
+| Normalize | l2_normalization
+| NormalizeL1 | l1_normalization
+| Not | not
+| Or | or | + unsqueeze if axis != 0
+| PRelu | prelu
+| Pow | pow | + unsqueeze if axis != 0
+| PrependDim | reshape
+| ReduceMin | min_reduce | + squeeze if not keepdims
+| ReduceMax <br> ReduceFrontMax <br> ReduceBackMax <br> ColwiseMax <br> RowwiseMax | max_reduce | + squeeze if not keepdims
+| ReduceSum <br> ReduceFrontSum <br> ReduceBackSum <br> ReduceTailSum <br> SumElements | sum_reduce | + squeeze if not keepdims
+| ReduceMean <br> ReduceFrontMean <br> ReduceBackMean | mean_reduce | + squeeze if not keepdims
+| ReduceL1 | sum_reduce(abs) | + squeeze if not keepdims
+| ReduceL2 | sqrt(sum_reduce(sqr)) | + squeeze if not keepdims
+| Relu | relu
+| Reshape | reshape | if shape parameter is constant or the result of Shape or the 2nd result of Reshape (old_shape)
+| ResizeLike | reshape
+| ResizeNearest | nearest_upsample | if upsample (or same size) in both dimensions
+| | nearest_downsample | if downsample (or same size) in both dimensions
+| | nearest_upsample(nearest_downsample) | if downsample in one dimension and upsample in the other
+| | copy | if output-shape = input-shape, may be optimized away
+| Scale | mul
+| RowMul(x, w) | mul | + reshape if w.rank != 1
+| Selu(x, alpha, scale) | select(x > 0, x, exp(x) * alpha - alpha) * scale 
+| Sigmoid | sigmoid
+| Sign | sign
+| Slice | slice
+| Softsign(x) | x / (abs(x) + 1)
+| Split | split | if split parameter is constant or the 2nd result of Concat (split_info)
+| Sqr | sqr
+| Sqrt | sqrt
+| SquaredL2Distance | (x - y) ^ 2 / 2 | + sum_reduce + squeeze if input-rank > 1
+| Squeeze | squeeze
+| StumpFunc(x, threshold, low_value, high_value) | select(x > threshold, high_value, low_value)
+| Sub | sub | + unsqueeze if axis != 0
+| Sum | add_n | if input-count >= 3
+| | add | if input-count == 2
+| | copy | if input-count == 1, may be optimized away
+| SumSqrElements | squeeze(sum_reduce(sqr)) | if not average
+| | squeeze(mean_reduce(sqr)) | if average
+| SumReduceLike | sum_reduce and/or squeeze | if output-shape != input-shape
+| | copy | if output-shape = input-shape, may be optimized away
+| Summarize(x) | min_ = min_reduce(x);<br> max_ = max_reduce(x);<br> mean_, std_ = moments(x);<br>min = reshape(min_);<br> max = reshape(max_);<br>mean = reshape(mean_);<br> std = reshape(std_);<br>y = concat(\[min, max, mean, sqrt(std * N / (N - 1))\]) | where N = count of x
+| Swish(x) | x / (1 + exp(-x))
+| Tanh | tanh
+| ThresholdedRelu | select(x > alpha, x, 0.0)
+| Transpose <br> NCHW2NHWC <br> NHWC2NCHW | transpose
+| Where | select
+| Xor(x, y) | or(and(x, not(y)), and(y, not(x))) | + unsqueeze if axis != 0
+
+**Constants:** These operations/tensors are converted to constants.
+
+| Caffe2 | NNEF | Notes
+| --- | --- | ---
+| Shape | constant\<integer\> | Can be used as Reshape's 2nd input (shape)
+| Size | constant\<integer\>
+| Reshape's 2nd output (old_shape) | constant\<integer\> | Can be used as Reshape's 2nd input (shape) 
+| Concat's 2nd output (split_info) | constant\<integer\> | Can be used as Split's 2nd input (split)
+| Range | constant\<scalar\>
+
+**Variables:** These operations (in the param initializer network) are converted to variable tensors.
+
+| Caffe2 | NNEF | Representation
+| --- | --- | ---
+| GivenTensorFill | variable\<scalar\> | float32
+| GivenTensorDoubleFill | variable\<scalar\> | float64
+| GivenTensorInt16Fill | variable\<integer\> | int16
+| GivenTensorIntFill | variable\<integer\> | int32
+| GivenTensorInt64Fill | variable\<integer\> | int64
+| GivenTensorBoolFill | variable\<logical\> | bool
+
 # ONNX
 
 The following table lists the correspondence between operations in ONNX and NNEF.

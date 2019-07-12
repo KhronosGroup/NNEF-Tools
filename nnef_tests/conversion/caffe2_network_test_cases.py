@@ -67,7 +67,8 @@ class Caffe2NetworkTestCases(Caffe2TestRunner):
                 'https://media.githubusercontent.com/media/caffe2/models/master/detectron/e2e_faster_rcnn_R-50-C4_1x/init_net.pb',
                 '_models/caffe2/detectron_1x/'),
             '_models/caffe2/detectron_1x/value_info.json',
-            feed_dict_override={'im_info': np.array([[800.0, 800.0, 1.0]], dtype=np.float32)}, test_shapes=False)
+            feed_dict_override={'im_info': np.array([[800.0, 800.0, 1.0]], dtype=np.float32)}, test_shapes=False,
+            can_convert=False)
 
     def test_detectron_2x(self):
         # im_info was missing from original value_info.json
@@ -81,39 +82,14 @@ class Caffe2NetworkTestCases(Caffe2TestRunner):
                 'https://media.githubusercontent.com/media/caffe2/models/master/detectron/e2e_faster_rcnn_R-50-C4_2x/init_net.pb',
                 '_models/caffe2/detectron_2x/'),
             '_models/caffe2/detectron_2x/value_info.json',
-            feed_dict_override={'im_info': np.array([[800.0, 800.0, 1.0]], dtype=np.float32)}, test_shapes=False)
+            feed_dict_override={'im_info': np.array([[800.0, 800.0, 1.0]], dtype=np.float32)}, test_shapes=False,
+            can_convert=False)
 
     def test_inception_v1(self):
         self._test_model(*download_caffe2_model('inception_v1'))
 
     def test_inception_v2(self):
         self._test_model(*download_caffe2_model('inception_v2'))
-
-    @unittest.skip('Networks with subnetworks (If, While, etc.) are not supported')
-    def test_mask_rcnn_2go_fp32(self):
-        json_utils.dump({"data": [1, [1, 3, 320, 320]]}, '_models/caffe2/mask_rcnn_2go_fp32/value_info.json',
-                        indent=False)
-        self._test_model(
-            download_once(
-                'https://media.githubusercontent.com/media/caffe2/models/master/mask_rcnn_2go/model/fp32/model.pb',
-                '_models/caffe2/mask_rcnn_2go_fp32/'),
-            download_once(
-                'https://media.githubusercontent.com/media/caffe2/models/master/mask_rcnn_2go/model/fp32/model_init.pb',
-                '_models/caffe2/mask_rcnn_2go_fp32/'),
-            '_models/caffe2/mask_rcnn_2go_fp32/value_info.json')
-
-    @unittest.skip('Quantized networks and networks with subnetworks (If, While, etc.) are not supported.')
-    def test_mask_rcnn_2go_int8(self):
-        json_utils.dump({"data": [1, [1, 3, 320, 320]]}, '_models/caffe2/mask_rcnn_2go_int8/value_info.json',
-                        indent=False)
-        self._test_model(
-            download_once(
-                'https://media.githubusercontent.com/media/caffe2/models/master/mask_rcnn_2go/model/int8/model.pb',
-                '_models/caffe2/mask_rcnn_2go_int8/'),
-            download_once(
-                'https://media.githubusercontent.com/media/caffe2/models/master/mask_rcnn_2go/model/int8/model_init.pb',
-                '_models/caffe2/mask_rcnn_2go_int8/'),
-            '_models/caffe2/mask_rcnn_2go_int8/value_info.json')
 
     def test_mobilenet_v2(self):
         self._test_model(
@@ -127,34 +103,8 @@ class Caffe2NetworkTestCases(Caffe2TestRunner):
                 'https://media.githubusercontent.com/media/caffe2/models/master/mobilenet_v2/value_info.json',
                 '_models/caffe2/mobilenet_v2/'))
 
-    @unittest.skip('Quantized networks are not supported.')
-    def test_mobilenet_v2_quantized(self):
-        json_utils.dump({"data": [1, [1, 3, 224, 224]]}, '_models/caffe2/mobilenet_v2_quantized/value_info.json',
-                        indent=False)
-        self._test_model(
-            download_once(  # The official one has an error: Blob is not a CPU Tensor: 325
-                'https://raw.githubusercontent.com/dzung-hoang/caffe2-models/master/mobilenet_v2_quantized/predict_net.pb',
-                '_models/caffe2/mobilenet_v2_quantized/'),
-            download_once(
-                'https://s3.amazonaws.com/download.caffe2.ai/models/mobilenet_v2_1.0_224_quant/init_net.pb',
-                '_models/caffe2/mobilenet_v2_quantized/'),
-            '_models/caffe2/mobilenet_v2_quantized/value_info.json')
-
     def test_resnet50(self):
         self._test_model(*download_caffe2_model('resnet50'))
-
-    @unittest.skip('Quantized networks are not supported.')
-    def test_resnet50_quantized(self):
-        json_utils.dump({"gpu_0/data_0": [1, [1, 3, 224, 224]]}, '_models/caffe2/resnet50_quantized/value_info.json',
-                        indent=False)
-        self._test_model(
-            download_once(
-                'https://s3.amazonaws.com/download.caffe2.ai/models/resnet50_quantized/resnet50_quantized_predict_net.pb',
-                '_models/caffe2/resnet50_quantized/'),
-            download_once(
-                'https://s3.amazonaws.com/download.caffe2.ai/models/resnet50_quantized/resnet50_quantized_init_net.pb',
-                '_models/caffe2/resnet50_quantized/'),
-            '_models/caffe2/resnet50_quantized/value_info.json')
 
     def test_squeezenet(self):
         self._test_model(*download_caffe2_model('squeezenet'))
@@ -163,6 +113,7 @@ class Caffe2NetworkTestCases(Caffe2TestRunner):
         # input type / size not sure
         json_utils.dump({"data_int8_bgra": [6, [1, 224, 224, 4]]},
                         '_models/caffe2/style_transfer_watercolor/value_info.json', indent=False)
+        # Can not compare because we don't preserve device-option and engine
         self._test_model(
             download_once(
                 'https://media.githubusercontent.com/media/caffe2/models/master/style_transfer/watercolor/predict_net.pb',
@@ -170,8 +121,7 @@ class Caffe2NetworkTestCases(Caffe2TestRunner):
             download_once(
                 'https://media.githubusercontent.com/media/caffe2/models/master/style_transfer/watercolor/init_net.pb',
                 '_models/caffe2/style_transfer_watercolor/'),
-            '_models/caffe2/style_transfer_watercolor/value_info.json',
-            can_compare=False)  # Can not compare because we don't preserve device-option and engine
+            '_models/caffe2/style_transfer_watercolor/value_info.json', can_compare=False, can_convert=False)
 
     def test_vgg19(self):
         self._test_model(*download_caffe2_model('vgg19'))

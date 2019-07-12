@@ -21,9 +21,10 @@ from collections import defaultdict
 import numpy as np
 import six
 
-from nnef_tools.core import utils, json_utils
+from nnef_tools.convert import convert_using_command
 from nnef_tools.io.caffe2.caffe2_io import Reader, Writer
 from nnef_tools.io.caffe2.caffe2_pb import dtype_id_to_name
+from nnef_tools.core import utils, json_utils
 
 DTYPE_ID_FLOAT = 1
 
@@ -68,19 +69,37 @@ class Caffe2TestRunner(unittest.TestCase):
     def _test_model(self, predict_net_path, init_net_path, value_info_path,
                     feed_dict_override=None, test_shapes=True, test_outputs=True,
                     can_run=True, can_compare=True, can_convert=True):
-        print("")
         network_name = utils.split_path(predict_net_path)[-2]
         print('Testing {}: {}, {}, {}'.format(network_name, predict_net_path, init_net_path, value_info_path))
-        print('Conversion is not yet implemented, so we are not testing that.')
         reader = Reader()
         g = reader(predict_net_path, init_net_path, value_info_path)
         input_name_shape_dtypes = [(tensor.name, tensor.shape, tensor.dtype) for tensor in g.inputs]
         output_shapes = [t.shape for t in g.outputs]
 
-        writer = Writer()
         our_dir = os.path.join('out', 'caffe2_ours', network_name)
-        writer(g, our_dir)
-        del g
+        if can_convert:
+            nnef_path = os.path.join('out', 'nnef', network_name + '.nnef')
+            command = """
+            ./nnef_tools/convert.py --input-format caffe2 \\
+                                    --output-format nnef \\
+                                    --input-model {predict_net} {init_net} {value_info} \\
+                                    --output-model {nnef}
+            """.format(predict_net=predict_net_path, init_net=init_net_path, value_info=value_info_path, nnef=nnef_path)
+            print(command)
+            convert_using_command(command)
+
+            command = """
+            ./nnef_tools/convert.py --input-format nnef \\
+                                    --output-format caffe2 \\
+                                    --input-model {nnef} \\
+                                    --output-model {out_dir}
+            """.format(nnef=nnef_path, out_dir=our_dir)
+            print(command)
+            convert_using_command(command)
+        else:
+            writer = Writer()
+            writer(g, our_dir)
+            del g
 
         activation_testing = int(os.environ.get('NNEF_ACTIVATION_TESTING', '1'))
         print("Activation testing is", "ON" if activation_testing else "OFF")
@@ -97,12 +116,13 @@ class Caffe2TestRunner(unittest.TestCase):
             outputs = run_caffe2_model(predict_net_path, init_net_path, feed_dict)
 
             print('Running our Caffe2:')
+            feed_dict2 = {k.replace('/', '_'): v for k, v in six.iteritems(feed_dict)}
             outputs2 = run_caffe2_model(os.path.join(our_dir, 'predict_net.pb'),
                                         os.path.join(our_dir, 'init_net.pb'),
-                                        feed_dict)
+                                        feed_dict2)
 
             if can_compare:
-                self.assertEqual(json_utils.load(value_info_path),
+                self.assertEqual({k.replace('/', '_'): v for k, v in six.iteritems(json_utils.load(value_info_path))},
                                  json_utils.load(os.path.join(our_dir, 'value_info.json')))
 
                 for output, output2, output_shape in zip(outputs, outputs2, output_shapes):

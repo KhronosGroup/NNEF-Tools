@@ -2,9 +2,6 @@
 
 This repository contains tools to generate and consume NNEF documents, such as a parser (C++ and Python) that can be included in consumer applications and converters for deep learning frameworks.
 
-**Much of the tools have been recently refactored into a new `nnef_tools` package.** This is an ongoing work, and the Caffe2 converter has not yet been migrated to this new package. This converter can be found in the 'legacy' folder.
-
-
 A **Model Zoo** is now available; the 'models' folder contains a variety of NNEF models converted from various sources.
 
 

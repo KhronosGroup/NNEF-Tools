@@ -140,14 +140,16 @@ def get_reader(input_format,
         elif output_format in ['caffe']:
             from nnef_tools.conversion.caffe import nnef_to_caffe
             configs.append(nnef_to_caffe.ParserConfig)
+        elif output_format in ['caffe2']:
+            from nnef_tools.conversion.caffe2 import nnef_to_caffe2
+            configs.append(nnef_to_caffe2.ParserConfig)
         else:
             assert False
 
         configs += NNEFParserConfig.load_configs(custom_converters, load_standard=False)
 
-        return Reader(parser_configs=configs, unify=(output_format in ['caffe']))
+        return Reader(parser_configs=configs, unify=(output_format in ['caffe', 'caffe2']))
     elif input_format == 'tensorflow-pb':
-        # TODO custom converter
         from nnef_tools.io.tensorflow.tf_pb_io import Reader
         return Reader(convert_to_tf_py=True, input_shape=input_shape)
     elif input_format == 'tensorflow-py':
@@ -158,7 +160,6 @@ def get_reader(input_format,
             custom_traceable_functions = None
         return Reader(expand_gradients=True, custom_traceable_functions=custom_traceable_functions)
     elif input_format == 'tensorflow-lite':
-        # TODO custom converter
         from nnef_tools.io.tensorflow.tflite_io import Reader
         return Reader(convert_to_tf_py=True)
     elif input_format == 'onnx':
@@ -168,8 +169,10 @@ def get_reader(input_format,
                       input_shape=input_shape,
                       custom_shapes=custom_shapes)
     elif input_format == 'caffe':
-        # TODO custom converter
         from nnef_tools.io.caffe.caffe_io import Reader
+        return Reader()
+    elif input_format == 'caffe2':
+        from nnef_tools.io.caffe2.caffe2_io import Reader
         return Reader()
     else:
         assert False
@@ -253,6 +256,20 @@ def get_converter(input_format, output_format, prefer_nchw=False, permissive=Fal
                                        if custom_converters else None)
 
         return Converter(custom_converter_by_op_name=custom_converter_by_op_name)
+    elif input_format == 'caffe2' and output_format == 'nnef':
+        from nnef_tools.conversion.caffe2.caffe2_to_nnef import Converter
+
+        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
+                                       if custom_converters else None)
+
+        return Converter(custom_converter_by_op_name=custom_converter_by_op_name)
+    elif input_format == 'nnef' and output_format == 'caffe2':
+        from nnef_tools.conversion.caffe2.nnef_to_caffe2 import Converter
+
+        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
+                                       if custom_converters else None)
+
+        return Converter(custom_converter_by_op_name=custom_converter_by_op_name)
     else:
         assert False
 
@@ -269,6 +286,9 @@ def get_data_format_optimizer(input_format, output_format, io_transformation):
         return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
     elif output_format == 'caffe':
         return lambda g: None
+    elif output_format == 'caffe2':
+        from nnef_tools.optimization.caffe2.caffe2_data_format_optimizer import Optimizer
+        return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
     else:
         assert False
 
@@ -304,6 +324,9 @@ def get_writer(input_format, output_format, compress, with_weights=True, custom_
     elif output_format == 'caffe':
         from nnef_tools.io.caffe.caffe_io import Writer
         return Writer()
+    elif output_format == 'caffe2':
+        from nnef_tools.io.caffe2.caffe2_io import Writer
+        return Writer()
     else:
         assert False
 
@@ -324,6 +347,8 @@ def get_extension(output_format, compress):
         return ".tflite"
     elif output_format == 'caffe':
         return ".prototxt"
+    elif output_format == 'caffe2':
+        return ""  # directory
     else:
         assert False
 
@@ -352,7 +377,8 @@ def convert_using_premade_objects(in_filename, out_filename, out_info_filename, 
     source_graph = reader(*in_filename)
     target_graph, conv_info = converter(source_graph)
     opt_info = data_format_optimizer(target_graph) if data_format_optimizer is not None else None
-    ensure_dirs(os.path.dirname(out_filename))
+    if os.path.dirname(out_filename):
+        ensure_dirs(os.path.dirname(out_filename))
     write_info = writer(target_graph, out_filename)
 
     if out_info_filename:
@@ -374,10 +400,19 @@ def convert(input_format,
             custom_converters=None,
             conversion_info=False  # type: typing.Union[bool, str, None]
             ):
+    target_is_parent_dir = False
     if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef']:
         output_prefix = os.path.basename(os.path.abspath(input_model[0]))
+        if output_format == 'caffe2':
+            output_prefix += '.caffe2'
     elif input_format == 'caffe':
         output_prefix = os.path.basename(os.path.abspath(input_model[1]))
+    elif input_format == 'caffe2':
+        output_prefix = os.path.basename(os.path.abspath(input_model[0]))
+        parent_dir_name = os.path.basename(os.path.dirname(os.path.abspath(input_model[0])))
+        if output_prefix == 'predict_net.pb' and parent_dir_name:
+            output_prefix = parent_dir_name
+            target_is_parent_dir = True
     elif input_format == 'tensorflow-py':
         output_prefix = input_model[0].split('.')[-1]
     else:
@@ -394,8 +429,11 @@ def convert(input_format,
                                           output_path=output_path,
                                           compress=compress)
     else:
-        if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef']:
-            output_dir = os.path.dirname(os.path.abspath(input_model[0]))
+        if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef', 'caffe2']:
+            if target_is_parent_dir:
+                output_dir = os.path.dirname(os.path.dirname(os.path.abspath(input_model[0])))
+            else:
+                output_dir = os.path.dirname(os.path.abspath(input_model[0]))
             if not output_dir:
                 output_dir = '.'
         elif input_format == 'caffe':
@@ -451,11 +489,13 @@ please add its location to PYTHONPATH.
 - Quote parameters if they contain spaces or special characters.""")
 
     parser.add_argument("--input-format",
-                        choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx', 'caffe'],
+                        choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx', 'caffe',
+                                 'caffe2'],
                         required=True,
                         help="""Input format""")
     parser.add_argument("--output-format",
-                        choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx', 'caffe'],
+                        choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx', 'caffe',
+                                 'caffe2'],
                         required=True,
                         help="""Output format""")
     parser.add_argument("--input-model",
@@ -468,6 +508,7 @@ tensorflow-pb: filename.pb
 tensorflow-py: package.module.function [filename.ckpt]
 tensorflow-lite: filename.tflite
 caffe: filename.prototxt filename.caffemodel
+caffe2: predict_net.pb init_net.pb value_info.json or directory
 """)
 
     parser.add_argument("--output-model",
@@ -475,7 +516,8 @@ caffe: filename.prototxt filename.caffemodel
 If it ends with '/' or '\\', it is considered a directory and the filename is auto-generated, similarly to the default.
 Default: tensorflow-py: {function name}.{output extension}, others: {input path}.{output extension}
 Example for default name generation: module.function -> function.nnef
-                                     directory/network.onnx -> directory/network.onnx.nnef""")
+                                     directory/network.onnx -> directory/network.onnx.nnef
+caffe2: this must be a directory""")
 
     parser.add_argument("--io-transformation",
                         default="IDENTITY",
@@ -554,12 +596,18 @@ With an argument: Write to the path defined by the argument.""")
         'tensorflow-py': [1, 2],
         'tensorflow-lite': [1],
         'caffe': [2],
+        'caffe2': [1, 3],
     }
     if not len(args.input_model) in allowed_input_length[args.input_format]:
         print("Error: {} values specified to --input-model, allowed: {}"
               .format(len(args.input_model), ', '.join(str(i) for i in allowed_input_length[args.input_format])),
               file=sys.stderr)
         exit(1)
+
+    if args.input_format == 'caffe2' and len(args.input_model) == 1:
+        args.input_model = [os.path.join(args.input_model[0], 'predict_net.pb'),
+                            os.path.join(args.input_model[0], 'init_net.pb'),
+                            os.path.join(args.input_model[0], 'value_info.json')]
 
     if args.input_format == 'tensorflow-pb':
         args.input_shape = parse_input_shapes(args.input_shape)

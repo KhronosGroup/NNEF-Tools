@@ -207,7 +207,8 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
         self._test_layer('AveragePool', [
             Input('x', [1, 3, 5, 5]),
         ], kernel_h=3, kernel_w=4, stride_h=2, stride_w=3, pad_t=2, pad_l=1, pad_b=0, pad_r=0)
-        # self._test_layer('AveragePool', [ # NHWC not supported
+        # NHWC unsupported
+        # self._test_layer('AveragePool', [
         #     Input('x', [1, 5, 5, 1]),
         # ], kernels=[5, 5], order='NHWC')
         self._test_layer('AveragePool', [
@@ -438,7 +439,8 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
             Input('bias', [6]),
         ], kernels=[2], strides=[3], dilations=[2], pads=[0, 1])
 
-        # self._test_layer('Conv', [ # NHWC not supported
+        # NHWC unsupported
+        # self._test_layer('Conv', [
         #     Input('input', [1, 15, 15, 3]),
         #     Input('filter', [6, 2, 2, 3]),
         #     Input('bias', [6]),
@@ -501,7 +503,8 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
             Input('bias', [6]),
         ], kernels=[2, 2], strides=[3, 2], pads=[0, 1, 1, 0], group=2)
 
-        # self._test_layer('ConvTranspose', [ # NHWC not supported
+        # NHWC unsupported
+        # self._test_layer('ConvTranspose', [
         #     Input('input', [1, 15, 15, 6]),
         #     Input('filter', [6, 2, 2, 3]),
         #     Input('bias', [3]),
@@ -530,7 +533,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
         ])
 
     def test_cos(self):
-        self._test_unary('Cos')
+        self._test_unary('Cos', _can_convert=False)
 
     def test_div(self):
         self._test_binary('Div')
@@ -722,7 +725,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
             Input('input', [3, 2, 3, 4]),
             Input('scale', [4]),
             Input('bias', [4]),
-        ])
+        ], can_convert=False)
 
     def test_l1_distance(self):
         # Elementwise subtract + abs
@@ -752,7 +755,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
         ], size=5, alpha=0.1, beta=0.2, bias=1.1)
         self._test_layer('LRN', [  # scale not supported
             Input('x', [2, 6, 3, 4]),
-        ], 2, size=5, alpha=0.1, beta=0.2, bias=1.1)
+        ], 2, size=5, alpha=0.1, beta=0.2, bias=1.1, _can_convert=False)
 
     def test_lt(self):
         self._test_binary('LT')
@@ -774,7 +777,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
             Input('x', [2, 6, 3, 4]),
             Input('scale', [3, 4]),
             Input('bias', [3, 4]),
-        ], 3, axis=2, epsilon=0.01, elementwise_affine=1)
+        ], 3, axis=2, epsilon=0.01, elementwise_affine=1, _can_convert=False)
 
     def test_leaky_relu(self):
         self._test_unary('LeakyRelu')
@@ -958,15 +961,15 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
     def test_pad_image(self):
         self._test_layer('PadImage', [
             Input('x', [1, 2, 3, 4])
-        ])
+        ], _can_convert=False)
 
         self._test_layer('PadImage', [
             Input('x', [1, 2, 3, 4])
-        ], pads=[0, 1, 2, 3])
+        ], pads=[0, 1, 2, 3], _can_convert=False)
 
         self._test_layer('PadImage', [
             Input('x', [1, 2, 3, 4])
-        ], pads=[0, 1, 2, 3], order="NHWC")
+        ], pads=[0, 1, 2, 3], order="NHWC", _can_convert=False)
 
     def test_pow(self):
         self._test_layer('Pow', [
@@ -1205,7 +1208,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
         ], width_scale=2.0, height_scale=0.5)
         self._test_layer('ResizeNearest', [  # only integer resize factor is supported
             Input('x', [1, 2, 12, 12]),
-        ], width_scale=0.2, height_scale=2.3)
+        ], width_scale=0.2, height_scale=2.3, _can_convert=False)
 
     def test_roi_align(self):
         # sampling_ratio=-1 unsupported in Caffe2
@@ -1219,7 +1222,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
                 [1, 4, 4, 20, 20],
                 [1, 5, 5, 9, 9],
             ], dtype=np.float32)
-        })
+        }, _can_convert=False)
         self._test_layer('RoIAlign', [
             Input('x', [1, 2, 32, 32]),
             Input('rois', [3, 4]),
@@ -1230,7 +1233,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
                 [4, 4, 20, 20],
                 [5, 5, 9, 9],
             ], dtype=np.float32)
-        })
+        }, _can_convert=False)
         self._test_layer('RoIAlign', [
             Input('x', [1, 32, 32, 2]),
             Input('rois', [3, 4]),
@@ -1241,7 +1244,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
                 [4, 4, 20, 20],
                 [5, 5, 9, 9],
             ], dtype=np.float32)
-        })
+        }, _can_convert=False)
 
     def test_roi_pool(self):
         # NHWC is unsupported in Caffe2
@@ -1256,7 +1259,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
                 [1, 4, 4, 20, 20],
                 [1, 5, 5, 9, 9],
             ], dtype=np.float32)
-        })
+        }, _can_convert=False)
 
     def test_row_mul(self):
         self._test_layer('RowMul', [
@@ -1321,7 +1324,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
         self._test_unary('Sign')
 
     def test_sin(self):
-        self._test_unary('Sin')
+        self._test_unary('Sin', _can_convert=False)
 
     def test_size(self):
         self._test_layer('Size', [
@@ -1559,7 +1562,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
         ])
         self._test_layer('Summarize', [  # does not have output
             Input('x', [1, 2, 3, 4])
-        ], 0, to_file=1)
+        ], 0, to_file=1, _can_convert=False)
 
     def test_swish(self):
         self._test_unary('Swish')
@@ -1575,11 +1578,11 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
     def test_tile(self):
         self._test_layer('Tile', [
             Input('x', [1, 2, 3, 4])
-        ], axis=1, tiles=3)
+        ], axis=1, tiles=3, _can_convert=False)
 
         self._test_layer('Tile', [
             Input('x', [1, 2, 3, 4])
-        ], axis=-1, tiles=3)
+        ], axis=-1, tiles=3, _can_convert=False)
 
         def model_fun(model):
             model.param_init_net.GivenTensorIntFill([], 'tiles', values=[3], shape=[1])
@@ -1588,7 +1591,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
 
         self._test_model_fun('Tile', model_fun, [
             Input('input', [1, 2, 3, 4])
-        ])
+        ], can_convert=False)
 
     def test_transpose(self):
         self._test_layer('Transpose', [
@@ -1626,11 +1629,11 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
             Input('w1', []),
             Input('x2', [1, 2, 3, 4]),
             Input('w2', []),
-        ])
+        ], _can_convert=False)
         self._test_layer('WeightedSum', [
             Input('x0', [1, 2, 3, 4]),
             Input('w0', []),
-        ])
+        ], _can_convert=False)
 
     def test_where(self):
         self._test_layer('Where', [
