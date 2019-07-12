@@ -15,6 +15,8 @@
  */
 
 #include <fstream>
+#include <iterator>
+
 #include "nnef.h"
 #include "nnef/comp/comp_parser.h"
 #include "nnef/flat/quant_parser.h"
@@ -192,9 +194,9 @@ namespace nnef
         try
         {
             validate_tensor_header(header);
-            
-            tensor.shape.resize(header.rank);
-            std::copy_n(header.extents, header.rank, tensor.shape.data());
+
+            tensor.shape.reserve(header.rank);
+            std::copy_n(header.extents, header.rank, std::back_inserter(tensor.shape));
         }
         catch ( nnef::Error e )
         {
