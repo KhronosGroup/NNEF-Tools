@@ -80,7 +80,7 @@ namespace nnef
             {
                 while ( lexer.token() == Lexer::Fragment )
                 {
-                    auto fragment = parseFragment(lexer, prototypes, _flags & KHR_ENABLE_OPERATOR_EXPRESSIONS);
+                    auto fragment = parseFragment(lexer, prototypes, (_flags & KHR_ENABLE_OPERATOR_EXPRESSIONS) != 0);
                     fragments.emplace(fragment.prototype().name(), std::move(fragment));
                 }
             }
@@ -88,7 +88,7 @@ namespace nnef
             lexer.readToken(Lexer::Graph);
 
             auto graph = parsePrototype(lexer, prototypes, false, true);
-            auto assignments = parseAssignments(lexer, graph, prototypes, _flags & KHR_ENABLE_OPERATOR_EXPRESSIONS, true);
+            auto assignments = parseAssignments(lexer, graph, prototypes, (_flags & KHR_ENABLE_OPERATOR_EXPRESSIONS) != 0, true);
             
             callback.beginGraph(graph, prototypes);
 

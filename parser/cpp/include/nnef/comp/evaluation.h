@@ -292,7 +292,7 @@ namespace nnef
                 Value::integer_t i = subscript.begin() ? evaluate(*subscript.begin(), values, dtypes, callback, dtype).integer() : (Value::integer_t)0;
                 if ( i < 0 )
                 {
-                    i += sequence.size();
+                    i += (Value::integer_t)sequence.size();
                 }
                 if ( i < 0 || i > (Value::integer_t)sequence.size() )
                 {
@@ -302,7 +302,7 @@ namespace nnef
                 Value::integer_t j = subscript.end() ? evaluate(*subscript.end(), values, dtypes, callback, dtype).integer() : (Value::integer_t)sequence.size();
                 if ( j < 0 )
                 {
-                    j += sequence.size();
+                    j += (Value::integer_t)sequence.size();
                 }
                 if ( j < 0 || j > (Value::integer_t)sequence.size() )
                 {
@@ -330,7 +330,7 @@ namespace nnef
                 Value::integer_t index = evaluate(*subscript.begin(), values, dtypes, callback, dtype).integer();
                 if ( index < 0 )
                 {
-                    index += sequence.size();
+                    index += (Value::integer_t)sequence.size();
                 }
                 if ( index < 0 || index >= (Value::integer_t)sequence.size() )
                 {
@@ -716,11 +716,11 @@ namespace nnef
                     }
                     else if ( arg.kind() == Value::Integer )
                     {
-                        return Value::logical((Value::logical_t)arg.integer());
+                        return Value::logical(arg.integer() != 0);
                     }
                     else if ( arg.kind() == Value::Scalar )
                     {
-                        return Value::logical((Value::logical_t)arg.scalar());
+                        return Value::logical(arg.scalar() != 0);
                     }
                     else if ( arg.kind() == Value::String )
                     {
