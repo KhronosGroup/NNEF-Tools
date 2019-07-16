@@ -38,7 +38,9 @@ _Floating point models_
 
 Name | Size | Original | Converted
 --- | --- | --- | ---
+Inception v1 | 28 Mb | [Caffe2](https://github.com/caffe2/models/tree/master/inception_v1) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/inception_v1.caffe2.nnef.tgz)
 Inception v1 | 28 Mb | [ONNX](https://s3.amazonaws.com/download.onnx/models/opset_9/inception_v1.tar.gz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/inception_v1.onnx.nnef.tgz)
+Inception v2 | 45 Mb | [Caffe2](https://github.com/caffe2/models/tree/master/inception_v2) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/inception_v2.caffe2.nnef.tgz)
 Inception v2 | 45 Mb | [ONNX](https://s3.amazonaws.com/download.onnx/models/opset_9/inception_v2.tar.gz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/inception_v2.onnx.nnef.tgz)
 Inception v3 | 95.3 Mb | [TensorFlow](https://storage.googleapis.com/download.tensorflow.org/models/tflite/model_zoo/upload_20180427/inception_v3_2018_04_27.tgz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/inception_v3.tfpb.nnef.tgz)
 Inception v4 | 170.7 Mb | [TensorFlow](https://storage.googleapis.com/download.tensorflow.org/models/tflite/model_zoo/upload_20180427/inception_v4_2018_04_27.tgz) | [NNEF](https://sfo2.digitaloceanspaces.com/nnef-public/inception_v4.tfpb.nnef.tgz)
