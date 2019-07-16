@@ -5,6 +5,8 @@ The following collection of models were compiled by running the converter tools 
 
 * TensorFlow models have been acquired from [https://www.tensorflow.org/lite/guide/hosted_models]
 * ONNX models have been acquired from [https://github.com/onnx/models]
+* Caffe models have been acquired from [https://github.com/BVLC/caffe/wiki/Model-Zoo]
+* Caffe2 models have been acquired from [https://github.com/caffe2/models]
 
 
 AlexNet
