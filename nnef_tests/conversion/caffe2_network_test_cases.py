@@ -17,11 +17,8 @@ from __future__ import division, print_function, absolute_import
 import os
 import unittest
 
-import numpy as np
-
 from nnef_tests.conversion.caffe2_test_runner import Caffe2TestRunner
 from nnef_tests.file_downloader import download_once
-from nnef_tools.core import json_utils
 
 if not os.path.exists('nnef_tools') and os.path.exists('../../nnef_tools'):
     os.chdir('../..')
@@ -55,41 +52,23 @@ class Caffe2NetworkTestCases(Caffe2TestRunner):
     def test_densenet121(self):
         self._test_model(*download_caffe2_model('densenet121'))
 
-    def test_detectron_1x(self):
-        # im_info was missing from original value_info.json
-        json_utils.dump({"data": [1, [1, 3, 800, 800]],
-                         "im_info": [1, [1, 3]]}, '_models/caffe2/detectron_1x/value_info.json', indent=False)
-        self._test_model(
-            download_once(
-                'https://media.githubusercontent.com/media/caffe2/models/master/detectron/e2e_faster_rcnn_R-50-C4_1x/predict_net.pb',
-                '_models/caffe2/detectron_1x/'),
-            download_once(
-                'https://media.githubusercontent.com/media/caffe2/models/master/detectron/e2e_faster_rcnn_R-50-C4_1x/init_net.pb',
-                '_models/caffe2/detectron_1x/'),
-            '_models/caffe2/detectron_1x/value_info.json',
-            feed_dict_override={'im_info': np.array([[800.0, 800.0, 1.0]], dtype=np.float32)}, test_shapes=False,
-            can_convert=False)
-
-    def test_detectron_2x(self):
-        # im_info was missing from original value_info.json
-        json_utils.dump({"data": [1, [1, 3, 800, 800]],
-                         "im_info": [1, [1, 3]]}, '_models/caffe2/detectron_2x/value_info.json', indent=False)
-        self._test_model(
-            download_once(
-                'https://media.githubusercontent.com/media/caffe2/models/master/detectron/e2e_faster_rcnn_R-50-C4_2x/predict_net.pb',
-                '_models/caffe2/detectron_2x/'),
-            download_once(
-                'https://media.githubusercontent.com/media/caffe2/models/master/detectron/e2e_faster_rcnn_R-50-C4_2x/init_net.pb',
-                '_models/caffe2/detectron_2x/'),
-            '_models/caffe2/detectron_2x/value_info.json',
-            feed_dict_override={'im_info': np.array([[800.0, 800.0, 1.0]], dtype=np.float32)}, test_shapes=False,
-            can_convert=False)
-
     def test_inception_v1(self):
         self._test_model(*download_caffe2_model('inception_v1'))
 
     def test_inception_v2(self):
         self._test_model(*download_caffe2_model('inception_v2'))
+
+    def test_resnet50(self):
+        self._test_model(*download_caffe2_model('resnet50'))
+
+    def test_squeezenet(self):
+        self._test_model(*download_caffe2_model('squeezenet'))
+
+    def test_vgg19(self):
+        self._test_model(*download_caffe2_model('vgg19'))
+
+    def test_zfnet512(self):
+        self._test_model(*download_caffe2_model('zfnet512'))
 
     def test_mobilenet_v2(self):
         self._test_model(
@@ -99,35 +78,9 @@ class Caffe2NetworkTestCases(Caffe2TestRunner):
             download_once(
                 'https://s3.amazonaws.com/download.caffe2.ai/models/mobilenet_v2/init_net.pb',
                 '_models/caffe2/mobilenet_v2/'),
-            download_once(
+            download_once(  # not at the usual place
                 'https://media.githubusercontent.com/media/caffe2/models/master/mobilenet_v2/value_info.json',
                 '_models/caffe2/mobilenet_v2/'))
-
-    def test_resnet50(self):
-        self._test_model(*download_caffe2_model('resnet50'))
-
-    def test_squeezenet(self):
-        self._test_model(*download_caffe2_model('squeezenet'))
-
-    def test_style_transfer_watercolor(self):
-        # input type / size not sure
-        json_utils.dump({"data_int8_bgra": [6, [1, 224, 224, 4]]},
-                        '_models/caffe2/style_transfer_watercolor/value_info.json', indent=False)
-        # Can not compare because we don't preserve device-option and engine
-        self._test_model(
-            download_once(
-                'https://media.githubusercontent.com/media/caffe2/models/master/style_transfer/watercolor/predict_net.pb',
-                '_models/caffe2/style_transfer_watercolor/'),
-            download_once(
-                'https://media.githubusercontent.com/media/caffe2/models/master/style_transfer/watercolor/init_net.pb',
-                '_models/caffe2/style_transfer_watercolor/'),
-            '_models/caffe2/style_transfer_watercolor/value_info.json', can_compare=False, can_convert=False)
-
-    def test_vgg19(self):
-        self._test_model(*download_caffe2_model('vgg19'))
-
-    def test_zfnet512(self):
-        self._test_model(*download_caffe2_model('zfnet512'))
 
 
 if __name__ == '__main__':

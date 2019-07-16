@@ -162,7 +162,7 @@ class ONNXTestRunner(unittest.TestCase):
                     print('Running original ONNX:')
                     outputs = run_onnx_model(filename, inputs)
 
-                print('Running our ONNX:')
+                print('Running converted ONNX model...')
                 outputs2 = run_onnx_model(filename2, inputs)
 
                 if compare:

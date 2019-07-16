@@ -76,7 +76,7 @@ class Caffe2TestRunner(unittest.TestCase):
         input_name_shape_dtypes = [(tensor.name, tensor.shape, tensor.dtype) for tensor in g.inputs]
         output_shapes = [t.shape for t in g.outputs]
 
-        our_dir = os.path.join('out', 'caffe2_ours', network_name)
+        our_dir = os.path.join('out', 'caffe2', network_name)
         if can_convert:
             print("Converting...")
             nnef_path = os.path.join('out', 'nnef', network_name + '.nnef')
@@ -118,7 +118,10 @@ class Caffe2TestRunner(unittest.TestCase):
             print('Running original Caffe2 model...')
             outputs = run_caffe2_model(predict_net_path, init_net_path, feed_dict)
 
-            print('Running our Caffe2 model...')
+            if can_convert:
+                print('Running converted Caffe2 model...')
+            else:
+                print('Running generated Caffe2 model...')
             feed_dict2 = {k.replace('/', '_'): v for k, v in six.iteritems(feed_dict)}
             outputs2 = run_caffe2_model(os.path.join(our_dir, 'predict_net.pb'),
                                         os.path.join(our_dir, 'init_net.pb'),

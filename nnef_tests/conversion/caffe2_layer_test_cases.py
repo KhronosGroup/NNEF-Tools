@@ -453,8 +453,9 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
         # ], kernels=[2], strides=[3], dilations=[2], pads=[0, 1], order='NHWC', group=3)
 
     def test_conv_transpose(self):
-        # Dilation not supported
-        # Only 4D is supported
+        # Dilation not supported in Caffe2
+        # Only 4D is supported in Caffe2
+        
         self._test_layer('ConvTranspose', [
             Input('input', [1, 3, 15, 15]),
             Input('filter', [3, 6, 2, 2]),
@@ -1619,21 +1620,6 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
         self._test_layer('NHWC2NCHW', [
             Input('x', [1, 2, 3])
         ])
-
-    def test_weighted_sum(self):
-        # We don't support this
-        self._test_layer('WeightedSum', [
-            Input('x0', [1, 2, 3, 4]),
-            Input('w0', []),
-            Input('x1', [1, 2, 3, 4]),
-            Input('w1', []),
-            Input('x2', [1, 2, 3, 4]),
-            Input('w2', []),
-        ], _can_convert=False)
-        self._test_layer('WeightedSum', [
-            Input('x0', [1, 2, 3, 4]),
-            Input('w0', []),
-        ], _can_convert=False)
 
     def test_where(self):
         self._test_layer('Where', [
