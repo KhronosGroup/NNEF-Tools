@@ -38,31 +38,34 @@ def format_argument(value):
         return 'true' if value else 'false'
     elif isinstance(value, (int, float)):
         return str(value)
-    elif isinstance(value, (list, tuple)):
-        string = '[' if isinstance(value, list) else '('
-        for idx, item in enumerate(value):
-            if idx != 0:
-                string += ', '
-            string += format_argument(item)
-        string += ']' if isinstance(value, list) else ')'
-        return string
+    elif isinstance(value, list):
+        return '[' + ', '.join(format_argument(item) for item in value) + ']'
+    elif isinstance(value, tuple):
+        return '(' + ', '.join(format_argument(item) for item in value) + ')'
     else:
         raise TypeError('arguments must be of type int, float, str, nnef.Identifier or list/tuple of such, found: ' + str(type(value)))
 
 
 def format_result(value):
-    if isinstance(value, (list, tuple)):
-        string = '[' if isinstance(value, list) else '('
-        for idx, item in enumerate(value):
-            if idx != 0:
-                string += ', '
-            string += format_result(item)
-        string += ']' if isinstance(value, list) else ')'
-        return string
+    if isinstance(value, list):
+        return '[' + ', '.join(format_result(item) for item in value) + ']'
+    elif isinstance(value, tuple):
+        return '(' + ', '.join(format_result(item) for item in value) + ')'
     elif isinstance(value, _nnef.Identifier):
         return value
     else:
         raise TypeError('results must be of type nnef.Identifier or list/tuple of such, found: ' + str(type(value)))
+
+
+def format_shapes(result, tensors):
+    if isinstance(result, list):
+        return '[' + ', '.join(format_shapes(item, tensors) for item in result) + ']'
+    elif isinstance(result, tuple):
+        return '(' + ', '.join(format_shapes(item, tensors) for item in result) + ')'
+    elif isinstance(result, _nnef.Identifier):
+        return str(tensors[result].shape)
+    else:
+        raise TypeError('results must be of type nnef.Identifier or list/tuple of such, found: ' + str(type(result)))
 
 
 def format_invocation(name, attribs, inputs, outputs=None, dtype=None):
@@ -96,7 +99,7 @@ def format_graph(name, inputs, outputs, operations, tensors, annotate_shapes=Fal
         invocation = format_invocation(operation.name, operation.attribs, inputs, outputs, operation.dtype)
         string += '\t' + invocation + ';'
         if annotate_shapes:
-            string += '\t# ' + ', '.join(str(tensors[name].shape) for name in outputs)
+            string += '\t# ' + ', '.join(format_shapes(output, tensors) for output in outputs)
         string += '\n'
     string += '}\n'
     return string

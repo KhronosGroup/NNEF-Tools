@@ -612,7 +612,9 @@ namespace nnef
             }
             catch ( const std::exception& e )
             {
-                error = "Shape error while inferring shape of tensor '" + op.outputs.front().second.identifier() +
+                auto& output = op.outputs.front().second;
+                auto& id = output.kind() == Value::Identifier ? output.identifier() : output[0].identifier();
+                error = "Shape error while inferring shape of tensor '" + id +
                         "' (operation '" + op.name + "'): " + e.what();
                 return false;
             }

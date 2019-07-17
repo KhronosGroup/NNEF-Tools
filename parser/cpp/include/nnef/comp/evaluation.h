@@ -796,6 +796,23 @@ namespace nnef
                     return Typename::Generic;
             }
         }
+        
+        void insertCopy( const Value& lvalue, const Value& rvalue, Dictionary<Typename>& dtypes, Callback& callback )
+        {
+            const Typename dtype = dtypeOf(rvalue, dtypes);
+            const Value dvalue = Value::string(toString(dtype));
+            
+            const Prototype& proto = _fragments.at("copy").prototype();
+            const Dictionary<Value> args =
+            {
+                std::make_pair("x", rvalue),
+                std::make_pair("y", lvalue),
+                std::make_pair("?", dvalue)
+            };
+            
+            dtypes[lvalue.identifier()] = dtype;
+            callback.operation(proto, args, dtypes);
+        }
 
         void assign( const Expr& lhs, const Value& rvalue, Dictionary<Value>& ids, Dictionary<Typename>& dtypes, Callback& callback )
         {
@@ -835,16 +852,23 @@ namespace nnef
                     {
                         if ( lvalue != rvalue )
                         {
-                            assert(lvalue.kind() == Value::Identifier);
-
-                            const Typename dtype = dtypeOf(rvalue, dtypes);
-                            const Value dvalue = Value::string(toString(dtype));
-
-                            const Prototype& proto = _fragments.at("copy").prototype();
-                            const Dictionary<Value> args = { std::make_pair("x", rvalue), std::make_pair("y", lvalue), std::make_pair("?", dvalue) };
-                            
-                            dtypes[lvalue.identifier()] = dtype;
-                            callback.operation(proto, args, dtypes);
+                            if ( lvalue.kind() == Value::Array || lvalue.kind() == Value::Tuple )
+                            {
+                                if ( lvalue.kind() == Value::Array && lvalue.size() != rvalue.size() )
+                                {
+                                    throw Error(lhs.position(), "cannot assign array of length %d to array of length %d",
+                                                (int)rvalue.size(), (int)lvalue.size());
+                                }
+                                for ( size_t i = 0; i < lvalue.size(); ++i )
+                                {
+                                    insertCopy(lvalue[i], rvalue[i], dtypes, callback);
+                                }
+                            }
+                            else
+                            {
+                                assert(lvalue.kind() == Value::Identifier);
+                                insertCopy(lvalue, rvalue, dtypes, callback);
+                            }
                         }
                     }
                     else
