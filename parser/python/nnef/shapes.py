@@ -239,25 +239,37 @@ def upsample_shape(input, factor, **kwargs):
     return input[:2] + [i * f for i, f in zip(input[2:], factor)]
 
 
-def reshape_shape(input, shape):
+def reshape_shape(input, shape, axis_start, axis_count):
+    rank = len(input)
     assert all(s >= -1 for s in shape), "items in 'shape' must be >= -1, found {}".format(shape)
     assert sum(1 for s in shape if s == -1) <= 1, "at most one item may be -1 in 'shape', found {}".format(shape)
+    assert 0 <= axis_start < rank, "'axis_start' must be in range [0,{}), found {}".format(rank, axis_start)
+    assert axis_count >= -1, "'axis_count' must be non-negative or -1, found {}".format(axis_count)
+    
+    if axis_count == -1:
+        axis_count = rank - axis_start
+    
+    axis_end = axis_start + axis_count
+
+    assert axis_end <= rank, "'axis_start' + 'axis_count' ({}) must be in range [0,{})".format(axis_end, rank)
 
     shape = list(shape)  # don't modify original list
 
     for i in range(len(shape)):
         if shape[i] == 0:
-            shape[i] = input[i]
+            shape[i] = input[i + axis_start]
+
+    input_range = input[axis_start:axis_end]
 
     if -1 in shape:
         idx = shape.index(-1)
-        assert _volume(input) % _volume(shape) == 0, \
-            "volume of 'shape' ({}) does not divide volume of 'input' ({})".format(shape, input)
-        shape[idx] = _volume(input) // -_volume(shape)
+        assert _volume(input_range) % _volume(shape) == 0, \
+            "volume of 'shape' ({}) does not divide volume of 'input[{}:{}]' ({})".format(shape, axis_start, axis_end, input_range)
+        shape[idx] = _volume(input_range) // -_volume(shape)
     else:
-        assert _volume(shape) == _volume(input), \
-            "volume of 'shape' ({}) does not equal volume of 'input' ({})".format(shape, input)
-    return shape
+        assert _volume(shape) == _volume(input_range), \
+            "volume of 'shape' ({}) does not equal volume of 'input[{}:{}]' ({})".format(shape, axis_start, axis_end, input_range)
+    return input[:axis_start] + shape + input[axis_end:]
 
 
 def transpose_shape(input, axes):
@@ -351,6 +363,20 @@ def slice_shape(input, axes, begin, end):
     for axis, first, last in zip(axes, begin, end):
         output[axis] = last - first
     return output
+
+
+def tile_shape(input, repeats):
+    rank = len(input)
+    assert len(repeats) == rank, "expected 'repeats' of length {}, found {}".format(rank, repeats)
+
+    return [i * r for i, r in zip(input, repeats)]
+
+
+def pad_shape(input, padding, **kwargs):
+    rank = len(input)
+    assert len(padding) == rank, "expected 'padding' of length {}, found {}".format(rank, padding)
+
+    return [p + i + q for i, (p, q) in zip(input, padding)]
 
 
 def matmul_shape(A, B, transposeA, transposeB):
@@ -515,6 +541,8 @@ _StandardShapeFuncs = {
     'rcp': unary_shape,
     'exp': unary_shape,
     'log': unary_shape,
+    'sin': unary_shape,
+    'cos': unary_shape,
     'abs': unary_shape,
     'sign': unary_shape,
     'floor': unary_shape,
@@ -571,6 +599,8 @@ _StandardShapeFuncs = {
     'mean_reduce': reduce_shape,
     'argmin_reduce': reduce_shape,
     'argmax_reduce': reduce_shape,
+    'any_reduce': reduce_shape,
+    'all_reduce': reduce_shape,
     'local_response_normalization': normalize_shape,
     'local_mean_normalization': normalize_shape,
     'local_variance_normalization': normalize_shape,
@@ -592,6 +622,8 @@ _StandardShapeFuncs = {
     'split': split_shape,
     'concat': concat_shape,
     'slice': slice_shape,
+    'tile': tile_shape,
+    'pad': pad_shape,
     'matmul': matmul_shape,
     'linear': linear_shape,
     'softmax': softmax_shape,

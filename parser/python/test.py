@@ -119,6 +119,17 @@ class ParserTest(unittest.TestCase):
                 output = op(input);
             }
             """)
+    
+    def test_reshape(self):
+        graph = nnef.parse_string("""
+            version 1.0;
+            graph G( input ) -> ( output )
+            {
+                input = external(shape = [1,2,3,4]);
+                output = reshape(input, axis_start = 1, axis_count = 2, shape = [6]);
+            }
+            """)
+        nnef.infer_shapes(graph)
 
     def test_alexnet(self):
         nnef.parse_file("../examples/alexnet.txt")

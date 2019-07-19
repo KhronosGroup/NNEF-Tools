@@ -76,6 +76,11 @@ namespace nnef
         return std::accumulate(shape.begin(), shape.end(), (size_t)1, std::multiplies<size_t>());
     }
     
+    inline size_t volume_of( const Shape& shape, const size_t offset, const size_t length )
+    {
+        return std::accumulate(shape.begin() + offset, shape.begin() + offset + length, (size_t)1, std::multiplies<size_t>());
+    }
+    
     inline bool broadcastable( const Shape& xShape, const Shape& yShape, const size_t n )
     {
         for ( size_t i = 0; i < n; ++i )
@@ -620,28 +625,41 @@ namespace nnef
         return roi_shape(input, rois, index, size);
     }
 
-    inline Shape reshape_shape( const Shape& input, const Value& shape )
+    inline Shape reshape_shape( const Shape& input, const Value& shape, const Value& axis_start, const Value& axis_count )
     {
-        Shape output = make_shape(shape);
+        check_axis_compatible_with_rank(axis_start, input.size());
+        check_range("axis_count", axis_start, -1);
+        
+        const size_t offset = axis_start.integer();
+        const size_t length = axis_count.integer() == -1 ? input.size() - axis_start.integer() : axis_count.integer();
+        
+        check(offset + length <= input.size(), "'axis_start' + 'axis_count' must be in range [0,%d), found %d",
+              (int)input.size(), (int)(offset + length));
+        
+        Shape output(input.begin(), input.begin() + offset);
         
         size_t autoAxis = std::numeric_limits<size_t>::max();
-        for ( size_t i = 0; i < output.size(); ++i )
+        for ( size_t i = 0; i < shape.size(); ++i )
         {
-            if ( output[i] == 0 )
+            auto s = shape[i].integer();
+            if ( s == 0 )
             {
-                output[i] = input[i];
+                s = input[i + offset];
             }
-            else if ( output[i] == -1 )
+            else if ( s == -1 )
             {
                 check(autoAxis == std::numeric_limits<size_t>::max(), "shape may only contain at most one -1 value");
                 
-                output[i] = 1;
-                autoAxis = i;
+                s = 1;
+                autoAxis = i + offset;
             }
+            output.push_back(s);
         }
         
-        auto inputVolume = volume_of(input);
-        auto outputVolume = volume_of(output);
+        output.insert(output.end(), input.begin() + offset + length, input.end());
+        
+        auto inputVolume = volume_of(input, offset, length);
+        auto outputVolume = volume_of(output, offset, shape.size());
         
         if ( autoAxis != std::numeric_limits<size_t>::max() )
         {
@@ -851,6 +869,31 @@ namespace nnef
         for ( size_t i = 0, k = 0; i < output.size(); ++i )
         {
             output[i] = contains_axis(axes, i) ? (Shape::value_type)1 : input[k++];
+        }
+        return output;
+    }
+    
+    inline Shape tile_shape( const Shape& input, const Value& repeats )
+    {
+        check_rank("repeats", repeats, input.size());
+        check_range("repeats", repeats, 1);
+        
+        Shape output(input.size());
+        for ( size_t i = 0; i < output.size(); ++i )
+        {
+            output[i] = input[i] * repeats[i].integer();
+        }
+        return output;
+    }
+    
+    inline Shape pad_shape( const Shape& input, const Value& padding )
+    {
+        check_rank("padding", padding, input.size());
+        
+        Shape output(input.size());
+        for ( size_t i = 0; i < output.size(); ++i )
+        {
+            output[i] = padding[i][0].integer() + input[i] + padding[i][1].integer();
         }
         return output;
     }

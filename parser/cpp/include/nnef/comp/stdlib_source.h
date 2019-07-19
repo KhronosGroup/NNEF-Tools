@@ -35,7 +35,7 @@ namespace nnef {
 
     # tensor shape operations
 
-    fragment reshape<?>( input: tensor<?>, shape: integer[] ) -> ( output: tensor<?> );
+    fragment reshape<?>( input: tensor<?>, shape: integer[], axis_start: integer = 0, axis_count: integer = -1 ) -> ( output: tensor<?> );
     fragment transpose<?>( input: tensor<?>, axes: integer[] ) -> ( output: tensor<?> );
     fragment concat<?>( values: tensor<?>[], axis: integer ) -> ( value: tensor<?> );
     fragment split<?>( value: tensor<?>, axis: integer, ratios: integer[] ) -> ( values: tensor<?>[] );
@@ -44,6 +44,8 @@ namespace nnef {
     fragment unsqueeze<?>( input: tensor<?>, axes: integer[] ) -> ( output: tensor<?> );
     fragment stack<?>( values: tensor<?>[], axis: integer ) -> ( value: tensor<?> );
     fragment unstack<?>( value: tensor<?>, axis: integer ) -> ( values: tensor<?>[] );
+    fragment tile<?>( input: tensor<?>, repeats: integer[] ) -> ( output: tensor<?> );
+    fragment pad( input: tensor<scalar>, padding: (integer, integer)[], border: string = 'constant', value: scalar = 0.0 ) -> ( output: tensor<scalar> );
 
 
     # element-wise arithmetic operations
@@ -56,6 +58,8 @@ namespace nnef {
 
     fragment exp( x: tensor<scalar> ) -> ( y: tensor<scalar> );
     fragment log( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment sin( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment cos( x: tensor<scalar> ) -> ( y: tensor<scalar> );
     fragment abs( x: tensor<scalar> ) -> ( y: tensor<scalar> );
     fragment sign( x: tensor<scalar> ) -> ( y: tensor<scalar> );
     fragment rcp( x: tensor<scalar> ) -> ( y: tensor<scalar> );
@@ -199,6 +203,8 @@ namespace nnef {
     fragment min_reduce( input: tensor<scalar>, axes: integer[] ) -> ( output: tensor<scalar> );
     fragment argmax_reduce( input: tensor<scalar>, axes: integer[] ) -> ( output: tensor<integer> );
     fragment argmin_reduce( input: tensor<scalar>, axes: integer[] ) -> ( output: tensor<integer> );
+    fragment any_reduce( input: tensor<logical>, axes: integer[] ) -> ( output: tensor<logical> );
+    fragment all_reduce( input: tensor<logical>, axes: integer[] ) -> ( output: tensor<logical> );
 
     fragment mean_reduce( input: tensor<scalar>, axes: integer[] ) -> ( output: tensor<scalar> );
     fragment moments( input: tensor<scalar>, axes: integer[] ) -> ( mean: tensor<scalar>, variance: tensor<scalar> );
