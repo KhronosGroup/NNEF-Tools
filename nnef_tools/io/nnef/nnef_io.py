@@ -32,18 +32,24 @@ from nnef_tools.io.nnef.nnef_graph import *
 from nnef_tools.io.nnef.parser_config import NNEFParserConfig
 
 NNEFDTypeByNumpyDType = {
-    "float16": 'scalar',
-    "float32": 'scalar',
-    "float64": 'scalar',
-    "int8": 'integer',
-    "uint8": 'integer',
-    "int16": 'integer',
-    "uint16": 'integer',
-    "int32": 'integer',
-    "uint32": 'integer',
-    "int64": 'integer',
-    "uint64": 'integer',
-    "bool": 'logical'
+    'float16': 'scalar',
+    'float32': 'scalar',
+    'float64': 'scalar',
+    'int8': 'integer',
+    'uint8': 'integer',
+    'int16': 'integer',
+    'uint16': 'integer',
+    'int32': 'integer',
+    'uint32': 'integer',
+    'int64': 'integer',
+    'uint64': 'integer',
+    'bool': 'logical',
+}
+
+NumpyDTypeByNNEFDType = {
+    'scalar': 'float32',
+    'integer': 'int32',
+    'logical': 'bool',
 }
 
 
@@ -213,7 +219,7 @@ def _read(parser_graph, with_weights=True):
                 outputs[0].data = parser_graph.tensors[parser_op.outputs["output"]].data
                 assert outputs[0].data is not None
             else:
-                outputs[0].data = np.array([])
+                outputs[0].data = np.array([], dtype=NumpyDTypeByNNEFDType[parser_op.dtype])
         if parser_op.name == "constant":
             outputs[0].data = parser_op.attribs["value"]
 
