@@ -93,6 +93,10 @@ class Caffe2DataFormatOptimizationDriver(DataFormatOptimizationDriver):
     def get_input_of_transform(self, transform):
         return transform.inputs[0]
 
+    def copy_quantization(self, from_tensor, to_tensor):
+        # type:(Caffe2Tensor, Caffe2Tensor)->None
+        to_tensor.quantization = from_tensor.quantization
+
 
 class Optimizer(object):
     def __init__(self,

@@ -98,6 +98,9 @@ class DataFormatOptimizationDriver(object):
     def get_input_of_transform(self, transform):
         raise NotImplementedError()
 
+    def copy_quantization(self, from_tensor, to_tensor):
+        raise NotImplementedError()
+
 
 class Transposer(object):
     @staticmethod
@@ -450,6 +453,7 @@ def transform_io(g, io_transform, transforms_by_name, driver):
                                                     name=tensor.name,
                                                     shape=utils.apply_permutation(tensor.shape, transform.axes),
                                                     dtype=tensor.dtype)
+            driver.copy_quantization(tensor, new_input_tensor)
             add_transform(transforms_by_name, new_input_tensor, transform)
 
             transpose = driver.create_transpose_op(graph=g, input=new_input_tensor,
@@ -953,6 +957,9 @@ def optimize_impl(g,  # type: BaseGraph
                 t.name = None
 
     driver.generate_missing_names(g)
+
+    if any(getattr(tensor, 'quantization', None) is not None for tensor in g.tensors):
+        propagate_quantizations(g, driver)
 
     info = _get_conversion_info(g, transforms_by_name, old_name_by_tensor)
 

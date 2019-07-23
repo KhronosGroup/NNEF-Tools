@@ -95,6 +95,9 @@ class ONNXDataFormatOptimizationDriver(DataFormatOptimizationDriver):
     def get_input_of_transform(self, transform):
         return transform.inputs[0]
 
+    def copy_quantization(self, from_tensor, to_tensor):
+        pass  # no quantization
+
 
 def transpose_operation_default(transposer, graph, op, perm):
     # type: (Transposer, ONNXGraph, ONNXOperation, typing.List[int])->None
