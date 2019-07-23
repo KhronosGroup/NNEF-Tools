@@ -636,6 +636,12 @@ class CaffeLayerTestCases(CaffeTestRunner):
         n.reshape1 = L.Reshape(n.input1, shape=make_shape([0, 0, -1]))
         self._test_model(*self._netspec_to_model(n, 'reshape2'))
 
+    def test_reshape3(self):
+        n = caffe.NetSpec()
+        n.input1 = L.Input(shape=make_shape([6, 4, 32, 64]))
+        n.reshape1 = L.Reshape(n.input1, shape=make_shape([-1]), axis=2, num_axes=2)
+        self._test_model(*self._netspec_to_model(n, 'reshape2'))
+
     def test_argmax(self):
         n = caffe.NetSpec()
         n.input1 = L.Input(shape=make_shape([6, 4, 64, 64]))

@@ -586,30 +586,14 @@ def convert_reshape(converter, nnef_op, caffe_graph):
     input, output = converter.converted_tensors((nnef_op.input, nnef_op.output))
     shape = nnef_op.attribs["shape"]
 
-    if sum(s == -1 for s in shape) == 1:
-        axis = shape.index(-1)
-        end_axis = axis + (input.rank - len(shape))
-        if end_axis == input.rank - 1:
-            end_axis = -1
-
-        tmp_shape = list(shape)
-        for _ in range(input.rank - len(shape)):
-            tmp_shape.insert(axis, -1)
-
-        if all(s == t or t in [0, -1] for s, t in zip(input.shape, tmp_shape)):
-            CaffeOperation(graph=caffe_graph,
-                           name="Flatten",
-                           inputs=input,
-                           outputs=output,
-                           attribs=dict(axis=axis,
-                                        end_axis=end_axis))
-            return
+    axis_start = nnef_op.attribs['axis_start']
+    axis_count = nnef_op.attribs['axis_count']
 
     CaffeOperation(graph=caffe_graph,
                    name="Reshape",
                    inputs=input,
                    outputs=output,
-                   attribs=dict(shape=shape))
+                   attribs=dict(shape=shape, axis=axis_start, num_axes=axis_count))
 
 
 def convert_softmax(converter, nnef_op, caffe_graph):

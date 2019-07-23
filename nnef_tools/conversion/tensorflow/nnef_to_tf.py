@@ -200,27 +200,6 @@ class Converter(converter.Converter[NNEFTensor, NNEFOperation, NNEFGraph,
             return to_tf[nnef_border_mode]
 
     @staticmethod
-    def nnef_reshaped_shape(input_shape, reshape_shape):
-        for i in range(len(reshape_shape)):
-            assert reshape_shape[i] != 0 or i <= len(input_shape), "Invalid input_shape and reshape_shape combination"
-        reshape_shape = [input_shape[i] if reshape_shape[i] == 0 else reshape_shape[i] for i in
-                         range(len(reshape_shape))]
-        if -1 in reshape_shape:
-            idx = reshape_shape.index(-1)
-            reshape_shape2 = list(reshape_shape)
-            reshape_shape2[idx] = 1
-            rem = int(np.prod(input_shape)) % int(np.prod(reshape_shape2))
-            assert rem == 0, "Invalid input_shape and reshape_shape combination"
-            div = int(int(np.prod(input_shape)) / int(np.prod(reshape_shape2)))
-            reshape_shape2[idx] = div
-            return reshape_shape2
-        return reshape_shape
-
-    @staticmethod
-    def nnef_flatten_shape(input_shape):
-        return [input_shape[0], int(np.prod(input_shape[1:]))]
-
-    @staticmethod
     def has_gt_1(data):
         return utils.has_gt_1(data)
 
@@ -472,12 +451,7 @@ def convert_reshape(converter, nnef_op, tf_graph):
     # type: (Converter, NNEFOperation, TFGraph)->None
 
     input, output = converter.converted_tensors((nnef_op.input, nnef_op.output))
-
-    new_shape = converter.nnef_reshaped_shape(nnef_op.input.shape, nnef_op.attribs["shape"])
-    if nnef_op.input.rank >= 2 and new_shape == converter.nnef_flatten_shape(nnef_op.input.shape):
-        TFOperation(graph=tf_graph, name="tf.layers.flatten", inputs=input, outputs=output)
-    else:
-        TFOperation(graph=tf_graph, name="tf.reshape", inputs=input, attribs=dict(shape=new_shape), outputs=output)
+    TFOperation(graph=tf_graph, name="tf.reshape", inputs=input, attribs=dict(shape=list(output.shape)), outputs=output)
 
 
 def convert_squeeze(converter, nnef_op, tf_graph):

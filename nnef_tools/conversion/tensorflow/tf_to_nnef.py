@@ -424,27 +424,6 @@ class Converter(converter.Converter[TFTensor, TFOperation, TFGraph,
                                                 dtype=nnef_tensor.dtype)).output
 
     @staticmethod
-    def nnef_reshaped_shape(input_shape, reshape_shape):
-        for i in range(len(reshape_shape)):
-            assert reshape_shape[i] != 0 or i <= len(input_shape), "Invalid input_shape and reshape_shape combination"
-        reshape_shape = [input_shape[i] if reshape_shape[i] == 0 else reshape_shape[i] for i in
-                         range(len(reshape_shape))]
-        if -1 in reshape_shape:
-            idx = reshape_shape.index(-1)
-            reshape_shape2 = list(reshape_shape)
-            reshape_shape2[idx] = 1
-            rem = int(np.prod(input_shape)) % int(np.prod(reshape_shape2))
-            assert rem == 0, "Invalid input_shape and reshape_shape combination"
-            div = int(int(np.prod(input_shape)) / int(np.prod(reshape_shape2)))
-            reshape_shape2[idx] = div
-            return reshape_shape2
-        return reshape_shape
-
-    @staticmethod
-    def nnef_flatten_shape(input_shape):
-        return [input_shape[0], int(np.prod(input_shape[1:]))]
-
-    @staticmethod
     def nnef_zero_value(nnef_dtype):
         if nnef_dtype == "scalar":
             return 0.0
@@ -928,7 +907,7 @@ def convert_reshape(converter, tf_op, nnef_graph):
     NNEFOperation(graph=nnef_graph,
                   name="reshape",
                   inputs=input,
-                  attribs=dict(shape=list(tf_op.attribs["shape"])),
+                  attribs=dict(shape=list(tf_op.attribs["shape"]), axis_start=0, axis_count=-1),
                   outputs=output)
 
 

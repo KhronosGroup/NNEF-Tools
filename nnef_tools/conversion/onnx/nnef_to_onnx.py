@@ -506,10 +506,18 @@ def convert_reshape(converter, nnef_op, onnx_graph):
 
     input, output = converter.converted_tensors((nnef_op.input, nnef_op.output))
 
+    shape = nnef_op.attribs['shape']
+    axis_start = nnef_op.attribs['axis_start']
+    axis_count = nnef_op.attribs['axis_count']
+    if axis_count == -1:
+        axis_count = input.rank - axis_start
+
+    onnx_shape = input.shape[:axis_start] + shape + input.shape[axis_start + axis_count:]
+
     ONNXOperation(graph=onnx_graph,
                   name='Reshape',
                   inputs=(input, converter.constant_1d_tensor(graph=onnx_graph,
-                                                              list_=nnef_op.attribs['shape'],
+                                                              list_=onnx_shape,
                                                               dtype='INT64')),
                   outputs=output)
 

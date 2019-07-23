@@ -501,7 +501,7 @@ def convert_reshape(converter, onnx_op, nnef_graph):
     NNEFOperation(graph=nnef_graph,
                   name='reshape',
                   inputs=input,
-                  attribs=dict(shape=onnx_op.attribs['shape']),
+                  attribs=dict(shape=onnx_op.attribs['shape'], axis_start=0, axis_count=-1),
                   outputs=output)
 
 

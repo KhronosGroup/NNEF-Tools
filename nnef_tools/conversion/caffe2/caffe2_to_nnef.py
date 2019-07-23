@@ -641,7 +641,7 @@ def convert_reshape(converter, caffe2_op, nnef_graph):
                   name='reshape',
                   inputs=input,
                   outputs=output,
-                  attribs=dict(shape=caffe2_op.attribs['shape']))
+                  attribs=dict(shape=caffe2_op.attribs['shape'], axis_start=0, axis_count=-1))
 
 
 def convert_merge_dim(converter, caffe2_op, nnef_graph):

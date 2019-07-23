@@ -489,11 +489,20 @@ def convert_reshape(converter, nnef_op, caffe2_graph):
 
     input = converter.converted_tensor(nnef_op.input)
     output = converter.converted_tensor(nnef_op.output)
+
+    shape = nnef_op.attribs['shape']
+    axis_start = nnef_op.attribs['axis_start']
+    axis_count = nnef_op.attribs['axis_count']
+    if axis_count == -1:
+        axis_count = input.rank - axis_start
+
+    caffe2_shape = input.shape[:axis_start] + shape + input.shape[axis_start + axis_count:]
+
     Caffe2Operation(graph=caffe2_graph,
                     name='Reshape',
                     inputs=input,
                     outputs=(output, Caffe2Tensor(graph=caffe2_graph, shape=[nnef_op.input.rank], dtype='INT64')),
-                    attribs=dict(shape=nnef_op.attribs['shape']))
+                    attribs=dict(shape=caffe2_shape))
 
 
 def convert_leaky_relu(converter, nnef_op, caffe2_graph):

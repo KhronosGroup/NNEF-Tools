@@ -520,13 +520,13 @@ def convert_reshape(converter, caffe_op, nnef_graph):
 
     axis = converter.nnef_axis(caffe_op.attribs["axis"], input.rank)
     num_axes = input.rank if caffe_op.attribs["num_axes"] == -1 else caffe_op.attribs["num_axes"]
-    new_shape = input.shape[:axis] + caffe_op.attribs["shape"] + input.shape[axis + num_axes:]
+    shape = caffe_op.attribs["shape"]
 
     NNEFOperation(graph=nnef_graph,
                   name="reshape",
                   inputs=input,
                   outputs=output,
-                  attribs=dict(shape=new_shape))
+                  attribs=dict(shape=shape, axis_start=axis, axis_count=num_axes))
 
 
 def convert_split(converter, caffe_op, nnef_graph):
