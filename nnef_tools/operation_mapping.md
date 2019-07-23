@@ -92,7 +92,12 @@ The following table lists the correspondence between operations in TensorFlow an
 | tf.image.resize_nearest_neighbor | nearest_upsample
 |                                  | nearest_downsample
 | tf.image.resize_area | area_downsample
-
+| tf.sin | sin
+| tf.cos | cos
+| tf.pad | pad
+| tf.tile | tile
+| tf.reduce_any | any_reduce
+| tf.reduce_all | all_reduce
 
 # Caffe
 The following table lists the correspondence between operations in Caffe and NNEF.
@@ -189,6 +194,7 @@ Only the NCHW version of the operations are supported (as opposed to NHWC).
 | Conv <br> Conv1D <br> Conv2D <br> Conv3D | conv
 | ConvTranspose | deconv
 | Copy <br> CopyFromCPUInput <br> CopyOnDeviceLike <br> EnsureCPUOutput <br> StopGradient | copy | may be optimized away
+| Cos | cos
 | Div | div | + unsqueeze if axis != 0
 | DotProduct | mul | + sum_reduce + squeeze if input-rank > 1
 | Dropout | copy | may be optimized away
@@ -233,6 +239,7 @@ Only the NCHW version of the operations are supported (as opposed to NHWC).
 | NormalizeL1 | l1_normalization
 | Not | not
 | Or | or | + unsqueeze if axis != 0
+| PadImage | pad
 | PRelu | prelu
 | Pow | pow | + unsqueeze if axis != 0
 | PrependDim | reshape
@@ -254,6 +261,7 @@ Only the NCHW version of the operations are supported (as opposed to NHWC).
 | Selu(x, alpha, scale) | select(x > 0, x, exp(x) * alpha - alpha) * scale 
 | Sigmoid | sigmoid
 | Sign | sign
+| Sin | sin
 | Slice | slice
 | Softsign(x) | x / (abs(x) + 1)
 | Split | split | if split parameter is constant or the 2nd result of Concat (split_info)
@@ -274,6 +282,7 @@ Only the NCHW version of the operations are supported (as opposed to NHWC).
 | Swish(x) | x / (1 + exp(-x))
 | Tanh | tanh
 | ThresholdedRelu | select(x > alpha, x, 0.0)
+| Tile | tile
 | Transpose <br> NCHW2NHWC <br> NHWC2NCHW | transpose
 | Where | select
 | Xor(x, y) | or(and(x, not(y)), and(y, not(x))) | + unsqueeze if axis != 0
@@ -329,7 +338,7 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | ConstantOfShape | constant
 | Conv | conv
 | ConvTranspose | deconv
-| Cos | -
+| Cos | cos
 | Cosh | -
 | DepthToSpace | reshape(transpose(reshape))
 | Div | div
@@ -338,7 +347,7 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | Equal | eq
 | Erf | -
 | Exp | exp
-| Expand | add(constant(0)) | workaround
+| Expand | tile
 | EyeLike | -
 | Flatten | reshape
 | Floor | floor
@@ -381,7 +390,7 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | OneHot | -
 | Or | or
 | PRelu | prelu
-| Pad | box | workaround
+| Pad | pad
 | Pow | pow
 | RNN | -
 | RandomNormal | -
@@ -408,7 +417,7 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | Shrink | -
 | Sigmoid | sigmoid
 | Sign | sign
-| Sin | -
+| Sin | sin
 | Sinh | -
 | Size | constant | if can be evaluated
 | Slice | slice
@@ -423,7 +432,7 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | Sum | add
 | Tan | -
 | Tanh | tanh
-| Tile | -
+| Tile | tile
 | TopK | -
 | Transpose | transpose
 | Unsqueeze | unsqueeze
