@@ -91,6 +91,10 @@ class NNEFDataFormatOptimizationDriver(DataFormatOptimizationDriver):
     def get_input_of_transform(self, transform):
         return transform.input
 
+    def copy_quantization(self, from_tensor, to_tensor):
+        # type: (NNEFTensor, NNEFTensor)->None
+        to_tensor.quantization = from_tensor.quantization
+
 
 def transpose_operation_default(transposer, graph, op, perm):
     # type: (Transposer, NNEFGraph, NNEFOperation, typing.List[int])->None

@@ -459,14 +459,15 @@ def _build_tensor(builder, tensor, buffer_index):
 
     buffer = buffer_index if tensor.data is not None else 0
 
-    quant = _build_quantization(builder, tensor.quantization)
+    quant = _build_quantization(builder, tensor.quantization, tensor.dtype)
 
     tflite_fb.TensorStart(builder)
     tflite_fb.TensorAddName(builder, name)
     tflite_fb.TensorAddShape(builder, shape)
     tflite_fb.TensorAddType(builder, type)
     tflite_fb.TensorAddBuffer(builder, buffer)
-    tflite_fb.TensorAddQuantization(builder, quant)
+    if quant is not None:
+        tflite_fb.TensorAddQuantization(builder, quant)
     return tflite_fb.TensorEnd(builder)
 
 
@@ -478,24 +479,26 @@ def _ensure_numpy_array(x, dtype):
         return np.array(x, dtype=dtype)
 
 
-def _build_quantization(builder, quant):
-    if quant is None:
-        min = _CreateNumpyVector(builder, _ensure_numpy_array([0.0], dtype=np.float32))
-        max = _CreateNumpyVector(builder, _ensure_numpy_array([0.0], dtype=np.float32))
-        scale = _CreateNumpyVector(builder, _ensure_numpy_array([0.0], dtype=np.float32))
-        zero_point = _CreateNumpyVector(builder, _ensure_numpy_array([0.0], dtype=np.int64))
-    else:
-        min = _CreateNumpyVector(builder, _ensure_numpy_array(quant.min, dtype=np.float32))
-        max = _CreateNumpyVector(builder, _ensure_numpy_array(quant.max, dtype=np.float32))
-        scale = _CreateNumpyVector(builder, _ensure_numpy_array(quant.scale, dtype=np.float32))
-        zero_point = _CreateNumpyVector(builder, _ensure_numpy_array(quant.zero_point, dtype=np.int64))
+def _build_quantization(builder, quant, dtype):
+    if quant is None or quant.all_zero():
+        return None
 
-    tflite_fb.QuantizationParametersStart(builder)
-    tflite_fb.QuantizationParametersAddMin(builder, min)
-    tflite_fb.QuantizationParametersAddMax(builder, max)
-    tflite_fb.QuantizationParametersAddScale(builder, scale)
-    tflite_fb.QuantizationParametersAddZeroPoint(builder, zero_point)
-    return tflite_fb.QuantizationParametersEnd(builder)
+    min = _CreateNumpyVector(builder, _ensure_numpy_array(quant.min, dtype=np.float32))
+    max = _CreateNumpyVector(builder, _ensure_numpy_array(quant.max, dtype=np.float32))
+    scale = _CreateNumpyVector(builder, _ensure_numpy_array(quant.scale, dtype=np.float32))
+    zero_point = _CreateNumpyVector(builder, _ensure_numpy_array(quant.zero_point, dtype=np.int64))
+
+    if dtype == "INT32":
+        tflite_fb.QuantizationParametersStart(builder)
+        tflite_fb.QuantizationParametersAddScale(builder, scale)
+        return tflite_fb.QuantizationParametersEnd(builder)
+    else:
+        tflite_fb.QuantizationParametersStart(builder)
+        tflite_fb.QuantizationParametersAddMin(builder, min)
+        tflite_fb.QuantizationParametersAddMax(builder, max)
+        tflite_fb.QuantizationParametersAddScale(builder, scale)
+        tflite_fb.QuantizationParametersAddZeroPoint(builder, zero_point)
+        return tflite_fb.QuantizationParametersEnd(builder)
 
 
 def _build_operator_code(builder, op_name):
