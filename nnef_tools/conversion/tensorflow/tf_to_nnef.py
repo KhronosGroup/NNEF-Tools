@@ -1236,7 +1236,7 @@ def convert_unstack(converter, tf_op, nnef_graph):
                   outputs=outputs)
 
 
-def convert_pad_to_box(converter, tf_op, nnef_graph):
+def convert_pad(converter, tf_op, nnef_graph):
     # type: (Converter, TFOperation, NNEFGraph)->None
 
     input, output = converter.converted_tensors((tf_op.input, tf_op.output))
@@ -1244,83 +1244,27 @@ def convert_pad_to_box(converter, tf_op, nnef_graph):
     assert tf_op.attribs["constant_values"] == 0, \
         "Only tf.pad constant_values=0 is supported, got: {}.".format(tf_op.attribs["constant_values"])
 
-    print("Warning: Explicit padding was required, converting it to 1x1 box operation")
-
-    NNEFOperation(
-        graph=nnef_graph,
-        name="box",
-        inputs=input,
-        attribs=dict(size=[1] * input.rank,
-                     border=converter.nnef_border(tf_op.attribs["mode"]),
-                     padding=converter.nnef_padding(padding=tf_op.attribs["paddings"],
-                                                    rank=input.rank,
-                                                    is_nhwc=None,
-                                                    out_spatial=False)),
-        outputs=output)
+    NNEFOperation(graph=nnef_graph,
+                  name="pad",
+                  inputs=input,
+                  attribs=dict(border=converter.nnef_border(tf_op.attribs["mode"]),
+                               padding=converter.nnef_padding(padding=tf_op.attribs["paddings"],
+                                                              rank=input.rank,
+                                                              is_nhwc=None,
+                                                              out_spatial=False)),
+                  outputs=output)
 
 
-def convert_tile_to_copy_add_or_concat(converter, tf_op, nnef_graph):
+def convert_tile(converter, tf_op, nnef_graph):
     # type: (Converter, TFOperation, NNEFGraph)->None
 
     input, output = converter.converted_tensors((tf_op.input, tf_op.output))
-    input_shape = input.shape
-    input_dtype = input.dtype
 
-    multiples = tf_op.attribs["multiples"]
-    assert input.rank == len(multiples)
-
-    if input_dtype == 'scalar':
-        broadcasts = [m if s == 1 and m != 1 else 1 for m, s in zip(multiples, input_shape)]
-        concats = [m if s != 1 and m != 1 else 1 for m, s in zip(multiples, input_shape)]
-    else:
-        broadcasts = [1] * len(multiples)
-        concats = list(multiples)
-
-    needs_broadcast = any(b != 1 for b in broadcasts)
-    needed_concats = sum(c != 1 for c in concats)
-
-    if not needs_broadcast and not needed_concats:
-        NNEFOperation(graph=nnef_graph, name="copy", inputs=input, outputs=output)
-        return
-
-    if needs_broadcast:
-        zeros = NNEFTensor(graph=nnef_graph, shape=list(broadcasts), dtype=input_dtype, data=[0.0])
-
-        if needed_concats:
-            add_output = NNEFTensor(graph=nnef_graph,
-                                    shape=[s * b for s, b in zip(input_shape, broadcasts)],
-                                    dtype=input_dtype)
-        else:
-            add_output = output
-
-        NNEFOperation(graph=nnef_graph,
-                      name="add",
-                      inputs=(input, zeros),
-                      outputs=add_output)
-        input = add_output
-
-    if needed_concats:
-        concats_created = 0
-        for i, c in enumerate(concats):
-            if c != 1:
-                if concats_created < needed_concats - 1:
-                    concat_output = NNEFTensor(graph=nnef_graph,
-                                               name=None,
-                                               shape=[s * b * c if j <= i else s * b
-                                                      for j, (s, b, c)
-                                                      in enumerate(zip(input_shape, broadcasts, concats))],
-                                               dtype=input_dtype)
-                else:
-                    concat_output = output
-                NNEFOperation(graph=nnef_graph,
-                              name="concat",
-                              inputs=[input] * c,
-                              attribs=dict(axis=i),
-                              outputs=concat_output)
-                input = concat_output
-                concats_created += 1
-
-        print("Warning: Simulating tile with {} concats.".format(concats_created))
+    NNEFOperation(graph=nnef_graph,
+                  name="tile",
+                  inputs=input,
+                  attribs=dict(repeats=tf_op.attribs["multiples"]),
+                  outputs=output)
 
 
 _StandardConverters = {
@@ -1409,6 +1353,11 @@ _StandardConverters = {
     "tf.slice": convert_slice,
     "tf.stack": convert_stack,
     "tf.unstack": convert_unstack,
-    "tf.pad": convert_pad_to_box,
-    "tf.tile": convert_tile_to_copy_add_or_concat
+    "tf.pad": convert_pad,
+    "tf.tile": convert_tile,
+
+    "tf.reduce_any": partial(generic_convert_reduce, target_name="any_reduce"),
+    "tf.reduce_all": partial(generic_convert_reduce, target_name="all_reduce"),
+    "tf.sin": partial(generic_convert_unary, target_name="sin"),
+    "tf.cos": partial(generic_convert_unary, target_name="cos"),
 }

@@ -736,17 +736,14 @@ def convert_pad(converter, onnx_op, nnef_graph):
         NNEFOperation(graph=nnef_graph, name='copy', inputs=input, outputs=output)
         return
 
-    box_op = NNEFOperation(
-        graph=nnef_graph,
-        name="box",
-        inputs=input,
-        attribs=dict(size=[1] * input.rank,
-                     border=border,
-                     padding=paddings),
-        outputs=output)
-
+    pad_op = NNEFOperation(graph=nnef_graph,
+                           name="pad",
+                           inputs=input,
+                           attribs=dict(border=border,
+                                        padding=paddings),
+                           outputs=output)
     if value != 0:
-        box_op.attribs['_value'] = value
+        pad_op.attribs['_value'] = value
 
 
 def convert_prelu(converter, onnx_op, nnef_graph):
@@ -931,21 +928,24 @@ def convert_elu(converter, onnx_op, nnef_graph):
 def convert_expand(converter, onnx_op, nnef_graph):
     # type: (Converter, ONNXOperation, NNEFGraph)->None
     input = converter.converted_tensor(onnx_op.input)
+    shape = onnx_op.attribs['shape']
     output = converter.converted_tensor(onnx_op.output)
 
-    zero_tensor = NNEFTensor(graph=nnef_graph,
-                             name=None,
-                             shape=list(onnx_op.attribs['shape']),
-                             dtype=input.dtype,
-                             data=[converter.nnef_zero_value(input.dtype)])
+    if len(shape) < input.rank:
+        shape = [1] * (input.rank - len(shape)) + shape
+
+    if input.rank < len(shape):
+        input = converter.add_unsqueeze(nnef_graph, input, axes=list(range(len(shape) - input.rank)))
+
+    assert len(shape) == input.rank
+
     NNEFOperation(
         graph=nnef_graph,
-        name=converter.nnef_addition_op(input.dtype),
-        inputs=((converter.add_unsqueeze(nnef_graph, input, list(range(zero_tensor.rank - input.rank)))
-                 if 0 < input.rank < zero_tensor.rank else input),
-                (converter.add_unsqueeze(nnef_graph, zero_tensor, list(range(input.rank - zero_tensor.rank)))
-                 if 0 < zero_tensor.rank < input.rank else zero_tensor)),
-        outputs=output)
+        name='tile',
+        inputs=input,
+        attribs=dict(repeats=[s // i if s != 1 else i for s, i in zip(shape, input.shape)]),
+        outputs=output
+    )
 
 
 def convert_max_unpool(converter, onnx_op, nnef_graph):
@@ -1050,75 +1050,12 @@ def convert_tile(converter, onnx_op, nnef_graph):
 
     input = converter.converted_tensor(onnx_op.input)
     output = converter.converted_tensor(onnx_op.output)
-    repeats = onnx_op.attribs['repeats']
 
-    input_shape = input.shape
-    input_dtype = input.dtype
-
-    assert input.rank == len(repeats)
-
-    if input_dtype == 'scalar':
-        broadcasts = [m if s == 1 and m != 1 else 1 for m, s in zip(repeats, input_shape)]
-        concats = [m if s != 1 and m != 1 else 1 for m, s in zip(repeats, input_shape)]
-    else:
-        broadcasts = [1] * len(repeats)
-        concats = list(repeats)
-
-    needs_broadcast = any(b != 1 for b in broadcasts)
-    needed_concats = sum(c != 1 for c in concats)
-
-    if not needs_broadcast and not needed_concats:
-        NNEFOperation(graph=nnef_graph, name="copy", inputs=input, outputs=output)
-        return
-
-    if needs_broadcast:
-        zeros = NNEFOperation(graph=nnef_graph,
-                              name="constant",
-                              inputs=input,
-                              attribs=dict(shape=list(broadcasts), value=[0.0]),
-                              outputs=NNEFTensor(graph=nnef_graph,
-                                                 shape=list(broadcasts),
-                                                 dtype=input_dtype))
-
-        if needed_concats:
-            add_output = NNEFTensor(graph=nnef_graph,
-                                    shape=[s * b for s, b in zip(input_shape, broadcasts)],
-                                    dtype=input_dtype)
-        else:
-            add_output = output
-
-        NNEFOperation(graph=nnef_graph,
-                      name="add",
-                      inputs=(input, zeros.output),
-                      outputs=add_output)
-        input = add_output
-
-    if needed_concats:
-        concats_created = 0
-        for i, c in enumerate(concats):
-            if c != 1:
-                if concats_created < needed_concats - 1:
-                    concat_output = NNEFTensor(graph=nnef_graph,
-                                               name=None,
-                                               shape=[s_ * b_ * c_ if j_ <= i else s_ * b_
-                                                      for j_, (s_, b_, c_)
-                                                      in enumerate(zip(input_shape, broadcasts, concats))],
-                                               dtype=input_dtype)
-                else:
-                    concat_output = output
-
-                NNEFOperation(graph=nnef_graph,
-                              name="concat",
-                              inputs=[input] * c,
-                              attribs=dict(axis=i),
-                              outputs=concat_output)
-
-                input = concat_output
-                concats_created += 1
-
-        if 'tile' not in converter.displayed_warnings:
-            print("Warning: Simulating tile with {} concats.".format(concats_created))
-            converter.displayed_warnings.add('tile')
+    NNEFOperation(graph=nnef_graph,
+                  name='tile',
+                  inputs=input,
+                  attribs=dict(repeats=onnx_op.attribs['repeats']),
+                  outputs=output)
 
 
 def convert_upsample(converter, onnx_op, nnef_graph):
@@ -1393,7 +1330,7 @@ _StandardConverters = {
     'ConstantOfShape': convert_constant_of_shape,
     'Conv': convert_conv,
     'ConvTranspose': convert_conv_transpose,
-    'Cos': UNSUPPORTED,
+    "Cos": partial(generic_convert_unary, target_name="cos"),
     'Cosh': UNSUPPORTED,
     'DepthToSpace': convert_depth_to_space,
     'Div': partial(generic_convert_binary_with_axis, target_name='div'),
@@ -1443,7 +1380,7 @@ _StandardConverters = {
     'OneHot': UNSUPPORTED,
     'Or': partial(generic_convert_binary_with_axis, target_name='or'),
     'PRelu': convert_prelu,
-    'Pad': partial(convert_pad),  # workaround
+    'Pad': partial(convert_pad),
     'Pow': partial(generic_convert_binary_with_axis, target_name='pow'),
     'RNN': UNSUPPORTED,
     'RandomNormal': UNSUPPORTED,
@@ -1471,7 +1408,7 @@ _StandardConverters = {
     'Shrink': UNSUPPORTED,
     'Sigmoid': partial(generic_convert_unary, target_name='sigmoid'),
     'Sign': partial(generic_convert_unary, target_name='sign'),
-    'Sin': UNSUPPORTED,
+    "Sin": partial(generic_convert_unary, target_name="sin"),
     'Sinh': UNSUPPORTED,
     'Size': convert_size,
     'Slice': convert_slice,
@@ -1495,7 +1432,7 @@ _StandardConverters = {
     'Xor': convert_xor,
 
     # Experimental ONNX ops (We will not support these in general!)
-    # It appears in model zoo, so we support it. But the order of add and mul is not sure.
+    # It appears in model zoo, so we support it.
     'ImageScaler': convert_image_scaler,
     'ConstantFill': convert_constant_fill,
 }

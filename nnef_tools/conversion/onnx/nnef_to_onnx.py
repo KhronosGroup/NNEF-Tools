@@ -864,6 +864,36 @@ def convert_nearest_upsample(converter, nnef_op, onnx_graph):
                   outputs=output)
 
 
+def convert_tile(converter, nnef_op, onnx_graph):
+    # type: (Converter, NNEFOperation, ONNXGraph)->None
+
+    input, output = converter.converted_tensors((nnef_op.input, nnef_op.output))
+
+    ONNXOperation(graph=onnx_graph,
+                  name='Tile',
+                  inputs=(input,
+                          converter.constant_1d_tensor(graph=onnx_graph,
+                                                       list_=nnef_op.attribs['repeats'],
+                                                       dtype='INT64')),
+                  outputs=output)
+
+
+def convert_pad(converter, nnef_op, onnx_graph):
+    # type: (Converter, NNEFOperation, ONNXGraph)->None
+
+    input, output = converter.converted_tensors((nnef_op.input, nnef_op.output))
+
+    onnx_op = ONNXOperation(graph=onnx_graph,
+                            name='Pad',
+                            inputs=input,
+                            attribs=dict(mode=converter.onnx_pad_mode(nnef_op.attribs['border']),
+                                         pads=converter.onnx_pads(nnef_op.attribs['padding'])),
+                            outputs=output)
+
+    if onnx_op.attribs['mode'] == 'constant':
+        onnx_op.attribs['value'] = 0.0
+
+
 _DefaultConverters = {
     'external': UNNEEDED,
     'variable': UNNEEDED,
@@ -961,6 +991,10 @@ _DefaultConverters = {
     'linear_quantize': NONATOMIC,
     'logarithmic_quantize': NONATOMIC,
     'copy_n': convert_copy_n,
+    'tile': convert_tile,
+    'pad': convert_pad,
+    'sin': partial(generic_convert_unary, target_name="Sin"),
+    'cos': partial(generic_convert_unary, target_name="Cos"),
 }
 
 # TODO add to class as static(?) method

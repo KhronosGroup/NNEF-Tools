@@ -672,6 +672,12 @@ class ONNXLayerTestCases(ONNXTestRunner):
         g.outputs = (y,)
         self._test_from_graph(g, run=False)
 
+    def test_Cos(self):
+        self._test_from_graph(self._unary('Cos'))
+
+    def test_Sin(self):
+        self._test_from_graph(self._unary('Sin'))
+
     # Cannot test ConstantFill, not supported in current versions
 
 

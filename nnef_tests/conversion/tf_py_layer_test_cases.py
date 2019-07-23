@@ -2089,6 +2089,26 @@ def network_resize_bicubic1():
     return tf.image.resize_bicubic(images, [64, 64])
 
 
+def network_sin():
+    floats = tf.placeholder(tf.float32, shape=[10, 64, 64, 3], name="floats")
+    return tf.sin(floats)
+
+
+def network_cos():
+    floats = tf.placeholder(tf.float32, shape=[10, 64, 64, 3], name="floats")
+    return tf.cos(floats)
+
+
+def network_reduce_any():
+    input_tensor = tf.placeholder(tf.bool, shape=[10, 64, 64, 3], name="input_tensor")
+    return tf.reduce_any(input_tensor, axis=[1, 2], keepdims=True)
+
+
+def network_reduce_all():
+    input_tensor = tf.placeholder(tf.bool, shape=[10, 64, 64, 3], name="input_tensor")
+    return tf.reduce_all(input_tensor, axis=[1, 2], keepdims=True)
+
+
 class TFPyLayerTestCases(TFPyTestRunner):
 
     def test_naming(self):
@@ -2918,6 +2938,18 @@ class TFPyLayerTestCases(TFPyTestRunner):
 
     def test_resize_bicubic1(self):
         self._test(network_resize_bicubic1, cmp=False)  # Imprecise conversion
+
+    def test_unary_sin(self):
+        self._test(network_sin)
+
+    def test_unary_cos(self):
+        self._test(network_cos)
+
+    def test_reduce_any(self):
+        self._test(network_reduce_any)
+
+    def test_reduce_all(self):
+        self._test(network_reduce_all)
 
 
 if __name__ == "__main__":

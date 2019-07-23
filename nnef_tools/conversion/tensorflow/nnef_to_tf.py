@@ -1469,6 +1469,35 @@ def convert_box_to_pad(converter, nnef_op, tf_graph):
         tf_op.attribs["mode"] = tf_pad_mode
 
 
+def convert_tile(converter, nnef_op, tf_graph):
+    # type: (Converter, NNEFOperation, TFGraph)->None
+
+    input, output = converter.converted_tensors((nnef_op.input, nnef_op.output))
+
+    TFOperation(graph=tf_graph,
+                name="tf.tile",
+                inputs=input,
+                attribs=dict(multiples=nnef_op.attribs["repeats"]),
+                outputs=output)
+
+
+def convert_pad(converter, nnef_op, tf_graph):
+    # type: (Converter, NNEFOperation, TFGraph)->None
+
+    input, output = converter.converted_tensors((nnef_op.input, nnef_op.output))
+
+    tf_op = TFOperation(graph=tf_graph,
+                        name="tf.pad",
+                        inputs=input,
+                        attribs=dict(paddings=list(nnef_op.attribs["padding"]), mode='CONSTANT', constant_values=0),
+                        outputs=output)
+
+    tf_pad_mode = converter.tf_border_mode(nnef_op.attribs["border"], converter.enable_imprecise_padding_border)
+
+    if tf_pad_mode != "CONSTANT":
+        tf_op.attribs["mode"] = tf_pad_mode
+
+
 _DefaultConverters = {
     "update": convert_update,
     "reshape": convert_reshape,
@@ -1555,6 +1584,13 @@ _DefaultConverters = {
     "copy": convert_copy,
     "_bias_add": convert_bias_add,
     "box": convert_box_to_pad,
+    "tile": convert_tile,
+    "pad": convert_pad,
+    "any_reduce": partial(generic_convert_reduce, target_name="tf.reduce_any"),
+    "all_reduce": partial(generic_convert_reduce, target_name="tf.reduce_all"),
+    "sin": partial(generic_convert_unary, target_name="tf.sin"),
+    "cos": partial(generic_convert_unary, target_name="tf.cos"),
+
     # unsupported: debox, sample, desample, local_mean_normalization, local_variance_normalization,
     # local_contrast_normalization, linear_quantize, logarithmic_quantize, binary_quantize, ternary_quantize
 }
