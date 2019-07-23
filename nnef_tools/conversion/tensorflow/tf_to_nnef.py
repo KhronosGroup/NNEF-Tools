@@ -1263,7 +1263,7 @@ def convert_tile(converter, tf_op, nnef_graph):
     NNEFOperation(graph=nnef_graph,
                   name="tile",
                   inputs=input,
-                  attribs=dict(repeats=tf_op.attribs["multiples"]),
+                  attribs=dict(repeats=list(tf_op.attribs["multiples"])),
                   outputs=output)
 
 

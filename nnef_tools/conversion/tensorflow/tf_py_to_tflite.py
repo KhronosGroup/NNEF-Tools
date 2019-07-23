@@ -437,6 +437,18 @@ def convert_transpose(op):
     op.attribs = dict()
 
 
+def convert_tile(op):
+    # type: (TFOperation)->None
+    op.name = "TILE"
+    op.inputs = (op.inputs[0],
+                 TFTensor(graph=op.graph,
+                          name=None,
+                          shape=[len(op.attribs['multiples'])],
+                          data=np.array(op.attribs['multiples'], dtype=np.int32),
+                          dtype="INT32"))
+    op.attribs = dict()
+
+
 # TODO remove unsqueeze/squeeze that cancel out each other
 _DefaultConverters = {
     "tf.nn.conv2d": convert_conv2d,
@@ -499,4 +511,7 @@ _DefaultConverters = {
     "tf.subtract": partial(rename, target_name="SUB"),
     "tf.transpose": convert_transpose,
     "tf.unstack": partial(rename, target_name="UNPACK"),
+    "tf.sin": partial(rename, target_name="SIN"),
+    "tf.cos": partial(rename, target_name="COS"),
+    "tf.tile": convert_tile,
 }

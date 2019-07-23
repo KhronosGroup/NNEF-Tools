@@ -54,7 +54,7 @@ def convert(tf_graph):
         tensor.dtype = _tf_py_dtype_to_tf_pb_dtype[tensor.dtype]
 
     for op in tf_graph.operations:
-        if op.name not in ['LogicalAnd', 'LogicalNot', 'LogicalOr']:
+        if op.name not in ['LogicalAnd', 'LogicalNot', 'LogicalOr', 'Any', 'All']:
             if op.name in ['Select', 'Conv2DBackpropInput', 'Conv3DBackpropInputV2']:
                 op.attribs['T'] = op.inputs[1].dtype
             else:
@@ -256,6 +256,20 @@ def convert_cast(op):
     op.attribs['DstT'] = _tf_py_dtype_to_tf_pb_dtype[op.output.dtype]
 
 
+def convert_pad(op):
+    # type: (TFOperation)->None
+    if op.attribs.get('mode', 'CONSTANT').upper() == 'CONSTANT':
+        generic_converter(op,
+                          target_name="Pad",
+                          attrib_to_input_dict={'paddings': 1},
+                          attribs_to_remove=['mode', 'constant_values'])
+    else:
+        generic_converter(op,
+                          target_name="MirrorPad",
+                          attrib_to_input_dict={'paddings': 1},
+                          attribs_to_remove=['constant_values'])
+
+
 def converter_sequence(fun1, fun2):
     def f(op):
         fun1(op)
@@ -277,4 +291,5 @@ _DefaultConverters.update({
     'tf.split': convert_split,
     'tf.slice': converter_sequence(_DefaultConverters['tf.slice'], postconvert_slice),
     'tf.cast': convert_cast,
+    'tf.pad': convert_pad,
 })

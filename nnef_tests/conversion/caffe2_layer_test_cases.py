@@ -455,7 +455,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
     def test_conv_transpose(self):
         # Dilation not supported in Caffe2
         # Only 4D is supported in Caffe2
-        
+
         self._test_layer('ConvTranspose', [
             Input('input', [1, 3, 15, 15]),
             Input('filter', [3, 6, 2, 2]),
@@ -534,7 +534,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
         ])
 
     def test_cos(self):
-        self._test_unary('Cos', _can_convert=False)
+        self._test_unary('Cos')
 
     def test_div(self):
         self._test_binary('Div')
@@ -962,15 +962,20 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
     def test_pad_image(self):
         self._test_layer('PadImage', [
             Input('x', [1, 2, 3, 4])
-        ], _can_convert=False)
+        ])
 
         self._test_layer('PadImage', [
             Input('x', [1, 2, 3, 4])
-        ], pads=[0, 1, 2, 3], _can_convert=False)
+        ], pads=[0, 1, 2, 3], mode="edge")
 
         self._test_layer('PadImage', [
             Input('x', [1, 2, 3, 4])
-        ], pads=[0, 1, 2, 3], order="NHWC", _can_convert=False)
+        ], pads=[0, 1, 2, 3], mode="reflect")
+
+        # nhwc not supported
+        # self._test_layer('PadImage', [
+        #     Input('x', [1, 2, 3, 4])
+        # ], pads=[0, 1, 2, 3], order="NHWC")
 
     def test_pow(self):
         self._test_layer('Pow', [
@@ -1325,7 +1330,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
         self._test_unary('Sign')
 
     def test_sin(self):
-        self._test_unary('Sin', _can_convert=False)
+        self._test_unary('Sin')
 
     def test_size(self):
         self._test_layer('Size', [
@@ -1579,11 +1584,11 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
     def test_tile(self):
         self._test_layer('Tile', [
             Input('x', [1, 2, 3, 4])
-        ], axis=1, tiles=3, _can_convert=False)
+        ], axis=1, tiles=3)
 
         self._test_layer('Tile', [
             Input('x', [1, 2, 3, 4])
-        ], axis=-1, tiles=3, _can_convert=False)
+        ], axis=-1, tiles=3)
 
         def model_fun(model):
             model.param_init_net.GivenTensorIntFill([], 'tiles', values=[3], shape=[1])
@@ -1592,7 +1597,7 @@ class Caffe2LayerTestCases(Caffe2TestRunner):
 
         self._test_model_fun('Tile', model_fun, [
             Input('input', [1, 2, 3, 4])
-        ], can_convert=False)
+        ])
 
     def test_transpose(self):
         self._test_layer('Transpose', [

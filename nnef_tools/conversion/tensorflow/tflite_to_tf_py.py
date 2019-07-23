@@ -334,6 +334,14 @@ def convert_transpose(op):
     op.inputs = (op.inputs[0],)
 
 
+def convert_tile(op):
+    # type: (TFOperation)->None
+    op.name = "tf.tile"
+    assert op.inputs[1].data is not None, "TILE is only supported with constant repeats (inputs[1])"
+    op.attribs = dict(multiples=op.inputs[1].data.tolist())
+    op.inputs = (op.inputs[0],)
+
+
 def rename(op, target_name):
     # type: (TFOperation, str)->None
     op.name = target_name
@@ -362,7 +370,7 @@ _DefaultConverters = {
     "CONCAT_EMBEDDINGS": UNSUPPORTED,
     "CONCATENATION": partial(rename, target_name="tf.concat"),
     "CONV_2D": convert_conv2d,
-    "COS": UNSUPPORTED,
+    "COS": partial(rename, target_name="tf.cos"),
     "CUSTOM": UNSUPPORTED,
     "DELEGATE": UNSUPPORTED,
     "DEPTH_TO_SPACE": UNSUPPORTED,
@@ -435,7 +443,7 @@ _DefaultConverters = {
     "RSQRT": UNSUPPORTED,
     "SELECT": partial(rename, target_name="tf.where"),
     "SHAPE": UNSUPPORTED,
-    "SIN": UNSUPPORTED,
+    "SIN": partial(rename, target_name="tf.sin"),
     "SKIP_GRAM": UNSUPPORTED,
     "SLICE": convert_slice,
     "SOFTMAX": convert_softmax,
@@ -452,7 +460,7 @@ _DefaultConverters = {
     "SUB": partial(rename, target_name="tf.subtract"),
     "SUM": partial(generic_convert_reduce, target_name="tf.reduce_sum"),
     "TANH": UNSUPPORTED,  # Not ready for use
-    "TILE": UNSUPPORTED,
+    "TILE": convert_tile,
     "TOPK_V2": UNSUPPORTED,
     "TRANSPOSE_CONV": convert_conv2d_transpose,
     "TRANSPOSE": convert_transpose,

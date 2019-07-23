@@ -541,6 +541,31 @@ class TFLiteLayerTestCases(TFLiteTestRunner):
     def test_zeros_like(self):
         self._test_model(self.to_tflite(self.zeros_like_network))
 
+    @staticmethod
+    def sin_network():
+        input_ = tf.placeholder(tf.float32, shape=[1, 2, 2, 3], name="input")
+        return input_, tf.sin(input_)
+
+    def test_sin(self):
+        self._test_model(self.to_tflite(self.sin_network))
+
+    @staticmethod
+    def cos_network():
+        input_ = tf.placeholder(tf.float32, shape=[1, 2, 2, 3], name="input")
+        return input_, tf.cos(input_)
+
+    @unittest.skip('Not yet supported in tflite')
+    def test_cos(self):
+        self._test_model(self.to_tflite(self.cos_network))
+
+    @staticmethod
+    def tile_network():
+        input_ = tf.placeholder(dtype=tf.float32, name='input', shape=[1, 32, 32, 1])
+        return input_, tf.tile(input_, multiples=[5, 1, 1, 4])
+
+    def test_tile(self):
+        self._test_model(self.to_tflite(self.tile_network))
+
 
 if __name__ == '__main__':
     unittest.main()

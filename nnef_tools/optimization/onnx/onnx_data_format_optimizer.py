@@ -131,7 +131,7 @@ def _get_default_transposable_ops():
                  'Relu', 'Sigmoid', 'Tanh', 'Softmax', 'Softplus', 'Elu', 'LeakyRelu', 'Sin', 'Cos']
     binary_ops = ['Add', 'Sub', 'Mul', 'Div', 'Pow', 'Less', 'Greater', 'Equal', 'And', 'Or', 'Min', 'Max']
     reduce_ops = ['ReduceSum', 'ReduceMean', 'ReduceMax', 'ReduceMin', 'ArgMax', 'ArgMin']
-    skippable_other_ops = ['select', 'concat', 'stack', 'unstack', 'copy_n', 'add_n', 'moments', 'box',
+    skippable_other_ops = ['select', 'concat', 'copy_n', 'add_n', 'moments', 'box',
                            'pad', 'pad_grad', 'clamp', 'split', 'softmax']
 
     op_names = (unary_ops + binary_ops + reduce_ops + skippable_other_ops)

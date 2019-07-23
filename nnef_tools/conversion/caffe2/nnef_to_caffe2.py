@@ -75,6 +75,12 @@ class Converter(_converter.Converter[NNEFTensor, NNEFOperation, NNEFGraph,
         return ps + qs
 
     @staticmethod
+    def nnef_border_to_caffe2_mode(mode):
+        return {'constant': 'constant',
+                'reflect': 'reflect',
+                'replicate': 'edge'}[mode]
+
+    @staticmethod
     def add_squeeze(caffe2_graph, caffe2_tensor, dims):
         # type: (Caffe2Graph, Caffe2Tensor, typing.List[int])->Caffe2Tensor
         return Caffe2Operation(graph=caffe2_graph,
@@ -745,6 +751,52 @@ def convert_nearest_downsample(converter, nnef_op, caffe2_graph):
                                  height_scale=float(1.0 / nnef_op.attribs['factor'][0])))
 
 
+def convert_tile(converter, nnef_op, caffe2_graph):
+    # type: (Converter, NNEFOperation, Caffe2Graph)->None
+
+    input, output = converter.converted_tensors((nnef_op.input, nnef_op.output))
+
+    repeats = nnef_op.attribs["repeats"]
+
+    if all(r == 1 for r in repeats):
+        Caffe2Operation(graph=caffe2_graph, name='Copy', inputs=input, outputs=output)
+        return
+
+    for axis, repeat in enumerate(repeats):
+        if repeat != 1:
+            input = Caffe2Operation(graph=caffe2_graph,
+                                    name='Tile',
+                                    attribs=dict(axis=axis, tiles=repeat),
+                                    inputs=input,
+                                    outputs=(output
+                                             if all(r == 1 for r in repeats[axis + 1:])
+                                             else Caffe2Tensor(graph=caffe2_graph,
+                                                               shape=[s * repeat if a == axis else s for a, s in
+                                                                      enumerate(input.shape)],
+                                                               dtype=input.dtype))).output
+
+
+def convert_pad(converter, nnef_op, caffe2_graph):
+    # type: (Converter, NNEFOperation, Caffe2Graph)->None
+
+    input, output = converter.converted_tensors((nnef_op.input, nnef_op.output))
+
+    padding = nnef_op.attribs['padding']
+
+    if (len(padding) >= 1 and padding[0] != (0, 0)) or (len(padding) >= 2 and padding[1] != (0, 0)):
+        raise utils.NNEFToolsException("Padding is not supported in N,C dimensions")
+
+    onnx_op = Caffe2Operation(graph=caffe2_graph,
+                              name='PadImage',
+                              inputs=input,
+                              attribs=dict(mode=converter.nnef_border_to_caffe2_mode(nnef_op.attribs['border']),
+                                           pads=converter.nnef_padding_to_caffe2_pads(padding[2:])),
+                              outputs=output)
+
+    if onnx_op.attribs['mode'] == 'constant':
+        onnx_op.attribs['value'] = 0.0
+
+
 def NONATOMIC(converter, nnef_op, caffe2_graph):
     # type: (Converter, NNEFOperation, Caffe2Graph)->None
 
@@ -827,6 +879,11 @@ _StandardConverters = {
     'slice': convert_slice,
     'nearest_upsample': convert_nearest_upsample,
     'nearest_downsample': convert_nearest_downsample,
+
+    "sin": partial(generic_convert_unary, target_name='Sin'),
+    "cos": partial(generic_convert_unary, target_name='Cos'),
+    "tile": convert_tile,
+    "pad": convert_pad,
 }
 
 # NNEF must be parsed with this before calling nnef_to_caffe.Converter on it

@@ -219,6 +219,32 @@ class TestBasicMath(TFPbTestRunner):
 
         self._test_layer(output_name, "z1")
 
+    # BasicMathSin Test
+    def sin_network(self, x):
+        z1 = tf.sin(x, name="z1")
+        return z1
+
+    def test_sin(self):
+        tf.reset_default_graph()
+        output_name = self.name + sys._getframe().f_code.co_name[5:] + '/'
+        x = tf.placeholder(tf.float32, shape=[None, 4, 4, 1], name='x')
+        self.sin_network(x)
+
+        self._test_layer(output_name, "z1")
+
+    # BasicMathCos Test
+    def cos_network(self, x):
+        z1 = tf.cos(x, name="z1")
+        return z1
+
+    def test_cos(self):
+        tf.reset_default_graph()
+        output_name = self.name + sys._getframe().f_code.co_name[5:] + '/'
+        x = tf.placeholder(tf.float32, shape=[None, 4, 4, 1], name='x')
+        self.cos_network(x)
+
+        self._test_layer(output_name, "z1")
+
 
 class TestComparisons(TFPbTestRunner):
 
@@ -685,6 +711,38 @@ class TestMathFunc(TFPbTestRunner):
 
         self._test_layer(output_name, "z1,z2,z3,z4")
 
+    # TestMathFunc_reduce_any Test
+    def reduce_any_network(self, x):
+        z1 = tf.reduce_any(x, name="z1")
+        z2 = tf.reduce_any(x, axis=[1, 1, 3], name="z2")
+        z3 = tf.reduce_any(x, axis=[0, 1], keepdims=True, name="z3")
+        z4 = tf.reduce_any(x, axis=[3], name="z4")
+        return z1, z2, z3, z4
+
+    def test_reduce_any(self):
+        tf.reset_default_graph()
+        output_name = self.name + sys._getframe().f_code.co_name[5:] + '/'
+        x = tf.placeholder(tf.bool, shape=[None, 4, 4, 2], name='x')
+        self.reduce_any_network(x)
+
+        self._test_layer(output_name, "z1,z2,z3,z4")
+
+    # TestMathFunc_reduce_all Test
+    def reduce_all_network(self, x):
+        z1 = tf.reduce_all(x, name="z1")
+        z2 = tf.reduce_all(x, axis=[1, 1, 3], name="z2")
+        z3 = tf.reduce_all(x, axis=[0, 1], keepdims=True, name="z3")
+        z4 = tf.reduce_all(x, axis=[3], name="z4")
+        return z1, z2, z3, z4
+
+    def test_reduce_all(self):
+        tf.reset_default_graph()
+        output_name = self.name + sys._getframe().f_code.co_name[5:] + '/'
+        x = tf.placeholder(tf.bool, shape=[None, 4, 4, 2], name='x')
+        self.reduce_all_network(x)
+
+        self._test_layer(output_name, "z1,z2,z3,z4")
+
     # TestMathFunc_reduce_mean Test
     def reduce_mean_network(self, x):
         z1 = tf.reduce_mean(x, name="z1")
@@ -990,6 +1048,56 @@ class TestVarOps(TFPbTestRunner):
         output_name = self.name + sys._getframe().f_code.co_name[5:] + '/'
         x = tf.placeholder(tf.float32, shape=[1, 4, 4, 2], name='x')
         self.reshape_network(x)
+
+        self._test_layer(output_name, "z1")
+
+    # VarOps_tile Test
+    def tile_network(self, x):
+        z1 = tf.tile(x, multiples=[1, 2, 3, 4], name="z1")
+        return z1
+
+    def test_tile(self):
+        tf.reset_default_graph()
+        output_name = self.name + sys._getframe().f_code.co_name[5:] + '/'
+        x = tf.placeholder(tf.float32, shape=[1, 4, 4, 2], name='x')
+        self.tile_network(x)
+
+        self._test_layer(output_name, "z1")
+
+    # VarOps_pad Test
+    def pad_network(self, x):
+        z1 = tf.pad(x, paddings=[[0, 0], [3, 2], [0, 2], [1, 1]], mode="REFLECT", name="z1")
+        return z1
+
+    def test_pad(self):
+        tf.reset_default_graph()
+        output_name = self.name + sys._getframe().f_code.co_name[5:] + '/'
+        x = tf.placeholder(tf.float32, shape=[1, 4, 4, 2], name='x')
+        self.pad_network(x)
+
+        self._test_layer(output_name, "z1")
+
+    def pad_network2(self, x):
+        z1 = tf.pad(x, paddings=[[0, 0], [3, 2], [0, 2], [1, 1]], mode="SYMMETRIC", name="z1")
+        return z1
+
+    def test_pad2(self):
+        tf.reset_default_graph()
+        output_name = self.name + sys._getframe().f_code.co_name[5:] + '/'
+        x = tf.placeholder(tf.float32, shape=[1, 4, 4, 2], name='x')
+        self.pad_network2(x)
+
+        self._test_layer(output_name, "z1")
+
+    def pad_network3(self, x):
+        z1 = tf.pad(x, paddings=[[0, 0], [3, 2], [0, 2], [1, 1]], mode="CONSTANT", name="z1")
+        return z1
+
+    def test_pad3(self):
+        tf.reset_default_graph()
+        output_name = self.name + sys._getframe().f_code.co_name[5:] + '/'
+        x = tf.placeholder(tf.float32, shape=[1, 4, 4, 2], name='x')
+        self.pad_network3(x)
 
         self._test_layer(output_name, "z1")
 

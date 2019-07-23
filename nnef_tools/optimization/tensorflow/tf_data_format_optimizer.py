@@ -134,7 +134,7 @@ def _get_default_transposable_ops():
 
     skippable_norm_ops = ['tf.nn.l2_normalize']
 
-    skippable_other_ops = ['tf.where', 'tf.concat', 'tf.stack', 'tf.unstack', 'tf.add_n', 'tf.nn.moments',
+    skippable_other_ops = ['tf.where', 'tf.concat', 'tf.add_n', 'tf.nn.moments',
                            'tf.pad', '_tf.mirror_pad_grad', 'tf.clip_by_value', 'tf.split', 'tf.nn.softmax', "tf.slice"]
 
     op_names = (unary_ops + binary_ops + activation_ops + reduce_ops + skippable_norm_ops

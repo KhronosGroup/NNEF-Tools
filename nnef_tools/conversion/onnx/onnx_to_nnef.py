@@ -1054,7 +1054,7 @@ def convert_tile(converter, onnx_op, nnef_graph):
     NNEFOperation(graph=nnef_graph,
                   name='tile',
                   inputs=input,
-                  attribs=dict(repeats=onnx_op.attribs['repeats']),
+                  attribs=dict(repeats=list(onnx_op.attribs['repeats'])),
                   outputs=output)
 
 
@@ -1339,7 +1339,7 @@ _StandardConverters = {
     'Equal': partial(generic_convert_binary_with_axis, target_name='eq'),
     'Erf': UNSUPPORTED,
     'Exp': partial(generic_convert_unary, target_name='exp'),
-    'Expand': partial(convert_expand),
+    'Expand': convert_expand,
     'EyeLike': UNSUPPORTED,
     'Flatten': convert_flatten,
     'Floor': partial(generic_convert_unary, target_name='floor'),
@@ -1380,7 +1380,7 @@ _StandardConverters = {
     'OneHot': UNSUPPORTED,
     'Or': partial(generic_convert_binary_with_axis, target_name='or'),
     'PRelu': convert_prelu,
-    'Pad': partial(convert_pad),
+    'Pad': convert_pad,
     'Pow': partial(generic_convert_binary_with_axis, target_name='pow'),
     'RNN': UNSUPPORTED,
     'RandomNormal': UNSUPPORTED,
@@ -1423,7 +1423,7 @@ _StandardConverters = {
     'Sum': partial(generic_convert_variadic, target_name='add', normalize=False),
     'Tan': UNSUPPORTED,
     'Tanh': partial(generic_convert_unary, target_name="tanh"),
-    'Tile': partial(convert_tile),
+    'Tile': convert_tile,
     'TopK': UNSUPPORTED,
     'Transpose': convert_transpose,
     'Unsqueeze': convert_unsqueeze,

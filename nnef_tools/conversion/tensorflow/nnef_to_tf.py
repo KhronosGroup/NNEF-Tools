@@ -1477,7 +1477,7 @@ def convert_tile(converter, nnef_op, tf_graph):
     TFOperation(graph=tf_graph,
                 name="tf.tile",
                 inputs=input,
-                attribs=dict(multiples=nnef_op.attribs["repeats"]),
+                attribs=dict(multiples=list(nnef_op.attribs["repeats"])),
                 outputs=output)
 
 

@@ -138,13 +138,14 @@ def propagate_squeeze(op, const_value_by_tensor):
     return [infer.squeeze(input=op.input.shape, axes=axes if axes else None)], [op.attribs['T']]
 
 
-def propagate_reduce(op, const_value_by_tensor):
-    # type: (TFOperation, _ConstValueByTensorT)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
+def propagate_reduce(op, const_value_by_tensor, dtype=None):
+    # type: (TFOperation, _ConstValueByTensorT, str)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
     input, axis = op.inputs
     axis = const_value_by_tensor[axis].tolist()  # type: typing.List[int]
     if not isinstance(axis, list):
         axis = [axis]
-    return [infer.reduce(input=input.shape, axes=axis, squeeze=not op.attribs["keep_dims"])], [op.attribs['T']]
+    return [infer.reduce(input=input.shape, axes=axis, squeeze=not op.attribs["keep_dims"])], \
+           [op.attribs['T'] if not dtype else dtype]
 
 
 def propagate_argminmax(op, const_value_by_tensor):
@@ -287,6 +288,8 @@ _DefaultPropagators = {
     "Tanh": propagate_first,
     "Select": propagate_broadcast,
     "ClipByValue": propagate_first,
+    "Sin": propagate_first,
+    "Cos": propagate_first,
 
     # more complex:
     "AvgPool": propagate_pool,
@@ -312,10 +315,13 @@ _DefaultPropagators = {
     "Max": propagate_reduce,
     "Sum": propagate_reduce,
     "Mean": propagate_reduce,
+    "Any": partial(propagate_reduce, dtype="DT_BOOL"),
+    "All": partial(propagate_reduce, dtype="DT_BOOL"),
 
     "ExpandDims": propagate_expand_dims,
     "ConcatV2": propagate_concat,
     "Pad": propagate_pad,
+    "MirrorPad": propagate_pad,
     "Reshape": propagate_reshape,
     "ResizeArea": propagate_resize,
     "ResizeBilinear": propagate_resize,

@@ -128,7 +128,7 @@ def _get_default_transposable_ops():
     skippable_norm_ops = ['local_mean_normalization', 'local_variance_normalization',
                           'local_contrast_normalization', 'l1_normalization', 'l2_normalization']
     quantization_ops = ['linear_quantize', 'logarithmic_quantize']
-    skippable_other_ops = ['select', 'concat', 'stack', 'unstack', 'copy_n', 'add_n', 'moments', 'box',
+    skippable_other_ops = ['select', 'concat', 'copy_n', 'add_n', 'moments', 'box',
                            'pad', 'pad_grad', 'clamp', 'split', 'softmax']
 
     op_names = (unary_ops + binary_ops + activation_ops + reduce_ops + skippable_norm_ops + quantization_ops

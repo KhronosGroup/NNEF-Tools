@@ -144,6 +144,12 @@ class Converter(_converter.Converter[Caffe2Tensor, Caffe2Operation, Caffe2Graph,
         return list(zip(pads[:len(pads) // 2], pads[len(pads) // 2:]))
 
     @staticmethod
+    def caffe2_mode_to_border(mode):
+        return {'constant': 'constant',
+                'reflect': 'reflect',
+                'edge': 'replicate'}[mode]
+
+    @staticmethod
     def is_tensor_used_or_io(caffe2_tensor):
         # type: (Caffe2Tensor)->bool
         return (bool(caffe2_tensor.consumers)
@@ -1702,6 +1708,47 @@ def convert_xor(converter, caffe2_op, nnef_graph):
                   outputs=c)
 
 
+def convert_tile(converter, caffe2_op, nnef_graph):
+    # type: (Converter, Caffe2Operation, NNEFGraph)->None
+
+    input = converter.converted_tensor(caffe2_op.input)
+    output = converter.converted_tensor(caffe2_op.output)
+    tiles = caffe2_op.attribs['tiles']
+    axis = caffe2_op.attribs['axis']
+    if axis < 0:
+        axis += input.rank
+
+    NNEFOperation(graph=nnef_graph,
+                  name='tile',
+                  inputs=input,
+                  attribs=dict(repeats=[tiles if i == axis else 1 for i in range(input.rank)]),
+                  outputs=output)
+
+
+def convert_pad_image(converter, caffe2_op, nnef_graph):
+    # type: (Converter, Caffe2Operation, NNEFGraph)->None
+    is_nhwc = caffe2_op.attribs.get('order', 'NCHW').upper() == 'NHWC'
+    if is_nhwc:
+        raise utils.NNEFToolsException('NHWC order is not supported')
+
+    input, output = converter.converted_tensors((caffe2_op.input, caffe2_op.output))
+
+    value = caffe2_op.attribs.get('value', 0.0)
+    border = converter.caffe2_mode_to_border(caffe2_op.attribs.get('mode', 'constant'))
+    padding = converter.caffe2_pads_to_nnef_padding(caffe2_op.attribs['pads'])
+    if all(p == 0 and q == 0 for p, q in padding):
+        NNEFOperation(graph=nnef_graph, name='copy', inputs=input, outputs=output)
+        return
+
+    pad_op = NNEFOperation(graph=nnef_graph,
+                           name="pad",
+                           inputs=input,
+                           attribs=dict(border=border, padding=[(0, 0), (0, 0)] + padding),
+                           outputs=output)
+    if value != 0:
+        pad_op.attribs['_value'] = value
+
+
 _StandardConverters = {
     'Abs': partial(generic_convert_unary, target_name='abs'),
     'Add': partial(generic_convert_binary, target_name='add'),
@@ -1730,7 +1777,7 @@ _StandardConverters = {
     'Conv': convert_conv,
     'ConvTranspose': convert_conv_transpose,
     'Copy': partial(generic_convert_unary, target_name='copy'),
-    'Cos': None,
+    'Cos': partial(generic_convert_unary, target_name='cos'),
     'Div': partial(generic_convert_binary, target_name='div'),
     'DotProduct': convert_dot_product,
     'DotProductWithPadding': None,
@@ -1783,7 +1830,7 @@ _StandardConverters = {
     'Or': partial(generic_convert_binary, target_name='or'),
     'PRelu': convert_prelu,
     'PackedInt8BGRANHWCToNCHWCStylizerPreprocess': None,
-    'PadImage': None,
+    'PadImage': convert_pad_image,
     'Perplexity': None,
     'PiecewiseLinearTransform': None,
     'Pow': convert_pow,
@@ -1808,7 +1855,7 @@ _StandardConverters = {
     'Selu': convert_selu,
     'Sigmoid': partial(generic_convert_unary, target_name='sigmoid'),
     'Sign': partial(generic_convert_unary, target_name='sign'),
-    'Sin': None,
+    'Sin': partial(generic_convert_unary, target_name='sin'),
     'Slice': convert_slice,
     'Softmax': convert_softmax,
     'Softplus': partial(generic_convert_unary, target_name='softplus'),
@@ -1832,7 +1879,7 @@ _StandardConverters = {
     'TT': None,
     'Tanh': partial(generic_convert_unary, target_name='tanh'),
     'ThresholdedRelu': convert_thresholded_relu,
-    'Tile': None,
+    'Tile': convert_tile,
     'TopK': None,
     'Transpose': convert_transpose,
     'Unique': None,
