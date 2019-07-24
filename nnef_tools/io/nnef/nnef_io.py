@@ -117,8 +117,7 @@ def read(path,  # type: str
                         op.attribs['shape'] = input_shape
 
         parser_config.infer_shapes(parser_graph)
-        return _read(parser_graph=parser_graph,
-                     with_weights=with_weights)
+        return _read(parser_graph=parser_graph, with_weights=with_weights)
 
     finally:
         if compressed and path_to_load:
