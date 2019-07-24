@@ -53,8 +53,11 @@ NumpyDTypeByNNEFDType = {
 }
 
 
-def read(path, parser_configs=None):
-    # type: (str, typing.Optional[typing.List[NNEFParserConfig]])->NNEFGraph
+def read(path,  # type: str
+         parser_configs=None,  # type: typing.Optional[typing.List[NNEFParserConfig]]
+         input_shape=None,  # type: typing.Union[None, typing.List[int], typing.Dict[str, typing.List[int]]]
+         ):
+    # type: (...)->NNEFGraph
 
     if not (path.endswith('.tgz') or path.endswith('.nnef') or path.endswith('.txt') or os.path.isdir(path)):
         raise utils.NNEFToolsException("Only .tgz or .nnef or .txt files or directories are supported")
@@ -98,7 +101,23 @@ def read(path, parser_configs=None):
                     if re_graph.search(line):
                         break
 
-        return _read(parser_graph=parser_config.infer_shapes(parser_config.load_graph(path_to_load)),
+        parser_graph = parser_config.load_graph(path_to_load)
+
+        if input_shape is not None:
+            if not isinstance(input_shape, (list, dict)):
+                raise utils.NNEFToolsException("input_shape must be list or dict")
+
+            for op in parser_graph.operations:
+                if op.name == 'external':
+                    if isinstance(input_shape, dict):
+                        name = op.outputs['output']
+                        if name in input_shape:
+                            op.attribs['shape'] = input_shape[name]
+                    else:
+                        op.attribs['shape'] = input_shape
+
+        parser_config.infer_shapes(parser_graph)
+        return _read(parser_graph=parser_graph,
                      with_weights=with_weights)
 
     finally:
@@ -477,12 +496,13 @@ def add_tflite_quantization_fragment_if_needed(nnef_graph, fragments):
 
 class Reader(object):
 
-    def __init__(self, parser_configs=None, unify=False):
+    def __init__(self, parser_configs=None, unify=False, input_shape=None):
         self._parser_configs = parser_configs
         self._unify = unify
+        self._input_shape = input_shape
 
     def __call__(self, filename):
-        g = read(filename, parser_configs=self._parser_configs)
+        g = read(filename, parser_configs=self._parser_configs, input_shape=self._input_shape)
         if self._unify:
             nnef_unifier.unify(g)
         return g
