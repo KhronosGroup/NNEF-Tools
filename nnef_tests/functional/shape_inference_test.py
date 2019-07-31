@@ -306,6 +306,8 @@ class TestShapeInference(unittest.TestCase):
             infer.reshape([], [0], zero_means_same=True)
         with self.assertRaises(AssertionError):
             infer.reshape([1], [1, 0], zero_means_same=True)
+        self.assertEqual([1, 1], infer.reshape([], [1, 1]))
+        self.assertEqual([2, 1], infer.reshape([2], [1], offset=1, count=0))
 
     def test_flatten(self):
         self.assertEqual([1, 1], infer.flatten([]))

@@ -627,7 +627,7 @@ namespace nnef
 
     inline Shape reshape_shape( const Shape& input, const Value& shape, const Value& axis_start, const Value& axis_count )
     {
-        check_axis_compatible_with_rank(axis_start, input.size());
+        check_axis_compatible_with_rank(axis_start, input.size() + 1);
         check_range("axis_count", axis_start, -1);
         
         const size_t offset = axis_start.integer();
