@@ -633,7 +633,7 @@ namespace nnef
         const size_t offset = axis_start.integer();
         const size_t length = axis_count.integer() == -1 ? input.size() - axis_start.integer() : axis_count.integer();
         
-        check(offset + length <= input.size(), "'axis_start' + 'axis_count' must be in range [0,%d), found %d",
+        check(offset + length <= input.size(), "'axis_start' + 'axis_count' must be in range [0,%d], found %d",
               (int)input.size(), (int)(offset + length));
         
         Shape output(input.begin(), input.begin() + offset);

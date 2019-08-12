@@ -243,7 +243,7 @@ def reshape_shape(input, shape, axis_start, axis_count):
     rank = len(input)
     assert all(s >= -1 for s in shape), "items in 'shape' must be >= -1, found {}".format(shape)
     assert sum(1 for s in shape if s == -1) <= 1, "at most one item may be -1 in 'shape', found {}".format(shape)
-    assert 0 <= axis_start < rank + 1, "'axis_start' must be in range [0,{}), found {}".format(rank + 1, axis_start)
+    assert 0 <= axis_start <= rank, "'axis_start' must be in range [0,{}], found {}".format(rank, axis_start)
     assert axis_count >= -1, "'axis_count' must be non-negative or -1, found {}".format(axis_count)
     
     if axis_count == -1:
@@ -251,7 +251,7 @@ def reshape_shape(input, shape, axis_start, axis_count):
     
     axis_end = axis_start + axis_count
 
-    assert axis_end <= rank, "'axis_start' + 'axis_count' ({}) must be in range [0,{})".format(axis_end, rank)
+    assert axis_end <= rank, "'axis_start' + 'axis_count' ({}) must be in range [0,{}]".format(axis_end, rank)
 
     shape = list(shape)  # don't modify original list
 
