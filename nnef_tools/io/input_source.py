@@ -140,6 +140,7 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
     elif isinstance(input_source, ImageInput):
         import skimage
         import skimage.io
+        import skimage.color
         import skimage.transform
 
         assert len(shape) == 4, "ImageInput can only produce tensors with rank=4"
@@ -162,6 +163,9 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
                     target_size = [shape[1], shape[2]]
 
                 img = skimage.img_as_ubyte(skimage.io.imread(filename))
+                if len(img.shape) == 2:
+                    img = skimage.color.gray2rgb(img)
+
                 img = img.astype(np.float32)
 
                 if input_source.color_format.upper() == ImageInput.COLOR_FORMAT_RGB:
