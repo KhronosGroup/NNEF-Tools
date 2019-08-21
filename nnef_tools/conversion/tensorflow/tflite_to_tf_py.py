@@ -326,6 +326,14 @@ def convert_resize_nearest_neighbor(op):
     op.inputs = (op.inputs[0],)
 
 
+def convert_resize_bilinear(op):
+    # type: (TFOperation)->None
+    op.name = "tf.image.resize_bilinear"
+    assert op.inputs[1].data is not None, "RESIZE_BILINEAR is only supported with constant size"
+    op.attribs = dict(size=op.inputs[1].data.tolist(), align_corners=op.attribs['align_corners'])
+    op.inputs = (op.inputs[0],)
+
+
 def convert_transpose(op):
     # type: (TFOperation)->None
     op.name = "tf.transpose"
@@ -435,7 +443,7 @@ _DefaultConverters = {
     "RELU_N1_TO_1": UNSUPPORTED,
     "RELU": partial(rename, target_name="tf.nn.relu"),
     "RESHAPE": convert_reshape,
-    "RESIZE_BILINEAR": UNSUPPORTED,  # Not ready for use
+    "RESIZE_BILINEAR": convert_resize_bilinear,
     "RESIZE_NEAREST_NEIGHBOR": convert_resize_nearest_neighbor,
     "REVERSE_SEQUENCE": UNSUPPORTED,
     "REVERSE_V2": UNSUPPORTED,

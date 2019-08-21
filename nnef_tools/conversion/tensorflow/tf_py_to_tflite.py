@@ -423,7 +423,18 @@ def convert_resize_nearest_neighbor(op):
                                         shape=[len(op.attribs['size'])],
                                         data=np.array(op.attribs['size'], dtype=np.int32),
                                         dtype="INT32"))
-    op.attribs = dict(align_corners=op.attribs['align_corners'])
+    op.attribs = dict(align_corners=op.attribs.get('align_corners', False))
+
+
+def convert_resize_bilinear(op):
+    # type: (TFOperation)->None
+    op.name = "RESIZE_BILINEAR"
+    op.inputs = (op.inputs[0], TFTensor(graph=op.graph,
+                                        name=None,
+                                        shape=[len(op.attribs['size'])],
+                                        data=np.array(op.attribs['size'], dtype=np.int32),
+                                        dtype="INT32"))
+    op.attribs = dict(align_corners=op.attribs.get('align_corners', False))
 
 
 def convert_transpose(op):
@@ -505,6 +516,7 @@ _DefaultConverters = {
     "tf.nn.relu6": partial(rename, target_name="RELU6"),
     "tf.clip_by_value": convert_clip_by_value,
     "tf.image.resize_nearest_neighbor": convert_resize_nearest_neighbor,
+    "tf.image.resize_bilinear": convert_resize_bilinear,
     "tf.where": partial(rename, target_name="SELECT"),
     "tf.sqrt": partial(rename, target_name="SQRT"),
     "tf.square": partial(rename, target_name="SQUARE"),

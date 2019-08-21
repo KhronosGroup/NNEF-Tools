@@ -471,9 +471,16 @@ class TFLiteLayerTestCases(TFLiteTestRunner):
         input_ = tf.placeholder(tf.float32, shape=[1, 2, 2, 3], name="input")
         return input_, tf.image.resize_nearest_neighbor(input_, (4, 4), align_corners=False)
 
-    @unittest.skip('Not yet supported in tflite')
     def test_resize_nearest_neighbor(self):
         self._test_model(self.to_tflite(self.resize_nearest_neighbor_network))
+
+    @staticmethod
+    def resize_bilinear_network():
+        input_ = tf.placeholder(tf.float32, shape=[1, 2, 2, 3], name="input")
+        return input_, tf.image.resize_bilinear(input_, (4, 4), align_corners=False)
+
+    def test_resize_bilinear(self):
+        self._test_model(self.to_tflite(self.resize_bilinear_network))
 
     @staticmethod
     def where_network():
