@@ -768,7 +768,7 @@ class Reader(object):
 
     def __call__(self, filename):
         g = read_tflite_graph_from_flatbuffers(filename)
-        g.dump()
+
         if self._convert_to_tf_py:
             tflite_to_tf_py.convert(g)
         return g
