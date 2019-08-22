@@ -1170,7 +1170,7 @@ def convert_slice(converter, tf_op, nnef_graph):
     assert input.rank == len(tf_op.attribs["begin"]) == len(tf_op.attribs["size"])
 
     axes, begin, end = utils.zip_inverse(3, [
-        (axis, begin, shape if size == -1 else begin + size)
+        (axis, begin, 0 if size == -1 else begin + size)
         for axis, (begin, size, shape)
         in enumerate(zip(tf_op.attribs["begin"], tf_op.attribs["size"], input.shape))
         if not (begin == 0 and size == -1) and not (begin == 0 and size != -1 and begin + size == shape)
