@@ -1368,21 +1368,18 @@ def convert_slice(converter, nnef_op, tf_graph):
     begin = nnef_op.attribs["begin"]
     end = nnef_op.attribs["end"]
 
-    size = [
-        -1 if e == -1 else e - b
-        for b, e in zip(begin, end)
-    ]
+    begin = [offset + input.shape[axis] if offset < 0 else offset for axis, offset in zip(axes, begin)]
+    end = [offset + input.shape[axis] if offset < 0 else offset for axis, offset in zip(axes, end)]
+    size = [-1 if e == 0 else e - b for b, e in zip(begin, end)]
 
-    tfbegin, tfsize = utils.zip_inverse(2, [
-        (begin[axes.index(i)], size[axes.index(i)]) if i in axes else (0, -1)
-        for i in range(input.rank)
-    ])
+    tf_begin = [begin[axes.index(i)] if i in axes else 0 for i in range(input.rank)]
+    tf_size = [size[axes.index(i)] if i in axes else -1 for i in range(input.rank)]
 
     TFOperation(graph=tf_graph,
                 name="tf.slice",
                 inputs=input,
-                attribs=dict(begin=tfbegin,
-                             size=tfsize),
+                attribs=dict(begin=tf_begin,
+                             size=tf_size),
                 outputs=output)
 
 
