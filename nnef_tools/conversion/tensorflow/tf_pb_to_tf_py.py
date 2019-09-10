@@ -183,6 +183,7 @@ _DefaultConverters = {
     "Greater": partial(generic_converter, target_name="tf.greater"),
     "GreaterEqual": partial(generic_converter, target_name="tf.greater_equal"),
     "Identity": partial(generic_converter, target_name="tf.identity"),
+    "LeakyRelu": partial(generic_converter, target_name="tf.nn.leaky_relu"),
     "Less": partial(generic_converter, target_name="tf.less"),
     "LessEqual": partial(generic_converter, target_name="tf.less_equal"),
     "Log": partial(generic_converter, target_name="tf.log"),
