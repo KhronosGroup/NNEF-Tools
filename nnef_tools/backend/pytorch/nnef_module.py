@@ -36,7 +36,6 @@ class NNEFModule(torch.nn.Module):
                  custom_operations=None,  # type: typing.Optional[typing.Dict[str, typing.Callable]]
                  batch_normalization_momentum=0.1,  # type: float
                  fix_batch_size=False,  # type: bool
-                 permissive=False,  # type: bool
                  save_memory=False,  # type: bool
                  tensor_hooks=None,  # type: typing.Optional[typing.List[_TensorHookType]]
                  ):
@@ -70,14 +69,12 @@ class NNEFModule(torch.nn.Module):
             self._operations.update(custom_operations)
         self._batch_normalization_momentum = batch_normalization_momentum
         self._fix_batch_size = fix_batch_size
-        self._permissive = permissive
         self._tensor_hooks = tensor_hooks if tensor_hooks else []
 
     def forward(self, *inputs):
         operations.context.reset(is_training=self.training,
                                  batch_normalization_momentum=self._batch_normalization_momentum,
-                                 fix_batch_size=self._fix_batch_size,
-                                 permissive=self._permissive)
+                                 fix_batch_size=self._fix_batch_size)
         try:
             self._ref_count = {t.name: (sum(input is t
                                             for consumer in t.consumers

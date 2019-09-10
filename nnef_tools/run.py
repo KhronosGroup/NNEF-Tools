@@ -280,12 +280,14 @@ def run_using_argv(argv):
                 stats_hook = runner.StatisticsHook()
                 tensor_hooks.append(stats_hook)
 
+            if args.permissive:
+                runner.try_to_fix_unsupported_attributes(graph)
+            
             runner.run(nnef_graph=graph,
                        inputs=inputs,
                        device=args.device,
                        custom_operations=get_custom_runners(args.custom_operations),
                        fix_batch_size=args.resize,
-                       permissive=args.permissive,
                        tensor_hooks=tensor_hooks)
 
             if stats_hook:

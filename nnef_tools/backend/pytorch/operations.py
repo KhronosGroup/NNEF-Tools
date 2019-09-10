@@ -14,7 +14,6 @@
 
 from __future__ import division, print_function, absolute_import
 
-import sys
 from typing import Optional, List, Tuple, Callable, Any
 
 import numpy as np
@@ -25,31 +24,16 @@ from nnef_tools.core import utils
 from nnef_tools.shape_inference import shape_inference
 
 
-class _Context(object):
+class _Context(object):  # TODO support "with", remove fix_batch_size
     def __init__(self):
         self.is_training = False
         self.batch_normalization_momentum = 0.1
         self.fix_batch_size = False
-        self.permissive = False
-        self._printed_warnings = set()
 
-    def reset(self, is_training=False, batch_normalization_momentum=0.1, fix_batch_size=False, permissive=False):
+    def reset(self, is_training=False, batch_normalization_momentum=0.1, fix_batch_size=False):
         self.is_training = is_training
         self.batch_normalization_momentum = batch_normalization_momentum
         self.fix_batch_size = fix_batch_size
-        self.permissive = permissive
-        self._printed_warnings = set()
-
-    def warn_once(self, message):
-        if message not in self._printed_warnings:
-            print(message, file=sys.stderr)
-            sys.stderr.flush()
-
-    def raise_or_warn_once(self, message, fix_info=''):
-        if self.permissive:
-            self.warn_once(message + '\n' + fix_info if fix_info else message)
-        else:
-            raise utils.NNEFToolsException(message)
 
 
 """
@@ -114,10 +98,8 @@ def nnef_pad(input, padding, border='constant', value=0.0):
             "Padding is not implemented in N, C dimensions, given: {}.".format(padding))
 
     if border not in ("constant", "reflect", "replicate"):
-        context.raise_or_warn_once(
-            "Padding is only implemented with constant, reflect and replicate border, given: {}.".format(border),
-            "Setting border to reflect.")
-        border = "reflect"
+        raise utils.NNEFToolsException(
+            "Padding is only implemented with constant, reflect and replicate border, given: {}.".format(border))
 
     input = _positive_pad(input,
                           padding=[(p if p > 0 else 0, q if q > 0 else 0) for p, q in padding],
@@ -188,8 +170,7 @@ def nnef_deconv(input,  # type: torch.Tensor
     # type: (...)->torch.Tensor
 
     if border != 'constant':
-        context.raise_or_warn_once("Deconv: '{}' border unsupported.".format(border),
-                                   "Using constant border.")
+        raise utils.NNEFToolsException("Deconv: '{}' border unsupported.".format(border))
 
     if output_shape and output_shape[0] != input.shape[0]:
         if context.fix_batch_size:
@@ -213,8 +194,7 @@ def nnef_deconv(input,  # type: torch.Tensor
         if output_shape:
             groups = output_shape[1]
         else:
-            context.warn_once(
-                "Planewise deconvolution without output_size, assuming that #(input channels) = #(output channels).")
+            # Planewise deconvolution without output_size, assuming that #(input channels) = #(output channels)
             groups = filter.shape[0]
 
     output_channels = filter.shape[1] * groups
@@ -533,8 +513,7 @@ def nnef_debox(input,  # type: torch.Tensor
                normalize=False,  # type: bool
                ):
     if border not in ('constant', 'ignore'):
-        context.raise_or_warn_once("Debox: '{}' border unsupported.".format(border),
-                                   "Using constant border.")
+        raise utils.NNEFToolsException("Debox: '{}' border unsupported.".format(border))
 
     if len(size) not in (3, 4, 5):
         raise utils.NNEFToolsException(
@@ -753,23 +732,19 @@ def nnef_multilinear_upsample(input, factor, method='symmetric', border='replica
             return nnef_slice(deconv, axes=[2, 3], begin=[1, 1], end=[-2, -2])
 
     if (method, border) in (('symmetric', 'constant'), ('asymmetric', 'constant'), ('asymmetric', 'replicate')):
-        context.raise_or_warn_once(
+        raise utils.NNEFToolsException(
             "Multilinear upsample with (symmetric, constant), (asymmetric, constant), (asymmetric, replicate) "
-            "is only implemented for 3D, 4D tensors, and factor=2 respectively.",
-            "Setting method, border to symmetric, replicate")
-        method, border = 'symmetric', 'replicate'
+            "is only implemented for 3D, 4D tensors, and factor=2 respectively.")
 
     if (method, border) != ('symmetric', 'replicate') and method != 'aligned':
-        context.raise_or_warn_once(
+        raise utils.NNEFToolsException(
             "Multilinear upsample is only implemented if (method, border) are "
             "(symmetric, constant) "
             "or (asymmetric, constant), "
             "or (symmetric, replicate), "
             "or (asymmetric, replicate), "
             "or (aligned, [anything]), "
-            "given: ({}, {})".format(method, border),
-            "Setting method, border to symmetric, replicate")
-        method, border = 'symmetric', 'replicate'
+            "given: ({}, {})".format(method, border))
 
     modes = ['linear', 'bilinear', 'trilinear']
     mode = modes[len(input.shape) - 3]
