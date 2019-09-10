@@ -34,7 +34,6 @@ def run(nnef_graph,  # type: NNEFGraph
         inputs,  # type: typing.Tuple[np.ndarray, ...]
         device=None,  # type: typing.Optional[str]
         custom_operations=None,  # type: typing.Optional[typing.Dict[str, typing.Callable]]
-        fix_batch_size=False,  # type: bool # TODO
         tensor_hooks=None,  # type: typing.Optional[typing.List[typing.Callable[[NNEFTensor, torch.Tensor], None]]]
         ):
     # type: (...) -> typing.Tuple[np.ndarray, ...]
@@ -49,7 +48,6 @@ def run(nnef_graph,  # type: NNEFGraph
 
     torch_outputs = NNEFModule(nnef_graph=nnef_graph,
                                custom_operations=custom_operations,
-                               fix_batch_size=fix_batch_size,
                                tensor_hooks=tensor_hooks).to(device).eval().forward(*torch_inputs)
 
     assert len(torch_outputs) == len(nnef_graph.outputs)
@@ -58,6 +56,48 @@ def run(nnef_graph,  # type: NNEFGraph
 
 
 def try_to_fix_unsupported_attributes(nnef_graph):
+    # type: (NNEFGraph)->None
+    printed_warnings = set()
+
+    def warn_once(message):
+        if message not in printed_warnings:
+            print(message, file=sys.stderr)
+            sys.stderr.flush()
+            printed_warnings.add(message)
+
+    for op in nnef_graph.operations:
+        if op.name in ("pad",) and op.attribs['border'] not in ("constant", "reflect", "replicate"):
+            warn_once("{}: only constant, reflect and replicate border is supported, "
+                      "given: {}. Using reflect border.".format(op.name, op.attribs['border']))
+            op.attribs['border'] = 'reflect'
+        elif op.name in ("deconv", "debox") and op.attribs['border'] not in ("constant",):
+            warn_once("{}: Only constant border is supported, "
+                      "given: '{}'. Using constant border.".format(op.name, op.attribs['border']))
+            op.attribs['border'] = 'constant'
+        elif op.name in ("multilinear_upsample",):
+            method, border = op.attribs['method'], op.attribs['border']
+            if (method, border) in (('symmetric', 'constant'),
+                                    ('asymmetric', 'constant'),
+                                    ('asymmetric', 'replicate')):
+                if op.attribs['factor'] not in ([2], [2, 2]):
+                    warn_once(
+                        "{}: (symmetric, constant), (asymmetric, constant/replicate) "
+                        "is only implemented for 3D, 4D tensors, and factor=2 respectively."
+                        "Setting method, border to symmetric, replicate".format(op.name))
+                    op.attribs['method'], op.attribs['border'] = 'symmetric', 'replicate'
+            elif (method, border) != ('symmetric', 'replicate') and method != 'aligned':
+                warn_once("Multilinear upsample is only implemented if (method, border) are "
+                          "(symmetric, constant) "
+                          "or (asymmetric, constant), "
+                          "or (symmetric, replicate), "
+                          "or (asymmetric, replicate), "
+                          "or (aligned, [anything]), "
+                          "given: ({}, {})."
+                          "Setting method, border to symmetric, replicate".format(method, border))
+                op.attribs['method'], op.attribs['border'] = 'symmetric', 'replicate'
+
+
+def try_to_make_batch_size_agnostic(nnef_graph):
     # type: (NNEFGraph)->None
     printed_warnings = set()
 

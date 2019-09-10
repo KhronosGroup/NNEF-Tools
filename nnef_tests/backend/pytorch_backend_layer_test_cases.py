@@ -76,17 +76,13 @@ class FunctionsTestCases(unittest.TestCase):
         self.assertTrue(np.all(np.equal(index2.numpy(), index2.numpy())))
 
     def test_desample6(self):
-        try:
-            context.reset(fix_batch_size=True)
-            input = torch.rand(2, 3, 5, 5)
-            pooled, index = nnef_max_pool_with_index(input, size=[1, 1, 2, 2])
-            unpooled = nnef_desample(pooled, index, size=[1, 1, 2, 2], output_shape=[1, 3, 5, 5])
-            pooled2, index2 = nnef_max_pool_with_index(unpooled, size=[1, 1, 2, 2])
-            self.assertEqual(unpooled.shape, input.shape)
-            self.assertTrue(np.all(np.equal(pooled2.numpy(), pooled.numpy())))
-            self.assertTrue(np.all(np.equal(index2.numpy(), index2.numpy())))
-        finally:
-            context.reset()
+        input = torch.rand(2, 3, 5, 5)
+        pooled, index = nnef_max_pool_with_index(input, size=[1, 1, 2, 2])
+        unpooled = nnef_desample(pooled, index, size=[1, 1, 2, 2], output_shape=[1, 3, 5, 5])
+        pooled2, index2 = nnef_max_pool_with_index(unpooled, size=[1, 1, 2, 2])
+        self.assertEqual(unpooled.shape, input.shape)
+        self.assertTrue(np.all(np.equal(pooled2.numpy(), pooled.numpy())))
+        self.assertTrue(np.all(np.equal(index2.numpy(), index2.numpy())))
 
     def test_deconv(self):
         input = torch.rand(1, 3, 5, 5)
@@ -126,16 +122,12 @@ class FunctionsTestCases(unittest.TestCase):
         self.assertEqual(deconv.shape, input.shape)
 
     def test_deconv5(self):
-        try:
-            context.reset(fix_batch_size=True)
-            input = torch.rand(2, 3, 5, 5)
-            filter = torch.rand(6, 3, 3, 3)
-            bias = torch.zeros(tuple())
-            conv = nnef_conv(input, filter, bias)
-            deconv = nnef_deconv(conv, filter, bias, output_shape=[1, 3, 5, 5])
-            self.assertEqual(deconv.shape, input.shape)
-        finally:
-            context.reset()
+        input = torch.rand(2, 3, 5, 5)
+        filter = torch.rand(6, 3, 3, 3)
+        bias = torch.zeros(tuple())
+        conv = nnef_conv(input, filter, bias)
+        deconv = nnef_deconv(conv, filter, bias, output_shape=[1, 3, 5, 5])
+        self.assertEqual(deconv.shape, input.shape)
 
     def test_box(self):
         input = torch.rand(5, 5, 5, 5, 1, 1, 1)
@@ -183,22 +175,14 @@ class FunctionsTestCases(unittest.TestCase):
         self.assertEqual(input.shape, output.shape)
 
     def test_reshape(self):
-        try:
-            context.reset(fix_batch_size=True)
-            input = torch.rand(2, 3, 5, 5)
-            output = nnef_reshape(input, shape=[1, 3, 25])
-            self.assertEqual([2, 3, 25], list(output.shape))
-        finally:
-            context.reset()
+        input = torch.rand(2, 3, 5, 5)
+        output = nnef_reshape(input, shape=[0, 3, 25])
+        self.assertEqual([2, 3, 25], list(output.shape))
 
     def test_reshape_2(self):
-        try:
-            context.reset(fix_batch_size=True)  # actually there is nothing to fix now
-            input = torch.rand(2, 3, 5, 5)
-            output = nnef_reshape(input, shape=[25], axis_start=2, axis_count=2)
-            self.assertEqual([2, 3, 25], list(output.shape))
-        finally:
-            context.reset()
+        input = torch.rand(2, 3, 5, 5)
+        output = nnef_reshape(input, shape=[25], axis_start=2, axis_count=2)
+        self.assertEqual([2, 3, 25], list(output.shape))
 
     def test_debox(self):
         input = torch.full(size=(1, 3, 6, 6), fill_value=3.14)

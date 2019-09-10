@@ -34,8 +34,7 @@ class NetworkTestCases(unittest.TestCase):
 ./nnef_tools/run.py --input-model _models/nnef/bvlc_alexnet.onnx.nnef.tgz \\
                     --input="Random(uniform, 0, 255)" \\
                     --stats \\
-                    --stats-path ../../../out/alexnet/ \\
-                    --resize
+                    --stats-path ../../../out/alexnet/
         """)
 
     def test_vgg16(self):
@@ -43,6 +42,7 @@ class NetworkTestCases(unittest.TestCase):
                       path="_models/nnef/")
         run_using_command("""
 ./nnef_tools/run.py --input-model _models/nnef/vgg16.onnx.nnef.tgz \\
+                    --input-shape "[2, 3, 224, 224]" \\
                     --input="Random(uniform, 0, 1)" \\
                     --stats \\
                     --stats-path ../../../out/vgg16/
@@ -86,8 +86,7 @@ class NetworkTestCases(unittest.TestCase):
 ./nnef_tools/run.py --input-model _models/nnef/inception_v3.tfpb.nnef.tgz \\
                     --input="Random(uniform, -1, 1)" \\
                     --stats \\
-                    --stats-path ../../../out/googlenet_inception_v3/ \\
-                    --resize
+                    --stats-path ../../../out/googlenet_inception_v3/
         """)
 
     def test_googlenet_inception_v4(self):
@@ -97,8 +96,7 @@ class NetworkTestCases(unittest.TestCase):
 ./nnef_tools/run.py --input-model _models/nnef/inception_v4.tfpb.nnef.tgz \\
                     --input="Random(uniform, -1, 1)" \\
                     --stats \
-                    --stats-path ../../../out/googlenet_inception_v4/ \\
-                    --resize
+                    --stats-path ../../../out/googlenet_inception_v4/
         """)
 
     def test_bvlc_googlenet(self):
@@ -198,8 +196,7 @@ class NetworkTestCases(unittest.TestCase):
 ./nnef_tools/run.py --input-model _models/nnef/inception_resnet_v2.tfpb.nnef.tgz \\
                     --input="Random(uniform, 0, 1)" \\
                     --stats \\
-                    --stats-path ../../../out/inception_resnet_v2/ \\
-                    --resize
+                    --stats-path ../../../out/inception_resnet_v2/
         """)
 
     def test_mobilenet_v1_tf(self):
@@ -209,8 +206,7 @@ class NetworkTestCases(unittest.TestCase):
 ./nnef_tools/run.py --input-model _models/nnef/mobilenet_v1_1.0.tfpb.nnef.tgz \\
                     --input="Random(uniform, -1, 1)" \\
                     --stats \\
-                    --stats-path ../../../out/mobilenet_v1_tf/ \\
-                    --resize
+                    --stats-path ../../../out/mobilenet_v1_tf/
         """)
 
     def test_mobilenet_v2_tf(self):
@@ -220,8 +216,7 @@ class NetworkTestCases(unittest.TestCase):
 ./nnef_tools/run.py --input-model _models/nnef/mobilenet_v2_1.0.tfpb.nnef.tgz \\
                     --input="Random(uniform, -1, 1)" \\
                     --stats \\
-                    --stats-path ../../../out/mobilenet_v2_tf/ \\
-                    --resize
+                    --stats-path ../../../out/mobilenet_v2_tf/
         """)
 
     def test_mobilenet_v2_onnx(self):
@@ -241,8 +236,7 @@ class NetworkTestCases(unittest.TestCase):
 ./nnef_tools/run.py --input-model _models/nnef/squeezenet.tfpb.nnef.tgz \\
                     --input="Random(uniform, 0, 255)" \\
                     --stats \\
-                    --stats-path ../../../out/squeezenet_tf/ \\
-                    --resize
+                    --stats-path ../../../out/squeezenet_tf/
         """)
 
     def test_squeezenet_1_0_onnx(self):
@@ -292,8 +286,7 @@ class NetworkTestCases(unittest.TestCase):
 ./nnef_tools/run.py --input-model _models/nnef/shufflenet.onnx.nnef.tgz \\
                     --input="Random(uniform, -1, 1)" \\
                     --stats \\
-                    --stats-path ../../../out/shufflenet/ \\
-                    --resize
+                    --stats-path ../../../out/shufflenet/
         """)
 
     def test_nasnet_mobile(self):
@@ -313,6 +306,5 @@ class NetworkTestCases(unittest.TestCase):
         run_using_command("""
 ./nnef_tools/run.py --input-model _models/nnef/generated_squeezenet.nnef \\
                     --input="Random(uniform, 0, 255)" \\
-                    --resize \\
                     --generate-weights
         """)

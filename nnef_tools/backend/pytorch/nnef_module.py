@@ -35,17 +35,16 @@ class NNEFModule(torch.nn.Module):
                  nnef_graph,  # type: NNEFGraph
                  custom_operations=None,  # type: typing.Optional[typing.Dict[str, typing.Callable]]
                  batch_normalization_momentum=0.1,  # type: float
-                 fix_batch_size=False,  # type: bool
-                 save_memory=False,  # type: bool
                  tensor_hooks=None,  # type: typing.Optional[typing.List[_TensorHookType]]
+                 deallocate_nnef_tensors=False,  # type: bool
                  ):
         # type: (...)->None
         """
-            nnef_graph might be modified by this class if save_memory is True or training and write_nnef is used
+            nnef_graph might be modified by this class if deallocate_nnef_tensors is True or training and write_nnef is used
         """
         super(NNEFModule, self).__init__()
         self._nnef_graph = nnef_graph
-        self._save_memory = save_memory
+        self._deallocate_nnef_tensors = deallocate_nnef_tensors
 
         for nnef_tensor in self._nnef_graph.tensors:
             if nnef_tensor.is_constant:
@@ -57,7 +56,7 @@ class NNEFModule(torch.nn.Module):
                 self.register_parameter(
                     self._safe_name(nnef_tensor.name),
                     torch.nn.Parameter(self.to_torch_tensor(np_array, nnef_dtype=nnef_tensor.dtype)))
-                if self._save_memory:
+                if self._deallocate_nnef_tensors:
                     nnef_tensor.data = np.array([])
 
         self._ref_count = {}  # tensor name -> int
@@ -68,13 +67,11 @@ class NNEFModule(torch.nn.Module):
         if custom_operations:
             self._operations.update(custom_operations)
         self._batch_normalization_momentum = batch_normalization_momentum
-        self._fix_batch_size = fix_batch_size
         self._tensor_hooks = tensor_hooks if tensor_hooks else []
 
     def forward(self, *inputs):
         operations.context.reset(is_training=self.training,
-                                 batch_normalization_momentum=self._batch_normalization_momentum,
-                                 fix_batch_size=self._fix_batch_size)
+                                 batch_normalization_momentum=self._batch_normalization_momentum)
         try:
             self._ref_count = {t.name: (sum(input is t
                                             for consumer in t.consumers
@@ -146,7 +143,7 @@ class NNEFModule(torch.nn.Module):
         writer = nnef_io.Writer()
         writer(self._nnef_graph, nnef_path)
 
-        if self._save_memory:
+        if self._deallocate_nnef_tensors:
             for nnef_tensor in self._nnef_graph.tensors:
                 if nnef_tensor.is_variable:
                     nnef_tensor.data = np.array([])

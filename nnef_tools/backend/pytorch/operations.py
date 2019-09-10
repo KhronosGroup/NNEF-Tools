@@ -24,16 +24,14 @@ from nnef_tools.core import utils
 from nnef_tools.shape_inference import shape_inference
 
 
-class _Context(object):  # TODO support "with", remove fix_batch_size
+class _Context(object):  # TODO support "with"
     def __init__(self):
         self.is_training = False
         self.batch_normalization_momentum = 0.1
-        self.fix_batch_size = False
 
-    def reset(self, is_training=False, batch_normalization_momentum=0.1, fix_batch_size=False):
+    def reset(self, is_training=False, batch_normalization_momentum=0.1):
         self.is_training = is_training
         self.batch_normalization_momentum = batch_normalization_momentum
-        self.fix_batch_size = fix_batch_size
 
 
 """
@@ -173,13 +171,8 @@ def nnef_deconv(input,  # type: torch.Tensor
         raise utils.NNEFToolsException("Deconv: '{}' border unsupported.".format(border))
 
     if output_shape and output_shape[0] != input.shape[0]:
-        if context.fix_batch_size:
-            new_output_shape = list(output_shape)
-            new_output_shape[0] = input.shape[0]
-            print("Deconv: Fixing batch size of output_shape: {} -> {}.".format(output_shape, new_output_shape))
-            output_shape = new_output_shape
-        else:
-            raise utils.NNEFToolsException("Deconv: batch size of output_shape is not correct, try --resize.")
+        output_shape = list(output_shape)
+        output_shape[0] = input.shape[0]
 
     rank = len(input.shape)
     if rank not in (3, 4, 5):
@@ -593,13 +586,8 @@ def nnef_desample(input,  # type: torch.Tensor
     # type: (...)->torch.Tensor
 
     if output_shape and output_shape[0] != input.shape[0]:
-        if context.fix_batch_size:
-            new_output_shape = list(output_shape)
-            new_output_shape[0] = input.shape[0]
-            print("Desample: Fixing batch size of output_shape: {} -> {}.".format(output_shape, new_output_shape))
-            output_shape = new_output_shape
-        else:
-            raise utils.NNEFToolsException("Desample: batch size of output_shape is not correct, try --resize.")
+        output_shape = list(output_shape)
+        output_shape[0] = input.shape[0]
 
     input_shape = list(input.shape)
     rank = len(input_shape)
@@ -1041,25 +1029,11 @@ def nnef_logarithmic_quantize(x, max, bits):
 def nnef_reshape(input, shape, axis_start=0, axis_count=-1):
     # type: (torch.Tensor, List[int], int, int)->torch.Tensor
 
-    input_shape = list(input.shape)
-
-    if axis_start == 0 and len(shape) > 0 and shape[0] not in (-1, 0) and context.fix_batch_size:
-        new_shape = list(shape)
-        new_shape[0] = 0
-        print("Reshape: Fixing batch size of shape: {} -> {}.".format(shape, new_shape))
-        shape = new_shape
-
-    try:
-        shape = shape_inference.reshape(input_shape, shape, offset=axis_start, count=axis_count, zero_means_same=True)
-    except AssertionError:
-        if context.fix_batch_size:
-            raise utils.NNEFToolsException(
-                "Reshape shape is not correct: {} -> {}.".format(input_shape, shape))
-        else:
-            raise utils.NNEFToolsException(
-                "Reshape shape is not correct: {} -> {}, try --resize.".format(input_shape, shape))
-
-    return input.reshape(shape)
+    return input.reshape(shape_inference.reshape(input=list(input.shape),
+                                                 shape=shape,
+                                                 offset=axis_start,
+                                                 count=axis_count,
+                                                 zero_means_same=True))
 
 
 def nnef_update(variable, value):

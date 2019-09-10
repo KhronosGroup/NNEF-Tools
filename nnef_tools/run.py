@@ -126,10 +126,6 @@ Default: . (inside model directory/archive)""")
                         action="store_true",
                         help="""Allow some imprecise evaluations""")
 
-    parser.add_argument("--resize",
-                        action="store_true",
-                        help="""Try to make the network batch-size agnostic.""")
-
     parser.add_argument("--device",
                         required=False,
                         help="""Set device: cpu, cuda, cuda:0, cuda:1, etc.
@@ -282,12 +278,11 @@ def run_using_argv(argv):
 
             if args.permissive:
                 runner.try_to_fix_unsupported_attributes(graph)
-            
+
             runner.run(nnef_graph=graph,
                        inputs=inputs,
                        device=args.device,
                        custom_operations=get_custom_runners(args.custom_operations),
-                       fix_batch_size=args.resize,
                        tensor_hooks=tensor_hooks)
 
             if stats_hook:

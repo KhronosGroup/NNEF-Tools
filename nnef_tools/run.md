@@ -7,46 +7,24 @@ For detailed usage, please see the `--help`.
 How to run on random input:
 
 ```
-./nnef_tools/run.py --input-model bvlc_googlenet.nnef
+./nnef_tools/run.py --input-model network.nnef
 ```
 
 Other examples:
 
-The `--stats` flag enables the generation of a graph.stats file, 
-containing the statistics of all tensors in the graph, using the given inputs.
-
-The `--permissive` flag allows the graph to run even when some of its operations are only imprecisely supported.
-
-The `--resize` flag tries to make the graph batch-size agnostic. 
-This is useful when you run the network with different batch size compared to the declared input shape.
-
-The `--activations` flag enables the export of activation tensors.
-
-The `--generate-weights` flag enables the generation of weights if the graph does not have them already.
-
 ```
-./nnef_tools/run.py --input-model nnef_models/mobilenet_v1_1.0.tfpb.nnef  \
-                        --input "Image('~/Documents/imagenet5/*.jpg', data_format=NHWC, range=[0, 255])" \
-                        --stats 
+./nnef_tools/run.py --input-model network.nnef \
+                    --input "Image('images/*.jpg', color_format=RGB, data_format=NHWC, range=[0, 1])" \
+                    --stats \
+                    --activations output
               
-./nnef_tools/run.py --input-model nnef_models/bvlc_googlenet.onnx.nnef \
-                        --input "Image('~/Documents/imagenet5/*.jpg', data_format=NHWC, range=[0, 1])" \
-                        --stats
-              
-./nnef_tools/run.py --input-model ~/Documents/neumann.nnef \
-                        --input "Image('~/Documents/imagenet5/*.jpg', \
-                                       data_format=NCHW, \
-                                       norm=[[103.52999877929688, 116.27999877929688, 123.67500305175781], \
-                                             [57.375, 57.119998931884766, 58.39500045776367]])" \
-                        --stats \
-                        --permissive \
-                        --resize \
-                        --custom-operations custom.torch_backend_my_company
-              
-./nnef_tools/run.py --input-model squeezenet.nnef \  
-                        --generate-weights \
-                        --activations \
-                        --stats
+./nnef_tools/run.py --input-model network.nnef \
+                    --input "Image('images/*.jpg', data_format=NCHW, color_format=RGB \
+                                   norm=[[103.52999877929688, 116.27999877929688, 123.67500305175781], \
+                                         [57.375, 57.119998931884766, 58.39500045776367]])" \
+                    --stats \
+                    --activations \
+                    --permissive
 ``` 
 
 ## Implementation status
@@ -166,3 +144,9 @@ Used terms:
 | pad                             | YES       |             |
 | any_reduce                      | YES       |             |
 | all_reduce                      | YES       |             |
+
+### Other limitations
+
+Some networks can handle any batch size, while some can only handle the predefined batch size.
+If you need to use a different batch size and it does not work, you have to edit the network manually.
+Usually the batch size of reshape's shape attribute must be set to 0.
