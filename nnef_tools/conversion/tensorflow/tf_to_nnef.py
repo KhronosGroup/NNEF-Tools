@@ -608,29 +608,16 @@ def generic_convert_binary(converter, tf_op, nnef_graph, target_name):
 def convert_leaky_relu(converter, tf_op, nnef_graph):
     # type: (Converter, TFOperation, NNEFGraph)->None
 
-    tf_x, tf_a = tf_op.inputs
+    x = converter.converted_tensor(tf_op.input)
+    alpha = tf_op.attribs["alpha"]
+    output = converter.converted_tensor(tf_op.output)
 
-    if converter.is_one_element_constant(tf_a):
-        x = converter.converted_tensor(tf_x)
-        a = converter.nnef_one_element_constant_value(tf_a)
-        output = converter.converted_tensor(tf_op.output)
-
-        NNEFOperation(
-            graph=nnef_graph,
-            name="leaky_relu",
-            inputs=x,
-            attribs=dict(alpha=a),
-            outputs=output)
-    else:
-        x, a = converter.converted_tensors((tf_x, tf_a))
-        output = converter.converted_tensor(tf_op.output)
-
-        NNEFOperation(
-            graph=nnef_graph,
-            name="prelu",
-            inputs=(x,
-                    converter.add_unsqueeze(nnef_graph, a, list(range(x.rank - a.rank))) if 0 < a.rank < x.rank else a),
-            outputs=output)
+    NNEFOperation(
+        graph=nnef_graph,
+        name="leaky_relu",
+        inputs=x,
+        attribs=dict(alpha=alpha),
+        outputs=output)
 
 
 def convert_squared_difference(converter, tf_op, nnef_graph):
