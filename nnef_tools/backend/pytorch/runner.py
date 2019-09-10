@@ -126,28 +126,3 @@ class StatisticsHook(object):
                                 torch.max(torch_tensor),
                                 torch.mean(torch_tensor),
                                 torch.std(torch_tensor, unbiased=True)))
-
-
-class TopKHook(object): # TODO remove
-    def __init__(self, tensor_names, k=5):
-        self.k = k
-        self.tensor_names = tensor_names
-
-    def __call__(self, nnef_tensor, torch_tensor):
-        # type: (NNEFTensor, torch.Tensor)->None
-
-        if nnef_tensor.name in self.tensor_names:
-            if len(nnef_tensor.shape) >= 2:
-                topk_result = torch_tensor.topk(dim=1, k=self.k)
-                topk_result = (NNEFModule.to_numpy_array(topk_result[0], nnef_tensor.dtype),
-                               NNEFModule.to_numpy_array(topk_result[1], nnef_tensor.dtype))
-                if len(topk_result[0].shape) == 3 and topk_result[0].shape[1] == topk_result[0].shape[2] == 1:
-                    topk_result = (np.squeeze(topk_result[0], axis=(1, 2)), np.squeeze(topk_result[1], axis=(1, 2)))
-                po = np.get_printoptions()
-                np.set_printoptions(precision=3, suppress=True, floatmode='fixed')
-                print("TopK({}, k={}, axis=1):\n{}\n{}".format(
-                    nnef_tensor.name, self.k, topk_result[0], topk_result[1]))
-                np.set_printoptions(**po)
-            else:
-                print("Tensor({}):\n{}".format(nnef_tensor.name, NNEFModule.to_numpy_array(torch_tensor,
-                                                                                           nnef_tensor.dtype)))

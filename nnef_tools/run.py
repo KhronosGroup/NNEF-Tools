@@ -122,13 +122,6 @@ Default: graph.stats (inside model directory/archive)""")
                         help="""Directory of activations, relative to the directory of the NNEF model. 
 Default: . (inside model directory/archive)""")
 
-    parser.add_argument("--topk",
-                        nargs='*',
-                        help="""Set this to print the top k indices of the output tensors. By default k=5. 
---topk: Print the top 5 indices of outputs.
---topk 10: Print the top 10 indices of outputs.
---topk 10 tensor_1 tensor_2: Print the top 10 indices of the specified tensors.""")
-
     parser.add_argument("--permissive",
                         action="store_true",
                         help="""Allow some imprecise evaluations""")
@@ -286,15 +279,6 @@ def run_using_argv(argv):
             if args.stats:
                 stats_hook = runner.StatisticsHook()
                 tensor_hooks.append(stats_hook)
-
-            if args.topk is None:
-                pass
-            elif not args.topk:
-                tensor_hooks.append(runner.TopKHook([output.name for output in graph.outputs], k=5))
-            elif len(args.topk) == 1:
-                tensor_hooks.append(runner.TopKHook([output.name for output in graph.outputs], k=int(args.topk[0])))
-            else:
-                tensor_hooks.append(runner.TopKHook(args.topk[1:], k=int(args.topk[0])))
 
             runner.run(nnef_graph=graph,
                        inputs=inputs,
