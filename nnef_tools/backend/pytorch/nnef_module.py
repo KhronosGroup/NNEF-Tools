@@ -70,9 +70,8 @@ class NNEFModule(torch.nn.Module):
         self._tensor_hooks = tensor_hooks if tensor_hooks else []
 
     def forward(self, *inputs):
-        operations.context.reset(is_training=self.training,
-                                 batch_normalization_momentum=self._batch_normalization_momentum)
-        try:
+        with operations.Context(is_training=self.training,
+                                batch_normalization_momentum=self._batch_normalization_momentum):
             self._ref_count = {t.name: (sum(input is t
                                             for consumer in t.consumers
                                             for input in consumer.inputs)
@@ -117,8 +116,6 @@ class NNEFModule(torch.nn.Module):
 
             assert not self._torch_tensors, "Memory leak in PyTorch NNEF Backend"
             return tuple(outputs)
-        finally:
-            operations.context.reset()
 
     def reset_parameters(self):
         biases = set()
