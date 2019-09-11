@@ -27,7 +27,7 @@ from nnef_tools.shape_inference import shape_inference
 Global context for the operations
 
 How to set the active context:
-with Context(is_training=False):
+with Context(is_training=True):
     # Run your network
 
 How to get a property of the active context:
