@@ -102,7 +102,6 @@ def try_to_fix_unsupported_attributes(nnef_graph):
 
 
 class ActivationExportHook(object):
-
     def __init__(self, tensor_names, output_directory):
         self.output_directory = output_directory
         self.tensor_names_to_export = set(tensor_names)
