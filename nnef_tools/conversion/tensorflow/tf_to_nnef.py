@@ -16,6 +16,7 @@ from __future__ import division, print_function, absolute_import
 
 import copy
 import typing
+from collections import OrderedDict
 from functools import partial
 
 import numpy as np
@@ -108,12 +109,20 @@ class Converter(converter.Converter[TFTensor, TFOperation, TFGraph,
     def convert_graph(self, source_graph):
         # type: (TFGraph)->NNEFGraph
         # TODO: we dont have to collapse conv/add or conv/pad if we use ext
+
         if any(t.quantization is not None for t in source_graph.tensors):
             self.is_quantized = True
         tf_to_nnef_passes.pre_conversion_pass(source_graph)
-        # source_graph.dump()
-        target_graph = super(Converter, self).convert_graph(source_graph)
+        target_graph = super(Converter, self).convert_graph(source_graph)  # type: NNEFGraph
+
+        if target_graph.input_ids is not None:
+            target_graph.inputs = OrderedDict((utils.to_identifier(name), tensor)
+                                              for name, tensor in zip(target_graph.input_ids, target_graph.inputs))
+        if target_graph.output_ids is not None:
+            target_graph.outputs = OrderedDict((utils.to_identifier(name), tensor)
+                                               for name, tensor in zip(target_graph.output_ids, target_graph.outputs))
         target_graph.generate_missing_names()
+        
         return target_graph
 
     def can_include_in_conversion_info(self, source_tensor, target_tensor):

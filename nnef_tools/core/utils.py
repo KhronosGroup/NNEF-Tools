@@ -486,3 +486,15 @@ def starts_with(iterable, prefix):
         return False
 
     return all(aa == bb for aa, bb in zip(a, b))
+
+
+def to_identifier(name):
+    if not any(c.isalnum() for c in name):
+        current_id = getattr(to_identifier, 'next_id', 0)
+        to_identifier.next_id = current_id + 1
+        return "id_{}".format(current_id)
+
+    if name[0] != '_' and not name[0].isalpha():
+        name = "id_{}".format(name)
+
+    return ''.join(c if c.isalnum() else "_" for c in name)
