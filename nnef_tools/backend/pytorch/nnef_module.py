@@ -121,6 +121,10 @@ class NNEFModule(torch.nn.Module):
         return tuple(outputs)
 
     def reset_parameters(self):
+        """
+        This method provides a very simple initialization that was enough for out experiments
+        If you need something more nuanced, please do the initialization externally
+        """
         biases = set()
         for op in self._nnef_graph.operations:
             if op.name in ('conv', 'separable_conv', 'deconv', 'separable_deconv'):
