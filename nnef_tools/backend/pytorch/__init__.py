@@ -31,16 +31,18 @@ from nnef_tools.io.nnef.nnef_graph import *
 
 
 def run(nnef_graph,  # type: NNEFGraph
-        inputs,  # type: typing.Tuple[np.ndarray, ...]
+        inputs,  # type: typing.Union[np.ndarray, typing.Tuple[np.ndarray, ...]]
         device=None,  # type: typing.Optional[str]
         custom_operations=None,  # type: typing.Optional[typing.Dict[str, typing.Callable]]
         tensor_hooks=None,  # type: typing.Optional[typing.List[typing.Callable[[NNEFTensor, torch.Tensor], None]]]
         ):
     # type: (...) -> typing.Tuple[np.ndarray, ...]
 
+    if not isinstance(inputs, (list, tuple)):
+        inputs = (inputs,)
+
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print('Info: Using device {}'.format(device))
 
     assert len(inputs) == len(nnef_graph.inputs)
     torch_inputs = (to_torch_tensor(input, tensor.dtype).to(device)
