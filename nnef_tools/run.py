@@ -38,7 +38,7 @@ from nnef_tools.core import utils
 from nnef_tools.io.nnef import nnef_io
 from nnef_tools.io.nnef.parser_config import NNEFParserConfig
 from nnef_tools.io.nnef.nnef_graph import *
-from nnef_tools.backend.pytorch import runner
+import nnef_tools.backend.pytorch as backend
 
 
 def ensure_dirs(dir):
@@ -262,28 +262,28 @@ def run_using_argv(argv):
                 pass
             elif not args.activations:
                 tensor_hooks.append(
-                    runner.ActivationExportHook(tensor_names=[t.name
-                                                              for t in graph.tensors
-                                                              if not t.is_constant and not t.is_variable],
-                                                output_directory=os.path.join(nnef_path, args.activations_path)))
+                    backend.ActivationExportHook(tensor_names=[t.name
+                                                               for t in graph.tensors
+                                                               if not t.is_constant and not t.is_variable],
+                                                 output_directory=os.path.join(nnef_path, args.activations_path)))
             else:
                 tensor_hooks.append(
-                    runner.ActivationExportHook(tensor_names=args.activations,
-                                                output_directory=os.path.join(nnef_path, args.activations_path)))
+                    backend.ActivationExportHook(tensor_names=args.activations,
+                                                 output_directory=os.path.join(nnef_path, args.activations_path)))
 
             stats_hook = None
             if args.stats:
-                stats_hook = runner.StatisticsHook()
+                stats_hook = backend.StatisticsHook()
                 tensor_hooks.append(stats_hook)
 
             if args.permissive:
-                runner.try_to_fix_unsupported_attributes(graph)
+                backend.try_to_fix_unsupported_attributes(graph)
 
-            runner.run(nnef_graph=graph,
-                       inputs=inputs,
-                       device=args.device,
-                       custom_operations=get_custom_runners(args.custom_operations),
-                       tensor_hooks=tensor_hooks)
+            backend.run(nnef_graph=graph,
+                        inputs=inputs,
+                        device=args.device,
+                        custom_operations=get_custom_runners(args.custom_operations),
+                        tensor_hooks=tensor_hooks)
 
             if stats_hook:
                 if args.stats_path.endswith('/') or args.stats_path.endswith('\\'):
