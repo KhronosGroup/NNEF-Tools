@@ -117,7 +117,7 @@ class NNEFModule(torch.nn.Module):
         for t in self._nnef_graph.outputs:
             activation_tensors.release(t.name)
 
-        assert not activation_tensors, "Memory leak in PyTorch NNEF Backend"
+        assert not activation_tensors, "Reference counting error in PyTorch NNEF Backend"
         return tuple(outputs)
 
     def reset_parameters(self):
