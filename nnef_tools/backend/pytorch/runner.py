@@ -46,10 +46,13 @@ def run(nnef_graph,  # type: NNEFGraph
     torch_inputs = (NNEFModule.to_torch_tensor(input, tensor.dtype).to(device) for input, tensor in
                     zip(inputs, nnef_graph.inputs))
 
-    nnef_module = NNEFModule(nnef_graph=nnef_graph,
-                             custom_operations=custom_operations,
-                             tensor_hooks=tensor_hooks)
-    torch_outputs = nnef_module.to(device).eval().forward(*torch_inputs)
+    with torch.no_grad():  # Without this, gradients are calculated even in eval mode
+        nnef_module = NNEFModule(nnef_graph=nnef_graph,
+                                 custom_operations=custom_operations,
+                                 tensor_hooks=tensor_hooks)
+        nnef_module.to(device)
+        nnef_module.eval()
+        torch_outputs = nnef_module.forward(*torch_inputs)
 
     assert len(torch_outputs) == len(nnef_graph.outputs)
     return tuple(NNEFModule.to_numpy_array(output, nnef_dtype=tensor.dtype)
