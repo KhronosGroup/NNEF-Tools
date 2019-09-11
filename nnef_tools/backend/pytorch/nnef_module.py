@@ -70,52 +70,50 @@ class NNEFModule(torch.nn.Module):
         self._tensor_hooks = tensor_hooks if tensor_hooks else []
 
     def forward(self, *inputs):
-        with operations.Context(is_training=self.training,
-                                batch_normalization_momentum=self._batch_normalization_momentum):
-            self._ref_count = {t.name: (sum(input is t
-                                            for consumer in t.consumers
-                                            for input in consumer.inputs)
-                                        + (1 if t in self._nnef_graph.outputs else 0))  # don't remove outputs
-                               for t in self._nnef_graph.tensors}
+        self._ref_count = {t.name: (sum(input is t
+                                        for consumer in t.consumers
+                                        for input in consumer.inputs)
+                                    + (1 if t in self._nnef_graph.outputs else 0))  # don't remove outputs
+                           for t in self._nnef_graph.tensors}
 
-            assert len(inputs) == len(self._nnef_graph.inputs)
-            for torch_tensor, nnef_tensor in zip(inputs, self._nnef_graph.inputs):
-                self._ready(nnef_tensor, torch_tensor)
-                for hook in self._tensor_hooks:
-                    hook(nnef_tensor, torch_tensor)
+        assert len(inputs) == len(self._nnef_graph.inputs)
+        for torch_tensor, nnef_tensor in zip(inputs, self._nnef_graph.inputs):
+            self._ready(nnef_tensor, torch_tensor)
+            for hook in self._tensor_hooks:
+                hook(nnef_tensor, torch_tensor)
 
-            if self._tensor_hooks:
-                for tensor in self._nnef_graph.tensors:
-                    if tensor.is_constant or tensor.is_variable:
-                        for hook in self._tensor_hooks:
-                            hook(tensor, self._get_torch_tensor(tensor))
-
-            for op in self._nnef_graph.operations:
-                if op.name not in self._operations:
-                    raise utils.NNEFToolsException("Unsupported operation: {}".format(op.name))
-                fun = self._operations[op.name]
-                assert all(self._has_torch_tensor(t) for t in op.inputs)
-                if isinstance(op.inputs, tuple):
-                    inputs = tuple(self._get_torch_tensor(t) for t in op.inputs)
-                else:
-                    inputs = ([self._get_torch_tensor(t) for t in op.inputs],)
-                outputs = fun(*inputs, **op.attribs)
-                if not isinstance(outputs, (list, tuple)):
-                    outputs = (outputs,)
-                for t, output in zip(op.outputs, outputs):
-                    self._ready(t, output)
+        if self._tensor_hooks:
+            for tensor in self._nnef_graph.tensors:
+                if tensor.is_constant or tensor.is_variable:
                     for hook in self._tensor_hooks:
-                        hook(t, output)
-                for t in op.inputs:
-                    if not t.is_constant and not t.is_variable:
-                        self._unref(t)
+                        hook(tensor, self._get_torch_tensor(tensor))
 
-            outputs = [self._get_torch_tensor(t) for t in self._nnef_graph.outputs]
-            for t in self._nnef_graph.outputs:
-                self._unref(t)
+        for op in self._nnef_graph.operations:
+            if op.name not in self._operations:
+                raise utils.NNEFToolsException("Unsupported operation: {}".format(op.name))
+            fun = self._operations[op.name]
+            assert all(self._has_torch_tensor(t) for t in op.inputs)
+            if isinstance(op.inputs, tuple):
+                inputs = tuple(self._get_torch_tensor(t) for t in op.inputs)
+            else:
+                inputs = ([self._get_torch_tensor(t) for t in op.inputs],)
+            outputs = fun(*inputs, **utils.dict_union(op.attribs, self._get_extra_attributes(op.name)))
+            if not isinstance(outputs, (list, tuple)):
+                outputs = (outputs,)
+            for t, output in zip(op.outputs, outputs):
+                self._ready(t, output)
+                for hook in self._tensor_hooks:
+                    hook(t, output)
+            for t in op.inputs:
+                if not t.is_constant and not t.is_variable:
+                    self._unref(t)
 
-            assert not self._torch_tensors, "Memory leak in PyTorch NNEF Backend"
-            return tuple(outputs)
+        outputs = [self._get_torch_tensor(t) for t in self._nnef_graph.outputs]
+        for t in self._nnef_graph.outputs:
+            self._unref(t)
+
+        assert not self._torch_tensors, "Memory leak in PyTorch NNEF Backend"
+        return tuple(outputs)
 
     def reset_parameters(self):
         biases = set()
@@ -177,6 +175,12 @@ class NNEFModule(torch.nn.Module):
     def _ready(self, nnef_tensor, torch_tensor):
         if self._ref_count[nnef_tensor.name] > 0:
             self._torch_tensors[nnef_tensor.name] = torch_tensor
+
+    def _get_extra_attributes(self, op_name):
+        if op_name == "batch_normalization":
+            return {'is_training': self.training,
+                    'momentum': self._batch_normalization_momentum}
+        return {}
 
     @staticmethod
     def _safe_name(name):

@@ -23,35 +23,6 @@ import torch.nn.functional as F
 from nnef_tools.core import utils
 from nnef_tools.shape_inference import shape_inference
 
-"""
-Global context for the operations
-
-How to set the active context:
-with Context(is_training=True):
-    # Run your network
-
-How to get a property of the active context:
-print(Context.active.is_training)
-"""
-
-
-class Context(object):
-    def __init__(self, is_training=False, batch_normalization_momentum=0.1):
-        self.is_training = is_training
-        self.batch_normalization_momentum = batch_normalization_momentum
-        self._prev_context = None
-
-    def __enter__(self):
-        self._prev_context = Context.active
-        Context.active = self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        Context.active = self._prev_context
-        self._prev_context = None
-
-
-Context.active = Context()
-
 
 # Helpers
 
@@ -660,6 +631,8 @@ def nnef_batch_normalization(input,  # type: torch.Tensor
                              offset,  # type: torch.Tensor
                              scale,  # type: torch.Tensor
                              epsilon,  # type: float
+                             is_training=False,  # type: bool
+                             momentum=0.1,  # type: float
                              ):
     # type: (...)->torch.Tensor
 
@@ -673,8 +646,8 @@ def nnef_batch_normalization(input,  # type: torch.Tensor
                         running_var=nnef_squeeze(variance, axes=[0]),
                         weight=nnef_squeeze(scale, axes=[0]),
                         bias=nnef_squeeze(offset, axes=[0]),
-                        training=Context.active.is_training,
-                        momentum=Context.active.batch_normalization_momentum,
+                        training=is_training,
+                        momentum=momentum,
                         eps=epsilon)
 
 
