@@ -59,9 +59,6 @@ class NNEFModule(torch.nn.Module):
                 if self._deallocate_nnef_tensors:
                     nnef_tensor.data = np.array([])
 
-        self._ref_count = {}  # tensor name -> int
-        self._torch_tensors = {}  # tensor name -> tensor
-
         self._operations = {}
         self._operations.update(operations.operations)
         if custom_operations:
@@ -70,49 +67,57 @@ class NNEFModule(torch.nn.Module):
         self._tensor_hooks = tensor_hooks if tensor_hooks else []
 
     def forward(self, *inputs):
-        self._ref_count = {t.name: (sum(input is t
-                                        for consumer in t.consumers
-                                        for input in consumer.inputs)
-                                    + (1 if t in self._nnef_graph.outputs else 0))  # don't remove outputs
-                           for t in self._nnef_graph.tensors}
+        activation_tensors = _RefCountedDict({
+            t.name: (sum(input is t
+                         for consumer in t.consumers
+                         for input in consumer.inputs)
+                     + (1 if t in self._nnef_graph.outputs else 0))
+            for t in self._nnef_graph.tensors})
+
+        def get_tensor(name):
+            if hasattr(self, self._safe_name(name)):
+                return getattr(self, self._safe_name(name))
+            else:
+                return activation_tensors[name]
+
+        def has_tensor(name):
+            return hasattr(self, self._safe_name(name)) or name in activation_tensors
 
         assert len(inputs) == len(self._nnef_graph.inputs)
         for torch_tensor, nnef_tensor in zip(inputs, self._nnef_graph.inputs):
-            self._ready(nnef_tensor, torch_tensor)
-            for hook in self._tensor_hooks:
-                hook(nnef_tensor, torch_tensor)
+            activation_tensors.ready(nnef_tensor.name, torch_tensor)
+            utils.call_each(self._tensor_hooks, nnef_tensor, torch_tensor)
 
         if self._tensor_hooks:
-            for tensor in self._nnef_graph.tensors:
-                if tensor.is_constant or tensor.is_variable:
-                    for hook in self._tensor_hooks:
-                        hook(tensor, self._get_torch_tensor(tensor))
+            for nnef_tensor in self._nnef_graph.tensors:
+                if nnef_tensor.is_constant or nnef_tensor.is_variable:
+                    utils.call_each(self._tensor_hooks, nnef_tensor, get_tensor(nnef_tensor.name))
 
         for op in self._nnef_graph.operations:
             if op.name not in self._operations:
                 raise utils.NNEFToolsException("Unsupported operation: {}".format(op.name))
             fun = self._operations[op.name]
-            assert all(self._has_torch_tensor(t) for t in op.inputs)
+            assert all(has_tensor(t.name) for t in op.inputs)
             if isinstance(op.inputs, tuple):
-                inputs = tuple(self._get_torch_tensor(t) for t in op.inputs)
+                inputs = tuple(get_tensor(t.name) for t in op.inputs)
             else:
-                inputs = ([self._get_torch_tensor(t) for t in op.inputs],)
+                inputs = ([get_tensor(t.name) for t in op.inputs],)
             outputs = fun(*inputs, **utils.dict_union(op.attribs, self._get_extra_attributes(op.name)))
             if not isinstance(outputs, (list, tuple)):
                 outputs = (outputs,)
             for t, output in zip(op.outputs, outputs):
-                self._ready(t, output)
-                for hook in self._tensor_hooks:
-                    hook(t, output)
+                activation_tensors.ready(t.name, output)
+                utils.call_each(self._tensor_hooks, t, output)
+
             for t in op.inputs:
                 if not t.is_constant and not t.is_variable:
-                    self._unref(t)
+                    activation_tensors.release(t.name)
 
-        outputs = [self._get_torch_tensor(t) for t in self._nnef_graph.outputs]
+        outputs = [get_tensor(t.name) for t in self._nnef_graph.outputs]
         for t in self._nnef_graph.outputs:
-            self._unref(t)
+            activation_tensors.release(t.name)
 
-        assert not self._torch_tensors, "Memory leak in PyTorch NNEF Backend"
+        assert not activation_tensors, "Memory leak in PyTorch NNEF Backend"
         return tuple(outputs)
 
     def reset_parameters(self):
@@ -134,7 +139,8 @@ class NNEFModule(torch.nn.Module):
     def write_nnef(self, nnef_path):
         for nnef_tensor in self._nnef_graph.tensors:
             if nnef_tensor.is_variable:
-                nnef_tensor.data = self.to_numpy_array(self._get_torch_tensor(nnef_tensor), nnef_tensor.dtype)
+                nnef_tensor.data = self.to_numpy_array(getattr(self, self._safe_name(nnef_tensor.name)),
+                                                       nnef_tensor.dtype)
         writer = nnef_io.Writer()
         writer(self._nnef_graph, nnef_path)
 
@@ -142,6 +148,12 @@ class NNEFModule(torch.nn.Module):
             for nnef_tensor in self._nnef_graph.tensors:
                 if nnef_tensor.is_variable:
                     nnef_tensor.data = np.array([])
+
+    def _get_extra_attributes(self, op_name):
+        if op_name == "batch_normalization":
+            return {'is_training': self.training,
+                    'momentum': self._batch_normalization_momentum}
+        return {}
 
     @staticmethod
     def to_torch_tensor(np_array, nnef_dtype):
@@ -155,33 +167,6 @@ class NNEFModule(torch.nn.Module):
                                                            'scalar': np.float32,
                                                            'integer': np.int32}[nnef_dtype])
 
-    def _get_torch_tensor(self, nnef_tensor):
-        if nnef_tensor.is_constant or nnef_tensor.is_variable:
-            return getattr(self, self._safe_name(nnef_tensor.name))
-        else:
-            return self._torch_tensors[nnef_tensor.name]
-
-    def _has_torch_tensor(self, nnef_tensor):
-        if nnef_tensor.is_constant or nnef_tensor.is_variable:
-            return hasattr(self, self._safe_name(nnef_tensor.name))
-        else:
-            return nnef_tensor.name in self._torch_tensors
-
-    def _unref(self, nnef_tensor):
-        self._ref_count[nnef_tensor.name] -= 1
-        if self._ref_count[nnef_tensor.name] <= 0:
-            del self._torch_tensors[nnef_tensor.name]
-
-    def _ready(self, nnef_tensor, torch_tensor):
-        if self._ref_count[nnef_tensor.name] > 0:
-            self._torch_tensors[nnef_tensor.name] = torch_tensor
-
-    def _get_extra_attributes(self, op_name):
-        if op_name == "batch_normalization":
-            return {'is_training': self.training,
-                    'momentum': self._batch_normalization_momentum}
-        return {}
-
     @staticmethod
     def _safe_name(name):
         return '_nnef_tensor_' + name
@@ -190,3 +175,40 @@ class NNEFModule(torch.nn.Module):
     def _unsafe_name(name):
         assert name.startswith('_nnef_tensor_')
         return name[len('_nnef_tensor_'):]
+
+
+class _RefCountedDict(object):
+    """
+        This is a special container to retain objects that are needed by a predefined number of consumers
+        - The number of consumers must be given in the constructor
+        - The ready method must be used to store the objects when they become ready
+        - The release method must be used to signal that a consumer of the object has already run
+    """
+
+    def __init__(self, ref_count_by_name):
+        self._ref_count = ref_count_by_name
+        self._value = {}
+
+    def ready(self, name, value):
+        assert name in self._ref_count
+        if self._ref_count[name] > 0:
+            self._value[name] = value
+
+    def release(self, name):
+        assert name in self._ref_count and self._ref_count[name] > 0
+        self._ref_count[name] -= 1
+        if self._ref_count[name] == 0:
+            del self._value[name]
+
+    def __getitem__(self, name):
+        assert name in self._value
+        return self._value[name]
+
+    def __contains__(self, name):
+        return name in self._value
+
+    def __bool__(self):
+        return bool(self._value)
+
+    def __nonzero__(self):  # python2 compatibility
+        return self.__bool__()

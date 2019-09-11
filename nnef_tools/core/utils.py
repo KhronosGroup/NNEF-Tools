@@ -486,3 +486,9 @@ def starts_with(iterable, prefix):
         return False
 
     return all(aa == bb for aa, bb in zip(a, b))
+
+
+def call_each(funs, *args, **kwargs):
+    if funs:
+        for fun in funs:
+            fun(*args, **kwargs)
