@@ -137,6 +137,18 @@ namespace nnef
                 Param("axes", Integers),
             }, { Result("output", GenericTensor) }),
 
+            Prototype("pad", {
+                Param("input", ScalarTensor),
+                Param("padding", IntegerPairs),
+                Param("border", String, StringConstant),
+                Param("value", Scalar, ScalarZero),
+            }, { Result("output", ScalarTensor) }),
+            
+            Prototype("tile", {
+                Param("input", GenericTensor),
+                Param("repeats", Integers),
+            }, { Result("output", GenericTensor) }),
+            
 
             Prototype("add", {
                 Param("x", ScalarTensor),
@@ -245,6 +257,14 @@ namespace nnef
             }, { Result("y", ScalarTensor) }),
             
             Prototype("log", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("sin", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("cos", {
                 Param("x", ScalarTensor),
             }, { Result("y", ScalarTensor) }),
             
@@ -575,6 +595,16 @@ namespace nnef
                 Param("input", ScalarTensor),
                 Param("axes", Integers),
             }, { Result("output", IntegerTensor) }),
+            
+            Prototype("any_reduce", {
+                Param("input", LogicalTensor),
+                Param("axes", Integers),
+            }, { Result("output", LogicalTensor) }),
+            
+            Prototype("all_reduce", {
+                Param("input", LogicalTensor),
+                Param("axes", Integers),
+            }, { Result("output", LogicalTensor) }),
             
             Prototype("moments", {
                 Param("input", ScalarTensor),
