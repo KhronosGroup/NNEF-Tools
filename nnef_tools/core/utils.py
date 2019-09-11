@@ -492,9 +492,9 @@ def to_identifier(name):
     if not any(c.isalnum() for c in name):
         current_id = getattr(to_identifier, 'next_id', 0)
         to_identifier.next_id = current_id + 1
-        return "id_{}".format(current_id)
+        return "_{}".format(current_id)
 
     if name[0] != '_' and not name[0].isalpha():
-        name = "id_{}".format(name)
+        name = "_{}".format(name)
 
     return ''.join(c if c.isalnum() else "_" for c in name)
