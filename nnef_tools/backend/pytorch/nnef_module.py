@@ -50,12 +50,12 @@ class NNEFModule(torch.nn.Module):
             if nnef_tensor.is_constant:
                 np_array = nnef_tensor.get_numpy_array()
                 self.register_buffer(self._safe_name(nnef_tensor.name),
-                                     self.to_torch_tensor(np_array, nnef_dtype=nnef_tensor.dtype))
+                                     to_torch_tensor(np_array, nnef_dtype=nnef_tensor.dtype))
             elif nnef_tensor.is_variable:
                 np_array = nnef_tensor.get_numpy_array()
                 self.register_parameter(
                     self._safe_name(nnef_tensor.name),
-                    torch.nn.Parameter(self.to_torch_tensor(np_array, nnef_dtype=nnef_tensor.dtype)))
+                    torch.nn.Parameter(to_torch_tensor(np_array, nnef_dtype=nnef_tensor.dtype)))
                 if self._deallocate_nnef_tensors:
                     nnef_tensor.data = np.array([])
 
@@ -139,8 +139,8 @@ class NNEFModule(torch.nn.Module):
     def write_nnef(self, nnef_path):
         for nnef_tensor in self._nnef_graph.tensors:
             if nnef_tensor.is_variable:
-                nnef_tensor.data = self.to_numpy_array(getattr(self, self._safe_name(nnef_tensor.name)),
-                                                       nnef_tensor.dtype)
+                nnef_tensor.data = to_numpy_array(getattr(self, self._safe_name(nnef_tensor.name)),
+                                                  nnef_tensor.dtype)
         writer = nnef_io.Writer()
         writer(self._nnef_graph, nnef_path)
 
@@ -154,18 +154,6 @@ class NNEFModule(torch.nn.Module):
             return {'is_training': self.training,
                     'momentum': self._batch_normalization_momentum}
         return {}
-
-    @staticmethod
-    def to_torch_tensor(np_array, nnef_dtype):
-        return torch.tensor(np_array, dtype={'logical': torch.uint8,
-                                             'scalar': torch.float32,
-                                             'integer': torch.int64}[nnef_dtype])
-
-    @staticmethod
-    def to_numpy_array(torch_tensor, nnef_dtype):
-        return torch_tensor.detach().cpu().numpy().astype({'logical': np.bool,
-                                                           'scalar': np.float32,
-                                                           'integer': np.int32}[nnef_dtype])
 
     @staticmethod
     def _safe_name(name):
@@ -212,3 +200,15 @@ class _RefCountedDict(object):
 
     def __nonzero__(self):  # python2 compatibility
         return self.__bool__()
+
+
+def to_torch_tensor(np_array, nnef_dtype):
+    return torch.tensor(np_array, dtype={'logical': torch.uint8,
+                                         'scalar': torch.float32,
+                                         'integer': torch.int64}[nnef_dtype])
+
+
+def to_numpy_array(torch_tensor, nnef_dtype):
+    return torch_tensor.detach().cpu().numpy().astype({'logical': np.bool,
+                                                       'scalar': np.float32,
+                                                       'integer': np.int32}[nnef_dtype])

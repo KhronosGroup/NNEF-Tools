@@ -23,7 +23,7 @@ import numpy as np
 import six
 import torch
 
-from nnef_tools.backend.pytorch.nnef_module import NNEFModule
+from nnef_tools.backend.pytorch.nnef_module import NNEFModule, to_torch_tensor, to_numpy_array
 from nnef_tools.core import json_utils
 from nnef_tools.core import utils
 from nnef_tools.io.nnef import nnef_io
@@ -43,8 +43,8 @@ def run(nnef_graph,  # type: NNEFGraph
     print('Info: Using device {}'.format(device))
 
     assert len(inputs) == len(nnef_graph.inputs)
-    torch_inputs = (NNEFModule.to_torch_tensor(input, tensor.dtype).to(device) for input, tensor in
-                    zip(inputs, nnef_graph.inputs))
+    torch_inputs = (to_torch_tensor(input, tensor.dtype).to(device)
+                    for input, tensor in zip(inputs, nnef_graph.inputs))
 
     with torch.no_grad():  # Without this, gradients are calculated even in eval mode
         nnef_module = NNEFModule(nnef_graph=nnef_graph,
@@ -55,7 +55,7 @@ def run(nnef_graph,  # type: NNEFGraph
         torch_outputs = nnef_module.forward(*torch_inputs)
 
     assert len(torch_outputs) == len(nnef_graph.outputs)
-    return tuple(NNEFModule.to_numpy_array(output, nnef_dtype=tensor.dtype)
+    return tuple(to_numpy_array(output, nnef_dtype=tensor.dtype)
                  for output, tensor in zip(torch_outputs, nnef_graph.outputs))
 
 
@@ -112,7 +112,7 @@ class ActivationExportHook(object):
 
         if nnef_tensor.name in self.tensor_names_to_export:
             nnef_io.write_nnef_tensor(filename=os.path.join(self.output_directory, nnef_tensor.name + ".dat"),
-                                      array=NNEFModule.to_numpy_array(torch_tensor, nnef_dtype=nnef_tensor.dtype))
+                                      array=to_numpy_array(torch_tensor, nnef_dtype=nnef_tensor.dtype))
 
 
 class Statistics(object):
@@ -142,7 +142,7 @@ class StatisticsHook(object):
         if not stat_tensor_tuple:  # seems like there were only bool or int tensors in the graph
             return {}
         stat_tensor = torch.stack(stat_tensor_tuple)
-        stat_numpy = NNEFModule.to_numpy_array(stat_tensor, nnef_dtype="scalar")
+        stat_numpy = to_numpy_array(stat_tensor, nnef_dtype="scalar")
         stats = {}
         for i, name in enumerate(tensor_names):
             stats[name] = Statistics(min=float(stat_numpy[i][0]),
@@ -180,4 +180,6 @@ __all__ = [
     "Statistics",
     "StatisticsHook",
     "NNEFModule",
+    "to_torch_tensor",
+    "to_numpy_array",
 ]
