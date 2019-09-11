@@ -40,7 +40,7 @@ def topk(data, axis, k):
 
 def get_args():
     parser = argparse.ArgumentParser(
-        description="NNEF-Tools/topk.py: Print argmax of tensor",
+        description="NNEF-Tools/topk.py: Print top k elements of a tensor along the given axis",
         formatter_class=argparse.RawTextHelpFormatter)
 
     parser.add_argument('tensor_path', help="""The path of the tensor""")
