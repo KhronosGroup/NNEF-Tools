@@ -50,6 +50,7 @@ namespace nnef
         static const Value ScalarOne = Value::scalar(1.0);
         static const Value ScalarHalf = Value::scalar(0.5);
 
+        static const Value IntegerMinusOne = Value::integer(-1);
         static const Value IntegerZero = Value::integer(0);
         static const Value IntegerOne = Value::integer(1);
 
@@ -89,6 +90,8 @@ namespace nnef
             Prototype("reshape", {
                 Param("input", GenericTensor),
                 Param("shape", Integers),
+                Param("axis_start", Integer, IntegerZero),
+                Param("axis_count", Integer, IntegerMinusOne),
             }, { Result("output", GenericTensor) }),
 
             Prototype("transpose", {
