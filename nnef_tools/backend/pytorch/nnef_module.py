@@ -36,15 +36,13 @@ class NNEFModule(torch.nn.Module):
                  custom_operations=None,  # type: typing.Optional[typing.Dict[str, typing.Callable]]
                  batch_normalization_momentum=0.1,  # type: float
                  tensor_hooks=None,  # type: typing.Optional[typing.List[_TensorHookType]]
-                 deallocate_nnef_tensors=False,  # type: bool
                  ):
         # type: (...)->None
         """
-            nnef_graph might be modified by this class if deallocate_nnef_tensors is True or training and write_nnef is used
+            nnef_graph might be modified by this class if training and write_nnef is used
         """
         super(NNEFModule, self).__init__()
         self._nnef_graph = nnef_graph
-        self._deallocate_nnef_tensors = deallocate_nnef_tensors
 
         for nnef_tensor in self._nnef_graph.tensors:
             if nnef_tensor.is_constant:
@@ -56,8 +54,6 @@ class NNEFModule(torch.nn.Module):
                 self.register_parameter(
                     self._safe_name(nnef_tensor.name),
                     torch.nn.Parameter(to_torch_tensor(np_array, nnef_dtype=nnef_tensor.dtype)))
-                if self._deallocate_nnef_tensors:
-                    nnef_tensor.data = np.array([])
 
         self._operations = {}
         self._operations.update(operations.operations)
@@ -147,11 +143,6 @@ class NNEFModule(torch.nn.Module):
                                                   nnef_tensor.dtype)
         writer = nnef_io.Writer()
         writer(self._nnef_graph, nnef_path)
-
-        if self._deallocate_nnef_tensors:
-            for nnef_tensor in self._nnef_graph.tensors:
-                if nnef_tensor.is_variable:
-                    nnef_tensor.data = np.array([])
 
     def _get_extra_attributes(self, op_name):
         if op_name == "batch_normalization":
