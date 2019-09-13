@@ -31,13 +31,9 @@ import tempfile
 import shutil
 import nnef
 
-import numpy as np
-
-from nnef_tools.io.input_source import InputSources
 from nnef_tools.core import utils
 from nnef_tools.io.nnef import nnef_io
 from nnef_tools.io.nnef.parser_config import NNEFParserConfig
-from nnef_tools.io.nnef.nnef_graph import *
 import nnef_tools.backend.pytorch as backend
 
 
@@ -55,52 +51,19 @@ please add its location to PYTHONPATH.
 - Quote parameters if they contain spaces or special characters.
 """)
 
-    parser.add_argument("--input-model",
-                        required=True,
-                        help="""Path of NNEF file, directory or archive""")
+    parser.add_argument("network",
+                        help="Path of NNEF file, directory or archive")
 
     parser.add_argument('--input',
-                        default=None,
-                        help="""An input_source or a tensor_name->input_source dictionary in Python syntax.
-The dictionary can also have "*" or a tuple of names as key, "*" meaning "for all other". 
-The following input sources are supported:
-- Random(algo, *args) for all types:
-    - Random('uniform', min, max) for int and float, range: [min, max]
-    - Random('normal', mean, std) for float
-    - Random('binomial', num, true_prob) for int, range: [0, num]
-    - Random('bernoulli', true_prob) for bool
-    Keyword arguments can not be used with Random.
-- Image(filename, color_format='RGB', data_format='NCHW', range=None, norm=None) for int and float:
-  Arguments:
-    - filename: string or list of strings, path(s) of jpg/png images, can have * in them
-    - color_format: RGB or BGR
-    - data_format: NCHW or NHWC
-    - range: [start, end] closed range
-    - norm: [mean, std] or [[mean0, mean1, mean2], [std0, std1, std2]]
-  The image is processed as follows:
-    - The image is loaded to float32[height, width, channels], values ranging from 0 to 255.
-    - The image is reordered to RGB or BGR, as requested.
-    - If range is not None, the image is transformed to the specified range. 
-      (The transform does not depend on the content of the image.)
-    - If norm is not None: image = (image - mean) / std
-    - The image is transformed to NCHW or NHWC as requested. 
-    - The image is casted to the target data type.
-- Tensor(filename) for all types:
-  Filename must be the path of an NNEF tensor file (.dat).
-The tokens [RGB, BGR, NCHW, NHWC, uniform, normal, binomial, bernoulli] can be written without quotes.
-Default: 
-  - float: Random('normal', 0.0, 1.0) 
-  - int: Random('binomial', 255, 0.5) 
-  - bool: Random('bernoulli', 0.5)""")
+                        required=False,
+                        nargs='+',
+                        help="Path of input tensors, relative to the directory of the NNEF model.\n"
+                             "By default they are read from the standard input through a pipe or redirect.")
 
-    parser.add_argument('--input-shape',
-                        help="""Use this to override input shapes.
-
-    Set all input shapes to [10, 224, 224, 3]:
-    --input-shape="[10, 224, 224, 3]"
-
-    Set different input shapes for each input:
-    --input-shape="{'input_name_1': [10, 224, 224, 3], 'input_name_2': [10, 299, 299, 3]}" """)
+    parser.add_argument('--output',
+                        required=False,
+                        help="The path of the output directory relative to the directory of the NNEF model.\n"
+                             "By default the standard output is used, but only if the command is piped or redirected.")
 
     parser.add_argument('--stats', action="store_true", help="Save statistics used for quantization")
 
@@ -135,35 +98,12 @@ Default: cuda if available, cpu otherwise.""")
                         nargs='*',
                         help="""Custom modules: e.g. package.module1 package.module2""")
 
-    parser.add_argument("--generate-weights",
-                        nargs='?',
-                        default=False,  # don't generate
-                        const=None,  # generate with default options
-                        help="""Generate and write random weight tensors. 
-Existing weights are not overwritten.
-Given my_network.nnef (or my_network.txt), it generates my_network.nnef.tgz.
-Optionally an input_source or a tensor_name->input_source dictionary can be provided.
-  - Please note that tensor *names* must be used, not labels.
-  - For the syntax and the defaults, see: --input.
-""")
-
-    parser.add_argument("--random-seed",
-                        required=False,
-                        default=-1,
-                        type=int,
-                        help="""Random seed to use in random generation. 
-Default: -1 (Get the seed from /dev/urandom or the clock)""")
-
     args = parser.parse_args(args=argv[1:])
-    args.input = InputSources(args.input)
-    if args.generate_weights is not False:
-        args.generate_weights = InputSources(args.generate_weights)
 
-    has_weights = not (os.path.isfile(args.input_model) and not args.input_model.endswith('.tgz'))
-    if not has_weights and args.generate_weights is False:
-        print("Error: Seems like you have specified an NNEF file without weights. "
-              "Specify the whole directory/tgz or use --generate-weights.")
-        exit(1)
+    has_weights = not (os.path.isfile(args.network) and not args.network.endswith('.tgz'))
+    if not has_weights:
+        raise utils.NNEFToolsException("Error: Seems like you have specified an NNEF file without weights. "
+                                       "Please use generate_weights.py")
 
     return args
 
@@ -179,82 +119,54 @@ def get_custom_runners(module_names):
     return runners
 
 
-def generate_weights(g, nnef_path, output_dir, input_sources):
-    # type: (NNEFGraph, str, str, InputSources)->bool
-    did_write = False
-    warned = False
-    for tensor in g.tensors:
-        if tensor.is_variable:
-            dat_path = os.path.join(output_dir, tensor.label + '.dat')
-            if os.path.exists(dat_path):
-                if not warned:
-                    print("Warning: leaving existing weights unchanged".format(tensor.name, tensor.label))
-                    warned = True
-            else:
-                array = input_sources.create_input(tensor.name, np_dtype=tensor.get_numpy_dtype(), shape=tensor.shape)
-                nnef_io.write_nnef_tensor(dat_path, array)
-                did_write = True
-    if not os.path.isdir(nnef_path):
-        shutil.copy(nnef_path, os.path.join(output_dir, 'graph.nnef'))
-        did_write = True
-    return did_write
-
-
 def _is_inside(dir, rel_path):
     prefix = utils.path_without_trailing_separator(os.path.abspath(dir)) + os.sep
     str = utils.path_without_trailing_separator(os.path.abspath(os.path.join(dir, rel_path))) + os.sep
     return str.startswith(prefix)
 
 
-def _evaluate_input_shape(s):
-    try:
-        if not s:
-            return None
-        else:
-            return eval(s)
-    except Exception:
-        print("Error: Can not evaluate --input-shape {}".format(s), file=sys.stderr)
-        exit(1)
-
-
 def run_using_argv(argv):
     try:
         args = get_args(argv)
-        if args.random_seed != -1:
-            np.random.seed(args.random_seed)
-        parent_dir_of_input_model = os.path.dirname(utils.path_without_trailing_separator(args.input_model))
+
+        if args.input is None:
+            if sys.stdin.isatty():
+                raise utils.NNEFToolsException("No input provided!")
+            utils.set_stdin_to_binary()
+
+        if args.output is None:
+            if sys.stdout.isatty():
+                raise utils.NNEFToolsException("No output provided!")
+            utils.set_stdout_to_binary()
+
+        parent_dir_of_input_model = os.path.dirname(utils.path_without_trailing_separator(args.network))
         tmp_dir = None
-        if args.input_model.endswith('.tgz'):
+
+        if args.network.endswith('.tgz'):
             nnef_path = tmp_dir = tempfile.mkdtemp(prefix="nnef_", dir=parent_dir_of_input_model)
-            utils.tgz_extract(args.input_model, nnef_path)
+            utils.tgz_extract(args.network, nnef_path)
         else:
-            nnef_path = args.input_model
+            nnef_path = args.network
+
         try:
             parser_configs = NNEFParserConfig.load_configs(args.custom_operations, load_standard=True)
-            reader = nnef_io.Reader(parser_configs=parser_configs, input_shape=_evaluate_input_shape(args.input_shape))
 
-            did_generate_weights = False
-            if args.generate_weights is not False:
+            if args.input is None:
+                reader = nnef_io.Reader(parser_configs=parser_configs)
                 # read without weights
                 graph = reader(os.path.join(nnef_path, 'graph.nnef') if os.path.isdir(nnef_path) else nnef_path)
-                if os.path.isdir(nnef_path):
-                    output_path = nnef_path
-                elif nnef_path.endswith('.nnef') or nnef_path.endswith('.txt'):
-                    output_path = tmp_dir = tempfile.mkdtemp(prefix="nnef_", dir=parent_dir_of_input_model)
-                else:
-                    assert False
-                did_generate_weights = generate_weights(graph,
-                                                        nnef_path,
-                                                        output_path,
-                                                        input_sources=args.generate_weights)
-                nnef_path = output_path
+                input_count = len(graph.inputs)
+
+                inputs = tuple(nnef.read_tensor(sys.stdin)[0] for _ in range(input_count))
+                assert not sys.stdin.read(), "Extra bytes on stdin"
+            else:
+                inputs = tuple(nnef_io.read_nnef_tensor(os.path.join(nnef_path, path))
+                               for path in args.input)
+
+            reader = nnef_io.Reader(parser_configs=parser_configs,
+                                    input_shape=tuple(list(input.shape) for input in inputs))
 
             graph = reader(nnef_path)
-
-            inputs = tuple(args.input.create_input(name=input.name,
-                                                   np_dtype=input.get_numpy_dtype(),
-                                                   shape=input.shape,
-                                                   allow_bigger_batch=True) for input in graph.inputs)
 
             tensor_hooks = []
 
@@ -279,11 +191,18 @@ def run_using_argv(argv):
             if args.permissive:
                 backend.try_to_fix_unsupported_attributes(graph)
 
-            backend.run(nnef_graph=graph,
-                        inputs=inputs,
-                        device=args.device,
-                        custom_operations=get_custom_runners(args.custom_operations),
-                        tensor_hooks=tensor_hooks)
+            outputs = backend.run(nnef_graph=graph,
+                                  inputs=inputs,
+                                  device=args.device,
+                                  custom_operations=get_custom_runners(args.custom_operations),
+                                  tensor_hooks=tensor_hooks)
+
+            if args.output is None:
+                for array in outputs:
+                    nnef.write_tensor(sys.stdout, array)
+            else:
+                for tensor, array in zip(graph.outputs, outputs):
+                    nnef_io.write_nnef_tensor(os.path.join(nnef_path, args.output, tensor.name + '.dat'), array)
 
             if stats_hook:
                 if args.stats_path.endswith('/') or args.stats_path.endswith('\\'):
@@ -292,16 +211,16 @@ def run_using_argv(argv):
                     stats_path = os.path.join(nnef_path, args.stats_path)
                 stats_hook.save_statistics(stats_path)
 
-            if tmp_dir and (did_generate_weights
-                            or (args.stats and _is_inside(nnef_path, args.stats_path))
-                            or (args.activations is not None and _is_inside(nnef_path, args.activations_path))):
-                if args.input_model.endswith('.tgz'):
-                    print("Info: Changing input archive")
-                    shutil.move(args.input_model, args.input_model + '.nnef-tools-backup')
-                    utils.tgz_compress(dir_path=nnef_path, file_path=args.input_model)
-                    os.remove(args.input_model + '.nnef-tools-backup')
+            if tmp_dir and ((args.output and _is_inside(nnef_path, args.output))
+                            or (args.activations is not None and _is_inside(nnef_path, args.activations_path))
+                            or (args.stats and _is_inside(nnef_path, args.stats_path))):
+                if args.network.endswith('.tgz'):
+                    print("Info: Changing input archive", file=sys.stderr)
+                    shutil.move(args.network, args.network + '.nnef-tools-backup')
+                    utils.tgz_compress(dir_path=nnef_path, file_path=args.network)
+                    os.remove(args.network + '.nnef-tools-backup')
                 else:
-                    output_path = args.input_model.rsplit('.', 1)[0] + '.nnef.tgz'
+                    output_path = args.network.rsplit('.', 1)[0] + '.nnef.tgz'
                     backup_path = output_path + '.nnef-tools-backup'
                     if os.path.exists(output_path):
                         shutil.move(output_path, backup_path)

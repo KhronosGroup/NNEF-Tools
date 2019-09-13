@@ -42,7 +42,12 @@ def get_args(argv):
     parser = argparse.ArgumentParser(
         description="NNEF-Tools/generate_weights.py: Generate weights for an NNEF network.\n"
                     "Existing weights are not overwritten.",
-        formatter_class=argparse.RawTextHelpFormatter)
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog="""Tips:
+- If you refer to a Python package or module that is not in the current directory,
+please add its location to PYTHONPATH.
+- Quote parameters if they contain spaces or special characters.
+""")
 
     parser.add_argument("network", help="Path of an NNEF model or a text file.\n"
                                         "Given my_network.nnef (or my_network.txt), it generates my_network.nnef.tgz.")
@@ -94,7 +99,8 @@ def generate_weights(g, nnef_path, output_dir, input_sources):
             dat_path = os.path.join(output_dir, tensor.label + '.dat')
             if os.path.exists(dat_path):
                 if not warned:
-                    print("Warning: leaving existing weights unchanged".format(tensor.name, tensor.label))
+                    print("Warning: leaving existing weights unchanged".format(tensor.name, tensor.label),
+                          file=sys.stderr)
                     warned = True
             else:
                 array = input_sources.create_input(tensor.name, np_dtype=tensor.get_numpy_dtype(), shape=tensor.shape)
@@ -145,7 +151,7 @@ def main():
 
             if tmp_dir and did_generate_weights:
                 if args.network.endswith('.tgz'):
-                    print("Info: Changing input archive")
+                    print("Info: Changing input archive", file=sys.stderr)
                     shutil.move(args.network, args.network + '.nnef-tools-backup')
                     utils.tgz_compress(dir_path=nnef_path, file_path=args.network)
                     os.remove(args.network + '.nnef-tools-backup')
