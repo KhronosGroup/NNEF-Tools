@@ -161,7 +161,7 @@ def main():
             if tmp_dir:
                 shutil.rmtree(tmp_dir)
     except Exception as e:
-        print(str(e), file=sys.stderr)
+        print('Error: {}'.format(e), file=sys.stderr)
         exit(1)
 
 

@@ -105,7 +105,7 @@ def main():
         else:
             nnef.write_tensor(sys.stdout, arr)
     except Exception as e:
-        print(str(e), file=sys.stderr)
+        print('Error: {}'.format(e), file=sys.stderr)
         exit(1)
 
 

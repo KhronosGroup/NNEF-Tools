@@ -171,7 +171,7 @@ def _debug_print(nnef_graph, file_handle=None):
     # type: (NNEFGraph, typing.Optional[typing.TextIO]) -> None
 
     if file_handle is None:
-        file_handle = sys.stdout
+        file_handle = sys.stderr
 
     _print(nnef_graph, file_handle=file_handle)
 

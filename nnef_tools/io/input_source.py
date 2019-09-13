@@ -112,6 +112,7 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
             input_source = RandomInput('bernoulli', 0.5)
         else:
             raise utils.NNEFToolsException("Random does not support this dtype: {}".format(np_dtype.name))
+        
     if isinstance(input_source, RandomInput):
         if input_source.algo == 'uniform':
             if 'float' in np_dtype.name:
