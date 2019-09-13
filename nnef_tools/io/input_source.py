@@ -15,11 +15,12 @@
 from __future__ import division, print_function, absolute_import
 
 import glob
+import math
 import os
+import sys
 import typing
 from collections import OrderedDict
 
-import math
 import nnef
 import numpy as np
 import six
@@ -143,7 +144,7 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
         import skimage.color
         import skimage.transform
 
-        assert len(shape) == 4, "ImageInput can only produce tensors with rank=4"
+        assert shape is None or len(shape) == 4, "ImageInput can only produce tensors with rank=4"
         assert input_source.data_format.upper() in [ImageInput.DATA_FORMAT_NCHW, ImageInput.DATA_FORMAT_NHWC]
         assert input_source.color_format.upper() in [ImageInput.COLOR_FORMAT_RGB, ImageInput.COLOR_FORMAT_BGR]
         imgs = []
@@ -151,16 +152,18 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
             filenames = sorted(glob.glob(os.path.expanduser(pattern)))
             assert filenames, "No files found for path: {}".format(pattern)
             for filename in filenames:
-                if input_source.data_format.upper() == ImageInput.DATA_FORMAT_NCHW:
-                    if shape[1] != 3:
-                        raise utils.NNEFToolsException(
-                            'NCHW image is specified as input, but channel dimension of input tensor is not 3.')
-                    target_size = [shape[2], shape[3]]
-                else:
-                    if shape[3] != 3:
-                        raise utils.NNEFToolsException(
-                            'NHWC image is specified as input, but channel dimension of input tensor is not 3.')
-                    target_size = [shape[1], shape[2]]
+                target_size = None
+                if shape is not None:
+                    if input_source.data_format.upper() == ImageInput.DATA_FORMAT_NCHW:
+                        if shape[1] != 3:
+                            raise utils.NNEFToolsException(
+                                'NCHW image is specified as input, but channel dimension of input tensor is not 3.')
+                        target_size = [shape[2], shape[3]]
+                    else:
+                        if shape[3] != 3:
+                            raise utils.NNEFToolsException(
+                                'NHWC image is specified as input, but channel dimension of input tensor is not 3.')
+                        target_size = [shape[1], shape[2]]
 
                 img = skimage.img_as_ubyte(skimage.io.imread(filename))
                 if len(img.shape) == 2:
@@ -185,10 +188,11 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
                     std = np.array(input_source.norm[1], dtype=np.float32)
                     img = (img - mean) / std
 
-                img = skimage.transform.resize(img, target_size,
-                                               preserve_range=True,
-                                               anti_aliasing=True,
-                                               mode='reflect')
+                if target_size is not None:
+                    img = skimage.transform.resize(img, target_size,
+                                                   preserve_range=True,
+                                                   anti_aliasing=True,
+                                                   mode='reflect')
 
                 img = img.astype(np_dtype)
 
@@ -198,12 +202,14 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
                 img = np.expand_dims(img, 0)
 
                 imgs.append(img)
-        if len(imgs) < shape[0]:
-            print("Info: Network batch size bigger than supplied data, repeating it")
+        if shape is not None and len(imgs) < shape[0]:
+            print("Info: Network batch size bigger than supplied data, repeating it", file=sys.stderr)
             imgs = imgs * ((shape[0] + len(imgs) - 1) // len(imgs))
             imgs = imgs[:shape[0]]
             assert len(imgs) == shape[0]
-        assert len(imgs) == shape[0] or allow_bigger_batch
+        assert shape is None or len(imgs) == shape[0] or allow_bigger_batch
+        if not all(img.shape == imgs[0].shape for img in imgs):
+            raise utils.NNEFToolsException("The size of all images must be the same, or --size must be specified")
         return np.concatenate(tuple(imgs), 0)
     elif isinstance(input_source, NNEFTensorInput):
         with open(input_source.filename) as f:

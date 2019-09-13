@@ -144,25 +144,20 @@ def write_tensor(file, tensor, version=(1, 0), quantization=None):
     _tofile(data, file)
 
 
-def read_tensor(file, repeated=False):
+def read_tensor(file):
     if isinstance(file, str):
         raise ValueError('file parameter must be a file object not a file name')
 
-    magic_bytes = file.read(2)
-    if repeated and not magic_bytes:
-        return None, None
-
-    [magic1, magic2] = np.frombuffer(magic_bytes, np.uint8, 2)
+    [magic1, magic2, major, minor] = _fromfile(file, dtype=np.uint8, count=4)
     if magic1 != 0x4E or magic2 != 0xEF:
         raise ValueError('not a valid NNEF file')
 
-    [major, minor] = _fromfile(file, dtype=np.uint8, count=2)
     if major > 1 or minor > 0:
         raise ValueError('unsupported file version')
 
     [data_length, rank] = _fromfile(file, dtype=np.uint32, count=2)
 
-    if not repeated and file.seekable():
+    if file.seekable():
         header_size = 128
         file_size = os.fstat(file.fileno()).st_size
         if file_size != header_size + data_length:

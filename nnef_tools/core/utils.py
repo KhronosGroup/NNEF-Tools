@@ -492,3 +492,22 @@ def call_each(funs, *args, **kwargs):
     if funs:
         for fun in funs:
             fun(*args, **kwargs)
+
+
+def set_stdin_to_binary():
+    import sys
+    if sys.version_info >= (3, 0):
+        sys.stdin = sys.stdin.buffer
+    elif sys.platform == 'win32':
+        import os, msvcrt
+        msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+
+
+def set_stdout_to_binary():
+    import sys
+
+    if sys.version_info >= (3, 0):
+        sys.stdout = sys.stdout.buffer
+    elif sys.platform == 'win32':
+        import os, msvcrt
+        msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
