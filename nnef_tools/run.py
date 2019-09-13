@@ -65,25 +65,29 @@ please add its location to PYTHONPATH.
                         help="The path of the output directory relative to the directory of the NNEF model.\n"
                              "By default the standard output is used, but only if the command is piped or redirected.")
 
-    parser.add_argument('--stats', action="store_true", help="Save statistics used for quantization")
+    parser.add_argument('--no-output', action="store_true", help='Do not write outputs')
 
-    parser.add_argument("--stats-path",
-                        required=False,
-                        default='graph.stats',
-                        help="""Path of stats file, relative to the directory of the NNEF model. 
-Default: graph.stats (inside model directory/archive)""")
+    parser.add_argument("--export-stats",
+                        nargs='?',
+                        default=None,
+                        const='graph.stats',
+                        help="""Set this to export statistics. 
+If a path is given it must be relative to the directory of the NNEF model.
+--stats: Write stats to graph.stats  
+--stats stats.txt: Write stats to stats.txt""")
 
-    parser.add_argument("--activations",
+    parser.add_argument("--export-activations",
+                        nargs='?',
+                        default=None,
+                        const='.',
+                        help="""Set this to dump activations. 
+If a path is given it must be relative to the directory of the NNEF model.
+--export-activations: Write activations inside model  
+--export-activations DIR: Write activations to DIR""")
+
+    parser.add_argument("--which-activations",
                         nargs='*',
-                        help="""Set this to dump activations.
---activations: Dump all activations. 
---activations tensor_1 tensor2: Dump activations for the listed tensors.""")
-
-    parser.add_argument("--activations-path",
-                        required=False,
-                        default='.',
-                        help="""Directory of activations, relative to the directory of the NNEF model. 
-Default: . (inside model directory/archive)""")
+                        help="""List tensor names to ensure that only those tensors are exported.""")
 
     parser.add_argument("--permissive",
                         action="store_true",
@@ -134,10 +138,11 @@ def run_using_argv(argv):
                 raise utils.NNEFToolsException("No input provided!")
             utils.set_stdin_to_binary()
 
-        if args.output is None:
-            if sys.stdout.isatty():
-                raise utils.NNEFToolsException("No output provided!")
-            utils.set_stdout_to_binary()
+        if not args.no_output:
+            if args.output is None:
+                if sys.stdout.isatty():
+                    raise utils.NNEFToolsException("No output provided!")
+                utils.set_stdout_to_binary()
 
         parent_dir_of_input_model = os.path.dirname(utils.path_without_trailing_separator(args.network))
         tmp_dir = None
@@ -170,21 +175,20 @@ def run_using_argv(argv):
 
             tensor_hooks = []
 
-            if args.activations is None:
-                pass
-            elif not args.activations:
-                tensor_hooks.append(
-                    backend.ActivationExportHook(tensor_names=[t.name
-                                                               for t in graph.tensors
-                                                               if not t.is_constant and not t.is_variable],
-                                                 output_directory=os.path.join(nnef_path, args.activations_path)))
-            else:
-                tensor_hooks.append(
-                    backend.ActivationExportHook(tensor_names=args.activations,
-                                                 output_directory=os.path.join(nnef_path, args.activations_path)))
+            if args.export_activations:
+                if args.which_activations is None:
+                    tensor_hooks.append(
+                        backend.ActivationExportHook(tensor_names=[t.name
+                                                                   for t in graph.tensors
+                                                                   if not t.is_constant and not t.is_variable],
+                                                     output_directory=os.path.join(nnef_path, args.export_activations)))
+                else:
+                    tensor_hooks.append(
+                        backend.ActivationExportHook(tensor_names=args.which_activations,
+                                                     output_directory=os.path.join(nnef_path, args.export_activations)))
 
             stats_hook = None
-            if args.stats:
+            if args.export_stats:
                 stats_hook = backend.StatisticsHook()
                 tensor_hooks.append(stats_hook)
 
@@ -197,23 +201,24 @@ def run_using_argv(argv):
                                   custom_operations=get_custom_runners(args.custom_operations),
                                   tensor_hooks=tensor_hooks)
 
-            if args.output is None:
-                for array in outputs:
-                    nnef.write_tensor(sys.stdout, array)
-            else:
-                for tensor, array in zip(graph.outputs, outputs):
-                    nnef_io.write_nnef_tensor(os.path.join(nnef_path, args.output, tensor.name + '.dat'), array)
+            if not args.no_output:
+                if args.output is None:
+                    for array in outputs:
+                        nnef.write_tensor(sys.stdout, array)
+                else:
+                    for tensor, array in zip(graph.outputs, outputs):
+                        nnef_io.write_nnef_tensor(os.path.join(nnef_path, args.output, tensor.name + '.dat'), array)
 
             if stats_hook:
-                if args.stats_path.endswith('/') or args.stats_path.endswith('\\'):
-                    stats_path = os.path.join(nnef_path, args.stats_path, 'graph.stats')
+                if args.export_stats.endswith('/') or args.export_stats.endswith('\\'):
+                    stats_path = os.path.join(nnef_path, args.export_stats, 'graph.stats')
                 else:
-                    stats_path = os.path.join(nnef_path, args.stats_path)
+                    stats_path = os.path.join(nnef_path, args.export_stats)
                 stats_hook.save_statistics(stats_path)
 
             if tmp_dir and ((args.output and _is_inside(nnef_path, args.output))
-                            or (args.activations is not None and _is_inside(nnef_path, args.activations_path))
-                            or (args.stats and _is_inside(nnef_path, args.stats_path))):
+                            or (args.export_activations is not None and _is_inside(nnef_path, args.export_activations))
+                            or (args.export_stats and _is_inside(nnef_path, args.export_stats))):
                 if args.network.endswith('.tgz'):
                     print("Info: Changing input archive", file=sys.stderr)
                     shutil.move(args.network, args.network + '.nnef-tools-backup')
@@ -236,11 +241,6 @@ def run_using_argv(argv):
     except nnef.Error as e:
         print("Error: " + str(e), file=sys.stderr)
         exit(1)
-
-
-# Call this if you don't want to reload the whole program for each run
-def run_using_command(command):
-    return run_using_argv(utils.command_to_argv(command))
 
 
 if __name__ == '__main__':
