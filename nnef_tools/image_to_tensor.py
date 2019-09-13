@@ -40,13 +40,13 @@ def get_args(argv):
         description="NNEF-Tools/image_to_tensor.py: Create tensor from (a batch of) image(s)",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog="""Image processing steps:
-    1. The image is loaded as float32.
+    1. The image is loaded as float32 with range [0, 255].
     2. The image is resized to the given size if specified.
     3. The image is transformed to RGB or BGR as requested.
     4. The image is transformed to the specified range. 
     5. The image is normalized as follows: image = (image - mean) / std
     6. The image is transformed to NCHW or NHWC as requested. 
-    7. The image is casted to the requested dtype.""")
+    7. The image is cast to the requested dtype.""")
 
     parser.add_argument('input', nargs='+', help="The path or paths of images, e.g. image.jpg, *.jpg, etc.")
     parser.add_argument('--output', required=False,
@@ -89,12 +89,12 @@ def get_args(argv):
                         nargs='+',
                         required=False,
                         type=int,
-                        help="Target image size: width [height]. Default: The size of the given images.\n"
+                        help="Target image size: width [height]. Default: The size of the given image(s).\n"
                              "E.g. 224 or 640 480")
 
     parser.add_argument("--dtype",
                         default="float32",
-                        help="Numpy dtype of the generated tensor (float32, etc.). Default: float32")
+                        help="Numpy dtype of the generated tensor. Default: float32")
 
     args = parser.parse_args(args=argv[1:])
 

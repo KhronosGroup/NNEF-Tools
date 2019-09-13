@@ -99,6 +99,7 @@ class NNEFTensorInput(InputSource):
         return "Tensor('{}')".format(self.filename)
 
 
+# TODO separate the creators by type
 def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
     assert isinstance(input_source, (DefaultInput, RandomInput, ImageInput, NNEFTensorInput))
     np_dtype = np.dtype(np_dtype)
