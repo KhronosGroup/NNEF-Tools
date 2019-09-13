@@ -34,7 +34,7 @@ class NetworkTestCases(unittest.TestCase):
             ' --params "Random(uniform, 0, 255)"'
             '|'
             './nnef_tools/run.py _models/nnef/bvlc_alexnet.onnx.nnef.tgz'
-            ' --no-output --export-stats ../../../out/alexnet/'))
+            ' --output-names --stats ../../../out/alexnet/'))
 
     def test_vgg16(self):
         download_once("https://sfo2.digitaloceanspaces.com/nnef-public/vgg16.onnx.nnef.tgz",
@@ -44,7 +44,7 @@ class NetworkTestCases(unittest.TestCase):
             ' --params "Random(uniform, 0, 1)" --shape 2 3 224 224'
             '|'
             './nnef_tools/run.py _models/nnef/vgg16.onnx.nnef.tgz'
-            ' --no-output --export-stats ../../../out/vgg16/'))
+            ' --output-names  ../../../out/vgg16/'))
 
     def test_vgg19(self):
         download_once("https://sfo2.digitaloceanspaces.com/nnef-public/vgg19.onnx.nnef.tgz",
@@ -54,7 +54,7 @@ class NetworkTestCases(unittest.TestCase):
             ' --params "Random(uniform, 0, 1)"'
             '|'
             './nnef_tools/run.py _models/nnef/vgg19.onnx.nnef.tgz'
-            ' --no-output --export-stats ../../../out/vgg19/'))
+            ' --output-names  ../../../out/vgg19/'))
 
     def test_googlenet_inception_v1(self):
         download_once("https://sfo2.digitaloceanspaces.com/nnef-public/inception_v1.onnx.nnef.tgz",
@@ -64,7 +64,7 @@ class NetworkTestCases(unittest.TestCase):
             ' --params "Random(uniform, 0, 255)"'
             '|'
             './nnef_tools/run.py _models/nnef/inception_v1.onnx.nnef.tgz'
-            ' --no-output --export-stats ../../../out/googlenet_inception_v1/'))
+            ' --output-names  ../../../out/googlenet_inception_v1/'))
 
     def test_googlenet_inception_v2(self):
         download_once("https://sfo2.digitaloceanspaces.com/nnef-public/inception_v2.onnx.nnef.tgz",
@@ -74,7 +74,7 @@ class NetworkTestCases(unittest.TestCase):
             ' --params "Random(uniform, 0, 255)"'
             '|'
             './nnef_tools/run.py _models/nnef/inception_v2.onnx.nnef.tgz'
-            ' --no-output --export-stats ../../../out/googlenet_inception_v2/'))
+            ' --output-names ../../../out/googlenet_inception_v2/'))
 
 # TODO rewrite these too
 

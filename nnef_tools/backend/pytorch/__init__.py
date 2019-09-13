@@ -22,6 +22,7 @@ import typing
 import numpy as np
 import six
 import torch
+import nnef
 
 from nnef_tools.backend.pytorch.nnef_module import NNEFModule, to_torch_tensor, to_numpy_array
 from nnef_tools.core import json_utils
@@ -105,6 +106,10 @@ def try_to_fix_unsupported_attributes(nnef_graph):
 
 class ActivationExportHook(object):
     def __init__(self, tensor_names, output_directory):
+        """
+        :param tensor_names:
+        :param output_directory: None means stdout
+        """
         self.output_directory = output_directory
         self.tensor_names_to_export = set(tensor_names)
 
@@ -112,8 +117,13 @@ class ActivationExportHook(object):
         # type: (NNEFTensor, torch.Tensor)->None
 
         if nnef_tensor.name in self.tensor_names_to_export:
-            nnef_io.write_nnef_tensor(filename=os.path.join(self.output_directory, nnef_tensor.name + ".dat"),
-                                      array=to_numpy_array(torch_tensor, nnef_dtype=nnef_tensor.dtype))
+            array = to_numpy_array(torch_tensor, nnef_dtype=nnef_tensor.dtype)
+
+            if self.output_directory is not None:
+                nnef_io.write_nnef_tensor(filename=os.path.join(self.output_directory, nnef_tensor.name + ".dat"),
+                                          array=array)
+            else:
+                nnef.write_tensor(sys.stdout, array)
 
 
 class Statistics(object):

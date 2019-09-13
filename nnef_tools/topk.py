@@ -74,7 +74,6 @@ def main():
             exit(1)
 
         tensor = nnef.read_tensor(sys.stdin)[0]
-        assert not sys.stdin.read(), "Extra bytes on stdin"
     else:
         tensor = read_nnef_tensor(args.tensor_path)
 
