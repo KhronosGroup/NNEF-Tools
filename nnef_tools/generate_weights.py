@@ -40,8 +40,7 @@ from nnef_tools.io.nnef.nnef_graph import *
 
 def get_args(argv):
     parser = argparse.ArgumentParser(
-        description="NNEF-Tools/generate_weights.py: Generate weights for an NNEF network.\n"
-                    "Existing weights are not overwritten.",
+        description="Generate (missing) weights for an NNEF model",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog="""Tips:
 - If you refer to a Python package or module that is not in the current directory,
@@ -62,10 +61,10 @@ Please quote this parameter.
 The following input sources are supported:
 
 Random(algo, *args):
-    Random(uniform, min, max) for int and float, range: [min, max]
-    Random(normal, mean, std) for float
-    Random(binomial, num, true_prob) for int, range: [0, num]
-    Random(bernoulli, true_prob) for bool
+    Random('uniform', min, max) for int and float, range: [min, max]
+    Random('normal', mean, std) for float
+    Random('binomial', num, true_prob) for int, range: [0, num]
+    Random('bernoulli', true_prob) for bool
     Keyword arguments can not be used with Random.
     
 Tensor('tensor.dat'):

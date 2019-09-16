@@ -37,7 +37,7 @@ from nnef_tools.core import utils
 
 def get_args(argv):
     parser = argparse.ArgumentParser(
-        description="NNEF-Tools/image_to_tensor.py: Create tensor from (a batch of) image(s)",
+        description="Create an NNEF tensor from (a batch of) image(s)",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog="""Image processing steps:
     1. The image is loaded as float32 with range [0, 255].

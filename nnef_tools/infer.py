@@ -43,7 +43,7 @@ def ensure_dirs(dir):
 
 
 def get_args(argv):
-    parser = argparse.ArgumentParser(description="NNEFTools/run: NNEF runner tool",
+    parser = argparse.ArgumentParser(description="NNEF inference tool",
                                      formatter_class=argparse.RawTextHelpFormatter,
                                      epilog="""Tips:
 - If you refer to a Python package or module that is not in the current directory,
@@ -151,13 +151,14 @@ def run_using_argv(argv):
         try:
             parser_configs = NNEFParserConfig.load_configs(args.custom_operations, load_standard=True)
 
-            if args.input is None:
-                reader = nnef_io.Reader(parser_configs=parser_configs)
-                # read without weights
-                graph = reader(os.path.join(nnef_path, 'graph.nnef') if os.path.isdir(nnef_path) else nnef_path)
-                input_count = len(graph.inputs)
+            # read without weights
+            reader = nnef_io.Reader(parser_configs=parser_configs)
+            graph = reader(os.path.join(nnef_path, 'graph.nnef') if os.path.isdir(nnef_path) else nnef_path)
 
-                inputs = tuple(nnef.read_tensor(sys.stdin)[0] for _ in range(input_count))
+            if args.input is None:
+                inputs = tuple(nnef.read_tensor(sys.stdin)[0] for _ in range(len(graph.inputs)))
+            elif len(args.input) == 1 and os.path.isdir(args.input[0]):
+                inputs = tuple(nnef_io.read_nnef_tensor(os.path.join(args.input[0], tensor.name + '.dat')) for tensor in graph.inputs)
             else:
                 inputs = tuple(nnef_io.read_nnef_tensor(path) for path in args.input)
 
@@ -200,7 +201,7 @@ def run_using_argv(argv):
                         nnef.write_tensor(sys.stdout, array)
                 else:
                     for tensor, array in zip(graph.outputs, outputs):
-                        nnef_io.write_nnef_tensor(os.path.join(nnef_path, args.output, tensor.name + '.dat'), array)
+                        nnef_io.write_nnef_tensor(os.path.join(args.output, tensor.name + '.dat'), array)
 
             if stats_hook:
                 if args.stats.endswith('/') or args.stats.endswith('\\'):

@@ -50,7 +50,7 @@ def _evaluate_input_shape(shape):
 
 def get_args(argv):
     parser = argparse.ArgumentParser(
-        description="NNEF-Tools/generate_inputs.py: Generate inputs for an NNEF network.\n",
+        description="Generate inputs for an NNEF model",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog="""Tips:
 - If you refer to a Python package or module that is not in the current directory,
