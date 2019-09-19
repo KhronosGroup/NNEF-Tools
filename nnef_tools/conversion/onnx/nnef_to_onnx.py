@@ -434,9 +434,9 @@ def partial_convert_pool(converter, nnef_op, onnx_graph, target_name, input, out
                                   filter=nnef_op.attribs['size'][2:],
                                   stride=strides[2:],
                                   dilation=dilations[2:])
-
-    assert pads[:2] == [(0, 0), (0, 0)], "Padding in batch and channel dimensions is not supported in ONNX"
-    pads = pads[2:]
+    else:
+        assert pads[:2] == [(0, 0), (0, 0)], "Padding in batch and channel dimensions ({}) is not supported in ONNX".format(pads)
+        pads = pads[2:]
     pads = converter.onnx_pads(pads)
 
     assert nnef_op.attribs['size'][:2] == strides[:2] == dilations[:2] == [1, 1], \
@@ -480,9 +480,9 @@ def convert_desample(converter, nnef_op, onnx_graph):
                                   filter=nnef_op.attribs['size'],
                                   stride=strides,
                                   dilation=dilations)
-
-    assert pads[:2] == [(0, 0), (0, 0)], "Padding in batch and channel dimensions is not supported in ONNX"
-    pads = pads[2:]
+    else:
+        assert pads[:2] == [(0, 0), (0, 0)], "Padding in batch and channel dimensions ({}) is not supported in ONNX".format(pads[:2])
+        pads = pads[2:]
     pads = converter.onnx_pads(pads)
 
     assert nnef_op.attribs['size'][:2] == strides[:2] == dilations[:2] == [1, 1], \
