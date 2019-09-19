@@ -214,7 +214,7 @@ DefaultTraceableFunctions = [
     TraceableFunction("tf.nn.relu6(features:T)", ["tf.nn.relu6"]),
     TraceableFunction("tf.nn.softsign(features:T)", ["tf.nn.softsign"]),
     TraceableFunction("tf.nn.softplus(features:T)", ["tf.nn.softplus"]),
-    TraceableFunction("tf.nn.leaky_relu(features:T, alpha:T)", ["_tf_functions.leaky_relu"]),
+    TraceableFunction("tf.nn.leaky_relu(features:T, alpha)", ["_tf_functions.leaky_relu"]),
     TraceableFunction("tf.nn.conv1d(value:T, filters:T, stride[], padding, data_format?)", ["tf.nn.conv1d"]),
     TraceableFunction("tf.nn.conv2d(input:T, filter:T, strides, padding, data_format?, dilations?)", ["tf.nn.conv2d"]),
     TraceableFunction("tf.nn.conv3d(input:T, filter:T, strides, padding, data_format?, dilations?)", ["tf.nn.conv3d"]),

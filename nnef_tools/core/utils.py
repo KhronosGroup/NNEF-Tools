@@ -511,3 +511,15 @@ def set_stdout_to_binary():
     elif sys.platform == 'win32':
         import os, msvcrt
         msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+
+
+def to_identifier(name):
+    if not any(c.isalnum() for c in name):
+        current_id = getattr(to_identifier, 'next_id', 0)
+        to_identifier.next_id = current_id + 1
+        return "_{}".format(current_id)
+
+    if name[0] != '_' and not name[0].isalpha():
+        name = "_{}".format(name)
+
+    return ''.join(c if c.isalnum() else "_" for c in name)

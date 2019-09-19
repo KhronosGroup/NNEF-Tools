@@ -1233,9 +1233,17 @@ def convert_prelu(converter, nnef_op, tf_graph):
     input, alpha = converter.converted_tensors(nnef_op.inputs)
     output = converter.converted_tensor(nnef_op.output)
 
+    zero = converter.create_constant_tf_tensor(tf_graph, 0.0)
+
+    cmp = TFTensor(graph=tf_graph, shape=list(input.shape), dtype="bool")
+    TFOperation(graph=tf_graph, name="tf.greater", inputs=(input, zero), outputs=cmp)
+
+    scaled = TFTensor(graph=tf_graph, shape=list(input.shape), dtype="float32")
+    TFOperation(graph=tf_graph, name="tf.multiply", inputs=(input, alpha), outputs=scaled)
+
     TFOperation(graph=tf_graph,
-                name="tf.nn.leaky_relu",
-                inputs=(input, alpha),
+                name="tf.where",
+                inputs=(cmp, input, scaled),
                 outputs=output)
 
 
@@ -1243,12 +1251,13 @@ def convert_leaky_relu(converter, nnef_op, tf_graph):
     # type: (Converter, NNEFOperation, TFGraph)->None
 
     input = converter.converted_tensor(nnef_op.input)
-    alpha = converter.create_constant_tf_tensor(tf_graph=tf_graph, data=nnef_op.attribs["alpha"])
+    alpha = nnef_op.attribs["alpha"]
     output = converter.converted_tensor(nnef_op.output)
 
     TFOperation(graph=tf_graph,
                 name="tf.nn.leaky_relu",
-                inputs=(input, alpha),
+                attribs=dict(alpha=alpha),
+                inputs=input,
                 outputs=output)
 
 

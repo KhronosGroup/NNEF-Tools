@@ -260,6 +260,7 @@ _DefaultPropagators = {
     "Greater": partial(propagate_broadcast, dtype='DT_BOOL'),
     "GreaterEqual": partial(propagate_broadcast, dtype='DT_BOOL'),
     "Identity": propagate_first,
+    "LeakyRelu": propagate_first,
     "Less": partial(propagate_broadcast, dtype='DT_BOOL'),
     "LessEqual": partial(propagate_broadcast, dtype='DT_BOOL'),
     "Log": propagate_first,

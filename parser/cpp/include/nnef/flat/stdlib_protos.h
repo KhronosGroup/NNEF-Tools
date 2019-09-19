@@ -50,6 +50,7 @@ namespace nnef
         static const Value ScalarOne = Value::scalar(1.0);
         static const Value ScalarHalf = Value::scalar(0.5);
 
+        static const Value IntegerMinusOne = Value::integer(-1);
         static const Value IntegerZero = Value::integer(0);
         static const Value IntegerOne = Value::integer(1);
 
@@ -89,6 +90,8 @@ namespace nnef
             Prototype("reshape", {
                 Param("input", GenericTensor),
                 Param("shape", Integers),
+                Param("axis_start", Integer, IntegerZero),
+                Param("axis_count", Integer, IntegerMinusOne),
             }, { Result("output", GenericTensor) }),
 
             Prototype("transpose", {
@@ -134,6 +137,18 @@ namespace nnef
                 Param("axes", Integers),
             }, { Result("output", GenericTensor) }),
 
+            Prototype("pad", {
+                Param("input", ScalarTensor),
+                Param("padding", IntegerPairs),
+                Param("border", String, StringConstant),
+                Param("value", Scalar, ScalarZero),
+            }, { Result("output", ScalarTensor) }),
+            
+            Prototype("tile", {
+                Param("input", GenericTensor),
+                Param("repeats", Integers),
+            }, { Result("output", GenericTensor) }),
+            
 
             Prototype("add", {
                 Param("x", ScalarTensor),
@@ -242,6 +257,14 @@ namespace nnef
             }, { Result("y", ScalarTensor) }),
             
             Prototype("log", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("sin", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("cos", {
                 Param("x", ScalarTensor),
             }, { Result("y", ScalarTensor) }),
             
@@ -572,6 +595,16 @@ namespace nnef
                 Param("input", ScalarTensor),
                 Param("axes", Integers),
             }, { Result("output", IntegerTensor) }),
+            
+            Prototype("any_reduce", {
+                Param("input", LogicalTensor),
+                Param("axes", Integers),
+            }, { Result("output", LogicalTensor) }),
+            
+            Prototype("all_reduce", {
+                Param("input", LogicalTensor),
+                Param("axes", Integers),
+            }, { Result("output", LogicalTensor) }),
             
             Prototype("moments", {
                 Param("input", ScalarTensor),

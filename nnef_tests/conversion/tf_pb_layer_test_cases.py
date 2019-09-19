@@ -113,6 +113,19 @@ class TestActivations(TFPbTestRunner):
 
         self._test_layer(output_name, "z1")
 
+    # Activations_nn_LeakyRelu Test
+    def nn_leaky_relu_network(self, x):
+        z1 = tf.nn.leaky_relu(x, alpha=0.1, name="a/b/c")
+        return z1
+
+    def test_nn_leaky_relu(self):
+        tf.reset_default_graph()
+        output_name = self.name + sys._getframe().f_code.co_name[5:] + '/'
+        x = tf.placeholder(tf.float32, shape=[None, 1, 1, 1], name='i/n/p/u/t')
+        self.nn_leaky_relu_network(x)
+
+        self._test_layer(output_name, "a/b/c")
+
 
 class TestBasicMath(TFPbTestRunner):
 

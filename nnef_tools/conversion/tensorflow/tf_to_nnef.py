@@ -16,6 +16,7 @@ from __future__ import division, print_function, absolute_import
 
 import copy
 import typing
+from collections import OrderedDict
 from functools import partial
 
 import numpy as np
@@ -108,12 +109,20 @@ class Converter(converter.Converter[TFTensor, TFOperation, TFGraph,
     def convert_graph(self, source_graph):
         # type: (TFGraph)->NNEFGraph
         # TODO: we dont have to collapse conv/add or conv/pad if we use ext
+
         if any(t.quantization is not None for t in source_graph.tensors):
             self.is_quantized = True
         tf_to_nnef_passes.pre_conversion_pass(source_graph)
-        # source_graph.dump()
-        target_graph = super(Converter, self).convert_graph(source_graph)
+        target_graph = super(Converter, self).convert_graph(source_graph)  # type: NNEFGraph
+
+        if target_graph.input_ids is not None:
+            target_graph.inputs = OrderedDict((utils.to_identifier(name), tensor)
+                                              for name, tensor in zip(target_graph.input_ids, target_graph.inputs))
+        if target_graph.output_ids is not None:
+            target_graph.outputs = OrderedDict((utils.to_identifier(name), tensor)
+                                               for name, tensor in zip(target_graph.output_ids, target_graph.outputs))
         target_graph.generate_missing_names()
+        
         return target_graph
 
     def can_include_in_conversion_info(self, source_tensor, target_tensor):
@@ -608,29 +617,16 @@ def generic_convert_binary(converter, tf_op, nnef_graph, target_name):
 def convert_leaky_relu(converter, tf_op, nnef_graph):
     # type: (Converter, TFOperation, NNEFGraph)->None
 
-    tf_x, tf_a = tf_op.inputs
+    x = converter.converted_tensor(tf_op.input)
+    alpha = tf_op.attribs["alpha"]
+    output = converter.converted_tensor(tf_op.output)
 
-    if converter.is_one_element_constant(tf_a):
-        x = converter.converted_tensor(tf_x)
-        a = converter.nnef_one_element_constant_value(tf_a)
-        output = converter.converted_tensor(tf_op.output)
-
-        NNEFOperation(
-            graph=nnef_graph,
-            name="leaky_relu",
-            inputs=x,
-            attribs=dict(alpha=a),
-            outputs=output)
-    else:
-        x, a = converter.converted_tensors((tf_x, tf_a))
-        output = converter.converted_tensor(tf_op.output)
-
-        NNEFOperation(
-            graph=nnef_graph,
-            name="prelu",
-            inputs=(x,
-                    converter.add_unsqueeze(nnef_graph, a, list(range(x.rank - a.rank))) if 0 < a.rank < x.rank else a),
-            outputs=output)
+    NNEFOperation(
+        graph=nnef_graph,
+        name="leaky_relu",
+        inputs=x,
+        attribs=dict(alpha=alpha),
+        outputs=output)
 
 
 def convert_squared_difference(converter, tf_op, nnef_graph):
