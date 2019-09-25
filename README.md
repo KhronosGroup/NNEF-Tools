@@ -9,7 +9,7 @@ This repository contains tools to generate and consume NNEF documents, such as a
 * [NNEF Model Zoo](models#nnef-model-zoo)
 * [NNEF Tests](#nnef-tests)
 * [NNEF Tools](nnef_tools#nnef-tools)
-* [NNEF Parser](#nnef-parser)
+* [NNEF Parser](parser#nnef-parser-project)
 
 ## NNEF Model Zoo
 A **Model Zoo** is now available; the 'models' folder contains a variety of [NNEF models](models#nnef-model-zoo) converted from various sources.
