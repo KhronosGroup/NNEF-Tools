@@ -219,8 +219,8 @@ def normalize_shape(input, **kwargs):
 
 
 def moments_shape(input, axes):
-    shape = normalize_shape(input, axes=axes)
-    return (shape, shape)
+    shape = reduce_shape(input, axes=axes)
+    return shape, list(shape)
 
 
 def downsample_shape(input, factor, **kwargs):
@@ -245,10 +245,10 @@ def reshape_shape(input, shape, axis_start, axis_count):
     assert sum(1 for s in shape if s == -1) <= 1, "at most one item may be -1 in 'shape', found {}".format(shape)
     assert 0 <= axis_start <= rank, "'axis_start' must be in range [0,{}], found {}".format(rank, axis_start)
     assert axis_count >= -1, "'axis_count' must be non-negative or -1, found {}".format(axis_count)
-    
+
     if axis_count == -1:
         axis_count = rank - axis_start
-    
+
     axis_end = axis_start + axis_count
 
     assert axis_end <= rank, "'axis_start' + 'axis_count' ({}) must be in range [0,{}]".format(axis_end, rank)
