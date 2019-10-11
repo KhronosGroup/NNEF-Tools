@@ -269,6 +269,12 @@ namespace nnef
             checkItems();
             return _items;
         }
+        
+        template<typename T>
+        const T& get() const
+        {
+            return get(T());
+        }
 
         size_t size() const
         {
@@ -297,6 +303,33 @@ namespace nnef
             std::stringstream ss;
             ss << *this;
             return ss.str();
+        }
+        
+    private:
+        
+        const scalar_t& get( scalar_t ) const
+        {
+            return scalar();
+        }
+        
+        const integer_t& get( integer_t ) const
+        {
+            return integer();
+        }
+        
+        const logical_t& get( logical_t ) const
+        {
+            return logical();
+        }
+        
+        const string_t& get( string_t ) const
+        {
+            return string();
+        }
+        
+        const identifier_t& get( identifier_t ) const
+        {
+            return identifier();
         }
         
     private:
