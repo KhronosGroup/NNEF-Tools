@@ -55,8 +55,7 @@ class TFLiteTestRunner(unittest.TestCase):
                                 --input-model={input} \\
                                 --output-model=out/nnef/{network}.nnef \\
                                 --permissive \\
-                                --io-transform SMART_NHWC_TO_NCHW \\
-                                --conversion-info
+                                --io-transform SMART_NHWC_TO_NCHW
         """.format(input=filename, network=network_name)
         print(command)
         convert.convert_using_command(command)
@@ -67,8 +66,7 @@ class TFLiteTestRunner(unittest.TestCase):
                                 --input-model=out/nnef/{network}.nnef \\
                                 --output-model=out/tflite/{network}.tflite \\
                                 --permissive \\
-                                --io-transform SMART_NCHW_TO_NHWC \\
-                                --conversion-info
+                                --io-transform SMART_NCHW_TO_NHWC
         """.format(network=network_name)
         print(command)
         convert.convert_using_command(command)

@@ -50,7 +50,7 @@ class Squeeze(Transform):
         return Squeeze(self.axes)
 
     def apply_np(self, arr):
-        return np.squeeze(arr, self.axes)
+        return np.squeeze(arr, tuple(self.axes))
 
     def __repr__(self):
         return "Squeeze({})".format(self.axes)

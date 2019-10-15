@@ -93,8 +93,7 @@ class ONNXTestRunner(unittest.TestCase):
                                 --output-model out/nnef/{}.nnef \\
                                 --input-shape "{}" \\
                                 --custom-converters {} \\
-                                --permissive \\
-                                --conversion-info
+                                --permissive
         """.format(filename, network_name, source_shape, ' '.join(convs))
         print(command)
         convert.convert_using_command(command)
@@ -106,8 +105,7 @@ class ONNXTestRunner(unittest.TestCase):
                                 --input-model out/nnef/{}.nnef \\
                                 --output-model out/onnx/{}.onnx \\
                                 --custom-converters {} \\
-                                --permissive \\
-                                --conversion-info
+                                --permissive
         """.format(network_name, network_name, ' '.join(convs))
         print(command)
         convert.convert_using_command(command)
