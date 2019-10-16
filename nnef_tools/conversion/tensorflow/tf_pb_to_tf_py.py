@@ -80,7 +80,7 @@ def evaluate_and_convert(tf_graph, source_shapes=None):
     for op in tf_graph.operations:
         # Shape prop
         if op.name not in tf_pb_shape_inference._DefaultPropagators:
-            raise utils.NNEFToolsException("No shape propagator for {}".format(op.name))
+            raise utils.NNEFToolsException("Operation '{}' is not supported".format(op.name))
         propagated_shapes, propagated_dtypes = \
             tf_pb_shape_inference._DefaultPropagators[op.name](op, const_value_by_tensor)
         assert not utils.has_le_0(propagated_shapes)
