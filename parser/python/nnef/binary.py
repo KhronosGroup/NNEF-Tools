@@ -111,6 +111,10 @@ def write_tensor(file, tensor, version=(1, 0), quantization=None):
     _tofile(np.asarray([0x4E, 0xEF, version[0], version[1]], dtype=np.uint8), file)
 
     dtype, bits = _numpy_dtype_split(tensor.dtype)
+    qbits = quantization.get('bits-per-item')
+    if qbits is not None and qbits != bits:
+        raise ValueError('incompatible bits per item ({}) and tensor dtype ({})'.format(qbits, tensor.dtype))
+
     data_length = int((np.prod(tensor.shape) * bits + 7) // 8)
     _tofile(np.asarray([data_length, tensor.ndim], dtype=np.uint32), file)
 
@@ -189,7 +193,7 @@ def read_tensor(file):
 
     tensor = data.reshape(shape)
 
-    quantization = {'op-code': code}
+    quantization = {'op-code': code, 'bits-per-item': bits}
     if code == QUANT_CODE_LINEAR or code == QUANT_CODE_LOGARITHMIC:
         quantization['min'] = params[0]
         quantization['max'] = params[1]
