@@ -18,9 +18,9 @@ import os
 import shutil
 import unittest
 
+import six
+
 from nnef_tools import convert
-from nnef_tools.activation_export import activation_test
-from nnef_tools.conversion import conversion_info
 from nnef_tools.core import utils
 
 
@@ -72,18 +72,16 @@ class TFPbTestRunner(unittest.TestCase):
         if os.path.exists('out'):
             shutil.rmtree('out')
 
-    @staticmethod
-    def _test_network(path, source_shape=1):
+    def _test_network(self, path, source_shape=1, ignore_extra_outputs=False):
         assert utils.is_anyint(source_shape) or isinstance(source_shape, (list, tuple))
 
-        network = os.path.basename(path.rsplit('.', 1)[0])
+        network = os.path.basename(path.rsplit('/', 2)[1])
         command = """
         ./nnef_tools/convert.py --input-format=tensorflow-pb \\
                                 --input-model={path} \\
                                 --output-format=nnef \\
                                 --output-model=out/nnef/{network}.nnef.tgz \\
                                 --compress \\
-                                --conversion-info \\
                                 --input-shape="{shape}" """.format(path=path, network=network, shape=source_shape)
         print(command)
         convert.convert_using_command(command)
@@ -99,20 +97,9 @@ class TFPbTestRunner(unittest.TestCase):
                                     --input-model=out/nnef/{network}.nnef.tgz \\
                                     --output-format=tensorflow-pb \\
                                     --output-model=out/tensorflow-pb{nchw_str}/{network}.pb \\
-                                    --conversion-info \\
                                     {nchw_opt}""".format(network=network,
                                                          nchw_str=prefer_nchw_str,
                                                          nchw_opt=prefer_nchw_opt)
-            print(command)
-            convert.convert_using_command(command)
-
-            command = """
-            ./nnef_tools/convert.py --input-format=tensorflow-pb \\
-                                    --input-model=out/tensorflow-pb{nchw_str}/{network}.pb \\
-                                    --output-format=nnef \\
-                                    --output-model=out/nnef2{nchw_str}/{network}.nnef.tgz \\
-                                    --compress \\
-                                    --conversion-info""".format(network=network, nchw_str=prefer_nchw_str)
             print(command)
             convert.convert_using_command(command)
 
@@ -121,14 +108,12 @@ class TFPbTestRunner(unittest.TestCase):
             if activation_testing:
                 import numpy as np
                 import tensorflow as tf
-                from nnef_tools import export_activation
-                from nnef_tools.activation_export.tensorflow import tf_activation_exporter
 
                 def normalize_shape(shape, default=1):
                     return [int(dim.value) if dim.value is not None else default for dim in shape.dims]
 
                 tf.reset_default_graph()
-                export_activation.tf_set_default_graph_from_pb(path)
+                self._set_default_graph_from_pb(path)
 
                 if isinstance(source_shape, (list, tuple)):
                     feed_dict = {placeholder.name: np.random.random(source_shape)
@@ -137,47 +122,32 @@ class TFPbTestRunner(unittest.TestCase):
                     feed_dict = {placeholder.name: np.random.random(normalize_shape(placeholder.shape,
                                                                                     default=source_shape))
                                  for placeholder in get_placeholders()}
+                old_names = [placeholder.name for placeholder in get_placeholders()]
 
-                conv_info_tf_to_nnef = conversion_info.load(
-                    os.path.join("out", 'nnef', network + ".nnef.tgz.conversion.json"))
-
-                tf_activation_exporter.export(
-                    output_path=os.path.join("out", 'nnef', network + ".nnef.tgz.activations"),
-                    feed_dict=feed_dict,
-                    conversion_info=conv_info_tf_to_nnef,
-                    input_output_only=True,
-                    verbose=False)
-
-                conv_info_nnef_to_tf = conversion_info.load(
-                    os.path.join('out', 'tensorflow-pb'+prefer_nchw_str, network + ".pb.conversion.json"))
-
-                conv_info_tf_to_tf = conversion_info.compose(conv_info_tf_to_nnef, conv_info_nnef_to_tf)
-
-                feed_dict2 = activation_test.transform_feed_dict(feed_dict, conv_info_tf_to_tf)
-
-                conv_info_tf_to_nnef2 = conversion_info.load(
-                    os.path.join('out', 'nnef2'+prefer_nchw_str, network + ".nnef.tgz.conversion.json"))
-                conv_info_nnef_to_nnef = conversion_info.compose(conv_info_nnef_to_tf, conv_info_tf_to_nnef2)
+                outputs = self._run_tfpb(path, feed_dict)
 
                 tf.reset_default_graph()
-                export_activation.tf_set_default_graph_from_pb(
-                    os.path.join('out', 'tensorflow-pb'+prefer_nchw_str, network + ".pb"))
+                path2 = os.path.join('out', 'tensorflow-pb' + prefer_nchw_str, network + ".pb")
+                self._set_default_graph_from_pb(path2)
 
-                tf_activation_exporter.export(
-                    output_path=os.path.join("out", 'nnef2'+prefer_nchw_str, network + ".nnef.tgz.activations"),
-                    feed_dict=feed_dict2,
-                    conversion_info=conv_info_tf_to_nnef2,
-                    input_output_only=True,
-                    verbose=False)
+                feed_dict2 = {placeholder.name: feed_dict[old_names[i]]
+                              for i, placeholder in enumerate(get_placeholders())}
 
-                activation_test.compare_activation_dirs(
-                    os.path.join("out", 'nnef', network + ".nnef.tgz.activations"),
-                    os.path.join("out", 'nnef2'+prefer_nchw_str, network + ".nnef.tgz.activations"),
-                    conv_info_nnef_to_nnef,
-                    verbose=False)
+                outputs2 = self._run_tfpb(path2, feed_dict2)
 
-    @staticmethod
-    def _test_layer(output_name, output_nodes, recreate=True):
+                if ignore_extra_outputs:
+                    outputs2 = outputs2[-len(outputs):]
+
+                self.assertTrue(len(outputs) == len(outputs2))
+                for a, b in zip(outputs, outputs2):
+                    if a.dtype == np.bool:
+                        self.assertTrue(np.all(a == b))
+                    else:
+                        self.assertTrue(np.all(np.isfinite(a)))
+                        self.assertTrue(np.all(np.isfinite(b)))
+                        self.assertTrue(np.allclose(a, b, atol=1e-5))
+
+    def _test_layer(self, output_name, output_nodes, recreate=True, ignore_extra_outputs=False):
         import tensorflow as tf
 
         pb_path = os.path.join('out', 'pb', output_name)
@@ -189,4 +159,35 @@ class TFPbTestRunner(unittest.TestCase):
             print("Wrote", os.path.abspath(pb_path))
             sess.close()
 
-        TFPbTestRunner._test_network(os.path.join(pb_path, 'test.pb'))
+        self._test_network(os.path.join(pb_path, 'test.pb'), ignore_extra_outputs=True)
+
+    @staticmethod
+    def _run_tfpb(path, feed_dict):
+        import tensorflow as tf
+
+        feed_dict = {k + ':0' if ':' not in k else k: v for k, v in six.iteritems(feed_dict)}
+
+        tf.reset_default_graph()
+        with tf.gfile.GFile(path, "rb") as f:
+            graph_def = tf.GraphDef()
+            graph_def.ParseFromString(f.read())
+        tf.import_graph_def(graph_def, name='')
+        with tf.Session() as sess:
+            outputs = []
+            ops = tf.get_default_graph().get_operations()
+            for op in ops:
+                if all(len(t.consumers()) == 0 for t in op.outputs):
+                    if op.op_def.name == "FusedBatchNorm":
+                        outputs.append(op.outputs[0])
+                    else:
+                        for t in op.outputs:
+                            outputs.append(t)
+            return [output for output in sess.run(outputs, feed_dict)]
+
+    @staticmethod
+    def _set_default_graph_from_pb(frozen_graph_filename):
+        import tensorflow as tf
+        with tf.gfile.GFile(frozen_graph_filename, "rb") as f:
+            graph_def = tf.GraphDef()
+            graph_def.ParseFromString(f.read())
+        tf.import_graph_def(graph_def, name='')

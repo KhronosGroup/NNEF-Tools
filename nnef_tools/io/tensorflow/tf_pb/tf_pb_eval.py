@@ -49,19 +49,33 @@ def evaluate_add(op, const_value_by_tensor):
         const_value_by_tensor[op.output] = const_value_by_tensor[a] + const_value_by_tensor[b]
 
 
+def evaluate_sub(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    a, b = op.inputs
+    if a in const_value_by_tensor and b in const_value_by_tensor:
+        const_value_by_tensor[op.output] = const_value_by_tensor[a] - const_value_by_tensor[b]
+
+
+def evaluate_mul(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    a, b = op.inputs
+    if a in const_value_by_tensor and b in const_value_by_tensor:
+        const_value_by_tensor[op.output] = const_value_by_tensor[a] * const_value_by_tensor[b]
+
+
+def evaluate_real_div(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    a, b = op.inputs
+    if a in const_value_by_tensor and b in const_value_by_tensor:
+        const_value_by_tensor[op.output] = const_value_by_tensor[a] / const_value_by_tensor[b]
+
+
 def evaluate_concat_v2(op, const_value_by_tensor):
     # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
     if all(input in const_value_by_tensor for input in op.inputs):
         inputs = tuple(const_value_by_tensor[input] for input in op.inputs[:-1])
         axis = const_value_by_tensor[op.inputs[-1]]
         const_value_by_tensor[op.output] = np.concatenate(inputs, axis.item())
-
-
-def evaluate_sub(op, const_value_by_tensor):
-    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
-    a, b = op.inputs
-    if a in const_value_by_tensor and b in const_value_by_tensor:
-        const_value_by_tensor[op.output] = const_value_by_tensor[a] - const_value_by_tensor[b]
 
 
 def evaluate_pack(op, const_value_by_tensor):
@@ -119,5 +133,7 @@ _DefaultOpEvaluators = {
     "Pack": evaluate_pack,
     "Add": evaluate_add,
     "Sub": evaluate_sub,
+    "Mul": evaluate_mul,
+    "RealDiv": evaluate_real_div,
     "ConcatV2": evaluate_concat_v2,
 }

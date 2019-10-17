@@ -378,20 +378,6 @@ def convert_l2_normalize(op):
     op.attribs = dict()
 
 
-def convert_leaky_relu(op):
-    # type: (TFOperation)->None
-    op.name = "LEAKY_RELU"
-    assert op.inputs[1].data is not None
-    if isinstance(op.inputs[1].data, list):
-        assert len(op.inputs[1].data) == 1
-        alpha = op.inputs[1].data[0]
-    else:
-        assert isinstance(op.inputs[1].data, np.ndarray) and op.inputs[1].data.shape == tuple()
-        alpha = float(op.inputs[1].data)
-    op.inputs = (op.inputs[0],)
-    op.attribs = dict(alpha=alpha)
-
-
 def convert_lrn(op):
     # type: (TFOperation)->None
     op.name = "LOCAL_RESPONSE_NORMALIZATION"
@@ -500,7 +486,7 @@ _DefaultConverters = {
     "tf.nn.l2_normalize": convert_l2_normalize,
     "tf.maximum": partial(rename, target_name="MAXIMUM"),
     "tf.minimum": partial(rename, target_name="MINIMUM"),
-    "tf.nn.leaky_relu": convert_leaky_relu,
+    "tf.nn.leaky_relu": partial(rename, target_name="LEAKY_RELU"),
     "tf.less": partial(rename, target_name="LESS"),
     "tf.less_equal": partial(rename, target_name="LESS_EQUAL"),
     "tf.nn.lrn": convert_lrn,

@@ -101,39 +101,45 @@ def write(tf_graph,  # type: TFGraph
           ):
     # type: (...) -> typing.Optional[conversion_info.ConversionInfo]
 
-    names_to_write = _generate_names(tf_graph=tf_graph,
-                                     custom_imports=custom_imports,
-                                     custom_op_protos=custom_op_protos)
+    generate_source_operations(tf_graph)
+    tf_graph.sort()
+    try:
 
-    old_names = {}
-    for tensor in tf_graph.tensors:
-        old_names[tensor] = tensor.name
-        tensor.name = utils.anystr_to_str(names_to_write[tensor])
+        names_to_write = _generate_names(tf_graph=tf_graph,
+                                         custom_imports=custom_imports,
+                                         custom_op_protos=custom_op_protos)
 
-    if not os.path.exists(os.path.dirname(file_path)):
-        os.makedirs(os.path.dirname(file_path))
+        old_names = {}
+        for tensor in tf_graph.tensors:
+            old_names[tensor] = tensor.name
+            tensor.name = utils.anystr_to_str(names_to_write[tensor])
 
-    with open(file_path, "w") as f:
-        _print(tf_graph, file_handle=f, custom_op_protos=custom_op_protos, custom_imports=custom_imports)
+        if not os.path.exists(os.path.dirname(file_path)):
+            os.makedirs(os.path.dirname(file_path))
 
-    with open(file_path, "r") as f:
-        tf_source = f.read()
+        with open(file_path, "w") as f:
+            _print(tf_graph, file_handle=f, custom_op_protos=custom_op_protos, custom_imports=custom_imports)
 
-    if tf_graph.list_variables() and write_weights:
-        checkpoint_dir = file_path + ".checkpoint"
-        checkpoint_path = os.path.join(checkpoint_dir, os.path.basename(file_path) + ".ckpt")
-        if not os.path.exists(checkpoint_dir):
-            os.makedirs(checkpoint_dir)
+        with open(file_path, "r") as f:
+            tf_source = f.read()
 
-        _create_checkpoint_with_values(
-            net_fun=_tfsource_to_function(tf_source, tf_graph.name),
-            file_name=checkpoint_path,
-            variable_value_by_name={t.name: t.data for t in tf_graph.tensors if t.is_variable and t.name})
+        if tf_graph.list_variables() and write_weights:
+            checkpoint_dir = file_path + ".checkpoint"
+            checkpoint_path = os.path.join(checkpoint_dir, os.path.basename(file_path) + ".ckpt")
+            if not os.path.exists(checkpoint_dir):
+                os.makedirs(checkpoint_dir)
 
-    for tensor in tf_graph.tensors:
-        tensor.name = old_names[tensor]
+            _create_checkpoint_with_values(
+                net_fun=_tfsource_to_function(tf_source, tf_graph.name),
+                file_name=checkpoint_path,
+                variable_value_by_name={t.name: t.data for t in tf_graph.tensors if t.is_variable and t.name})
 
-    return _get_rename_info(tf_graph, names_to_write)
+        for tensor in tf_graph.tensors:
+            tensor.name = old_names[tensor]
+
+        return _get_rename_info(tf_graph, names_to_write)
+    finally:
+        remove_source_operations(tf_graph)
 
 
 def _tfsource_to_function(src, function_name):
@@ -238,52 +244,47 @@ def _print(tf_graph, file_handle, custom_op_protos=None, custom_imports=None, wi
     if custom_op_protos:
         op_proto_by_name.update({op_proto.op_name: op_proto for op_proto in custom_op_protos})
 
-    generate_source_operations(tf_graph)
-    tf_graph.sort()
-    try:
-        printed_tensors = set()  # we need this because 0d constants are not printed as tensors
-        f = file_handle
-        print("from __future__ import division, print_function, absolute_import", file=f)
-        print("from collections import OrderedDict", file=f)
-        print("import tensorflow as tf", file=f)
-        if any(op.name.startswith("_tf.") for op in tf_graph.operations):
-            print("from nnef_tools.io.tensorflow.tf_py.tf_py_compat import tf_internal as _tf", file=f)
-        if custom_imports:
-            print(custom_imports, file=f)
-        print(file=f)
-        print(file=f)
-        assert utils.is_identifier(tf_graph.name), "Graph name '{}' is not an identifier".format(tf_graph.name)
+    printed_tensors = set()  # we need this because 0d constants are not printed as tensors
+    f = file_handle
+    print("from __future__ import division, print_function, absolute_import", file=f)
+    print("from collections import OrderedDict", file=f)
+    print("import tensorflow as tf", file=f)
+    if any(op.name.startswith("_tf.") for op in tf_graph.operations):
+        print("from nnef_tools.io.tensorflow.tf_py.tf_py_compat import tf_internal as _tf", file=f)
+    if custom_imports:
+        print(custom_imports, file=f)
+    print(file=f)
+    print(file=f)
+    assert utils.is_identifier(tf_graph.name), "Graph name '{}' is not an identifier".format(tf_graph.name)
 
-        print("def {}():".format(tf_graph.name), file=f)
-        indent = " " * 4
-        for op in list(tf_graph.operations):
-            assert op.name in op_proto_by_name, 'We have no op_proto for op: {}'.format(op.name)
-            args = args_from_tfop(op, op_proto_by_name[op.name], allow_missing=True)
-            for t in op.outputs:
-                printed_tensors.add(t)
-            print("{}{} = {}({})".format(
-                indent, _format_result_names(op.outputs), op.name, _format_args(args)), file=f)
+    print("def {}():".format(tf_graph.name), file=f)
+    indent = " " * 4
+    for op in list(tf_graph.operations):
+        assert op.name in op_proto_by_name, 'We have no op_proto for op: {}'.format(op.name)
+        args = args_from_tfop(op, op_proto_by_name[op.name], allow_missing=True)
+        for t in op.outputs:
+            printed_tensors.add(t)
+        print("{}{} = {}({})".format(
+            indent, _format_result_names(op.outputs), op.name, _format_args(args)), file=f)
+    print(file=f)
+    if with_name_dict:
+        inputs = ",\n{}{}".format(indent, indent).join('("{}", {})'.format(name, _format_tensor_name(t.name))
+                                                       for name, t in zip(tf_graph.input_ids, tf_graph.inputs))
+        print("{}__inputs = OrderedDict([\n{}{}{}\n{}])".format(indent, indent, indent, inputs, indent), file=f)
+        outputs = ",\n{}{}".format(indent, indent).join('("{}", {})'.format(name, _format_tensor_name(t.name))
+                                                        for name, t in zip(tf_graph.output_ids, tf_graph.outputs))
+        print("{}__outputs = OrderedDict([\n{}{}{}\n{}])".format(indent, indent, indent, outputs, indent), file=f)
+        tensors = ",\n{}{}".format(indent, indent).join('("{}", {})'.format(t.name, _format_tensor_name(t.name))
+                                                        for t in sorted(tf_graph.tensors, key=lambda t: t.name)
+                                                        if t in printed_tensors)
+        print("{}__tensors = OrderedDict([\n{}{}{}\n{}])".format(indent, indent, indent, tensors, indent), file=f)
         print(file=f)
-        if with_name_dict:
-            inputs = ",\n{}{}".format(indent, indent).join('("{}", {})'.format(name, _format_tensor_name(t.name))
-                                                           for name, t in zip(tf_graph.input_ids, tf_graph.inputs))
-            print("{}__inputs = OrderedDict([\n{}{}{}\n{}])".format(indent, indent, indent, inputs, indent), file=f)
-            outputs = ",\n{}{}".format(indent, indent).join('("{}", {})'.format(name, _format_tensor_name(t.name))
-                                                            for name, t in zip(tf_graph.output_ids, tf_graph.outputs))
-            print("{}__outputs = OrderedDict([\n{}{}{}\n{}])".format(indent, indent, indent, outputs, indent), file=f)
-            tensors = ",\n{}{}".format(indent, indent).join('("{}", {})'.format(t.name, _format_tensor_name(t.name))
-                                                            for t in sorted(tf_graph.tensors, key=lambda t: t.name)
-                                                            if t in printed_tensors)
-            print("{}__tensors = OrderedDict([\n{}{}{}\n{}])".format(indent, indent, indent, tensors, indent), file=f)
-            print(file=f)
-            print("{}return __inputs, __outputs, __tensors".format(indent), file=f)
-        else:
-            outputs = ",\n{}{}".format(indent, indent).join('("{}", {})'.format(name, _format_tensor_name(t.name))
-                                                            for name, t in zip(tf_graph.output_ids, tf_graph.outputs))
-            print("{}return OrderedDict([\n{}{}{}\n{}])".format(indent, indent, indent, outputs, indent), file=f)
-        print(file=f)
-    finally:
-        remove_source_operations(tf_graph)
+        print("{}return __inputs, __outputs, __tensors".format(indent), file=f)
+    else:
+        outputs = ",\n{}{}".format(indent, indent).join('("{}", {})'.format(name, _format_tensor_name(t.name))
+                                                        for name, t in zip(tf_graph.output_ids, tf_graph.outputs))
+        print("{}return OrderedDict([\n{}{}{}\n{}])".format(indent, indent, indent, outputs, indent), file=f)
+    print(file=f)
 
 
 def generate_source_operations(tf_graph):

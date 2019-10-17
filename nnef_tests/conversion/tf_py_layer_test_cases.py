@@ -2775,7 +2775,7 @@ class TFPyLayerTestCases(TFPyTestRunner):
         self._test(network_pad_transform_conv_reflect)
 
     def test_fused_batch_norm_transform1(self):
-        self._test(network_fused_batch_norm_transform1)
+        self._test(network_fused_batch_norm_transform1, atol=1e-4)
 
     def test_fused_batch_norm_transform2(self):
         self._test(network_fused_batch_norm_transform2)

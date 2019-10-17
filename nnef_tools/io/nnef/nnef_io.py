@@ -52,10 +52,15 @@ NumpyDTypeByNNEFDType = {
     'logical': 'bool',
 }
 
+_InputShapeType = typing.Union[None,
+                               typing.List[int],
+                               typing.Tuple[typing.List[int]],
+                               typing.Dict[str, typing.List[int]]]
+
 
 def read(path,  # type: str
          parser_configs=None,  # type: typing.Optional[typing.List[NNEFParserConfig]]
-         input_shape=None,  # type: typing.Union[None, typing.List[int], typing.Dict[str, typing.List[int]]]
+         input_shape=None,  # type: _InputShapeType
          ):
     # type: (...)->NNEFGraph
 
@@ -104,15 +109,17 @@ def read(path,  # type: str
         parser_graph = parser_config.load_graph(path_to_load)
 
         if input_shape is not None:
-            if not isinstance(input_shape, (list, dict)):
+            if not isinstance(input_shape, (tuple, list, dict)):
                 raise utils.NNEFToolsException("input_shape must be list or dict")
 
             for op in parser_graph.operations:
                 if op.name == 'external':
+                    name = op.outputs['output']
                     if isinstance(input_shape, dict):
-                        name = op.outputs['output']
                         if name in input_shape:
                             op.attribs['shape'] = input_shape[name]
+                    elif isinstance(input_shape, tuple):
+                        op.attribs['shape'] = input_shape[parser_graph.inputs.index(name)]
                     else:
                         op.attribs['shape'] = input_shape
 
@@ -171,7 +178,7 @@ def _debug_print(nnef_graph, file_handle=None):
     # type: (NNEFGraph, typing.Optional[typing.TextIO]) -> None
 
     if file_handle is None:
-        file_handle = sys.stdout
+        file_handle = sys.stderr
 
     _print(nnef_graph, file_handle=file_handle)
 

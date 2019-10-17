@@ -280,7 +280,7 @@ def converter_sequence(fun1, fun2):
 
 # noinspection PyProtectedMember
 _DefaultConverters = generate_back_converters(
-    tf_pb_to_tf_py._DefaultConverters
+    tf_pb_to_tf_py.DefaultConverters
 )  # type: typing.Dict[str, typing.Callable[[TFOperation], None]]
 
 _DefaultConverters.update({

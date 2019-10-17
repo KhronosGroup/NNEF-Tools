@@ -80,7 +80,7 @@ def evaluate_and_convert(tf_graph, source_shapes=None):
     for op in tf_graph.operations:
         # Shape prop
         if op.name not in tf_pb_shape_inference._DefaultPropagators:
-            raise utils.NNEFToolsException("No shape propagator for {}".format(op.name))
+            raise utils.NNEFToolsException("Operation '{}' is not supported".format(op.name))
         propagated_shapes, propagated_dtypes = \
             tf_pb_shape_inference._DefaultPropagators[op.name](op, const_value_by_tensor)
         assert not utils.has_le_0(propagated_shapes)
@@ -96,8 +96,8 @@ def evaluate_and_convert(tf_graph, source_shapes=None):
             tf_pb_eval._DefaultOpEvaluators[op.name](op, const_value_by_tensor)
 
         # Conversion
-        assert op.name in _DefaultConverters, "No tf_pb_to_tf_py converter for {}".format(op.name)
-        _DefaultConverters[op.name](op, const_value_by_tensor)
+        assert op.name in DefaultConverters, "No tf_pb_to_tf_py converter for {}".format(op.name)
+        DefaultConverters[op.name](op, const_value_by_tensor)
 
     for tensor in tf_graph.tensors:
         tensor.dtype = _tf_py_dtype_by_tf_pb_dtype.get(tensor.dtype, None)
@@ -170,7 +170,7 @@ def convert_cast(op, const_value_by_tensor):
 
 
 # See: https://www.tensorflow.org/api_docs/cc/
-_DefaultConverters = {
+DefaultConverters = {
     # attribless:
     "Abs": partial(generic_converter, target_name="tf.abs"),
     "Add": partial(generic_converter, target_name="tf.add"),

@@ -849,7 +849,7 @@ class TestNormalization(TFPbTestRunner):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_fused_batch_norm_network(x)
 
-        self._test_layer(output_name, "z1")
+        self._test_layer(output_name, "z1", ignore_extra_outputs=True)
 
     # Normalization_nn_fused_batch_norm Test
     def nn_fused_batch_norm_network2(self, x):
@@ -866,7 +866,7 @@ class TestNormalization(TFPbTestRunner):
         x = tf.placeholder(tf.float32, shape=[None, 4, 4, 4], name='x')
         self.nn_fused_batch_norm_network2(x)
 
-        self._test_layer(output_name, "z1")
+        self._test_layer(output_name, "z1", ignore_extra_outputs=True)
 
     # Normalization_nn_l2_normalize Test
     def nn_l2_normalize_network(self, x):

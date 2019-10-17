@@ -12,20 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import shutil
-from setuptools import setup, Extension
+from setuptools import setup, find_packages
 
 
-module = Extension('_nnef',
-                   sources=['nnef.cpp'],
-                   include_dirs=['../cpp/include'],
-                   language='c++',
-                   extra_compile_args=['-std=c++11'])
-
-setup(name='nnef',
-      version='0.3',
-      description='A package for parsing NNEF files',
+setup(name='nnef_tools',
+      version='0.1',
+      description='A package for managing NNEF files',
       url='https://github.com/KhronosGroup/NNEF-Tools',
       author='Viktor Gyenes',
       author_email='viktor.gyenes@aimotive.com',
@@ -39,10 +32,9 @@ setup(name='nnef',
           'Programming Language :: Python :: 3',
       ],
       keywords='nnef',
-      packages=['nnef'],
-      ext_modules=[module]
+      packages=['nnef_tools'] + ['nnef_tools.' + package for package in find_packages(where='nnef_tools')]
       )
 
 shutil.rmtree('build')
 shutil.rmtree('dist')
-shutil.rmtree('nnef.egg-info')
+shutil.rmtree('nnef_tools.egg-info')

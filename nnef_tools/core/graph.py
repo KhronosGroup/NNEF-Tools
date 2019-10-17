@@ -291,12 +291,6 @@ class Graph(typing.Generic[_TensorT, _OperationT]):
         return True
 
     def sort(self):
-        # TODO change to iterative
-
-        # Ensure that we get the same order for the same graph
-        # including when the ops are regenerated for some source tensors
-        self._operations.sort(key=lambda op_: id(op_.outputs[0]) if len(op_.outputs) > 0 else id(op_))
-
         visited = set()
         operations = []
 

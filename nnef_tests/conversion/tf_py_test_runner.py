@@ -14,19 +14,16 @@
 
 from __future__ import division, print_function, absolute_import
 
-import fnmatch
 import os
 import shutil
 import sys
 import unittest
 
 import numpy as np
+import six
 import tensorflow as tf
 
 from nnef_tools import convert
-from nnef_tools.activation_export import activation_test
-from nnef_tools.activation_export.tensorflow import tf_activation_exporter
-from nnef_tools.conversion import conversion_info
 from nnef_tools.core import utils
 from nnef_tools.io.tensorflow import tf_py_io
 
@@ -114,7 +111,8 @@ class TFPyTestRunner(unittest.TestCase):
               cmp=True,
               custom_tf_to_nnef_converters="",
               custom_nnef_to_tf_converters="",
-              test_module="nnef_tests.conversion.tf_py_layer_test_cases"):
+              test_module="nnef_tests.conversion.tf_py_layer_test_cases",
+              atol=1e-5):
 
         activation_testing = int(os.environ.get('NNEF_ACTIVATION_TESTING', '1'))
         print("Activation testing is", "ON" if activation_testing else "OFF")
@@ -126,6 +124,7 @@ class TFPyTestRunner(unittest.TestCase):
 
             network_outputs = fun()
             feed_dict = get_feed_dict()
+            old_names = [placeholder.name for placeholder in get_placeholders()]
             checkpoint_path = os.path.join("out", fun.__name__, "orig_checkpoint", fun.__name__ + ".ckpt")
             checkpoint_path = save_random_checkpoint(network_outputs, checkpoint_path, feed_dict)
 
@@ -141,30 +140,26 @@ class TFPyTestRunner(unittest.TestCase):
                                         --custom-converters {custom} \\
                                         --permissive \\
                                         --io-transformation SMART_TF_NHWC_TO_NCHW \\
-                                        --conversion-info \\
                                         {compress}
-                """.format(checkpoint=checkpoint_path if checkpoint_path else "",
-                           network=fun.__name__,
-                           custom=" ".join(custom_tf_to_nnef_converters),
-                           compress="--compress" if compress_nnef else "",
-                           module=test_module,
-                           tgz=".tgz" if compress_nnef else "")
+            """.format(checkpoint=checkpoint_path if checkpoint_path else "",
+                       network=fun.__name__,
+                       custom=" ".join(custom_tf_to_nnef_converters),
+                       compress="--compress" if compress_nnef else "",
+                       module=test_module,
+                       tgz=".tgz" if compress_nnef else "")
 
             convert.convert_using_command(command)
 
             if activation_testing:
                 tf.reset_default_graph()
                 tf.set_random_seed(0)
-                fun()
-                conv_info = conversion_info.load(
-                    os.path.join("out", fun.__name__, fun.__name__ + ".nnef.conversion.json"))
-
-                tf_activation_exporter.export(
-                    output_path=os.path.join("out", fun.__name__, fun.__name__ + ".nnef", "activations"),
-                    feed_dict=feed_dict,
-                    conversion_info=conv_info,
-                    checkpoint_path=checkpoint_path,
-                    verbose=False)
+                network_outputs = fun()
+                network_output_list = []
+                utils.recursive_visit(network_outputs, lambda t: network_output_list.append(t))
+                # Flatten is needed because of MaxPoolWithArgMax objects
+                outputs = utils.flatten(self._run_tfpy(network_output_list, feed_dict, checkpoint_path))
+            else:
+                outputs = None
 
             prefer_nhwc_options = [True]
             if tf_has_cuda_gpu():
@@ -180,12 +175,11 @@ class TFPyTestRunner(unittest.TestCase):
                                             --output-model {output} \\
                                             --io-transformation SMART_NCHW_TO_TF_NHWC \\
                                             --custom-converters {custom} \\
-                                            --permissive \\
-                                            --conversion-info
-                    """.format(network=fun.__name__,
-                               custom=" ".join(custom_nnef_to_tf_converters),
-                               tgz=".nnef.tgz" if compress_nnef else "",
-                               output=tf_output_path)
+                                            --permissive
+                """.format(network=fun.__name__,
+                           custom=" ".join(custom_nnef_to_tf_converters),
+                           tgz=".nnef.tgz" if compress_nnef else "",
+                           output=tf_output_path)
                 convert.convert_using_command(command)
 
                 with open(os.path.join(tf_output_path), 'r') as f:
@@ -194,63 +188,53 @@ class TFPyTestRunner(unittest.TestCase):
                 # noinspection PyProtectedMember
                 new_net_fun = tf_py_io._tfsource_to_function(tf_src, fun.__name__)
 
-                conv_info_tf_to_nnef = conversion_info.load(
-                    os.path.join("out", fun.__name__, fun.__name__ + ".nnef.conversion.json"))
-                conv_info_nnef_to_tf = conversion_info.load(os.path.join(tf_output_path + ".conversion.json"))
-                conv_info_tf_to_tf = conversion_info.compose(conv_info_tf_to_nnef, conv_info_nnef_to_tf)
-
-                conversion_info.dump(conv_info_tf_to_tf, os.path.join(tf_output_path + ".conv_info_tf_to_tf.json"))
-
-                feed_dict2 = activation_test.transform_feed_dict(feed_dict, conv_info_tf_to_tf)
-                nnef2_out_dir = os.path.join(tf_output_path + ".nnef")
-
                 tf.reset_default_graph()
                 tf.set_random_seed(0)
-
-                command = """
-                    ./nnef_tools/convert.py --input-format tensorflow-py \\
-                                            --output-format nnef \\
-                                            --input-model {input} {checkpoint} \\
-                                            --output-model {output} \\
-                                            --custom-converters {custom} \\
-                                            --permissive \\
-                                            --io-transformation SMART_TF_NHWC_TO_NCHW \\
-                                            --conversion-info \\
-                                            {compress}
-                    """.format(checkpoint=(os.path.join(tf_output_path + ".checkpoint") if checkpoint_path else ""),
-                               input=tf_output_path.replace('/', '.')[:-len('.py')] + "." + fun.__name__,
-                               custom=" ".join(custom_tf_to_nnef_converters),
-                               compress="--compress" if compress_nnef else "",
-                               output=nnef2_out_dir)
-
-                convert.convert_using_command(command)
-
-                conv_info_tf_to_nnef2 = conversion_info.load(nnef2_out_dir + ".conversion.json")
-                conv_info_nnef_to_nnef = conversion_info.compose(conv_info_nnef_to_tf, conv_info_tf_to_nnef2)
-                conversion_info.dump(conv_info_nnef_to_nnef,
-                                     os.path.join(nnef2_out_dir + ".conv_info_nnef_to_nnef.json"))
 
                 if activation_testing:
                     tf.reset_default_graph()
                     tf.set_random_seed(0)
-                    new_net_fun()
-                    tf_activation_exporter.export(
-                        output_path=os.path.join(nnef2_out_dir, "activations"),
-                        feed_dict=feed_dict2,
-                        conversion_info=conv_info_tf_to_nnef2,
-                        checkpoint_path=(os.path.join(tf_output_path + ".checkpoint")
-                                         if checkpoint_path else None),
-                        verbose=False)
+                    network_outputs = new_net_fun()
+                    network_output_list = []
+                    utils.recursive_visit(network_outputs, lambda t: network_output_list.append(t))
+                    feed_dict2 = {placeholder.name: feed_dict[old_names[i]]
+                                  for i, placeholder in enumerate(get_placeholders())}
+                    outputs2 = utils.flatten(self._run_tfpy(network_output_list,
+                                                            feed_dict2,
+                                                            (os.path.join(tf_output_path + ".checkpoint")
+                                                             if checkpoint_path else None)))
 
                     if cmp:
-                        activation_test.compare_activation_dirs(
-                            os.path.join("out", fun.__name__, fun.__name__ + ".nnef", "activations"),
-                            os.path.join(nnef2_out_dir, "activations"),
-                            conv_info_nnef_to_nnef,
-                            verbose=False)
+                        self.assertTrue(len(outputs) == len(outputs2))
+                        for a, b in zip(outputs, outputs2):
+                            if a.dtype == np.bool:
+                                self.assertTrue(np.all(a == b))
+                            else:
+                                print('Max diff:', np.max(np.abs(a - b)))
+                                self.assertTrue(np.all(np.isfinite(a)))
+                                self.assertTrue(np.all(np.isfinite(b)))
+                                self.assertTrue(np.allclose(a, b, atol=atol))
+
         finally:
             if self.delete_dats_and_checkpoints:
                 dat_files = utils.recursive_glob(out_dir, "*.dat")
                 checkpoints = utils.recursive_glob(out_dir, "*ckpt*")
                 for file_name in set(dat_files + checkpoints):
                     os.remove(file_name)
+
+    @staticmethod
+    def _run_tfpy(outputs, feed_dict, checkpoint_path):
+        import tensorflow as tf
+
+        feed_dict = {k + ':0' if ':' not in k else k: v for k, v in six.iteritems(feed_dict)}
+
+        with tf.Session() as sess:
+            saver = tf.train.Saver() if checkpoint_path else None
+            sess.run(tf.global_variables_initializer())
+            if checkpoint_path is not None:
+                if os.path.isdir(checkpoint_path):
+                    saver.restore(sess, tf.train.latest_checkpoint(checkpoint_path))
+                else:
+                    saver.restore(sess, checkpoint_path)
+
+            return [output for output in sess.run(outputs, feed_dict)]

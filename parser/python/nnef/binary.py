@@ -14,6 +14,7 @@
 
 import os
 import sys
+
 import numpy as np
 
 QUANT_CODE_FLOAT = 0x00
@@ -45,7 +46,7 @@ def _numpy_dtype_split(dtype):
 
 
 def _numpy_dtype_make(code, bits, signed=False):
-    if not code in [QUANT_CODE_FLOAT, QUANT_CODE_INTEGER, QUANT_CODE_LINEAR, QUANT_CODE_LOGARITHMIC]:
+    if code not in [QUANT_CODE_FLOAT, QUANT_CODE_INTEGER, QUANT_CODE_LINEAR, QUANT_CODE_LOGARITHMIC]:
         raise ValueError('unsupported data type code: {}'.format(code))
 
     if code == QUANT_CODE_FLOAT and bits == 16:
@@ -68,7 +69,8 @@ def _numpy_dtype_make(code, bits, signed=False):
         raise ValueError('unsupported combination of item type code ({}) and bits per item ({})'.format(code, bits))
 
 
-MaxTensorRank = 8;
+MaxTensorRank = 8
+
 
 def _rank_of(shape):
     rank = len(shape)
@@ -83,17 +85,26 @@ _is_little_endian = sys.byteorder == 'little'
 def _tofile(data, file):
     if not _is_little_endian and data.dtype != np.uint8 and data.dtype != np.int8:
         data = data.byteswap()
-    data.tofile(file)
+    if file.seekable():
+        data.tofile(file)
+    else:
+        file.write(data.tobytes())
 
 
 def _fromfile(file, dtype, count):
-    data = np.fromfile(file, dtype, count)
+    if file.seekable():
+        data = np.fromfile(file, dtype, count)
+    else:
+        data = np.frombuffer(file.read(count * np.dtype(dtype).itemsize), dtype, count)
+
     if not _is_little_endian and data.dtype != np.uint8 and data.dtype != np.int8:
         data = data.byteswap()
     return data
 
 
-def write_tensor(file, tensor, version=(1,0), quantization={}):
+def write_tensor(file, tensor, version=(1, 0), quantization=None):
+    if quantization is None:
+        quantization = {}
     if isinstance(file, str):
         raise ValueError('file parameter must be a file object not a file name')
 
@@ -115,8 +126,8 @@ def write_tensor(file, tensor, version=(1,0), quantization={}):
 
     code = quantization.get('code', QUANT_CODE_FLOAT if dtype == np.float else QUANT_CODE_INTEGER)
     if (code == QUANT_CODE_FLOAT and dtype != np.float) or \
-        (code == QUANT_CODE_INTEGER and dtype != np.int and dtype != np.uint) or \
-        ((code == QUANT_CODE_LINEAR or code == QUANT_CODE_LOGARITHMIC) and dtype != np.uint):
+            (code == QUANT_CODE_INTEGER and dtype != np.int and dtype != np.uint) or \
+            ((code == QUANT_CODE_LINEAR or code == QUANT_CODE_LOGARITHMIC) and dtype != np.uint):
         raise ValueError('incompatible quantization code ({}) and tensor dtype ({})'.format(code, tensor.dtype))
 
     _tofile(np.asarray([bits, code], dtype=np.uint32), file)
@@ -144,15 +155,17 @@ def read_tensor(file):
     [magic1, magic2, major, minor] = _fromfile(file, dtype=np.uint8, count=4)
     if magic1 != 0x4E or magic2 != 0xEF:
         raise ValueError('not a valid NNEF file')
+
     if major > 1 or minor > 0:
         raise ValueError('unsupported file version')
 
     [data_length, rank] = _fromfile(file, dtype=np.uint32, count=2)
 
-    header_size = 128
-    file_size = os.fstat(file.fileno()).st_size
-    if file_size != header_size + data_length:
-        raise ValueError('invalid tensor file; size does not match header info')
+    if file.seekable():
+        header_size = 128
+        file_size = os.fstat(file.fileno()).st_size
+        if file_size != header_size + data_length:
+            raise ValueError('invalid tensor file; size does not match header info')
 
     if rank > MaxTensorRank:
         raise ValueError('tensor rank exceeds maximum possible value of {}'.format(MaxTensorRank))
@@ -166,7 +179,7 @@ def read_tensor(file):
 
     signed = params[0] != 0 if code == QUANT_CODE_INTEGER else False
 
-    count = np.prod(shape)
+    count = int(np.prod(shape))
     if bits == 1:
         byte_count = int((count + 7) // 8)
         data = _fromfile(file, dtype=np.uint8, count=byte_count)
@@ -174,7 +187,7 @@ def read_tensor(file):
             raise ValueError('could not read tensor data')
         data = np.unpackbits(data).astype(np.bool)[:count]
     else:
-        data = _fromfile(file, dtype=_numpy_dtype_make(code,bits,signed), count=count)
+        data = _fromfile(file, dtype=_numpy_dtype_make(code, bits, signed), count=count)
         if len(data) != count:
             raise ValueError('could not read tensor data')
 
@@ -190,8 +203,7 @@ def read_tensor(file):
     return tensor, quantization
 
 
-
-def _write_tensor_provisional(file, tensor, version=(1,0)):
+def _write_tensor_provisional(file, tensor, version=(1, 0)):
     _tofile(np.asarray([0x4E, 0xEF, version[0], version[1]], dtype=np.uint8), file)
 
     header_length = 4 + 4 + (tensor.ndim + 1) * 4 + 4
@@ -216,7 +228,7 @@ def _read_tensor_provisional(file):
     if major > 1 or minor > 0:
         raise ValueError('unsupported file version')
 
-    [header_length] = _fromfile(file, dtype=np.uint32, count=1)
+    [_header_length] = _fromfile(file, dtype=np.uint32, count=1)
 
     [rank] = _fromfile(file, dtype=np.uint32, count=1)
     shape = _fromfile(file, dtype=np.uint32, count=rank)
@@ -224,8 +236,8 @@ def _read_tensor_provisional(file):
     [code, bits] = _fromfile(file, dtype=np.uint8, count=2)
     [qlen] = _fromfile(file, dtype=np.uint16, count=1)
 
-    assert(code == 0)
-    assert(bits == 32)
-    assert(qlen == 0)
+    assert (code == 0)
+    assert (bits == 32)
+    assert (qlen == 0)
 
-    return _fromfile(file, dtype=np.float32, count=np.prod(shape)).reshape(shape)
+    return _fromfile(file, dtype=np.float32, count=int(np.prod(shape))).reshape(shape)

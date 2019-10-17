@@ -443,6 +443,9 @@ class Reader(object):
 
     def __call__(self, filename):
         g = read_tf_graph_from_protobuf(filename)
+        unsupported_ops = set(op.name for op in g.operations if op.name not in tf_pb_to_tf_py.DefaultConverters)
+        if unsupported_ops:
+            raise utils.NNEFToolsException("Unsupported operation(s): {}".format(unsupported_ops))
         if self._convert_to_tf_py:
             tf_pb_to_tf_py.evaluate_and_convert(g, source_shapes=self._input_shape)
         return g

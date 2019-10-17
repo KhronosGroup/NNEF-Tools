@@ -296,13 +296,6 @@ def convert_l2_normalize(op):
     op.attribs = dict(axis=[-1], epsilon=1e-12)
 
 
-def convert_leaky_relu(op):
-    # type: (TFOperation)->None
-    op.name = "tf.nn.leaky_relu"
-    op.inputs = (op.input, TFTensor(graph=op.graph, shape=[], dtype=op.input.dtype, data=[op.attribs['alpha']]))
-    op.attribs = dict()
-
-
 def convert_lrn(op):
     # type: (TFOperation)->None
     op.name = "tf.nn.lrn"
@@ -404,7 +397,7 @@ _DefaultConverters = {
     "HASHTABLE_LOOKUP": UNSUPPORTED,
     "L2_NORMALIZATION": convert_l2_normalize,
     "L2_POOL_2D": UNSUPPORTED,
-    "LEAKY_RELU": convert_leaky_relu,
+    "LEAKY_RELU": partial(rename, target_name="tf.nn.leaky_relu"),
     "LESS_EQUAL": partial(rename, target_name="tf.less_equal"),
     "LESS": partial(rename, target_name="tf.less"),
     "LOCAL_RESPONSE_NORMALIZATION": convert_lrn,
