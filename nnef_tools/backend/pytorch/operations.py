@@ -654,80 +654,53 @@ def nnef_batch_normalization(input,  # type: torch.Tensor
 def nnef_multilinear_upsample(input, factor, method='symmetric', border='replicate'):
     # type: (torch.Tensor, List[int], str, str)->torch.Tensor
 
-    if len(input.shape) not in (3, 4, 5):
+    rank = len(factor)
+    if rank not in (1, 2):
         raise utils.NNEFToolsException(
-            "Multilinear upsample is only implemented for 3D, 4D, 5D tensors, given: {}D.".format(len(input.shape)))
+            "Multilinear upsample is only implemented for 1 and 2 spatial dimensions, got: {}.".format(rank))
 
-    assert len(factor) == len(input.shape) - 2
+    assert len(input.shape) == rank + 2
 
-    if factor == [2]:
-        if method == 'symmetric' and border == 'constant':
-            n, c, h = input.shape
-            filter = torch.from_numpy(
-                np.array([0.25, 0.75, 0.75, 0.25] * c, dtype=np.float32).reshape([c, 1, 4])
-            ).to(device=input.device, dtype=input.dtype)
-            bias = torch.zeros(size=tuple(), device=input.device, dtype=input.dtype)
-            return nnef_deconv(input, filter, bias,
-                               stride=[2], padding=[(1, 1)], border=border, groups=c, output_shape=[n, c, 2 * h])
-        elif method == 'asymmetric' and border in ['constant', 'replicate']:
-            n, c, h = input.shape
-            filter = torch.from_numpy(
-                np.array([0.5, 1.0, 0.5] * c, dtype=np.float32).reshape([c, 1, 3])
-            ).to(device=input.device, dtype=input.dtype)
-            bias = torch.zeros(size=(c,), device=input.device, dtype=input.dtype)
-            pad = nnef_pad(input, padding=[(0, 0), (0, 0), (0, 1)], border=border)
-            deconv = F.conv_transpose1d(
-                input=pad, weight=filter, bias=bias, stride=2, padding=0, output_padding=0, groups=c, dilation=1)
-            return nnef_slice(deconv, axes=[2], begin=[1], end=[-2])
-    elif factor == [2, 2]:
-        if method == 'symmetric' and border == 'constant':
-            n, c, h, w = input.shape
-            filter = torch.from_numpy(
-                np.array([0.0625, 0.1875, 0.1875, 0.0625,
-                          0.1875, 0.5625, 0.5625, 0.1875,
-                          0.1875, 0.5625, 0.5625, 0.1875,
-                          0.0625, 0.1875, 0.1875, 0.0625] * c, dtype=np.float32).reshape([c, 1, 4, 4])
-            ).to(device=input.device, dtype=input.dtype)
-            bias = torch.zeros(size=tuple(), device=input.device, dtype=input.dtype)
-            return nnef_deconv(
-                input, filter, bias,
-                stride=[2, 2], padding=[(1, 1), (1, 1)], border=border, groups=c, output_shape=[n, c, 2 * h, 2 * w])
-        elif method == 'asymmetric' and border in ['constant', 'replicate']:
-            n, c, h, w = input.shape
-            filter = torch.from_numpy(
-                np.array([0.25, 0.5, 0.25,
-                          0.50, 1.0, 0.50,
-                          0.25, 0.5, 0.25] * c, dtype=np.float32).reshape([c, 1, 3, 3])
-            ).to(device=input.device, dtype=input.dtype)
-            bias = torch.zeros(size=(c,), device=input.device, dtype=input.dtype)
-            pad = nnef_pad(input, padding=[(0, 0), (0, 0), (0, 1), (0, 1)], border=border)
-            deconv = F.conv_transpose2d(
-                input=pad, weight=filter, bias=bias, stride=2, padding=0, output_padding=0, groups=c, dilation=1)
-            return nnef_slice(deconv, axes=[2, 3], begin=[1, 1], end=[-2, -2])
+    if factor != [2] * rank:
+        raise utils.NNEFToolsException("Multilinear upsample is only supported if factor=2, got: {}".format(factor))
 
-    if (method, border) in (('symmetric', 'constant'), ('asymmetric', 'constant'), ('asymmetric', 'replicate')):
-        raise utils.NNEFToolsException(
-            "Multilinear upsample with (symmetric, constant), (asymmetric, constant), (asymmetric, replicate) "
-            "is only implemented for 3D, 4D tensors, and factor=2 respectively.")
+    n, c, = input.shape[:2]
+    size = [2 * s for s in input.shape[2:]]
 
-    if (method, border) != ('symmetric', 'replicate') and method != 'aligned':
-        raise utils.NNEFToolsException(
-            "Multilinear upsample is only implemented if (method, border) are "
-            "(symmetric, constant) "
-            "or (asymmetric, constant), "
-            "or (symmetric, replicate), "
-            "or (asymmetric, replicate), "
-            "or (aligned, [anything]), "
-            "given: ({}, {})".format(method, border))
+    bias = torch.zeros(size=tuple(), device=input.device, dtype=input.dtype)
+    mode = 'linear' if rank == 1 else 'bilinear'
 
-    modes = ['linear', 'bilinear', 'trilinear']
-    mode = modes[len(input.shape) - 3]
-    if (method, border) == ('symmetric', 'replicate'):
-        return F.interpolate(input=input, scale_factor=tuple(factor), mode=mode, align_corners=False)
-    elif method == 'aligned':
-        return F.interpolate(input=input, scale_factor=tuple(factor), mode=mode, align_corners=True)
+    if method == 'symmetric':
+        if border == 'replicate':
+            return F.interpolate(input=input, scale_factor=tuple(factor), mode=mode, align_corners=False)
+
+        weights = [0.25, 0.75, 0.75, 0.25] if rank == 1 else [0.0625, 0.1875, 0.1875, 0.0625,
+                                                              0.1875, 0.5625, 0.5625, 0.1875,
+                                                              0.1875, 0.5625, 0.5625, 0.1875,
+                                                              0.0625, 0.1875, 0.1875, 0.0625]
+        array = np.array(weights * c, dtype=np.float32).reshape([c, 1] + [4] * rank)
+        filter = torch.from_numpy(array).to(device=input.device, dtype=input.dtype)
+        return nnef_deconv(input, filter, bias, stride=[2] * rank, padding=[(1, 1)] * rank, border='constant',
+                           groups=c, output_shape=[n, c] + size)
+    elif method == 'asymmetric':
+        if border == 'replicate':
+            input = nnef_pad(input, padding=[(0, 0), (0, 0)] + [(1, 0)] * rank, border=border)
+
+        weights = [0.5, 1.0, 0.5] if rank == 1 else [0.25, 0.5, 0.25,
+                                                     0.50, 1.0, 0.50,
+                                                     0.25, 0.5, 0.25]
+        array = np.array(weights * c, dtype=np.float32).reshape([c, 1] + [3] * rank)
+        filter = torch.from_numpy(array).to(device=input.device, dtype=input.dtype)
+        output = nnef_deconv(input, filter, bias, stride=[2] * rank, padding=[(0, 1)] * rank, border='constant',
+                             groups=c, output_shape=[n, c] + size)
+
+        F.conv_transpose2d()
+
+        if border == 'replicate':
+            output = nnef_slice(output, axes=list(range(2, rank)), begin=[2] * rank, end=[0] * rank)
+        return output
     else:
-        assert False
+        return F.interpolate(input=input, scale_factor=tuple(factor), mode=mode, align_corners=True)
 
 
 def nnef_nearest_upsample(input, factor):
