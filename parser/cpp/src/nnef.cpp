@@ -179,15 +179,8 @@ namespace nnef
         return parse(graph_is, "input", quant_is, "quantization", graph, error, stdlib, lowered);
     }
     
-    bool read_tensor( const std::string& filename, Tensor& tensor, std::string& error ) noexcept
+    bool read_tensor( std::istream& is, Tensor& tensor, std::string& error ) noexcept
     {
-        std::ifstream is(filename, std::ios::binary);
-        if ( !is )
-        {
-            error = "Could not open tensor file: " + filename;
-            return false;
-        }
-        
         TensorHeader header;
         is.read((char*)&header, sizeof(header));
         
@@ -195,15 +188,17 @@ namespace nnef
         {
             validate_tensor_header(header);
 
+            tensor.shape.clear();
             tensor.shape.reserve(header.rank);
             std::copy_n(header.extents, header.rank, std::back_inserter(tensor.shape));
         }
         catch ( nnef::Error e )
         {
-            error = "Failed to read header from tensor file: " + filename + ": " + e.what();
+            error = "Invalid tensor header: " + std::string(e.what());
             return false;
         }
         
+        tensor.compression.clear();
         tensor.compression.emplace_back("op-code", Value::integer(header.quant_code));
         tensor.compression.emplace_back("bits-per-item", Value::integer(header.bits_per_item));
         
@@ -220,24 +215,27 @@ namespace nnef
         tensor.data.resize(header.data_length);
         is.read((char*)tensor.data.data(), header.data_length);
         
-        if ( !is )
-        {
-            error = "Could not read tensor data from file: " + filename;
-            return false;
-        }
-        
-        return true;
+        return (bool)is;
     }
-    
-    bool write_tensor( const std::string& filename, const Tensor& tensor, std::string& error ) noexcept
+
+    bool read_tensor( const std::string& filename, Tensor& tensor, std::string& error ) noexcept
     {
-        std::ofstream os(filename, std::ios::binary);
-        if ( !os )
+        std::ifstream is(filename, std::ios::binary);
+        if ( !is )
         {
             error = "Could not open tensor file: " + filename;
             return false;
         }
-        
+        if ( !read_tensor(is, tensor, error) && error.empty() )
+        {
+            error = "Could not read tensor data from file: " + filename;
+            return false;
+        }
+        return true;
+    }
+    
+    bool write_tensor( std::ostream& os, const Tensor& tensor, std::string& error ) noexcept
+    {
         if ( tensor.shape.size() > TensorHeader::MaxRank )
         {
             error = "Tensor rank " + std::to_string(tensor.shape.size()) + " exceeds maximum allowed rank (" + std::to_string(TensorHeader::MaxRank) + ")";
@@ -253,14 +251,16 @@ namespace nnef
         header.version[1] = 0;
         header.rank = (uint32_t)tensor.shape.size();
         std::copy(tensor.shape.begin(), tensor.shape.end(), header.extents);
-        header.quant_code = tensor.compression.get("op-code", Value::integer(0)).integer();
-        auto bits_per_item = header.quant_code == TensorHeader::Float || header.quant_code == TensorHeader::Integer ? 32 : 8;
+        auto default_quant_code = tensor.dtype == "scalar" ? TensorHeader::Float : TensorHeader::Integer;
+        header.quant_code = tensor.compression.get("op-code", Value::integer(default_quant_code)).integer();
+        auto bits_per_item = header.quant_code == TensorHeader::Linear || header.quant_code == TensorHeader::Logarithmic ? 8 :
+                             tensor.dtype == "logical" ? 1 : 32;
         header.bits_per_item = tensor.compression.get("bits-per-item", Value::integer(bits_per_item)).integer();
         header.data_length = (item_count * header.bits_per_item + 7) / 8;
         
         if ( tensor.data.size() != header.data_length )
         {
-            error = "Tensor data length (" + std::to_string(tensor.data.size()) + ") does not match item count (" + std::to_string(item_count) + ")  implied by shape";
+            error = "Tensor data length (" + std::to_string(tensor.data.size()) + ") does not match number of bytes (" + std::to_string(header.data_length) + ") implied by shape and data-type";
             return false;
         }
         
@@ -277,18 +277,28 @@ namespace nnef
         }
         else if ( header.quant_code == TensorHeader::Integer )
         {
-            header.quant_params[0] = tensor.compression.get("signed", Value::logical(false)).logical() ? 1 : 0;
+            header.quant_params[0] = tensor.compression.get("signed", Value::logical(tensor.dtype == "integer")).logical() ? 1 : 0;
         }
         
         os.write((char*)&header, sizeof(header));
         os.write((char*)tensor.data.data(), tensor.data.size());
         
+        return (bool)os;
+    }
+
+    bool write_tensor( const std::string& filename, const Tensor& tensor, std::string& error ) noexcept
+    {
+        std::ofstream os(filename, std::ios::binary);
         if ( !os )
+        {
+            error = "Could not open tensor file: " + filename;
+            return false;
+        }
+        if ( !write_tensor(os, tensor, error) && error.empty() )
         {
             error = "Could not write data to file: " + filename;
             return false;
         }
-        
         return true;
     }
     

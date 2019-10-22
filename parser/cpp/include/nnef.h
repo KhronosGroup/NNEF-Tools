@@ -20,6 +20,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <iostream>
 #include <functional>
 #include <algorithm>
 #include "nnef/common/value.h"
@@ -128,6 +129,18 @@ namespace nnef
     bool parse_string( const std::string& graph_str, const std::string& quant_str, Graph& graph, std::string& error,
                       const std::string& stdlib = "", const std::set<std::string>& lowered = {} ) noexcept;
     
+    /*
+     * Read/write a single tensor from/to binary stream
+     *
+     * @param is/os: the stream to read from/write to
+     * @param tensor: the tensor object to fill into/from
+     * @param error: the string to store the error message if any
+     *
+     * @return true if there were no errors, false otherwise
+     */
+    bool read_tensor( std::istream& is, Tensor& tensor, std::string& error ) noexcept;
+    bool write_tensor( std::ostream& os, const Tensor& tensor, std::string& error ) noexcept;
+
     /*
      * Read/write a single tensor from/to a binary file
      *
