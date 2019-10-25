@@ -665,7 +665,6 @@ def nnef_multilinear_upsample(input, factor, method='symmetric', border='replica
         raise utils.NNEFToolsException("Multilinear upsample is only supported if factor=2, got: {}".format(factor))
 
     n, c, = input.shape[:2]
-    size = [2 * s for s in input.shape[2:]]
 
     bias = torch.zeros(size=tuple(), device=input.device, dtype=input.dtype)
     mode = 'linear' if rank == 1 else 'bilinear'
@@ -681,7 +680,7 @@ def nnef_multilinear_upsample(input, factor, method='symmetric', border='replica
         array = np.array(weights * c, dtype=np.float32).reshape([c, 1] + [4] * rank)
         filter = torch.from_numpy(array).to(device=input.device, dtype=input.dtype)
         return nnef_deconv(input, filter, bias, stride=[2] * rank, padding=[(1, 1)] * rank, border='constant',
-                           groups=c, output_shape=[n, c] + size)
+                           groups=c, output_shape=[n, c] + [2 * s for s in input.shape[2:]])
     elif method == 'asymmetric':
         if border == 'replicate':
             input = nnef_pad(input, padding=[(0, 0), (0, 0)] + [(1, 0)] * rank, border=border)
@@ -692,12 +691,10 @@ def nnef_multilinear_upsample(input, factor, method='symmetric', border='replica
         array = np.array(weights * c, dtype=np.float32).reshape([c, 1] + [3] * rank)
         filter = torch.from_numpy(array).to(device=input.device, dtype=input.dtype)
         output = nnef_deconv(input, filter, bias, stride=[2] * rank, padding=[(0, 1)] * rank, border='constant',
-                             groups=c, output_shape=[n, c] + size)
-
-        F.conv_transpose2d()
+                             groups=c, output_shape=[n, c] + [2 * s for s in input.shape[2:]])
 
         if border == 'replicate':
-            output = nnef_slice(output, axes=list(range(2, rank)), begin=[2] * rank, end=[0] * rank)
+            output = nnef_slice(output, axes=list(range(2, 2 + rank)), begin=[2] * rank, end=[0] * rank)
         return output
     else:
         return F.interpolate(input=input, scale_factor=tuple(factor), mode=mode, align_corners=True)
@@ -787,15 +784,13 @@ def nnef_split(value, axis, ratios):
 def nnef_slice(input, axes, begin, end):
     # type:(torch.Tensor, List[int], List[int], List[int])->torch.Tensor
 
-    old_shape = list(input.shape)
+    shape = list(input.shape)
 
     for axis, b, e in zip(axes, begin, end):
         if b < 0:
-            e += old_shape[axis]
-        if e == 0:
-            e = old_shape[axis]
-        if e < 0:
-            e += old_shape[axis]
+            e += shape[axis]
+        if e <= 0:
+            e += shape[axis]
         input = input.narrow(dim=axis, start=b, length=(e - b))
 
     return input
