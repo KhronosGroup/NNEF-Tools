@@ -26,15 +26,15 @@ namespace nnef { namespace rt
     {
         static inline void call( const S shape[], I index[], const Op& op )
         {
-            for ( index[K] = 0; index[K] < shape[K]; ++index[K] )
+            for ( index[N-K] = 0; index[N-K] < shape[N-K]; ++index[N-K] )
             {
-                _nd_loop<N,K+1,I,S,Op>::call(shape, index, op);
+                _nd_loop<N,K-1,I,S,Op>::call(shape, index, op);
             }
         }
     };
 
     template<size_t N, typename I, typename S, typename Op>
-    struct _nd_loop<N,N-1,I,S,Op>
+    struct _nd_loop<N,1,I,S,Op>
     {
         static inline void call( const S shape[], I index[], const Op& op )
         {
@@ -44,12 +44,21 @@ namespace nnef { namespace rt
             }
         }
     };
+    
+    template<typename I, typename S, typename Op>
+    struct _nd_loop<0,0,I,S,Op>
+    {
+        static inline void call( const S shape[], I index[], const Op& op )
+        {
+            op(index);
+        }
+    };
 
     template<size_t N, typename I, typename S, typename Op>
     inline void nd_loop( const S shape[], const Op& op )
     {
         I index[N];
-        _nd_loop<N,0,S,I,Op>::call(shape, index, op);
+        _nd_loop<N,N,S,I,Op>::call(shape, index, op);
     };
 
 

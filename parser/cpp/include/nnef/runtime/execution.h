@@ -19,6 +19,7 @@
 
 #include "nnef.h"
 #include "operations.h"
+#include <cassert>
 
 
 #define DISPATCH_BY_DTYPE(name) \
