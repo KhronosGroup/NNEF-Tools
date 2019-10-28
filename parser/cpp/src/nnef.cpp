@@ -606,7 +606,8 @@ namespace nnef
     };
     
     
-    bool infer_shapes( Graph& graph, std::string& error, const std::map<std::string,ShapeFunc>& custom_shapes ) noexcept
+    bool infer_shapes( Graph& graph, std::string& error, const std::map<std::string,Shape>& input_shapes,
+                      const std::map<std::string,ShapeFunc>& custom_shapes ) noexcept
     {
         for ( auto& op : graph.operations )
         {
@@ -621,6 +622,24 @@ namespace nnef
 				}
             }
             auto func = it->second;
+            
+            if ( op.name == "external" )
+            {
+                auto& id = op.outputs.get("output").identifier();
+                auto it = input_shapes.find(id);
+                if ( it != input_shapes.end() )
+                {
+                    auto& original = op.attribs.get("shape");
+                    if ( it->second.size() != original.size() )
+                    {
+                        error = "Overridden external shape rank (" + std::to_string(it->second.size()) +
+                                ") does not match original rank (" + std::to_string(original.size()) + ")";
+                        return false;
+                    }
+                    graph.tensors.at(id).shape = it->second;
+                    continue;
+                }
+            }
             
             try
             {

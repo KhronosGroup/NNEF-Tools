@@ -208,6 +208,7 @@ int main( int argc, const char * argv[] )
         return -1;
     }
     
+    std::map<std::string,nnef::Shape> input_shapes;
     if ( !inputs.empty() || !isatty(STDIN_FILENO) )
     {
         bool read = !inputs.empty() ? read_inputs_from_file(graph, inputs, error) : read_inputs_from_cin(graph, error);
@@ -216,9 +217,13 @@ int main( int argc, const char * argv[] )
             std::cerr << error << std::endl;
             return -1;
         }
+        for ( auto& input : graph.inputs )
+        {
+            input_shapes.emplace(input, graph.tensors.at(input).shape);
+        }
     }
     
-    if ( !nnef::infer_shapes(graph, error) )
+    if ( !nnef::infer_shapes(graph, error, input_shapes) )
     {
         std::cerr << error << std::endl;
         return -1;

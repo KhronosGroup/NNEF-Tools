@@ -183,7 +183,8 @@ namespace nnef
      *
      * @return true if there were no errors, false otherwise
      */
-    bool infer_shapes( Graph& graph, std::string& error, const std::map<std::string,ShapeFunc>& custom_shapes = {} ) noexcept;
+    bool infer_shapes( Graph& graph, std::string& error, const std::map<std::string,Shape>& input_shapes = {},
+                      const std::map<std::string,ShapeFunc>& custom_shapes = {} ) noexcept;
 
 }   // namespace nnef
 
