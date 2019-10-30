@@ -226,6 +226,7 @@ namespace nnef
         else if ( tensor.dtype == "integer" )
         {
             assert(header.quant_code == TensorHeader::Integer);
+            assert(header.quant_params[0] == 1);
             from_bytes(bytes.data(), count, header.bits_per_item, (int*)tensor.data.data());
         }
         else if ( tensor.dtype == "logical" )
