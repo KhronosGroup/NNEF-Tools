@@ -229,48 +229,11 @@ int main( int argc, const char * argv[] )
         return -1;
     }
     
-    std::cerr << "Successfully parsed file: " << path << std::endl;
+    std::cerr << "Executing model: " << path << std::endl;
     
-    try
+    if ( !nnef::execute(graph, error) )
     {
-        nnef::rt::Execution exec(graph);
-        
-        for ( auto& input : graph.inputs )
-        {
-            auto& tensor = graph.tensors.at(input);
-            if ( !tensor.data.empty() )
-            {
-                exec.push_tensor(input, tensor.dtype, tensor.compression.get("bits-per-item").integer(), tensor.data.data());
-            }
-        }
-        
-        std::cout << "Running inference... " << std::flush;
-        
-        auto start = std::chrono::system_clock::now();
-        
-        exec();
-        
-        auto end = std::chrono::system_clock::now();
-        std::chrono::duration<double> elapsed = end - start;
-        
-        std::cout << "done; elapsed time: " << elapsed.count() << "s" << std::endl;
-        
-        for ( auto& output : graph.outputs )
-        {
-            auto& tensor = graph.tensors.at(output);
-            
-            const size_t volume = nnef::volume_of(tensor.shape);
-            const size_t bits_per_item = tensor.dtype == "scalar" ? sizeof(float) * 8 :
-                                         tensor.dtype == "integer" ? sizeof(int) * 8 :
-                                         tensor.dtype == "logical" ? 1 : 0;
-            
-            tensor.data.resize((volume * bits_per_item + 7) / 8);
-            exec.pull_tensor(output, tensor.dtype, bits_per_item, tensor.data.data());
-        }
-    }
-    catch ( std::runtime_error e )
-    {
-        std::cerr << "Runtime error: " << e.what() << std::endl;
+        std::cerr << error << std::endl;
         return -1;
     }
     
@@ -278,10 +241,14 @@ int main( int argc, const char * argv[] )
     {
         for ( size_t i = 0; i < graph.outputs.size(); ++i )
         {
-            nnef::Tensor tensor;
-            nnef::read_tensor(outputs[i], tensor, error);
-            
             const nnef::Tensor& output = graph.tensors.at(graph.outputs[i]);
+            
+            nnef::Tensor tensor = { output.name, output.dtype };
+            if ( !nnef::read_tensor(outputs[i], tensor, error) )
+            {
+                std::cerr << error << std::endl;
+                return -1;
+            }
             
             if ( output.shape != tensor.shape )
             {

@@ -469,9 +469,8 @@ namespace nnef { namespace rt
             0.25, 0.75, 0.75, 0.25
         };
         const int shape[] = { 1, 1, 4 };
-        const int strides[] = { 4, 4, 1 };
-        tensor_view<const T> filter = { 3, 4, shape, strides, weights };
-        tensor_view<const T> bias = { 0, 1, nullptr, nullptr, &zero };
+        tensor_view<const T> filter = { 3, 4, shape, weights };
+        tensor_view<const T> bias = { 0, 1, nullptr, &zero };
         const int padding[] = { 1 };
         const int stride[] = { 2 };
         const int dilation[] = { 1 };
@@ -487,9 +486,8 @@ namespace nnef { namespace rt
             0.5, 1.0, 0.5,
         };
         const int shape[] = { 1, 1, 3 };
-        const int strides[] = { 3, 3, 1 };
-        tensor_view<const T> filter = { 3, 3, shape, strides, weights };
-        tensor_view<const T> bias = { 0, 1, nullptr, nullptr, &zero };
+        tensor_view<const T> filter = { 3, 3, shape, weights };
+        tensor_view<const T> bias = { 0, 1, nullptr, &zero };
         const int padding[] = { 0 };
         const int stride[] = { 2 };
         const int dilation[] = { 1 };
@@ -508,9 +506,8 @@ namespace nnef { namespace rt
             0.0625, 0.1875, 0.1875, 0.0625,
         };
         const int shape[] = { 1, 1, 4, 4 };
-        const int strides[] = { 16, 16, 4, 1 };
-        tensor_view<const T> filter = { 4, 16, shape, strides, weights };
-        tensor_view<const T> bias = { 0, 1, nullptr, nullptr, &zero };
+        tensor_view<const T> filter = { 4, 16, shape, weights };
+        tensor_view<const T> bias = { 0, 1, nullptr, &zero };
         const int padding[] = { 1, 1 };
         const int stride[] = { 2, 2 };
         const int dilation[] = { 1, 1 };
@@ -528,9 +525,8 @@ namespace nnef { namespace rt
             0.25, 0.5, 0.25,
         };
         const int shape[] = { 1, 1, 3, 3 };
-        const int strides[] = { 9, 9, 3, 1 };
-        tensor_view<const T> filter = { 4, 9, shape, strides, weights };
-        tensor_view<const T> bias = { 0, 1, nullptr, nullptr, &zero };
+        tensor_view<const T> filter = { 4, 9, shape, weights };
+        tensor_view<const T> bias = { 0, 1, nullptr, &zero };
         const int padding[] = { 0, 0 };
         const int stride[] = { 2, 2 };
         const int dilation[] = { 1, 1 };

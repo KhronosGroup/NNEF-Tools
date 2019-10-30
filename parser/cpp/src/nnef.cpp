@@ -22,6 +22,7 @@
 #include "nnef/flat/quant_parser.h"
 #include "nnef/common/binary.h"
 #include "nnef/common/shapes.h"
+#include "nnef/runtime/execution.h"
 
 
 namespace nnef
@@ -178,7 +179,17 @@ namespace nnef
         }
         return parse(graph_is, "input", quant_is, "quantization", graph, error, stdlib, lowered);
     }
+
+    size_t item_bytes( const std::string& dtype )
+    {
+        return dtype == "scalar" ? sizeof(float) : dtype == "integer" ? sizeof(int) : dtype == "logical" ? sizeof(bool) : 0;
+    }
     
+    size_t item_bits( const std::string& dtype )
+    {
+        return dtype == "scalar" ? 32 : dtype == "integer" ? 32 : dtype == "logical" ? 1 : 0;
+    }
+
     bool read_tensor( std::istream& is, Tensor& tensor, std::string& error ) noexcept
     {
         TensorHeader header;
@@ -187,10 +198,7 @@ namespace nnef
         try
         {
             validate_tensor_header(header);
-
-            tensor.shape.clear();
-            tensor.shape.reserve(header.rank);
-            std::copy_n(header.extents, header.rank, std::back_inserter(tensor.shape));
+            tensor.shape.assign(header.extents, header.extents + header.rank);
         }
         catch ( nnef::Error e )
         {
@@ -198,24 +206,86 @@ namespace nnef
             return false;
         }
         
-        tensor.compression.clear();
-        tensor.compression.emplace_back("op-code", Value::integer(header.quant_code));
-        tensor.compression.emplace_back("bits-per-item", Value::integer(header.bits_per_item));
+        std::vector<char> bytes(header.data_length);
+        is.read(bytes.data(), bytes.size());
         
-        if ( header.quant_code == TensorHeader::Linear || header.quant_code == TensorHeader::Logarithmic )
+        if ( !is )
         {
-            tensor.compression.emplace_back("min", Value::scalar(reinterpret_cast<Value::scalar_t&>(header.quant_params[0])));
-            tensor.compression.emplace_back("max", Value::scalar(reinterpret_cast<Value::scalar_t&>(header.quant_params[1])));
+            error = "Failed to read tensor data";
+            return false;
         }
-        else if ( header.quant_code == TensorHeader::Integer )
-        {
-            tensor.compression.emplace_back("signed", Value::logical(header.quant_params[0] != 0));
-        }
+
+        const size_t count = volume_of(tensor.shape);
+        tensor.data.resize(count * item_bytes(tensor.dtype));
         
-        tensor.data.resize(header.data_length);
-        is.read((char*)tensor.data.data(), header.data_length);
+        if ( tensor.dtype == "scalar" )
+        {
+            assert(header.quant_code == TensorHeader::Float);
+            from_bytes(bytes.data(), count, header.bits_per_item, (float*)tensor.data.data());
+        }
+        else if ( tensor.dtype == "integer" )
+        {
+            assert(header.quant_code == TensorHeader::Integer);
+            from_bytes(bytes.data(), count, header.bits_per_item, (int*)tensor.data.data());
+        }
+        else if ( tensor.dtype == "logical" )
+        {
+            assert(header.quant_code == TensorHeader::Integer);
+            from_bytes(bytes.data(), count, header.bits_per_item, (bool*)tensor.data.data());
+        }
+        else
+        {
+            error = "Invalid tensor dtype: " + tensor.dtype;
+            return false;
+        }
         
         return (bool)is;
+    }
+
+    bool write_tensor( std::ostream& os, const Tensor& tensor, std::string& error ) noexcept
+    {
+        if ( tensor.shape.size() > TensorHeader::MaxRank )
+        {
+            error = "Tensor rank " + std::to_string(tensor.shape.size()) + " exceeds maximum allowed rank (" + std::to_string(TensorHeader::MaxRank) + ")";
+            return false;
+        }
+        
+        const TensorHeader::QuantCode quant_code = tensor.dtype == "scalar" ? TensorHeader::Float : TensorHeader::Integer;
+        
+        TensorHeader header;
+        fill_tensor_header(header, (size_t[]){ 1, 0 }, tensor.shape.size(), tensor.shape.data(), item_bits(tensor.dtype), quant_code);
+        
+        const size_t count = volume_of(tensor.shape);
+        std::vector<char> bytes(header.data_length);
+        
+        if ( tensor.dtype == "scalar" )
+        {
+            to_bytes((const float*)tensor.data.data(), count, bytes.data());
+        }
+        else if ( tensor.dtype == "integer" )
+        {
+            to_bytes((const int*)tensor.data.data(), count, bytes.data());
+            header.quant_params[0] = 1;
+        }
+        else if ( tensor.dtype == "logical" )
+        {
+            to_bytes((const bool*)tensor.data.data(), count, bytes.data());
+        }
+        else
+        {
+            error = "Invalid tensor dtype: " + tensor.dtype;
+            return false;
+        }
+        
+        os.write((char*)&header, sizeof(header));
+        os.write(bytes.data(), bytes.size());
+        
+        if ( !os )
+        {
+            error = "Failed to write tensor data";
+            return false;
+        }
+        return true;
     }
 
     bool read_tensor( const std::string& filename, Tensor& tensor, std::string& error ) noexcept
@@ -226,64 +296,7 @@ namespace nnef
             error = "Could not open tensor file: " + filename;
             return false;
         }
-        if ( !read_tensor(is, tensor, error) && error.empty() )
-        {
-            error = "Could not read tensor data from file: " + filename;
-            return false;
-        }
-        return true;
-    }
-    
-    bool write_tensor( std::ostream& os, const Tensor& tensor, std::string& error ) noexcept
-    {
-        if ( tensor.shape.size() > TensorHeader::MaxRank )
-        {
-            error = "Tensor rank " + std::to_string(tensor.shape.size()) + " exceeds maximum allowed rank (" + std::to_string(TensorHeader::MaxRank) + ")";
-            return false;
-        }
-        
-        auto item_count = std::accumulate(tensor.shape.begin(), tensor.shape.end(), 1, std::multiplies<int>());
-        
-        TensorHeader header;
-        header.magic[0] = 'N';
-        header.magic[1] = 0xEF;
-        header.version[0] = 1;
-        header.version[1] = 0;
-        header.rank = (uint32_t)tensor.shape.size();
-        std::copy(tensor.shape.begin(), tensor.shape.end(), header.extents);
-        auto default_quant_code = tensor.dtype == "scalar" ? TensorHeader::Float : TensorHeader::Integer;
-        header.quant_code = tensor.compression.get("op-code", Value::integer(default_quant_code)).integer();
-        auto bits_per_item = header.quant_code == TensorHeader::Linear || header.quant_code == TensorHeader::Logarithmic ? 8 :
-                             tensor.dtype == "logical" ? 1 : 32;
-        header.bits_per_item = tensor.compression.get("bits-per-item", Value::integer(bits_per_item)).integer();
-        header.data_length = (item_count * header.bits_per_item + 7) / 8;
-        
-        if ( tensor.data.size() != header.data_length )
-        {
-            error = "Tensor data length (" + std::to_string(tensor.data.size()) + ") does not match number of bytes (" + std::to_string(header.data_length) + ") implied by shape and data-type";
-            return false;
-        }
-        
-        if ( header.quant_code == TensorHeader::Linear || header.quant_code == TensorHeader::Logarithmic )
-        {
-            if ( !tensor.compression.contains("min") || !tensor.compression.contains("max") )
-            {
-                error = "Tensor compression dictionary must contain 'min' and 'max' values";
-                return false;
-            }
-            
-            header.quant_params[0] = reinterpret_cast<const uint32_t&>(tensor.compression.get("min").scalar());
-            header.quant_params[1] = reinterpret_cast<const uint32_t&>(tensor.compression.get("max").scalar());
-        }
-        else if ( header.quant_code == TensorHeader::Integer )
-        {
-            header.quant_params[0] = tensor.compression.get("signed", Value::logical(tensor.dtype == "integer")).logical() ? 1 : 0;
-        }
-        
-        os.write((char*)&header, sizeof(header));
-        os.write((char*)tensor.data.data(), tensor.data.size());
-        
-        return (bool)os;
+        return read_tensor(is, tensor, error);
     }
 
     bool write_tensor( const std::string& filename, const Tensor& tensor, std::string& error ) noexcept
@@ -294,12 +307,7 @@ namespace nnef
             error = "Could not open tensor file: " + filename;
             return false;
         }
-        if ( !write_tensor(os, tensor, error) && error.empty() )
-        {
-            error = "Could not write data to file: " + filename;
-            return false;
-        }
-        return true;
+        return write_tensor(os, tensor, error);
     }
     
     bool load_variables( const std::string& path, Graph& graph, std::string& error ) noexcept
@@ -645,7 +653,7 @@ namespace nnef
             {
                 func(op, graph);
             }
-            catch ( const std::exception& e )
+            catch ( std::exception e )
             {
                 auto& output = op.outputs.front().second;
                 auto& id = output.kind() == Value::Identifier ? output.identifier() : output[0].identifier();
@@ -655,6 +663,36 @@ namespace nnef
             }
         }
         return true;
+    }
+    
+
+    bool execute( Graph& graph, std::string& error ) noexcept
+    {
+        try
+        {
+            for ( auto& item : graph.tensors )
+            {
+                auto& tensor = item.second;
+                tensor.data.resize(volume_of(tensor.shape) * item_bytes(tensor.dtype));
+            }
+            
+            for ( auto& op : graph.operations )
+            {
+                auto it = rt::Executors.find(op.name);
+                if ( it == rt::Executors.end() )
+                {
+                    throw std::runtime_error("operation not implemented: " + op.name);
+                }
+                auto& func = it->second;
+                func(op, graph.tensors);
+            }
+            return true;
+        }
+        catch ( std::runtime_error e )
+        {
+            error = "Runtime error: " + std::string(e.what());
+            return false;
+        }
     }
     
 }   // namespace nnef

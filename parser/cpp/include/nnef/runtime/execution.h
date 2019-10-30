@@ -35,24 +35,13 @@
 namespace nnef { namespace rt
 {
 
-    struct Tensor
+    inline Tensor _make_tensor( const size_t rank, const int shape[], const size_t item_bytes )
     {
-        Tensor( const size_t rank, const int shape[], const size_t item_bytes )
-        : shape(shape, shape + rank), stride(rank + 1)
-        {
-            stride.back() = 1;
-            for ( size_t i = rank; i--; )
-            {
-                stride[i] = stride[i+1] * shape[i];
-            }
-            data.resize(stride.front() * item_bytes);
-        }
-        
-        std::vector<int> shape;
-        std::vector<int> stride;
-        std::vector<char> data;
-    };
-
+        Tensor tensor;
+        tensor.shape.assign(shape, shape + rank);
+        tensor.data.resize(volume_of(tensor.shape) * item_bytes);
+        return tensor;
+    }
 
     typedef std::map<std::string,Tensor> TensorDict;
     typedef std::function<void( const Operation& op, TensorDict& tensors )> Executor;
@@ -61,14 +50,13 @@ namespace nnef { namespace rt
     template<typename T>
     tensor_view<T> _tensor_view( const Tensor& tensor )
     {
-        return (tensor_view<T>){ tensor.shape.size(), (size_t)tensor.stride.front(), tensor.shape.data(),
-            tensor.stride.data() + 1, (T*)tensor.data.data() };
+        return (tensor_view<T>){ tensor.shape.size(), volume_of(tensor.shape), tensor.shape.data(), (T*)tensor.data.data() };
     }
 
     template<typename T>
     tensor_view<T> _tensor_view( const T& value )
     {
-        return (tensor_view<T>){ 0, 1, nullptr, nullptr, (T*)&value };
+        return (tensor_view<T>){ 0, 1, nullptr, (T*)&value };
     }
 
     template<typename T>
@@ -304,7 +292,7 @@ namespace nnef { namespace rt
             }
             else if ( border == "ignore" )
             {
-                Tensor tensor(d, output_view.shape, sizeof(T));
+                Tensor tensor = _make_tensor(d, output_view.shape, sizeof(T));
                 
                 pool_area<Transposed>(_tensor_view<T>(tensor), input_view.shape, output_view.shape, sizeShape.data(),
                                       paddingShape.data(), strideShape.data(), dilationShape.data());
@@ -605,8 +593,8 @@ namespace nnef { namespace rt
                 padded_output_shape[i] += (method == "symmetric" ? 4 : 2);
             }
             
-            Tensor padded_input(padded_input_shape.size(), padded_input_shape.data(), sizeof(T));
-            Tensor padded_output(padded_output_shape.size(), padded_output_shape.data(), sizeof(T));
+            Tensor padded_input = _make_tensor(padded_input_shape.size(), padded_input_shape.data(), sizeof(T));
+            Tensor padded_output = _make_tensor(padded_output_shape.size(), padded_output_shape.data(), sizeof(T));
             
             pad_replicate((tensor_view<const T>)input_view, _tensor_view<T>(padded_input), input_padding.data());
             
@@ -733,146 +721,6 @@ namespace nnef { namespace rt
         { "multilinear_upsample", execute_multilinear_upsample<float> },
         
         { "update", execute_update },
-    };
-    
-
-    class Execution
-    {
-    public:
-        
-        Execution( const Graph& graph )
-        : _graph(graph)
-        {
-            for ( auto& item : _graph.tensors )
-            {
-                Tensor tensor(item.second.shape.size(), item.second.shape.data(), item_bytes(item.second.dtype));
-                if ( !item.second.data.empty() )
-                {
-                    push_tensor(tensor, item.second.dtype, item.second.compression.get("bits-per-item").integer(), item.second.data.data());
-                }
-                _tensors.emplace(item.first, std::move(tensor));
-            }
-        }
-        
-        void push_tensor( const std::string& id, const std::string& dtype, const size_t bits_per_item, const char* data )
-        {
-            push_tensor(_tensors.at(id), dtype, bits_per_item, data);
-        }
-        
-        void pull_tensor( const std::string& id, const std::string& dtype, const size_t bits_per_item, char* data )
-        {
-            pull_tensor(_tensors.at(id), dtype, bits_per_item, data);
-        }
-        
-        void operator()()
-        {
-            for ( auto& op : _graph.operations )
-            {
-                auto it = Executors.find(op.name);
-                if ( it == Executors.end() )
-                {
-                    throw std::runtime_error("operation not implemented: " + op.name);
-                }
-                auto& func = it->second;
-                func(op, _tensors);
-            }
-        }
-        
-    private:
-        
-        static size_t item_bytes( const std::string& dtype )
-        {
-            return dtype == "scalar" ? sizeof(float) : dtype == "integer" ? sizeof(int) : dtype == "logical" ? sizeof(bool) : 0;
-        }
-        
-        static char get_bit( const char* data, const size_t idx )
-        {
-            return (data[idx / 8] >> (7 - (idx % 8))) & 0x01;
-        }
-        
-        static void set_bit( char* data, const size_t idx, const char value )
-        {
-            data[idx / 8] |= (value << (7 - (idx % 8)));
-        }
-        
-        void push_tensor( Tensor& tensor, const std::string& dtype, const size_t bits_per_item, const char* data )
-        {
-            const size_t count = volume_of(tensor.shape);
-            if ( dtype == "logical" )
-            {
-                assert(bits_per_item == 1);
-                for ( size_t i = 0; i < count; ++i )
-                {
-                    tensor.data[i] = get_bit(data, i);
-                }
-            }
-            else if ( dtype == "scalar" )
-            {
-                assert(bits_per_item == 32 || bits_per_item == 64);
-                if ( bits_per_item == 32 )
-                {
-                    std::copy_n((const float*)data, count, (float*)tensor.data.data());
-                }
-                else if ( bits_per_item == 64 )
-                {
-                    std::copy_n((const double*)data, count, (float*)tensor.data.data());
-                }
-            }
-            else if ( dtype == "integer" )
-            {
-                assert(bits_per_item == 32 || bits_per_item == 64);
-                if ( bits_per_item == 32 )
-                {
-                    std::copy_n((const int32_t*)data, count, (int*)tensor.data.data());
-                }
-                else if ( bits_per_item == 64 )
-                {
-                    std::copy_n((const int64_t*)data, count, (int*)tensor.data.data());
-                }
-            }
-        }
-        
-        void pull_tensor( const Tensor& tensor, const std::string& dtype, const size_t bits_per_item, char* data )
-        {
-            const size_t count = volume_of(tensor.shape);
-            if ( dtype == "logical" )
-            {
-                assert(bits_per_item == 1);
-                for ( size_t i = 0; i < count; ++i )
-                {
-                    set_bit(data, i, tensor.data[i]);
-                }
-            }
-            else if ( dtype == "scalar" )
-            {
-                assert(bits_per_item == 32 || bits_per_item == 64);
-                if ( bits_per_item == 32 )
-                {
-                    std::copy_n((const float*)tensor.data.data(), count, (float*)data);
-                }
-                else if ( bits_per_item == 64 )
-                {
-                    std::copy_n((const float*)tensor.data.data(), count, (double*)data);
-                }
-            }
-            else if ( dtype == "integer" )
-            {
-                assert(bits_per_item == 32 || bits_per_item == 64);
-                if ( bits_per_item == 32 )
-                {
-                    std::copy_n((const int*)tensor.data.data(), count, (int32_t*)data);
-                }
-                else if ( bits_per_item == 64 )
-                {
-                    std::copy_n((const int*)tensor.data.data(), count, (int64_t*)data);
-                }
-            }
-        }
-        
-    private:
-        
-        const Graph& _graph;
-        TensorDict _tensors;
     };
 
 }}   // namespace nnef::rt

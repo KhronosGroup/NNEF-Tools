@@ -210,17 +210,17 @@ namespace nnef { namespace rt
         const size_t rank;
         const size_t volume;
         const int* shape;
-        const int* stride;
         T* data;
         
         tensor_view operator[]( const size_t idx ) const
         {
-            return (tensor_view){ rank - 1, (size_t)*stride, shape + 1, stride + 1, data + *stride * idx };
+            const size_t size = volume / *shape;
+            return (tensor_view){ rank - 1, size, shape + 1, data + size * idx };
         }
         
         operator tensor_view<const T>() const
         {
-            return (tensor_view<const T>){ rank, volume, shape, stride, data };
+            return (tensor_view<const T>){ rank, volume, shape, data };
         }
     };
 
