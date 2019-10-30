@@ -46,7 +46,7 @@ namespace nnef
     };
 
 
-    template<typename T, typename U = float>
+    template<typename T>
     inline void fill_tensor_header( TensorHeader& header, const size_t version[2], const size_t rank, const T* extents,
                                    const size_t bits_per_item, const TensorHeader::QuantCode quant_code )
     {
