@@ -46,8 +46,9 @@ namespace nnef
     };
 
 
-    template<typename T, typename U = float>
-    inline void fill_tensor_header( TensorHeader& header, const size_t version[2], const size_t rank, const T* extents, const size_t bits_per_item )
+    template<typename T>
+    inline void fill_tensor_header( TensorHeader& header, const size_t version[2], const size_t rank, const T* extents,
+                                   const size_t bits_per_item, const TensorHeader::QuantCode quant_code )
     {
         const char* magic = "N\xEF";
 
@@ -68,6 +69,7 @@ namespace nnef
         header.data_length = (uint32_t)((item_count * bits_per_item + 7) / 8);
         header.bits_per_item = (uint32_t)bits_per_item;
         header.rank = (uint32_t)rank;
+        header.quant_code = quant_code;
 
         std::copy_n(extents, rank, header.extents);
     }
@@ -122,6 +124,93 @@ namespace nnef
                 }
             }
         }
+    }
+
+    inline void pack_bits( const size_t n, const bool* data, char* bytes )
+    {
+        for ( size_t i = 0; i < n; ++i )
+        {
+            bytes[i / 8] |= (data[i] << (7 - (i % 8)));
+        }
+    }
+
+    inline void unpack_bits( const size_t n, const char* bytes, bool* data )
+    {
+        for ( size_t i = 0; i < n; ++i )
+        {
+            data[i] = (bytes[i / 8] >> (7 - (i % 8))) & 0x01;
+        }
+    }
+    
+    inline void from_bytes( const char* bytes, const size_t count, const size_t bits_per_item, float* data )
+    {
+        if ( bits_per_item == 32 )
+        {
+            std::copy_n((const float*)bytes, count, data);
+        }
+        else if ( bits_per_item == 64 )
+        {
+            std::copy_n((const double*)bytes, count, data);
+        }
+        else
+        {
+            throw std::runtime_error("cannot load float data of " + std::to_string(bits_per_item) + " bits per item");
+        }
+    }
+
+    inline void from_bytes( const char* bytes, const size_t count, const size_t bits_per_item, int* data )
+    {
+        if ( bits_per_item == 8 )
+        {
+            std::copy_n((const int8_t*)bytes, count, data);
+        }
+        else if ( bits_per_item == 16 )
+        {
+            std::copy_n((const int16_t*)bytes, count, data);
+        }
+        else if ( bits_per_item == 32 )
+        {
+            std::copy_n((const int32_t*)bytes, count, data);
+        }
+        else if ( bits_per_item == 64 )
+        {
+            std::copy_n((const int64_t*)bytes, count, data);
+        }
+        else
+        {
+            throw std::runtime_error("cannot load int data of " + std::to_string(bits_per_item) + " bits per item");
+        }
+    }
+
+    inline void from_bytes( const char* bytes, const size_t count, const size_t bits_per_item, bool* data )
+    {
+        if ( bits_per_item == 1 )
+        {
+            unpack_bits(count, bytes, data);
+        }
+        else if ( bits_per_item == 8 )
+        {
+            std::copy_n((const int8_t*)bytes, count, data);
+        }
+        else
+        {
+            throw std::runtime_error("cannot load bool data of " + std::to_string(bits_per_item) + " bits per item");
+        }
+    }
+
+    inline void to_bytes( const float* data, const size_t count, char* bytes )
+    {
+        std::copy_n(data, count, (float*)bytes);
+    }
+
+    inline void to_bytes( const int* data, const size_t count, char* bytes )
+    {
+        std::copy_n(data, count, (int32_t*)bytes);
+    }
+
+    inline void to_bytes( const bool* data, const size_t count, char* bytes )
+    {
+        pack_bits(count, data, bytes);
     }
 
 }   // namespace nnef

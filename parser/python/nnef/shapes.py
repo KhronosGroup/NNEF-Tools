@@ -499,7 +499,7 @@ def _set_shape(graph, value, shape):
             _set_shape(graph, v, s)
 
 
-def infer_shapes(graph, custom_shapes={}):
+def infer_shapes(graph, input_shapes={}, custom_shapes={}):
     # type: (nnef.Graph, dict)->None
     for op in graph.operations:
         func = _StandardShapeFuncs.get(op.name)
@@ -507,6 +507,16 @@ def infer_shapes(graph, custom_shapes={}):
             func = custom_shapes.get(op.name)
         if func is None:
             raise nnef.Error("shape inference function is not defined for operation '{}'".format(op.name))
+
+        if op.name == 'external':
+            id = op.outputs['output']
+            override = input_shapes.get(id)
+            if override is not None:
+                original = op.attribs['shape']
+                assert len(override) == len(original), \
+                    "overridden external shape rank ({}) does not match original rank ({})".format(len(override), len(original))
+                _set_shape(graph, id, override)
+                continue
 
         input_shapes = [_get_shape(graph, input) for input in op.inputs.values()]
 
@@ -527,8 +537,8 @@ def infer_shapes(graph, custom_shapes={}):
                 _set_shape(graph, output, shape)
 
         except AssertionError as e:
-            raise nnef.Error("while inferring shape of tensor(s) '{}' (operation '{}'): {}"
-                               .format(', '.join(op.outputs.values()), op.name, e))
+            raise nnef.Error("while inferring shape of tensor(s) '{}' (operation '{}'): {}".
+                             format(', '.join(op.outputs.values()), op.name, e))
 
 
 _StandardShapeFuncs = {

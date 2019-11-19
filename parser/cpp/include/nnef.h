@@ -60,14 +60,10 @@ namespace nnef
      */
     struct Tensor
     {
-        enum class CompressionCode { Float = 0x00, Integer = 0x01, Linear = 0x10, Logarithmic = 0x11 };
-        
         std::string name;           // name of the tensor in the graph
         std::string dtype;          // data-type of the tensor (such as "scalar", "integer", "logical")
         std::vector<int> shape;     // shape of the tensor, filled if shape propagation is in effect
         std::vector<char> data;     // byte array of the data of the tensor, filled in if tensor is a variable
-        ValueDict compression;      // compression info for the data of the tensor, filled in if tensor is a variable
-                                    // used keys: "op-code" (integer), "bits-per-item" (integer), "min" (scalar), "max" (scalar), "signed" (logical)
         ValueDict quantization;     // quantization algorithm info for both activation and variable tensors
                                     // used keys: "op-name" (string), attribute names depending on op-name
     };
@@ -183,7 +179,19 @@ namespace nnef
      *
      * @return true if there were no errors, false otherwise
      */
-    bool infer_shapes( Graph& graph, std::string& error, const std::map<std::string,ShapeFunc>& custom_shapes = {} ) noexcept;
+    bool infer_shapes( Graph& graph, std::string& error, const std::map<std::string,Shape>& input_shapes = {},
+                      const std::map<std::string,ShapeFunc>& custom_shapes = {} ) noexcept;
+
+
+    /*
+     * Execute a graph
+     *
+     * @param graph: the graph object
+     * @param error: the string to store the error message if any
+     *
+     * @return true if there were no errors, false otherwise
+     */
+    bool execute( Graph& graph, std::string& error ) noexcept;
 
 }   // namespace nnef
 
