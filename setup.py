@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import shutil
 from setuptools import setup, find_packages
 
 
@@ -34,7 +33,3 @@ setup(name='nnef_tools',
       keywords='nnef',
       packages=['nnef_tools'] + ['nnef_tools.' + package for package in find_packages(where='nnef_tools')]
       )
-
-shutil.rmtree('build')
-shutil.rmtree('dist')
-shutil.rmtree('nnef_tools.egg-info')
