@@ -41,6 +41,10 @@ def _np_inverse_permutation(p):
     return s
 
 
+def _list2tuple(x):
+    return tuple(x) if isinstance(x, list) else x
+
+
 def evaluate_constant(tensor, const_value_by_tensor):
     # type: (TFTensor, typing.Dict[TFTensor, np.ndarray])->None
     const_value_by_tensor[tensor] = _evaluate_constant(tensor)
@@ -71,16 +75,22 @@ def evaluate_add(op, const_value_by_tensor):
         const_value_by_tensor[op.output] = const_value_by_tensor[op.inputs[0]] + const_value_by_tensor[op.inputs[1]]
 
 
+def evaluate_subtract(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    if op.inputs[0] in const_value_by_tensor and op.inputs[1] in const_value_by_tensor:
+        const_value_by_tensor[op.output] = const_value_by_tensor[op.inputs[0]] - const_value_by_tensor[op.inputs[1]]
+
+
 def evaluate_multiply(op, const_value_by_tensor):
     # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
     if op.inputs[0] in const_value_by_tensor and op.inputs[1] in const_value_by_tensor:
         const_value_by_tensor[op.output] = const_value_by_tensor[op.inputs[0]] * const_value_by_tensor[op.inputs[1]]
 
 
-def evaluate_subtract(op, const_value_by_tensor):
+def evaluate_divide(op, const_value_by_tensor):
     # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
     if op.inputs[0] in const_value_by_tensor and op.inputs[1] in const_value_by_tensor:
-        const_value_by_tensor[op.output] = const_value_by_tensor[op.inputs[0]] - const_value_by_tensor[op.inputs[1]]
+        const_value_by_tensor[op.output] = const_value_by_tensor[op.inputs[0]] / const_value_by_tensor[op.inputs[1]]
 
 
 def evaluate_mod(op, const_value_by_tensor):
@@ -97,16 +107,29 @@ def evaluate_floor_div(op, const_value_by_tensor):
                                                            const_value_by_tensor[op.inputs[1]])
 
 
+def evaluate_squeeze(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    if op.input in const_value_by_tensor:
+        const_value_by_tensor[op.output] = np.squeeze(const_value_by_tensor[op.input], axis=_list2tuple(op.attribs["axis"]))
+
+
 def evaluate_expand_dims(op, const_value_by_tensor):
     # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
     if op.input in const_value_by_tensor:
-        const_value_by_tensor[op.output] = np.expand_dims(const_value_by_tensor[op.input], axis=op.attribs["axis"])
+        const_value_by_tensor[op.output] = np.expand_dims(const_value_by_tensor[op.input], axis=_list2tuple(op.attribs["axis"]))
 
 
 def evaluate_maximum(op, const_value_by_tensor):
     # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
     if op.inputs[0] in const_value_by_tensor and op.inputs[1] in const_value_by_tensor:
         const_value_by_tensor[op.output] = np.maximum(const_value_by_tensor[op.inputs[0]],
+                                                      const_value_by_tensor[op.inputs[1]])
+
+
+def evaluate_minimum(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    if op.inputs[0] in const_value_by_tensor and op.inputs[1] in const_value_by_tensor:
+        const_value_by_tensor[op.output] = np.minimum(const_value_by_tensor[op.inputs[0]],
                                                       const_value_by_tensor[op.inputs[1]])
 
 
@@ -144,6 +167,15 @@ def evaluate_stack(op, const_value_by_tensor):
                                                     axis=op.attribs["axis"])
 
 
+def evaluate_unstack(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    axis = op.attribs["axis"]
+    if op.input in const_value_by_tensor:
+        items = np.split(const_value_by_tensor[op.input], axis=axis, indices_or_sections=op.input.shape[axis])
+        for (output, item) in zip(op.outputs, items):
+            const_value_by_tensor[output] = item
+
+
 def evaluate_range(op, const_value_by_tensor):
     # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
     start = op.attribs["start"]
@@ -164,6 +196,15 @@ def evaluate_concat(op, const_value_by_tensor):
     if all(t in const_value_by_tensor for t in op.inputs):
         cat = np.concatenate(tuple(const_value_by_tensor[t] for t in op.inputs), axis=op.attribs["axis"])
         const_value_by_tensor[op.output] = np.array(cat, dtype=np.dtype(op.output.dtype))
+
+
+def evaluate_split(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    if op.input in const_value_by_tensor:
+        items = np.split(const_value_by_tensor[op.input], axis=op.attribs["axis"],
+                         indices_or_sections=op.attribs["num_or_size_splits"])
+        for output, item in zip(op.outputs, items):
+            const_value_by_tensor[output] = item
 
 
 def evaluate_slice(op, const_value_by_tensor):
@@ -190,7 +231,7 @@ def evaluate_reduce_sum(op, const_value_by_tensor):
     # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
     if op.input in const_value_by_tensor:
         const_value_by_tensor[op.output] = np.sum(a=const_value_by_tensor[op.input],
-                                                  axis=tuple(op.attribs["axis"]),
+                                                  axis=_list2tuple(op.attribs["axis"]),
                                                   keepdims=bool(op.attribs["keepdims"]))
 
 
@@ -277,17 +318,21 @@ _DefaultOpEvaluators = {
     "tf.shape": evaluate_shape,
     "tf.shape_n": evaluate_shape_n,
     "tf.size": evaluate_size,
-    "tf.subtract": evaluate_subtract,
-    "tf.mod": evaluate_mod,
     "tf.add": evaluate_add,
+    "tf.subtract": evaluate_subtract,
     "tf.multiply": evaluate_multiply,
+    "tf.divide": evaluate_divide,
     "tf.floor_div": evaluate_floor_div,
+    "tf.mod": evaluate_mod,
     "tf.maximum": evaluate_maximum,
+    "tf.minimum": evaluate_minimum,
     "tf.fill": evaluate_fill,
     "tf.dynamic_stitch": evaluate_dynamic_stitch,
     "tf.stack": evaluate_stack,
+    "tf.unstack": evaluate_unstack,
     "tf.range": evaluate_range,
     "tf.concat": evaluate_concat,
+    "tf.split": evaluate_split,
     "tf.slice": evaluate_slice,
     "tf.invert_permutation": evaluate_invert_permutation,
     "tf.reduce_sum": evaluate_reduce_sum,
@@ -295,5 +340,6 @@ _DefaultOpEvaluators = {
     "tf.reshape": evaluate_reshape,
     "tf.transpose": evaluate_transpose,
     "_tf.concat_offset": evaluate_concat_offset,
+    "tf.squeeze": evaluate_squeeze,
     "tf.expand_dims": evaluate_expand_dims,
 }
