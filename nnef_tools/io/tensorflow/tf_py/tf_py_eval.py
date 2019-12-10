@@ -307,6 +307,12 @@ def evaluate_size(op, const_value_by_tensor):
         const_value_by_tensor[op.output] = np.product(op.input.shape)
 
 
+def evaluate_cast(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    if op.input in const_value_by_tensor:
+        const_value_by_tensor[op.output] = const_value_by_tensor[op.input].astype(np.typeDict[op.attribs["dtype"]])
+
+
 def try_to_evaluate_operation(op, const_value_by_tensor):
     # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
     if op.name in _DefaultOpEvaluators:
@@ -342,4 +348,5 @@ _DefaultOpEvaluators = {
     "_tf.concat_offset": evaluate_concat_offset,
     "tf.squeeze": evaluate_squeeze,
     "tf.expand_dims": evaluate_expand_dims,
+    "tf.cast": evaluate_cast,
 }
