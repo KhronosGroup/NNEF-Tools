@@ -17,6 +17,7 @@ from __future__ import division, print_function, absolute_import
 import typing
 
 import numpy as np
+import math
 
 from nnef_tools.io.tensorflow.tf_graph import *
 
@@ -221,14 +222,36 @@ def evaluate_slice(op, const_value_by_tensor):
         const_value_by_tensor[op.output] = input[tuple(slice(b, b + s, 1) for b, s in zip(begin, size))]
 
 
+def _is_bit_set(val, idx):
+    return ((val >> idx) & 1) != 0
+
+
 def evaluate_strided_slice(op, const_value_by_tensor):
     # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
     if op.input in const_value_by_tensor:
         begin = np.array(op.attribs["begin"], dtype=np.int64)
         end = np.array(op.attribs["end"], dtype=np.int64)
         strides = np.array(op.attribs["strides"], dtype=np.int64)
+        begin_mask = op.attribs["begin_mask"]
+        end_mask = op.attribs["end_mask"]
+        new_axis_mask = op.attribs["new_axis_mask"]
+        shrink_axis_mask = op.attribs["shrink_axis_mask"]
+        ellipsis_mask = op.attribs["ellipsis_mask"]
+
         input = const_value_by_tensor[op.input]
-        const_value_by_tensor[op.output] = input[tuple(slice(b, e, s) for b, e, s in zip(begin, end, strides))]
+        index = tuple(b if _is_bit_set(shrink_axis_mask, i) else
+                      1 if _is_bit_set(new_axis_mask, i) else
+                      None if _is_bit_set(ellipsis_mask, i) else
+                      slice(b if not _is_bit_set(begin_mask, i) else None,
+                            e if not _is_bit_set(end_mask, i) else None, s)
+                      for i, (b, e, s) in enumerate(zip(begin, end, strides)))
+
+        if ellipsis_mask:
+            ellipsis_offset = int(math.log2(ellipsis_mask))
+            ellipsis_length = len(input.shape) - len(begin)
+            index = index[:ellipsis_offset] + (slice(None, None, 1),) * ellipsis_length + index[ellipsis_offset+1:]
+
+        const_value_by_tensor[op.output] = input[index]
 
 
 def evaluate_invert_permutation(op, const_value_by_tensor):
