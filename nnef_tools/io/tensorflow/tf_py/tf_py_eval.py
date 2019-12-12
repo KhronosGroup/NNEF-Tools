@@ -217,8 +217,18 @@ def evaluate_slice(op, const_value_by_tensor):
             begin = np.array([begin.item()])
         if len(size.shape) == 0:
             size = np.array([size.item()])
-        input_value = const_value_by_tensor[op.input]
-        const_value_by_tensor[op.output] = input_value[tuple(slice(b, b + s, 1) for b, s in zip(begin, size))]
+        input = const_value_by_tensor[op.input]
+        const_value_by_tensor[op.output] = input[tuple(slice(b, b + s, 1) for b, s in zip(begin, size))]
+
+
+def evaluate_strided_slice(op, const_value_by_tensor):
+    # type: (TFOperation, typing.Dict[TFTensor, np.ndarray])->None
+    if op.input in const_value_by_tensor:
+        begin = np.array(op.attribs["begin"], dtype=np.int64)
+        end = np.array(op.attribs["end"], dtype=np.int64)
+        strides = np.array(op.attribs["strides"], dtype=np.int64)
+        input = const_value_by_tensor[op.input]
+        const_value_by_tensor[op.output] = input[tuple(slice(b, e, s) for b, e, s in zip(begin, end, strides))]
 
 
 def evaluate_invert_permutation(op, const_value_by_tensor):
@@ -340,6 +350,7 @@ _DefaultOpEvaluators = {
     "tf.concat": evaluate_concat,
     "tf.split": evaluate_split,
     "tf.slice": evaluate_slice,
+    "tf.strided_slice": evaluate_strided_slice,
     "tf.invert_permutation": evaluate_invert_permutation,
     "tf.reduce_sum": evaluate_reduce_sum,
     "_tf.broadcast_gradient_args": evaluate_broadcast_gradient_args,
