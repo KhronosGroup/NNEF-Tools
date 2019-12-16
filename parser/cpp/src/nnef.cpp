@@ -236,7 +236,7 @@ namespace nnef
         }
         else
         {
-            error = "Invalid tensor dtype: " + tensor.dtype;
+            error = "Invalid tensor dtype: '" + tensor.dtype + "'";
             return false;
         }
         
@@ -275,7 +275,7 @@ namespace nnef
         }
         else
         {
-            error = "Invalid tensor dtype: " + tensor.dtype;
+            error = "Invalid tensor dtype: '" + tensor.dtype + "'";
             return false;
         }
         
