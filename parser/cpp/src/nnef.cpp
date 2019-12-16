@@ -254,7 +254,8 @@ namespace nnef
         const TensorHeader::QuantCode quant_code = tensor.dtype == "scalar" ? TensorHeader::Float : TensorHeader::Integer;
         
         TensorHeader header;
-        fill_tensor_header(header, (size_t[]){ 1, 0 }, tensor.shape.size(), tensor.shape.data(), item_bits(tensor.dtype), quant_code);
+        const size_t version[] = { 1, 0 };
+        fill_tensor_header(header, version, tensor.shape.size(), tensor.shape.data(), item_bits(tensor.dtype), quant_code);
         
         const size_t count = volume_of(tensor.shape);
         std::vector<char> bytes(header.data_length);
