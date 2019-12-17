@@ -314,7 +314,7 @@ namespace nnef { namespace rt
                 {
                     value = op(value, Transposed ? at<D>(output, output_index) : at<D>(input, input_index));
                 }
-                else if ( include_border )
+                else if ( include_border && !Transposed )
                 {
                     value = op(value, (T)0);
                 }
