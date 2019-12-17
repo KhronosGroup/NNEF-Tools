@@ -333,6 +333,12 @@ namespace nnef
                     return false;
                 }
                 
+                if ( tensor.dtype != op.dtype )
+                {
+                    error = "item-type " + tensor.dtype + " in variable file '" + filename + "' does not match data-type " + op.dtype + " defined in network structure";
+                    return false;
+                }
+                
                 Value::items_t items(tensor.shape.size());
                 for ( size_t i = 0; i < items.size(); ++i )
                 {
@@ -342,7 +348,7 @@ namespace nnef
                 
                 if ( tensorShape != shape )
                 {
-                    error = "shape " + tensorShape.toString() + " in variable file does not match shape "
+                    error = "shape " + tensorShape.toString() + " in variable file '" + filename + "' does not match shape "
                             + shape.toString() + " defined in network structure";
                     return false;
                 }
