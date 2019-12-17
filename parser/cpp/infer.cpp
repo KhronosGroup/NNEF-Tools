@@ -243,14 +243,18 @@ int main( int argc, const char * argv[] )
         {
             const nnef::Tensor& output = graph.tensors.at(graph.outputs[i]);
             
-            nnef::Tensor tensor = { output.name, output.dtype };
+            nnef::Tensor tensor;
             if ( !nnef::read_tensor(outputs[i], tensor, error) )
             {
                 std::cerr << error << std::endl;
                 return -1;
             }
             
-            if ( output.shape != tensor.shape )
+            if ( tensor.dtype != tensor.dtype )
+            {
+                std::cout << "data-type " << output.dtype << " of '" << graph.outputs[i] << "' does not match reference data-type " << tensor.dtype << std::endl;
+            }
+            else if ( output.shape != tensor.shape )
             {
                 std::cout << "shape " << nnef::to_string(output.shape) << " of '" << graph.outputs[i] << "' does not match reference shape " << nnef::to_string(tensor.shape) << std::endl;
             }

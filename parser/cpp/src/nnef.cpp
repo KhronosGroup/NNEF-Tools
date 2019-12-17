@@ -216,27 +216,29 @@ namespace nnef
         }
 
         const size_t count = volume_of(tensor.shape);
-        tensor.data.resize(count * item_bytes(tensor.dtype));
         
-        if ( tensor.dtype == "scalar" )
+        if ( header.quant_code == TensorHeader::Float )
         {
-            assert(header.quant_code == TensorHeader::Float);
+            tensor.dtype = "scalar";
+            tensor.data.resize(count * item_bytes(tensor.dtype));
             from_bytes(bytes.data(), count, header.bits_per_item, (float*)tensor.data.data());
         }
-        else if ( tensor.dtype == "integer" )
+        else if ( header.quant_code == TensorHeader::Integer && header.bits_per_item == 1 )
         {
-            assert(header.quant_code == TensorHeader::Integer);
-            assert(header.quant_params[0] == 1);
-            from_bytes(bytes.data(), count, header.bits_per_item, (int*)tensor.data.data());
-        }
-        else if ( tensor.dtype == "logical" )
-        {
-            assert(header.quant_code == TensorHeader::Integer);
+            tensor.dtype = "logical";
+            tensor.data.resize(count * item_bytes(tensor.dtype));
             from_bytes(bytes.data(), count, header.bits_per_item, (bool*)tensor.data.data());
+        }
+        else if ( header.quant_code == TensorHeader::Integer )
+        {
+            assert(header.quant_params[0] == 1);
+            tensor.dtype = "integer";
+            tensor.data.resize(count * item_bytes(tensor.dtype));
+            from_bytes(bytes.data(), count, header.bits_per_item, (int*)tensor.data.data());
         }
         else
         {
-            error = "Invalid tensor dtype: '" + tensor.dtype + "'";
+            error = "Unsupported tensor item-type code '" + std::to_string(header.quant_code) + "' and bits per item '" + std::to_string(header.bits_per_item) + "'";
             return false;
         }
         
@@ -275,7 +277,7 @@ namespace nnef
         }
         else
         {
-            error = "Invalid tensor dtype: '" + tensor.dtype + "'";
+            error = "Invalid tensor data-type: '" + tensor.dtype + "'";
             return false;
         }
         
