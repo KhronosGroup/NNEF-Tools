@@ -250,7 +250,7 @@ int main( int argc, const char * argv[] )
                 return -1;
             }
             
-            if ( tensor.dtype != tensor.dtype )
+            if ( output.dtype != tensor.dtype )
             {
                 std::cout << "data-type " << output.dtype << " of '" << graph.outputs[i] << "' does not match reference data-type " << tensor.dtype << std::endl;
             }
@@ -260,9 +260,17 @@ int main( int argc, const char * argv[] )
             }
             else
             {
-                auto diff = relative_difference(nnef::volume_of(tensor.shape), (const float*)tensor.data.data(),
-                                                (const float*)output.data.data());
-                std::cout << "'" << graph.outputs[i] << "' diff = " << diff << std::endl;
+                if ( tensor.dtype == "scalar" )
+                {
+                    auto diff = relative_difference(nnef::volume_of(tensor.shape), (const float*)tensor.data.data(),
+                                                    (const float*)output.data.data());
+                    std::cout << "'" << graph.outputs[i] << "' diff = " << diff << std::endl;
+                }
+                else
+                {
+                    auto matches = output.data == tensor.data;
+                    std::cout << "'" << graph.outputs[i] << "' " << (matches ? "matches" : "does not match") << std::endl;
+                }
             }
         }
     }
