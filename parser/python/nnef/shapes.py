@@ -499,7 +499,7 @@ def _set_shape(graph, value, shape):
             _set_shape(graph, v, s)
 
 
-def infer_shapes(graph, input_shapes={}, custom_shapes={}):
+def infer_shapes(graph, external_shapes={}, custom_shapes={}):
     # type: (nnef.Graph, dict)->None
     for op in graph.operations:
         func = _StandardShapeFuncs.get(op.name)
@@ -510,7 +510,7 @@ def infer_shapes(graph, input_shapes={}, custom_shapes={}):
 
         if op.name == 'external':
             id = op.outputs['output']
-            override = input_shapes.get(id)
+            override = external_shapes.get(id)
             if override is not None:
                 original = op.attribs['shape']
                 assert len(override) == len(original), \
