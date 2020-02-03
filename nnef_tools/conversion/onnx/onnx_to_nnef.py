@@ -636,10 +636,14 @@ def convert_concat(converter, onnx_op, nnef_graph):
     inputs = list(converter.converted_tensors(onnx_op.inputs))
     output = converter.converted_tensor(onnx_op.output)
 
+    axis = onnx_op.attribs.get('axis', 1)
+    if axis < 0:
+        axis += onnx_op.inputs[0].rank
+
     NNEFOperation(graph=nnef_graph,
                   name='concat',
                   inputs=inputs,
-                  attribs=dict(axis=onnx_op.attribs.get('axis', 1)),
+                  attribs=dict(axis=axis),
                   outputs=output)
 
 
@@ -772,12 +776,11 @@ def generic_convert_reduce(converter, onnx_op, nnef_graph, target_name, multi_ax
                               outputs=NNEFTensor(graph=nnef_graph, shape=list(input.shape), dtype=input.dtype)).output
 
     if not multi_axis:
-        axis = onnx_op.attribs.get('axis', 0)
-        if axis < 0:
-            axis += input.rank
-        axes = [axis]
+        axes = [onnx_op.attribs.get('axis', 0)]
     else:
         axes = onnx_op.attribs.get('axes', list(range(input.rank)))
+
+    axes = [axis if axis >= 0 else axis + input.rank for axis in axes]
 
     keepdims = onnx_op.attribs.get('keepdims', 1)
 
