@@ -475,10 +475,10 @@ namespace nnef { namespace rt
     {
         auto& A = op.inputs.get("A");
         auto& B = op.inputs.get("B");
-        auto& C = op.inputs.get("C");
+        auto& C = op.outputs.get("C");
         
         bool trA = op.attribs.get("transposeA").logical();
-        bool trB = op.attribs.get("transposeA").logical();
+        bool trB = op.attribs.get("transposeB").logical();
         
         matmul(trA, trB, _tensor_view<const T>(A, tensors), _tensor_view<const T>(B, tensors), _tensor_view<T>(C, tensors));
     }
