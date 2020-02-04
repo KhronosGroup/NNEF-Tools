@@ -229,7 +229,7 @@ namespace nnef
 
             if ( results.size() != proto.resultCount() )
             {
-                throw Error(position, "left-hand-side item count must match result count of operation (%s)",
+                throw Error(position, "left-hand-side item count must match result count of operation (%d)",
                                  (int)proto.resultCount());
             }
 
@@ -328,7 +328,7 @@ namespace nnef
 
                 if ( args.count(param->name()) )
                 {
-                    throw Error(position, "duplicate arguments: parameter '%s' already assigned (%u,%u)",
+                    throw Error(position, "duplicate arguments: parameter '%s' already assigned",
                                 param->name().c_str());
                 }
                 if ( param == exclusion )
