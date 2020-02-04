@@ -198,11 +198,11 @@ namespace nnef
             bool hasGenericResults = std::any_of(results.begin(), results.end(), isGenericTyped);
             if ( (hasGenericParams || hasGenericResults) && !isGenericDecl )
             {
-                throw Error("fragment with generic parameter or result types must be declared generic using <?>");
+                throw Error(position, "fragment with generic parameter or result types must be declared generic using <?>");
             }
             else if ( isGenericDecl && !hasGenericParams && !hasGenericResults )
             {
-                throw Error("fragment declared as generic must have at least one generic parameter or result type");
+                throw Error(position, "fragment declared as generic must have at least one generic parameter or result type");
             }
 
             return Prototype(name, params, results, genericParamDefault);
