@@ -24,7 +24,6 @@
 #include <functional>
 #include <algorithm>
 #include "nnef/common/value.h"
-#include "nnef/common/shapes.h"
 
 
 namespace nnef
@@ -179,7 +178,7 @@ namespace nnef
      *
      * @return true if there were no errors, false otherwise
      */
-    bool infer_shapes( Graph& graph, std::string& error, const std::map<std::string,Shape>& input_shapes = {},
+    bool infer_shapes( Graph& graph, std::string& error, const std::map<std::string,std::vector<int>>& input_shapes = {},
                       const std::map<std::string,ShapeFunc>& custom_shapes = {} ) noexcept;
 
 

@@ -15,12 +15,13 @@
  */
 
 #include "nnef.h"
-#include "nnef/runtime/execution.h"
 
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <numeric>
 #include <chrono>
+#include <cmath>
 #ifdef _WIN32
 #include <io.h>
 #else
@@ -134,6 +135,26 @@ T relative_difference( const size_t n, const T* ref, const T* dat )
     return std::sqrt(diff / range);
 }
 
+std::ostream& operator<<( std::ostream& os, const std::vector<int>& v )
+{
+    os << '[';
+    for ( size_t i = 0; i < v.size(); ++i )
+    {
+        if ( i )
+        {
+            os << ',';
+        }
+        os << v[i];
+    }
+    os << ']';
+    return os;
+}
+
+int volume( const std::vector<int>& v )
+{
+    return std::accumulate(v.begin(), v.end(), 1, std::multiplies<int>());
+}
+
 
 int main( int argc, const char * argv[] )
 {
@@ -208,7 +229,7 @@ int main( int argc, const char * argv[] )
         return -1;
     }
     
-    std::map<std::string,nnef::Shape> input_shapes;
+    std::map<std::string,std::vector<int>> input_shapes;
     if ( !inputs.empty() || !isatty(STDIN_FILENO) )
     {
         bool read = !inputs.empty() ? read_inputs_from_file(graph, inputs, error) : read_inputs_from_cin(graph, error);
@@ -256,13 +277,13 @@ int main( int argc, const char * argv[] )
             }
             else if ( output.shape != tensor.shape )
             {
-                std::cout << "shape " << nnef::to_string(output.shape) << " of '" << graph.outputs[i] << "' does not match reference shape " << nnef::to_string(tensor.shape) << std::endl;
+                std::cout << "shape " << output.shape << " of '" << graph.outputs[i] << "' does not match reference shape " << tensor.shape << std::endl;
             }
             else
             {
                 if ( tensor.dtype == "scalar" )
                 {
-                    auto diff = relative_difference(nnef::volume_of(tensor.shape), (const float*)tensor.data.data(),
+                    auto diff = relative_difference(volume(tensor.shape), (const float*)tensor.data.data(),
                                                     (const float*)output.data.data());
                     std::cout << "'" << graph.outputs[i] << "' diff = " << diff << std::endl;
                 }
