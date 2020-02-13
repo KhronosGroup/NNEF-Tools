@@ -240,16 +240,11 @@ def evaluate_strided_slice(op, const_value_by_tensor):
 
         input = const_value_by_tensor[op.input]
         index = tuple(b if _is_bit_set(shrink_axis_mask, i) else
-                      1 if _is_bit_set(new_axis_mask, i) else
-                      None if _is_bit_set(ellipsis_mask, i) else
+                      np.newaxis if _is_bit_set(new_axis_mask, i) else
+                      Ellipsis if _is_bit_set(ellipsis_mask, i) else
                       slice(b if not _is_bit_set(begin_mask, i) else None,
                             e if not _is_bit_set(end_mask, i) else None, s)
                       for i, (b, e, s) in enumerate(zip(begin, end, strides)))
-
-        if ellipsis_mask:
-            ellipsis_offset = int(math.log2(ellipsis_mask))
-            ellipsis_length = len(input.shape) - len(begin)
-            index = index[:ellipsis_offset] + (slice(None, None, 1),) * ellipsis_length + index[ellipsis_offset+1:]
 
         const_value_by_tensor[op.output] = input[index]
 

@@ -243,8 +243,8 @@ def _transform_range(g, op):
 def _transform_strided_slice(g, op):
     # type: (TFGraph, TFOperation)->None
 
-    assert op.attribs["strides"] is None or all(s == 1 for s in op.attribs["strides"]), \
-        "Only strides=1 is supported for tf.strided_slice, got: {}".format(op.attribs["strides"])
+    if op.attribs["strides"] is not None and not all(s == 1 for s in op.attribs["strides"]):
+        return
 
     ssl_begin, ssl_end, ssl_stride, ssl_shape, reshape_shape = shape_inference.decompose_strided_slice(
         input=op.input.shape,
