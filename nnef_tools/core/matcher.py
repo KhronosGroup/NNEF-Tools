@@ -52,7 +52,7 @@ class Tensor(Pattern):
         assert isinstance(value, BaseTensor)
 
         if settings.dict_so_far.get(self, value) != value:
-            return Match
+            return Match()
 
         if self._producer_pattern and settings.follow_producer:
             if value.producer is None:
@@ -305,11 +305,9 @@ class _MatchSettings(object):
 
 class Match(object):
     def __init__(self, did_match=False, root=None, dict_=None):
-        if dict_ is None:
-            dict_ = {}
         self._root = root
         self._did_match = did_match
-        self._dict = dict_
+        self._dict = dict_ if dict_ is not None else {}
 
     @property
     def operations(self):
