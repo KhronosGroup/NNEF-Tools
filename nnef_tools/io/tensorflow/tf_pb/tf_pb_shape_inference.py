@@ -248,9 +248,36 @@ def propagate_tile(op, const_value_by_tensor):
                        repeat=multiples)], [op.attribs['T']]
 
 
+def propagate_batch_to_space(op, const_value_by_tensor):
+    # type: (TFOperation, _ConstValueByTensorT)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
+
+    input, block_shape, crops = op.inputs
+    batch, *spatial, channels = input.shape
+    block_shape = const_value_by_tensor[block_shape].tolist()
+    crops = const_value_by_tensor[crops].tolist()
+
+    spatial = [(size * block - (before + after)) for size, block, (before, after) in zip(spatial, block_shape, crops)]
+
+    return [[batch, *spatial, channels]], [op.attribs['T']]
+
+
+def propagate_space_to_batch(op, const_value_by_tensor):
+    # type: (TFOperation, _ConstValueByTensorT)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
+
+    input, block_shape, paddings = op.inputs
+    batch, *spatial, channels = input.shape
+    block_shape = const_value_by_tensor[block_shape].tolist()
+    paddings = const_value_by_tensor[paddings].tolist()
+
+    spatial = [(before + size + after) // block for size, block, (before, after) in zip(spatial, block_shape, paddings)]
+
+    return [[batch, *spatial, channels]], [op.attribs['T']]
+
+
 _DefaultPropagators = {
     "Abs": propagate_first,
     "Add": propagate_broadcast,
+    "BatchToSpaceND": propagate_batch_to_space,
     "BiasAdd": propagate_first,
     "Ceil": propagate_first,
     "Elu": propagate_first,
@@ -298,7 +325,6 @@ _DefaultPropagators = {
     "Conv3D": partial(propagate_conv, depthwise=False),
     "Conv2DBackpropInput": propagate_deconv,
     "Conv3DBackpropInputV2": propagate_deconv,
-    # "CudnnRNN": None,
     "DepthwiseConv2dNative": partial(propagate_conv, depthwise=True),
     "FusedBatchNorm": propagate_fused_batch_norm,
     "LRN": propagate_first,
@@ -310,6 +336,7 @@ _DefaultPropagators = {
     "Pack": propagate_pack,
     "Shape": propagate_shape,
     "Squeeze": propagate_squeeze,
+    "SpaceToBatchND": propagate_space_to_batch,
 
     # even more complex:
     "Min": propagate_reduce,

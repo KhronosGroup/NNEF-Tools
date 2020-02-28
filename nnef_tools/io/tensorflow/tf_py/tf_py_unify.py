@@ -76,10 +76,11 @@ def unify_ops(g):
             inputs = [i for i in inputs if i is not None]
             inputs = inputs if is_list else tuple(inputs)
             old_outputs = op.outputs if isinstance(op.outputs, tuple) else list(op.outputs)
-            op.inputs = []
-            op.outputs = []
-            g.remove_operation(op)
-            TFOperation(graph=g, name=unifier.op_proto.op_name, inputs=inputs, outputs=old_outputs, attribs=attribs)
+
+            op.name = unifier.op_proto.op_name
+            op.inputs = inputs
+            op.outputs = old_outputs
+            op.attribs = attribs
 
 
 _DefaultOpUnifiers = [

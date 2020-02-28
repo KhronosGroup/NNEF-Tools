@@ -73,6 +73,7 @@ def pre_conversion_pass(g):
     _transform_pad(g)
     _transform_add_conv(g)
     _transform_bias_add_conv(g)
+    _transform_space_to_batch_depthwise_conv(g)
 
     graph_utils.remove_passthroughs(g, is_passthrough=lambda op_: op_.name in passthroughs)
     graph_utils.remove_unreachable(g)
@@ -852,6 +853,25 @@ def _transform_add_conv(g):
                                           attribs=m[conv].attribs,
                                           outputs=m[add].outputs),
                     lambda m: is_bias(m[conv], m[bias]))
+
+
+def _transform_space_to_batch_depthwise_conv(g):
+    # type: (TFGraph)->None
+
+    input, block_shape1, block_shape2, paddings, crops, filter, batched, filtered, output = matcher.tensors(9)
+    space_to_batch = matcher.Operation(name=["tf.space_to_batch", "tf.space_to_batch_nd"],
+                                       inputs=(input, block_shape1, paddings), outputs=batched)
+    conv = matcher.Operation(name="_planewise_conv",
+                             inputs=(batched, filter), outputs=filtered)
+    batch_to_space = matcher.Operation(name=["tf.batch_to_space", "tf.batch_to_space_nd"],
+                                       inputs=(filtered, block_shape2, crops), outputs=output)
+
+    matcher.replace(g, batch_to_space,
+                    lambda m: TFOperation(graph=g,
+                                          name=m[conv].name,
+                                          inputs=(m[input], m[filter]),
+                                          attribs=dict(m[conv].attribs, dilation=m[block_shape1].data.tolist(), padding='SAME'),
+                                          outputs=m[batch_to_space].outputs))
 
 
 def _transform_pad(g):

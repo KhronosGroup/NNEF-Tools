@@ -22,7 +22,7 @@ import six
 import nnef_tools.io.tensorflow.tf_pb as tf_pb
 from nnef_tools.conversion import conversion_info
 from nnef_tools.conversion.tensorflow import tf_pb_to_tf_py, tf_py_to_tf_pb
-from nnef_tools.core import utils
+from nnef_tools.core import utils, graph_utils
 from nnef_tools.io.tensorflow.tf_graph import *
 
 _NumpyDtype = {
@@ -46,6 +46,7 @@ _NumpyDtype = {
 
 # Ops with one output are not listed
 _OutputCount = {
+    'Assert': 0,
     'FusedBatchNorm': 5,
     'MaxPoolWithArgmax': 2,
     'Split': 'num_split',
@@ -287,11 +288,8 @@ def _build_graph(graph, names):
 
 def _detect_output_counts(graph_def):
     detected_output_count = {}
-    used_tensor_names = [name
-                         for node in graph_def.node
-                         for name in node.input]
-    node_type_by_name = {node.name: node.op
-                         for node in graph_def.node}
+    used_tensor_names = [name for node in graph_def.node for name in node.input]
+    node_type_by_name = {node.name: node.op for node in graph_def.node}
     for name in used_tensor_names:  # type: str
         if ':' in name:
             op_name, index = name.rsplit(':', 1)
@@ -299,13 +297,13 @@ def _detect_output_counts(graph_def):
         else:
             op_name, index = name, 0
         if op_name.startswith('^'):
-            op_name = op_name[1:]
-        if op_name not in node_type_by_name:
+            node_type = node_type_by_name[op_name[1:]]
+            detected_output_count[node_type] = 0
+        elif op_name not in node_type_by_name:
             print("Warning: Tensor {} does not belong to any op?".format(name))
         else:
             node_type = node_type_by_name[op_name]
-            detected_output_count[node_type] = max(detected_output_count.get(node_type, 1),
-                                                   index + 1)
+            detected_output_count[node_type] = max(detected_output_count.get(node_type, 1), index + 1)
     return detected_output_count
 
 
@@ -365,8 +363,7 @@ def read_tf_graph_from_protobuf(filename):
             else:
                 tensor.data = value
         else:
-            input_names = [name[:-2] if name.endswith(':0') else name for name in node.input]
-            input_names = [name[1:] if name.startswith('^') else name for name in input_names]
+            input_names = [name[:-2] if name.endswith(':0') else name for name in node.input if not name.startswith('^')]
             for name in input_names:
                 if name not in tensor_by_name:
                     print('Info: List of node types in graph: {}\n'.format(
@@ -437,12 +434,26 @@ def _get_rename_info(graph, names):
 class Reader(object):
 
     # input shape: (dtype, shape) tuple or name->(dtype, shape) dict
-    def __init__(self, convert_to_tf_py=False, input_shape=None):
+    def __init__(self, convert_to_tf_py=False, input_shape=None, output_names=None):
         self._convert_to_tf_py = convert_to_tf_py
         self._input_shape = input_shape
+        self._output_names = output_names
 
     def __call__(self, filename):
         g = read_tf_graph_from_protobuf(filename)
+
+        if self._output_names is not None:
+            outputs = [tensor for tensor in g.tensors if tensor.name in self._output_names]
+
+            if len(outputs) != len(self._output_names):
+                found_names = [tensor.name for tensor in outputs]
+                not_found_names = [output_name for output_name in self._output_names if output_name not in found_names]
+                raise utils.NNEFToolsException("Could not find tensor(s) in graph: {}".format(not_found_names))
+
+            g.outputs = outputs
+
+        graph_utils.remove_unreachable(g)
+
         unsupported_ops = set(op.name for op in g.operations if op.name not in tf_pb_to_tf_py.DefaultConverters)
         if unsupported_ops:
             raise utils.NNEFToolsException("Unsupported operation(s): {}".format(unsupported_ops))

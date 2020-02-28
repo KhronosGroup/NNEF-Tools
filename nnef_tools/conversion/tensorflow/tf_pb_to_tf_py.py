@@ -174,6 +174,7 @@ DefaultConverters = {
     # attribless:
     "Abs": partial(generic_converter, target_name="tf.abs"),
     "Add": partial(generic_converter, target_name="tf.add"),
+    "BatchToSpaceND": partial(generic_converter, target_name="tf.batch_to_space"),
     "BiasAdd": partial(generic_converter, target_name="tf.nn.bias_add"),
     "Ceil": partial(generic_converter, target_name="tf.ceil"),
     "Elu": partial(generic_converter, target_name="tf.nn.elu"),
@@ -267,6 +268,7 @@ DefaultConverters = {
                                      target_name="tf.image.resize_nearest_neighbor",
                                      input_to_attrib_dict={1: "size"}),
     "Slice": partial(generic_converter, target_name="tf.slice", input_to_attrib_dict={1: "begin", 2: "size"}),
+    "SpaceToBatchND": partial(generic_converter, target_name="tf.space_to_batch"),
     "Split": partial(generic_converter,
                      target_name="tf.split",
                      attrib_name_dict={'num_split': 'num_or_size_splits'},
