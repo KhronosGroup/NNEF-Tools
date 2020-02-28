@@ -123,6 +123,7 @@ def get_tf_py_imports_and_op_protos(module_names):
 def get_reader(input_format,
                output_format,
                input_shape=None,
+               model_outputs=None,
                permissive=False,
                with_weights=True,
                custom_converters=None):
@@ -151,13 +152,10 @@ def get_reader(input_format,
         return Reader(parser_configs=configs, unify=(output_format in ['caffe', 'caffe2']))
     elif input_format == 'tensorflow-pb':
         from nnef_tools.io.tensorflow.tf_pb_io import Reader
-        return Reader(convert_to_tf_py=True, input_shape=input_shape)
+        return Reader(convert_to_tf_py=True, input_shape=input_shape, output_names=model_outputs)
     elif input_format == 'tensorflow-py':
         from nnef_tools.io.tensorflow.tf_py_io import Reader
-        if custom_converters:
-            custom_traceable_functions = get_tf_py_custom_traceable_functions(custom_converters)
-        else:
-            custom_traceable_functions = None
+        custom_traceable_functions = get_tf_py_custom_traceable_functions(custom_converters) if custom_converters else None
         return Reader(expand_gradients=True, custom_traceable_functions=custom_traceable_functions)
     elif input_format == 'tensorflow-lite':
         from nnef_tools.io.tensorflow.tflite_io import Reader
@@ -180,6 +178,9 @@ def get_reader(input_format,
 
 def get_custom_converters(input_format, output_format, module_names):
     format = input_format if input_format != "nnef" else output_format
+    if format == "tensorflow-pb":
+        format = "tensorflow-py"
+
     direction = "exporters" if input_format != "nnef" else "importers"
     attrname = (format + '_' + direction).replace('-', '_').upper()
 
@@ -207,21 +208,15 @@ def get_custom_shape_functions(input_format, module_names):
 def get_converter(input_format, output_format, prefer_nchw=False, permissive=False, custom_converters=None):
     if input_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite'] and output_format == 'nnef':
         from nnef_tools.conversion.tensorflow.tf_to_nnef import Converter
-
-        if input_format == 'tensorflow-py' and custom_converters:
-            custom_converter_by_op_name = get_custom_converters(input_format, output_format, custom_converters)
-        else:
-            custom_converter_by_op_name = None
-
+        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
+                                        if custom_converters else None)
         return Converter(enable_imprecise_image_resize=permissive,
                          custom_converter_by_op_name=custom_converter_by_op_name)
     elif input_format == 'nnef' and output_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite']:
         from nnef_tools.conversion.tensorflow.nnef_to_tf import Converter
 
-        if output_format == 'tensorflow-py' and custom_converters:
-            custom_converter_by_op_name = get_custom_converters(input_format, output_format, custom_converters)
-        else:
-            custom_converter_by_op_name = None
+        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
+                                        if custom_converters else None)
 
         return Converter(prefer_nhwc=not prefer_nchw,
                          enable_imprecise_image_resize=permissive,
@@ -392,6 +387,7 @@ def convert(input_format,
             input_model,
             output_path,
             input_shape=None,
+            model_outputs=None,
             prefer_nchw=False,
             io_transformation=None,
             compress=False,
@@ -462,6 +458,7 @@ def convert(input_format,
                                   reader=get_reader(input_format=input_format,
                                                     output_format=output_format,
                                                     input_shape=input_shape,
+                                                    model_outputs=model_outputs,
                                                     permissive=permissive,
                                                     with_weights=with_weights,
                                                     custom_converters=custom_converters),
@@ -551,6 +548,10 @@ they will be listed if any of them is incomplete.
    
 Default: Unknown dimensions are set to 1. If the rank is unknown this option can not be omitted.
 """)
+
+    parser.add_argument('--model-outputs',
+                        nargs='+',
+                        help="""tensorflow-pb: names of tensors to be treated as outputs, the resof the graph is stripped away""")
 
     parser.add_argument("--prefer-nchw",
                         action="store_true",
@@ -658,6 +659,7 @@ def convert_using_argv(argv):
                 input_model=args.input_model,
                 output_path=args.output_model,
                 input_shape=args.input_shape,
+                model_outputs=args.model_outputs,
                 prefer_nchw=args.prefer_nchw,
                 io_transformation=args.io_transformation,
                 compress=args.compress,
