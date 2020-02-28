@@ -112,9 +112,11 @@ class NNEFOperation(BaseOperation["NNEFGraph", "NNEFTensor"]):
                  outputs=None,  # type: _OptTensorOrListOrTuple
                  attribs=None,  # type: typing.Optional[typing.Dict[str, typing.Any]]
                  comment=None,  # type: typing.Optional[str]
+                 dtype=None,    # type: typing.Optional[str]
                  ):
         super(NNEFOperation, self).__init__(graph=graph, name=name, inputs=inputs, outputs=outputs, attribs=attribs)
         self.comment = comment
+        self.dtype = dtype
 
 
 class NNEFGraph(BaseGraph["NNEFTensor", "NNEFOperation"]):

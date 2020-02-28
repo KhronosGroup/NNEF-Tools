@@ -249,7 +249,8 @@ def _read(parser_graph, with_weights=True):
             outputs[0].data = parser_op.attribs["value"]
 
         if parser_op.name not in ["external", "constant", "variable"]:
-            NNEFOperation(graph=g, name=parser_op.name, attribs=dict(parser_op.attribs), inputs=inputs, outputs=outputs)
+            NNEFOperation(graph=g, name=parser_op.name, attribs=dict(parser_op.attribs), inputs=inputs, outputs=outputs,
+                          dtype=NumpyDTypeByNNEFDType[parser_op.dtype] if parser_op.dtype else None)
 
     input_tensors = []
 
@@ -334,14 +335,13 @@ def _print(nnef_graph,  # type: NNEFGraph
 
         for op in nnef_graph.operations:
             inputs = _transform_inputs_before_print(list(op.inputs) if not isinstance(op.inputs, tuple) else op.inputs)
-            dtype = op.output.dtype if op.name in ["external", "constant", "variable"] else None
             invocation = nnef.format_invocation(
                 name=_recursive_check_str(op.name),
                 attribs=_recursive_check_str(_sorted_ordered_dict(op.attribs)),
                 inputs=_recursive_check_str([inputs] if isinstance(inputs, list) else list(inputs)),
                 outputs=_recursive_check_str(
                     _result_to_identifiers(list(op.outputs) if not isinstance(op.outputs, tuple) else op.outputs)),
-                dtype=_recursive_check_str(dtype))
+                dtype=_recursive_check_str(op.dtype))
 
             comment = "  # {}".format(_recursive_check_str(op.comment)) if op.comment else ""
             print("{}{};{}".format(indent, invocation, comment), file=f)
@@ -451,19 +451,22 @@ def generate_source_operations(nnef_graph, gen_for_rank0_also=False):
                                   name="constant",
                                   attribs=dict(shape=t.shape, value=t.data),
                                   inputs=tuple(),
-                                  outputs=t)
+                                  outputs=t,
+                                  dtype=t.dtype)
             elif t.is_variable:
                 NNEFOperation(graph=nnef_graph,
                               name="variable",
                               attribs=dict(shape=t.shape, label=t.label),
                               inputs=tuple(),
-                              outputs=t)
+                              outputs=t,
+                              dtype=t.dtype)
             elif t.producer is None:
                 NNEFOperation(graph=nnef_graph,
                               name="external",
                               attribs=dict(shape=t.shape),
                               inputs=tuple(),
-                              outputs=t)
+                              outputs=t,
+                              dtype=t.dtype)
             else:
                 assert False, "All non-source tensors must have a producer in an NNEF graph"
 
