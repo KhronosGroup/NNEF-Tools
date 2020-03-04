@@ -165,7 +165,8 @@ def get_reader(input_format,
         custom_shapes = get_custom_shape_functions(input_format, custom_converters) if custom_converters else None
         return Reader(infer_shapes=True,
                       input_shape=input_shape,
-                      custom_shapes=custom_shapes)
+                      custom_shapes=custom_shapes,
+                      output_names=model_outputs)
     elif input_format == 'caffe':
         from nnef_tools.io.caffe.caffe_io import Reader
         return Reader()

@@ -20,7 +20,7 @@ import typing
 import numpy as np
 import six
 
-from nnef_tools.core import utils
+from nnef_tools.core import utils, graph_utils
 from nnef_tools.io.onnx import onnx_shape_inference
 from nnef_tools.io.onnx.onnx_graph import *
 from nnef_tools.io.onnx.onnx_pb import onnx_pb2
@@ -504,16 +504,30 @@ class Reader(object):
                  infer_shapes=False,  # type: bool
                  input_shape=None,  # type: typing.Union[typing.Dict[str, _DTypeShapeTuple], _DTypeShapeTuple, None]
                  custom_shapes=None,  # type: typing.Dict[str, typing.Callable]
+                 output_names=None,     # type: typing.List[str]
                  ):
         # type: (...)->None
         self._infer_shapes = infer_shapes
         self._input_shape = input_shape
         self._custom_shapes = custom_shapes
+        self._output_names = output_names
 
     def __call__(self, filename):
         # type: (str)->ONNXGraph
 
         g = read_onnx_from_protobuf(filename)
+
+        if self._output_names is not None:
+            outputs = [tensor for tensor in g.tensors if tensor.name in self._output_names]
+
+            if len(outputs) != len(self._output_names):
+                found_names = [tensor.name for tensor in outputs]
+                not_found_names = [output_name for output_name in self._output_names if output_name not in found_names]
+                raise utils.NNEFToolsException("Could not find tensor(s) in graph: {}".format(not_found_names))
+
+            g.outputs = outputs
+
+        graph_utils.remove_unreachable(g)
 
         if self._infer_shapes:
             onnx_shape_inference.infer_shapes(g, source_shapes=self._input_shape, custom_shapes=self._custom_shapes)
