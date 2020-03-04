@@ -583,7 +583,7 @@ def generic_convert_pool(converter, tf_op, nnef_graph, target_name):
             stride=stride,
             dilation=[]),
         outputs=(tuple(converter.create_nchw_intermediate_for_nhwc_output(nnef_graph, output) for output in outputs)
-                 if is_nhwc else outputs)
+                 if is_nhwc else tuple(outputs))
     )
 
     if is_nhwc:

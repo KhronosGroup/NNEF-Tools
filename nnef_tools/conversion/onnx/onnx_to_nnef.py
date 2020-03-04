@@ -533,7 +533,7 @@ def generic_convert_pool(converter, onnx_op, nnef_graph, target_name, before='',
     pooling = NNEFOperation(graph=nnef_graph,
                             name=target_name + ('_with_index' if len(outputs) == 2 else ''),
                             inputs=input,
-                            outputs=outputs,
+                            outputs=tuple(outputs),
                             attribs=dict(size=[1, 1] + filter_size,
                                          border=('ignore' if onnx_op.attribs.get('count_include_pad', 0) == 0
                                                  else 'constant'),
