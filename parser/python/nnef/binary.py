@@ -115,7 +115,8 @@ def write_tensor(file, tensor, version=(1, 0), quantization=None):
     if qbits is not None and qbits != bits:
         raise ValueError('incompatible bits per item ({}) and tensor dtype ({})'.format(qbits, tensor.dtype))
 
-    data_length = int((np.prod(tensor.shape) * bits + 7) // 8)
+    count = int(np.prod(tensor.shape))
+    data_length = (count + 7) // 8 if bits == 1 else count * (bits // 8)
     _tofile(np.asarray([data_length, tensor.ndim], dtype=np.uint32), file)
 
     if tensor.ndim > MaxTensorRank:
