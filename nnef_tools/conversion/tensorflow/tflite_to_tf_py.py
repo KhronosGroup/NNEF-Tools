@@ -404,7 +404,7 @@ _DefaultConverters = {
     "LOGICAL_AND": partial(rename, target_name="tf.logical_and"),
     "LOGICAL_NOT": partial(rename, target_name="tf.logical_not"),
     "LOGICAL_OR": partial(rename, target_name="tf.logical_or"),
-    "LOGISTIC": UNSUPPORTED,
+    "LOGISTIC": partial(rename, target_name="tf.nn.sigmoid"),
     "LOG": partial(rename, target_name="tf.log"),
     "LOG_SOFTMAX": UNSUPPORTED,
     "LSH_PROJECTION": UNSUPPORTED,
