@@ -345,8 +345,11 @@ def convert_tile(op):
     op.inputs = (op.inputs[0],)
 
 
+_custom_op_type_key = "__custom_op_type"
 def convert_custom(op):
-    rename(op, "custom.{}".format(op.attribs["CUSTOM_TYPE"]))
+    assert _custom_op_type_key in op.attribs, "CUSTOM op name must be set as an attribute with the key '{}'".format(_custom_op_type_key)
+    rename(op, op.attribs[_custom_op_type_key])
+    del op.attribs[_custom_op_type_key]
 
 
 def rename(op, target_name):

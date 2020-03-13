@@ -624,9 +624,10 @@ def read_tflite_graph_from_flatbuffers(filename):
         else:
             attribs = {}
 
-        if name == "CUSTOM":
-            attribs["CUSTOM_TYPE"] = operatorCode.CustomCode().decode('ascii')
-
+        if operatorCode.BuiltinCode() == tflite_fb.BuiltinOperator.CUSTOM:
+            assert tflite_to_tf_py._custom_op_type_key not in attribs, \
+                "'{}' shall not be set as an attribute".format(tflite_to_tf_py._custom_op_type_key)
+            attribs[tflite_to_tf_py._custom_op_type_key] = operatorCode.CustomCode().decode('ascii')
         TFOperation(graph, name, inputs, outputs, attribs)
 
     inputs = []
