@@ -345,6 +345,10 @@ def convert_tile(op):
     op.inputs = (op.inputs[0],)
 
 
+def convert_custom(op):
+    rename(op, "custom.{}".format(op.attribs["CUSTOM_TYPE"]))
+
+
 def rename(op, target_name):
     # type: (TFOperation, str)->None
     op.name = target_name
@@ -374,7 +378,7 @@ _DefaultConverters = {
     "CONCATENATION": partial(rename, target_name="tf.concat"),
     "CONV_2D": convert_conv2d,
     "COS": partial(rename, target_name="tf.cos"),
-    "CUSTOM": UNSUPPORTED,
+    "CUSTOM": convert_custom,
     "DELEGATE": UNSUPPORTED,
     "DEPTH_TO_SPACE": UNSUPPORTED,
     "DEPTHWISE_CONV_2D": convert_depthwise_conv2d,

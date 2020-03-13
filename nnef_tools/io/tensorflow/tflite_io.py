@@ -608,7 +608,8 @@ def read_tflite_graph_from_flatbuffers(filename):
 
     for i in range(subgraph.OperatorsLength()):
         operator = subgraph.Operators(i)
-        name = _BuiltinOperatorNameByValue[model.OperatorCodes(operator.OpcodeIndex()).BuiltinCode()]
+        operatorCode = model.OperatorCodes(operator.OpcodeIndex())
+        name = _BuiltinOperatorNameByValue[operatorCode.BuiltinCode()]
 
         options = operator.BuiltinOptions()
         optionsClass = _BuiltinOptionsClasses[operator.BuiltinOptionsType()]
@@ -622,6 +623,9 @@ def read_tflite_graph_from_flatbuffers(filename):
             attribs = _enumerate_attributes(optionsClass, optionsObject)
         else:
             attribs = {}
+
+        if name == "CUSTOM":
+            attribs["CUSTOM_TYPE"] = operatorCode.CustomCode().decode('ascii')
 
         TFOperation(graph, name, inputs, outputs, attribs)
 
