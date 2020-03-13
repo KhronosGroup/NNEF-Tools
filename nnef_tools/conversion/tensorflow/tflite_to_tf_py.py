@@ -120,9 +120,11 @@ def convert_depthwise_conv2d(op):
                       data_format="NHWC")
     input = op.inputs[0]
     filter = op.inputs[1]
-    assert filter.shape[-1] % input.shape[-1] == 0
-    filter.shape = filter.shape[1:-1] + [input.shape[-1], filter.shape[-1] // input.shape[-1]]
-    filter.data = filter.data.reshape(filter.shape)
+    if not hasattr(filter, "shape_fixed"):
+        assert filter.shape[-1] % input.shape[-1] == 0
+        filter.shape = filter.shape[1:-1] + [input.shape[-1], filter.shape[-1] // input.shape[-1]]
+        filter.data = filter.data.reshape(filter.shape)
+        filter.shape_fixed = True
     if len(op.inputs) == 3:
         bias = op.inputs[2]
         output = op.output
