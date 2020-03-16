@@ -148,6 +148,8 @@ def generic_convert_pool_2d(op, target_name):
 
 def convert_reshape(op):
     # type: (TFOperation)->None
+    if not op.attribs['new_shape']:
+        op.attribs['new_shape'] = op.inputs[1].data.tolist()
     op.name = "tf.reshape"
     op.inputs = (op.inputs[0],)
     op.attribs = dict(shape=op.attribs['new_shape'])
