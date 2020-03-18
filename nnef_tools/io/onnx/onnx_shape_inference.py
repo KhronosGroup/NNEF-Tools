@@ -502,28 +502,27 @@ def propagate_shape(op):
 def propagate_slice(op):
     # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
 
+    data = op.inputs[0]
+    if len(op.inputs) > 1:
+        op.attribs['starts'] = evaluate_shape_tensor_simple(op.inputs[1])
+    if len(op.inputs) > 2:
+        op.attribs['ends'] = evaluate_shape_tensor_simple(op.inputs[2])
+    if len(op.inputs) > 3:
+        op.attribs['axes'] = evaluate_shape_tensor_simple(op.inputs[3])
+    if len(op.inputs) > 4:
+        op.attribs['steps'] = evaluate_shape_tensor_simple(op.inputs[4])
+
     starts = op.attribs['starts']
     ends = op.attribs['ends']
     axes = op.attribs.get('axes', list(range(len(starts))))
+    steps = op.attribs['steps']
 
-    return [infer.slice(input=op.input.shape,
-                        axes=axes,
-                        begin=starts,
-                        end=ends)], [op.input.dtype]
-
-
-def propagate_dynamic_slice(op):
-    # type: (ONNXOperation)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
-
-    data, starts, ends, axes = op.inputs
-    op.attribs['starts'] = evaluate_shape_tensor_simple(starts)
-    op.attribs['ends'] = evaluate_shape_tensor_simple(ends)
-    op.attribs['axes'] = evaluate_shape_tensor_simple(axes)
     op.inputs = (data,)
     return [infer.slice(input=data.shape,
-                        axes=op.attribs['axes'],
-                        begin=op.attribs['starts'],
-                        end=op.attribs['ends'])], [data.dtype]
+                        axes=axes,
+                        begin=starts,
+                        end=ends,
+                        stride=steps)], [data.dtype]
 
 
 def propagate_split(op):
@@ -759,7 +758,6 @@ _DefaultShapes = {
     'Affine': propagate_first,
     'ConstantFill': propagate_constant_fill,
     'Crop': propagate_crop,
-    'DynamicSlice': propagate_dynamic_slice,
     'GRUUnit': UNSUPPORTED,
     'GivenTensorFill': UNSUPPORTED,
     'ImageScaler': propagate_first,
