@@ -44,7 +44,44 @@ _nnef_dtype_by_tf_dtype = {
     "bool": 'logical'
 }
 
+_nnef_dtype_by_python_type = {
+    str: 'string',
+    float: 'scalar',
+    int: 'integer',
+    bool: 'logical',
+    None: 'dtype',
+}
+
 _NNEFOpOrTupleOrList = typing.Union[NNEFOperation, typing.Tuple[NNEFOperation, ...], typing.List[NNEFOperation]]
+
+
+class Opdef:
+
+    def __init__(self, name, dtype, attribs, inputs, outputs):
+        self.name = name
+        self.dtype = dtype
+        self.attribs = attribs
+        self.inputs = inputs
+        self.outputs = outputs
+
+    def __str__(self):
+        str = self.name
+        if self.dtype is not None:
+            str += '<' + self.dtype + '>'
+        str += '( '
+        str += self._types_str(['_I{}'.format(i+1) for i in range(len(self.inputs))], self.inputs, True)
+        if len(self.inputs) and len(self.attribs):
+            str += ', '
+        str += self._types_str(self.attribs.keys(), self.attribs.values(), False)
+        str += ' ) -> ( '
+        str += self._types_str(['_O{}'.format(i+1) for i in range(len(self.outputs))], self.outputs, True)
+        str += ' );'
+        return str
+
+    @staticmethod
+    def _types_str(names, items, tensor):
+        return ', '.join(name + ': ' + ('tensor<{}>'.format(type) if tensor else type) + ('[]' if repeated else '')
+                         for name, (type, repeated) in zip(names, items))
 
 
 class Converter(converter.Converter[TFTensor, TFOperation, TFGraph,
@@ -54,7 +91,8 @@ class Converter(converter.Converter[TFTensor, TFOperation, TFGraph,
                  enable_standard_converters=True,
                  enable_default_conversion=False,
                  enable_imprecise_image_resize=False,
-                 custom_converter_by_op_name=None):
+                 custom_converter_by_op_name=None,
+                 generate_unknown_opdefs=False):
         converters = {}
         if enable_standard_converters:
             converters.update(_StandardConverters)
@@ -66,7 +104,9 @@ class Converter(converter.Converter[TFTensor, TFOperation, TFGraph,
                                         default_op_converter=default_op_converter)
 
         self.enable_imprecise_image_resize = enable_imprecise_image_resize
+        self.generate_unknown_opdefs = generate_unknown_opdefs
         self.is_quantized = False
+        self.opdefs = {}
 
     def create_graph(self, source_graph):
         # type: (TFGraph)->NNEFGraph
@@ -122,6 +162,8 @@ class Converter(converter.Converter[TFTensor, TFOperation, TFGraph,
             target_graph.outputs = OrderedDict((utils.to_identifier(name), tensor)
                                                for name, tensor in zip(target_graph.output_ids, target_graph.outputs))
         target_graph.generate_missing_names()
+
+        target_graph.fragments = '\n'.join('{}'.format(str(opdef)) for opdefs in self.opdefs.values() for opdef in opdefs)
         
         return target_graph
 
@@ -472,17 +514,63 @@ class Converter(converter.Converter[TFTensor, TFOperation, TFGraph,
                 return False
         return True
 
+    @staticmethod
+    def make_opdef(op):
+        attribs = {key: Converter.make_attrib_type(value) for key, value in op.attribs.items()}
+        inputs = [Converter.make_tensor_type(value) for value in op.inputs]
+        outputs = [Converter.make_tensor_type(value) for value in op.outputs]
+        return Opdef(op.name, op.dtype, attribs, inputs, outputs)
+
+    @staticmethod
+    def make_attrib_type(value):
+        repeated = False
+        if isinstance(value, list):
+            if len(value) == 0:
+                return None, False
+            tp = type(value[0])
+            if not all(type(v) == tp for v in value):
+                return None, False
+            repeated = True
+            value = value[0]
+
+        if not isinstance(value, (float, int, bool, str)):
+            return None, False
+
+        return _nnef_dtype_by_python_type[type(value)], repeated
+
+    @staticmethod
+    def make_tensor_type(value):
+        repeated = False
+        if isinstance(value, list):
+            if len(value) == 0:
+                return None, False
+            dtype = value[0].dtype
+            if not all(v.dtype == dtype for v in value):
+                return None, False
+            repeated = True
+            value = value[0]
+
+        return value.dtype, repeated
+
 
 def convert_default(converter, tf_op, nnef_graph):
     # type: (Converter, TFOperation, NNEFGraph)->None
 
     print("Warning: Converter of {} is not implemented, doing default conversion.".format(tf_op.name))
 
-    NNEFOperation(graph=nnef_graph,
-                  name=tf_op.name.replace('.', '_'),
-                  inputs=converter.converted_tensors(tf_op.inputs),
-                  attribs=utils.recursive_transform(tf_op.attribs, lambda x: x if x is not None else "None"),
-                  outputs=converter.converted_tensors(tf_op.outputs))
+    nnef_op = NNEFOperation(graph=nnef_graph,
+                            name=tf_op.name.replace('.', '_'),
+                            inputs=converter.converted_tensors(tf_op.inputs),
+                            attribs=utils.recursive_transform(tf_op.attribs, lambda x: x if x is not None else "None"),
+                            outputs=tuple(converter.converted_tensors(tf_op.outputs)))
+
+    if converter.generate_unknown_opdefs:
+        defs = converter.opdefs.get(nnef_op.name)
+        if defs is None:
+            defs = converter.opdefs[nnef_op.name] = []
+
+        nnef_op.name += '_v{}'.format(len(defs) + 1)
+        defs.append(converter.make_opdef(nnef_op))
 
 
 def convert_assign(converter, tf_op, nnef_graph):

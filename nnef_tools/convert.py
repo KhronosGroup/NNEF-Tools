@@ -206,13 +206,16 @@ def get_custom_shape_functions(input_format, module_names):
     return custom_shapes
 
 
-def get_converter(input_format, output_format, prefer_nchw=False, permissive=False, custom_converters=None):
+def get_converter(input_format, output_format, prefer_nchw=False, permissive=False, enable_default_conversion=False,
+                  enable_fragment_definitions=False, custom_converters=None):
     if input_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite'] and output_format == 'nnef':
         from nnef_tools.conversion.tensorflow.tf_to_nnef import Converter
         custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
                                         if custom_converters else None)
         return Converter(enable_imprecise_image_resize=permissive,
-                         custom_converter_by_op_name=custom_converter_by_op_name)
+                         custom_converter_by_op_name=custom_converter_by_op_name,
+                         enable_default_conversion=enable_default_conversion,
+                         generate_unknown_opdefs=enable_fragment_definitions)
     elif input_format == 'nnef' and output_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite']:
         from nnef_tools.conversion.tensorflow.nnef_to_tf import Converter
 
@@ -394,6 +397,8 @@ def convert(input_format,
             compress=False,
             permissive=False,
             with_weights=True,
+            enable_default_conversion=False,
+            enable_fragment_definitions=False,
             custom_converters=None,
             conversion_info=False  # type: typing.Union[bool, str, None]
             ):
@@ -467,6 +472,8 @@ def convert(input_format,
                                                           output_format=output_format,
                                                           prefer_nchw=prefer_nchw,
                                                           permissive=permissive,
+                                                          enable_default_conversion=enable_default_conversion,
+                                                          enable_fragment_definitions=enable_fragment_definitions,
                                                           custom_converters=custom_converters),
                                   data_format_optimizer=get_data_format_optimizer(input_format=input_format,
                                                                                   output_format=output_format,
@@ -571,6 +578,14 @@ Stronger compression is slower.""")
                         action="store_true",
                         help="""Allow some imprecise conversions""")
 
+    parser.add_argument("--default-conversion",
+                        action="store_true",
+                        help="""Enable default conversions""")
+
+    parser.add_argument("--fragment-definitions",
+                        action="store_true",
+                        help="""Enable automatic generation of fragment definitions for unknown ops""")
+
     parser.add_argument('--custom-converters',
                         nargs='*',
                         help="""Modules of custom converters, e.g. package1.module1 [package2.module2 ...]""")
@@ -666,6 +681,8 @@ def convert_using_argv(argv):
                 compress=args.compress,
                 permissive=args.permissive,
                 with_weights=not args.no_weights,
+                enable_default_conversion=args.default_conversion,
+                enable_fragment_definitions=args.fragment_definitions,
                 custom_converters=args.custom_converters,
                 conversion_info=args.conversion_info)
     except utils.NNEFToolsException as e:
