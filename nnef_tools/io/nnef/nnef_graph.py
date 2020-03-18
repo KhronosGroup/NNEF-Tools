@@ -121,6 +121,11 @@ class NNEFOperation(BaseOperation["NNEFGraph", "NNEFTensor"]):
 
 class NNEFGraph(BaseGraph["NNEFTensor", "NNEFOperation"]):
 
+    def __init__(self, name=None, fragments=None):
+        # type: (typing.Optional[str], typing.Optional[str]) -> None
+        super(NNEFGraph, self).__init__(name=name)
+        self.fragments = fragments
+
     def generate_missing_names(self):
         name_generator = utils.NameGenerator(used_names=set(t.name for t in self.tensors if t.name))
 
