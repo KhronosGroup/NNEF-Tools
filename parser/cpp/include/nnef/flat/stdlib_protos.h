@@ -689,6 +689,15 @@ namespace nnef
                 Param("max", ScalarTensor),
                 Param("bits", Integer),
             }, { Result("y", ScalarTensor) }),
+            
+            Prototype("gemmlowp_quantize", {
+                Param("x", ScalarTensor),
+                Param("zero_point", IntegerTensor),
+                Param("scale", ScalarTensor),
+                Param("bits", Integer),
+                Param("signed", Logical),
+                Param("symmetric", Logical),
+            }, { Result("y", ScalarTensor) }),
         };
 
         return prototypes;

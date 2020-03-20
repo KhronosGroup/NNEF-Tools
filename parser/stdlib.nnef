@@ -35,7 +35,7 @@ fragment stack<?>( values: tensor<?>[], axis: integer ) -> ( value: tensor<?> );
 fragment unstack<?>( value: tensor<?>, axis: integer ) -> ( values: tensor<?>[] );
 fragment tile<?>( input: tensor<?>, repeats: integer[] ) -> ( output: tensor<?> );
 fragment pad( input: tensor<scalar>, padding: (integer, integer)[], border: string = 'constant', value: scalar = 0.0 ) -> ( output: tensor<scalar> );
-
+fragment cast<?>( input: tensor<> ) -> ( output: tensor<?> );
 
 # element-wise arithmetic operations
 
@@ -511,7 +511,12 @@ fragment max_roi_align(
 
 # quantization operations
 
-fragment linear_quantize( x: tensor<scalar>, min: tensor<scalar>, max: tensor<scalar>, bits: integer ) -> ( y: tensor<scalar> )
+fragment linear_quantize(
+    x: tensor<scalar>,
+    min: tensor<scalar>,
+    max: tensor<scalar>,
+    bits: integer )
+-> ( y: tensor<scalar> )
 {
     r = scalar(2 ^ bits - 1);
     z = clamp(x, min, max);
@@ -519,12 +524,31 @@ fragment linear_quantize( x: tensor<scalar>, min: tensor<scalar>, max: tensor<sc
     y = q / r * (max - min) + min;
 }
 
-fragment logarithmic_quantize( x: tensor<scalar>, max: tensor<scalar>, bits: integer ) -> ( y: tensor<scalar> )
+fragment logarithmic_quantize(
+    x: tensor<scalar>,
+    max: tensor<scalar>,
+    bits: integer )
+-> ( y: tensor<scalar> )
 {
     m = ceil(log2(max));
     r = scalar(2 ^ bits - 1);
     q = round(clamp(log2(abs(x)), m - r, m));
     y = sign(x) * 2.0 ^ q;
+}
+
+fragment gemmlowp_quantize(
+    x: tensor<scalar>,
+    zero_point: tensor<integer>,
+    scale: tensor<scalar>,
+    bits: integer,
+    signed: logical,
+    symmetric: logical )
+-> ( y: tensor<scalar> )
+{
+    z = round(x / scale) + cast<scalar>(zero_point);
+    r = scalar(2 ^ (bits - 1) - 1 if signed else 2 ^ bits - 1);
+    q = clamp(z, 0.0 if !signed else -r if symmetric else -r - 1.0, r);
+    y = (q - cast<scalar>(zero_point)) * scale;
 }
 
 
