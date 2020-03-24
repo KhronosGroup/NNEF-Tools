@@ -247,7 +247,8 @@ def _enumerate_options_getters(optionsClass):
     return {_camel_to_snake(name): func for name, func in optionsClass.__dict__.items()
             if not name.startswith('_')
             and name != 'Init' and not name.startswith('GetRootAs')
-            and not name.endswith('AsNumpy') and not name.endswith('Length')}
+            and not name.endswith('AsNumpy') and not name.endswith('Length')
+            and not isinstance(func, classmethod)}
 
 
 def _enumerate_options_length_getters(optionsClass):
