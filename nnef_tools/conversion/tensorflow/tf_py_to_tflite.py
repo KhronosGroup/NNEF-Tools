@@ -207,8 +207,10 @@ def convert_depthwise_conv2d(op):
                       depth_multiplier=op.outputs[0].shape[3] // op.inputs[0].shape[3],
                       fused_activation_function=op.attribs.get('fused_activation_function', 'NONE'))
     filter = op.inputs[1]
-    filter.shape = [1] + filter.shape[:-2] + [filter.shape[-2] * filter.shape[-1]]
-    filter.data = filter.data.reshape(filter.shape)
+    if not hasattr(filter, "shape_fixed"):
+        filter.shape = [1] + filter.shape[:-2] + [filter.shape[-2] * filter.shape[-1]]
+        filter.data = filter.data.reshape(filter.shape)
+        filter.shape_fixed = True
 
 
 def generic_convert_pool_2d(op, target_name):
