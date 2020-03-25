@@ -699,6 +699,10 @@ def write_tflite_graph_to_flatbuffers(graph, filename):
             bytes = tensor_data.reshape([-1]).view(np.uint8)
             buffers.append(_build_buffer(builder, bytes))
 
+    #metadata buffer
+    metadata_index = len(buffers)
+    buffers.append(_build_buffer(builder, np.frombuffer(b'1.14.0', dtype=np.uint8)))
+
     tflite_fb.ModelStartBuffersVector(builder, len(buffers))
     for buffer in reversed(buffers):
         builder.PrependUOffsetTRelative(buffer)
@@ -768,11 +772,21 @@ def write_tflite_graph_to_flatbuffers(graph, filename):
     builder.PrependUOffsetTRelative(subgraph)
     subgraphs = builder.EndVector(1)
 
+    metadata_name = builder.CreateString("min_runtime_version")
+    tflite_fb.MetadataStart(builder)
+    tflite_fb.MetadataAddName(builder, metadata_name)
+    tflite_fb.MetadataAddBuffer(builder, metadata_index)
+    metadata = tflite_fb.MetadataEnd(builder)
+    tflite_fb.ModelStartMetadataVector(builder, 1)
+    builder.PrependUOffsetTRelative(metadata)
+    metadata_vector = builder.EndVector(1)
+
     tflite_fb.ModelStart(builder)
     tflite_fb.ModelAddVersion(builder, OUTPUT_SCHEMA_VERSION)
     tflite_fb.ModelAddBuffers(builder, buffers)
     tflite_fb.ModelAddOperatorCodes(builder, op_codes)
     tflite_fb.ModelAddSubgraphs(builder, subgraphs)
+    tflite_fb.ModelAddMetadata(builder, metadata_vector)
     model = tflite_fb.ModelEnd(builder)
 
     FinishWithFileIdentifier(builder, model, OUTPUT_FILE_IDENTIFIER)
