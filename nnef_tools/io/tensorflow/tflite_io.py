@@ -501,6 +501,7 @@ def _build_quantization(builder, quant, dtype):
     if dtype == "INT32":
         tflite_fb.QuantizationParametersStart(builder)
         tflite_fb.QuantizationParametersAddScale(builder, scale)
+        tflite_fb.QuantizationParametersAddZeroPoint(builder, zero_point)
         return tflite_fb.QuantizationParametersEnd(builder)
     else:
         tflite_fb.QuantizationParametersStart(builder)
