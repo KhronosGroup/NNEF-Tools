@@ -480,6 +480,7 @@ def _ensure_numpy_array(x, dtype):
         return np.array(x, dtype=dtype)
 
 _custom_op_type_key = "__custom_op_type"
+_custom_op_options_key = "custom"
 def _builtin_code_and_custom_code(operator):
     builtin_code = _BuiltinOperatorValueByName.get(operator.name, tflite_fb.BuiltinOperator.CUSTOM)
     custom_code = None
@@ -551,6 +552,17 @@ def _build_operator_options(builder, attribs, optionsClass):
     return ender(builder)
 
 
+def _build_operator_custom_options(builder, attribs):
+    assert _custom_op_options_key in attribs, \
+            "'{}' must be set as an attribute in a CUSTOM op to build custom options".format(_custom_op_options_key)
+    custom = attribs[_custom_op_options_key]
+
+    tflite_fb.OperatorStartCustomOptionsVector(builder, len(custom))
+    for b in reversed(custom):
+        builder.PrependUint8(b)
+    return builder.EndVector(len(custom))
+
+
 def _build_operator(builder, operation, op_code_index, tensor_index):
     inputs = [tensor_index[tensor] for tensor in operation.inputs]
     tflite_fb.OperatorStartInputsVector(builder, len(inputs))
@@ -579,6 +591,11 @@ def _build_operator(builder, operation, op_code_index, tensor_index):
     else:
         options = None
 
+    if custom_code and _custom_op_options_key in attribs:
+        custom_options = _build_operator_custom_options(builder, attribs)
+    else:
+        custom_options = None
+
     tflite_fb.OperatorStart(builder)
     tflite_fb.OperatorAddOpcodeIndex(builder, op_code_index[(builtin_code, custom_code)])
     tflite_fb.OperatorAddInputs(builder, inputs)
@@ -587,6 +604,9 @@ def _build_operator(builder, operation, op_code_index, tensor_index):
 
     if options:
         tflite_fb.OperatorAddBuiltinOptions(builder, options)
+
+    if custom_options:
+        tflite_fb.OperatorAddCustomOptions(builder, custom_options)
 
     return tflite_fb.OperatorEnd(builder)
 
@@ -645,6 +665,9 @@ def read_tflite_graph_from_flatbuffers(filename):
             assert _custom_op_type_key not in attribs, \
                 "'{}' shall not be set as an attribute".format(_custom_op_type_key)
             attribs[_custom_op_type_key] = operatorCode.CustomCode().decode('ascii')
+            assert _custom_op_options_key not in attribs, \
+                "'{}' shall not be set as an attribute".format(_custom_op_options_key)
+            attribs[_custom_op_options_key] = operator.CustomOptionsAsNumpy().tolist()
         TFOperation(graph, name, inputs, outputs, attribs)
 
     inputs = []
