@@ -303,6 +303,10 @@ def _print(nnef_graph,  # type: NNEFGraph
 
         if fragments is None:
             fragments = ""
+        if nnef_graph.fragments is not None:
+            if len(fragments) != 0:
+                fragments += '\n'
+            fragments += nnef_graph.fragments
 
         fragments = add_tflite_quantization_fragment_if_needed(nnef_graph, fragments)
 
@@ -376,12 +380,10 @@ def _write_weights(nnef_graph, dir_path, raise_on_missing_weight=True):
                                   array=np.asarray(tensor.data, order='C'))
             elif tensor.data.size == 0:
                 if raise_on_missing_weight:
-                    utils.NNEFToolsException("Missing value for variable: {}".format(tensor.name))
+                    raise utils.NNEFToolsException("Missing value for variable: {}".format(tensor.name))
             else:
-                utils.NNEFToolsException(
-                    "Invalid data size for variable: {}, expected: {}, got: {}".format(tensor.name,
-                                                                                       tensor.count,
-                                                                                       tensor.data.size))
+                raise utils.NNEFToolsException("Invalid data size for variable: {}, expected: {}, got: {}".
+                                               format(tensor.name, tensor.count, tensor.data.size))
 
 
 def read_nnef_tensor(filename):

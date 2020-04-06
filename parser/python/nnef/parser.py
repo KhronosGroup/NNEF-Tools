@@ -15,9 +15,9 @@
 import _nnef
 
 
-def parse_file(graph_fn, quant_fn=None, stdlib=None, lowered=[]):
-    return _nnef.parse_file(graph_fn, quantization=quant_fn, stdlib=stdlib, lowered=lowered)
+def parse_file(graph_fn, quant_fn=None, stdlib=None, lowered=None):
+    return _nnef.parse_file(graph_fn, quantization=quant_fn, stdlib=stdlib, lowered=lowered or [])
 
 
-def parse_string(graph_str, quant_str=None, stdlib=None, lowered=[]):
-    return _nnef.parse_string(graph_str, quantization=quant_str, stdlib=stdlib, lowered=lowered)
+def parse_string(graph_str, quant_str=None, stdlib=None, lowered=None):
+    return _nnef.parse_string(graph_str, quantization=quant_str, stdlib=stdlib, lowered=lowered or [])

@@ -70,6 +70,12 @@ def propagate_first(op, const_value_by_tensor):
     return [infer.copy(op.inputs[0].shape)], [get_op_t(op)]
 
 
+def propagate_cast(op, const_value_by_tensor):
+    # type: (TFOperation, _ConstValueByTensorT)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
+
+    return [infer.copy(op.inputs[0].shape)], [op.attribs['DstT']]
+
+
 def propagate_pool(op, const_value_by_tensor):
     # type: (TFOperation, _ConstValueByTensorT)->typing.Tuple[typing.List[typing.List[int]], typing.List[str]]
 
@@ -361,5 +367,5 @@ _DefaultPropagators = {
     "Slice": propagate_slice,
     "StridedSlice": propagate_strided_slice,
     "Tile": propagate_tile,
-    "Cast": propagate_first,
+    "Cast": propagate_cast,
 }

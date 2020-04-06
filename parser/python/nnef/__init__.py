@@ -16,7 +16,7 @@ import _nnef
 from .parser import *
 from .printer import *
 from .binary import read_tensor, write_tensor
-from .shapes import infer_shapes
+from .shapes import infer_shapes, _StandardShapeFuncs
 import os
 
 
@@ -35,7 +35,10 @@ Tensor.__new__.__defaults__ = (None, None, None)
 Operation.__new__.__defaults__ = (None,)
 
 
-def load_graph(path, stdlib=None, lowered=[]):
+StandardOperations = set(_StandardShapeFuncs.keys())
+
+
+def load_graph(path, stdlib=None, lowered=None):
     if os.path.isfile(path):
         return parse_file(path, stdlib=stdlib, lowered=lowered)
 
