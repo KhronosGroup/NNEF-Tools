@@ -231,7 +231,6 @@ namespace nnef
         }
         else if ( header.quant_code == TensorHeader::Integer )
         {
-            assert(header.quant_params[0] == 1);
             tensor.dtype = "integer";
             tensor.data.resize(count * item_bytes(tensor.dtype));
             from_bytes(bytes.data(), count, header.bits_per_item, (int*)tensor.data.data());
