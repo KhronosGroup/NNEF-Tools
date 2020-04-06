@@ -35,7 +35,7 @@ fragment stack<?>( values: tensor<?>[], axis: integer ) -> ( value: tensor<?> );
 fragment unstack<?>( value: tensor<?>, axis: integer ) -> ( values: tensor<?>[] );
 fragment tile<?>( input: tensor<?>, repeats: integer[] ) -> ( output: tensor<?> );
 fragment pad( input: tensor<scalar>, padding: (integer, integer)[], border: string = 'constant', value: scalar = 0.0 ) -> ( output: tensor<scalar> );
-fragment cast<?>( input: tensor<> ) -> ( output: tensor<?> );
+
 
 # element-wise arithmetic operations
 
