@@ -394,26 +394,37 @@ namespace nnef {
 
     # quantization operations
 
-    fragment linear_quantize(
+    fragment min_max_linear_quantize(
         x: tensor<scalar>,
         min: tensor<scalar>,
         max: tensor<scalar>,
         bits: integer )
     -> ( y: tensor<scalar> );
     
+    fragment zero_point_linear_quantize(
+        x: tensor<scalar>,
+        zero_point: integer,
+        scale: scalar,
+        bits: integer,
+        signed: logical,
+        symmetric: logical )
+    -> ( y: tensor<scalar> );
+    
+    fragment linear_quantize(
+        x: tensor<scalar>,
+        min: tensor<scalar>,
+        max: tensor<scalar>,
+        bits: integer,
+        zero_point: integer = 0,
+        scale: scalar = 0.0,
+        signed: logical = true,
+        symmetric: logical = false )
+    -> ( y: tensor<scalar> );
+    
     fragment logarithmic_quantize(
         x: tensor<scalar>,
         max: tensor<scalar>,
         bits: integer )
-    -> ( y: tensor<scalar> );
-    
-    fragment gemmlowp_quantize(
-        x: tensor<scalar>,
-        zero_point: tensor<integer>,
-        scale: tensor<scalar>,
-        bits: integer,
-        signed: logical,
-        symmetric: logical )
     -> ( y: tensor<scalar> );
 
 

@@ -677,26 +677,37 @@ namespace nnef
             }, { Result("y", GenericTensors) }),
             
             
-            Prototype("linear_quantize", {
+            Prototype("min_max_linear_quantize", {
                 Param("x", ScalarTensor),
                 Param("min", ScalarTensor),
                 Param("max", ScalarTensor),
                 Param("bits", Integer),
             }, { Result("y", ScalarTensor) }),
             
+            Prototype("zero_point_linear_quantize", {
+                Param("x", ScalarTensor),
+                Param("zero_point", Integer),
+                Param("scale", Scalar),
+                Param("bits", Integer),
+                Param("signed", Logical),
+                Param("symmetric", Logical),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("linear_quantize", {
+                Param("x", ScalarTensor),
+                Param("min", ScalarTensor),
+                Param("max", ScalarTensor),
+                Param("bits", Integer),
+                Param("zero_point", Integer, IntegerZero),
+                Param("scale", Scalar, ScalarZero),
+                Param("signed", Logical, LogicalTrue),
+                Param("symmetric", Logical, LogicalFalse),
+            }, { Result("y", ScalarTensor) }),
+            
             Prototype("logarithmic_quantize", {
                 Param("x", ScalarTensor),
                 Param("max", ScalarTensor),
                 Param("bits", Integer),
-            }, { Result("y", ScalarTensor) }),
-            
-            Prototype("gemmlowp_quantize", {
-                Param("x", ScalarTensor),
-                Param("zero_point", IntegerTensor),
-                Param("scale", ScalarTensor),
-                Param("bits", Integer),
-                Param("signed", Logical),
-                Param("symmetric", Logical),
             }, { Result("y", ScalarTensor) }),
         };
 

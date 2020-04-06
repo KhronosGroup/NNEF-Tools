@@ -511,7 +511,7 @@ fragment max_roi_align(
 
 # quantization operations
 
-fragment linear_quantize(
+fragment min_max_linear_quantize(
     x: tensor<scalar>,
     min: tensor<scalar>,
     max: tensor<scalar>,
@@ -524,6 +524,37 @@ fragment linear_quantize(
     y = q / r * (max - min) + min;
 }
 
+fragment zero_point_linear_quantize(
+    x: tensor<scalar>,
+    zero_point: integer,
+    scale: scalar,
+    bits: integer,
+    signed: logical,
+    symmetric: logical )
+-> ( y: tensor<scalar> )
+{
+    z = round(x / scale) + scalar(zero_point);
+    r = scalar(2 ^ (bits - 1) - 1 if signed else 2 ^ bits - 1);
+    q = clamp(z, 0.0 if !signed else -r if symmetric else -r - 1.0, r);
+    y = (q - scalar(zero_point)) * scale;
+}
+
+fragment linear_quantize(
+    x: tensor<scalar>,
+    min: tensor<scalar>,
+    max: tensor<scalar>,
+    bits: integer,
+    zero_point: integer = 0,
+    scale: scalar = 0.0,
+    signed: logical = true,
+    symmetric: logical = false )
+-> ( y: tensor<scalar> )
+{
+    y = min_max_linear_quantize(x, min, max, bits = bits) if scale == 0.0 else
+        zero_point_linear_quantize(x, zero_point = zero_point, scale = scale,
+                                   bits = bits, signed = signed, symmetric = symmetric);
+}
+
 fragment logarithmic_quantize(
     x: tensor<scalar>,
     max: tensor<scalar>,
@@ -534,21 +565,6 @@ fragment logarithmic_quantize(
     r = scalar(2 ^ bits - 1);
     q = round(clamp(log2(abs(x)), m - r, m));
     y = sign(x) * 2.0 ^ q;
-}
-
-fragment gemmlowp_quantize(
-    x: tensor<scalar>,
-    zero_point: tensor<integer>,
-    scale: tensor<scalar>,
-    bits: integer,
-    signed: logical,
-    symmetric: logical )
--> ( y: tensor<scalar> )
-{
-    z = round(x / scale) + cast<scalar>(zero_point);
-    r = scalar(2 ^ (bits - 1) - 1 if signed else 2 ^ bits - 1);
-    q = clamp(z, 0.0 if !signed else -r if symmetric else -r - 1.0, r);
-    y = (q - cast<scalar>(zero_point)) * scale;
 }
 
 
