@@ -3,6 +3,8 @@
 # namespace: tflite_fb
 
 import flatbuffers
+from flatbuffers.compat import import_numpy
+np = import_numpy()
 
 class Model(object):
     __slots__ = ['_tab']
@@ -13,6 +15,10 @@ class Model(object):
         x = Model()
         x.Init(buf, n + offset)
         return x
+
+    @classmethod
+    def ModelBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
+        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # Model
     def Init(self, buf, pos):
@@ -46,6 +52,11 @@ class Model(object):
         return 0
 
     # Model
+    def OperatorCodesIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
+        return o == 0
+
+    # Model
     def Subgraphs(self, j):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
@@ -64,6 +75,11 @@ class Model(object):
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
+
+    # Model
+    def SubgraphsIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        return o == 0
 
     # Model
     def Description(self):
@@ -93,6 +109,11 @@ class Model(object):
         return 0
 
     # Model
+    def BuffersIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
+        return o == 0
+
+    # Model
     def MetadataBuffer(self, j):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
         if o != 0:
@@ -114,7 +135,37 @@ class Model(object):
             return self._tab.VectorLen(o)
         return 0
 
-def ModelStart(builder): builder.StartObject(6)
+    # Model
+    def MetadataBufferIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
+        return o == 0
+
+    # Model
+    def Metadata(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
+        if o != 0:
+            x = self._tab.Vector(o)
+            x += flatbuffers.number_types.UOffsetTFlags.py_type(j) * 4
+            x = self._tab.Indirect(x)
+            from .Metadata import Metadata
+            obj = Metadata()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
+    # Model
+    def MetadataLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # Model
+    def MetadataIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
+        return o == 0
+
+def ModelStart(builder): builder.StartObject(7)
 def ModelAddVersion(builder, version): builder.PrependUint32Slot(0, version, 0)
 def ModelAddOperatorCodes(builder, operatorCodes): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(operatorCodes), 0)
 def ModelStartOperatorCodesVector(builder, numElems): return builder.StartVector(4, numElems, 4)
@@ -125,4 +176,6 @@ def ModelAddBuffers(builder, buffers): builder.PrependUOffsetTRelativeSlot(4, fl
 def ModelStartBuffersVector(builder, numElems): return builder.StartVector(4, numElems, 4)
 def ModelAddMetadataBuffer(builder, metadataBuffer): builder.PrependUOffsetTRelativeSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(metadataBuffer), 0)
 def ModelStartMetadataBufferVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def ModelAddMetadata(builder, metadata): builder.PrependUOffsetTRelativeSlot(6, flatbuffers.number_types.UOffsetTFlags.py_type(metadata), 0)
+def ModelStartMetadataVector(builder, numElems): return builder.StartVector(4, numElems, 4)
 def ModelEnd(builder): return builder.EndObject()

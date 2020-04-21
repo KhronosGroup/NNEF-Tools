@@ -112,8 +112,7 @@ class Signature(object):
         self.imports = []
         self.op_names = []
         for name in names:
-            assert '.' in name
-            if not name.startswith('tf.') and not name.startswith('_tf.'):
+            if '.' in name and not name.startswith('tf.') and not name.startswith('_tf.'):
                 parts = name.split('.')
                 self.imports.append("from {} import {}\n".format('.'.join(parts[:-1]), parts[-1]))
                 name = parts[-1]

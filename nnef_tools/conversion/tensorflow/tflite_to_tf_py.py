@@ -19,7 +19,7 @@ from functools import partial
 from nnef_tools.conversion.transforms import squeezed_shape
 from nnef_tools.core import graph_utils, utils
 from nnef_tools.io.tensorflow.tf_graph import *
-
+from nnef_tools.io.tensorflow import tflite_io
 
 def _to_tf_py_dtype(tflite_dtype):
     # type: (str)->str
@@ -120,9 +120,11 @@ def convert_depthwise_conv2d(op):
                       data_format="NHWC")
     input = op.inputs[0]
     filter = op.inputs[1]
-    assert filter.shape[-1] % input.shape[-1] == 0
-    filter.shape = filter.shape[1:-1] + [input.shape[-1], filter.shape[-1] // input.shape[-1]]
-    filter.data = filter.data.reshape(filter.shape)
+    if not hasattr(filter, "shape_fixed"):
+        assert filter.shape[-1] % input.shape[-1] == 0
+        filter.shape = filter.shape[1:-1] + [input.shape[-1], filter.shape[-1] // input.shape[-1]]
+        filter.data = filter.data.reshape(filter.shape)
+        filter.shape_fixed = True
     if len(op.inputs) == 3:
         bias = op.inputs[2]
         output = op.output
@@ -146,6 +148,8 @@ def generic_convert_pool_2d(op, target_name):
 
 def convert_reshape(op):
     # type: (TFOperation)->None
+    if not op.attribs['new_shape']:
+        op.attribs['new_shape'] = op.inputs[1].data.tolist()
     op.name = "tf.reshape"
     op.inputs = (op.inputs[0],)
     op.attribs = dict(shape=op.attribs['new_shape'])
@@ -343,6 +347,13 @@ def convert_tile(op):
     op.inputs = (op.inputs[0],)
 
 
+def convert_custom(op):
+    assert tflite_io._custom_op_type_key in op.attribs, \
+        "CUSTOM op name must be set as an attribute with the key '{}'".format(tflite_io._custom_op_type_key)
+    rename(op, op.attribs[tflite_io._custom_op_type_key])
+    del op.attribs[tflite_io._custom_op_type_key]
+
+
 def rename(op, target_name):
     # type: (TFOperation, str)->None
     op.name = target_name
@@ -372,7 +383,7 @@ _DefaultConverters = {
     "CONCATENATION": partial(rename, target_name="tf.concat"),
     "CONV_2D": convert_conv2d,
     "COS": partial(rename, target_name="tf.cos"),
-    "CUSTOM": UNSUPPORTED,
+    "CUSTOM": convert_custom,
     "DELEGATE": UNSUPPORTED,
     "DEPTH_TO_SPACE": UNSUPPORTED,
     "DEPTHWISE_CONV_2D": convert_depthwise_conv2d,
@@ -404,7 +415,7 @@ _DefaultConverters = {
     "LOGICAL_AND": partial(rename, target_name="tf.logical_and"),
     "LOGICAL_NOT": partial(rename, target_name="tf.logical_not"),
     "LOGICAL_OR": partial(rename, target_name="tf.logical_or"),
-    "LOGISTIC": UNSUPPORTED,
+    "LOGISTIC": partial(rename, target_name="tf.nn.sigmoid"),
     "LOG": partial(rename, target_name="tf.log"),
     "LOG_SOFTMAX": UNSUPPORTED,
     "LSH_PROJECTION": UNSUPPORTED,
