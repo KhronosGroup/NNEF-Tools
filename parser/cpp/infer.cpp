@@ -250,6 +250,12 @@ int main( int argc, const char * argv[] )
         return -1;
     }
     
+    if ( !nnef::allocate_buffers(graph, error) )
+    {
+        std::cerr << error << std::endl;
+        return -1;
+    }
+    
     std::cerr << "Executing model: " << path << std::endl;
     
     if ( !nnef::execute(graph, error) )

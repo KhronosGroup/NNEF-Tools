@@ -181,6 +181,15 @@ namespace nnef
     bool infer_shapes( Graph& graph, std::string& error, const std::map<std::string,std::vector<int>>& input_shapes = {},
                       const std::map<std::string,ShapeFunc>& custom_shapes = {} ) noexcept;
 
+    /*
+     * Allocate tensor buffers in the graph
+     *
+     * @param graph: the graph object
+     * @param error: the string to store the error message if any
+     *
+     * @return true if there were no errors, false otherwise
+     */
+    bool allocate_buffers( Graph& graph, std::string& error ) noexcept;
 
     /*
      * Execute a graph

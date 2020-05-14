@@ -674,17 +674,22 @@ namespace nnef
         return true;
     }
     
+    
+    bool allocate_buffers( Graph& graph, std::string& error ) noexcept
+    {
+        for ( auto& item : graph.tensors )
+        {
+            auto& tensor = item.second;
+            tensor.data.resize(volume_of(tensor.shape) * item_bytes(tensor.dtype));
+        }
+        return true;
+    }
+    
 
     bool execute( Graph& graph, std::string& error ) noexcept
     {
         try
         {
-            for ( auto& item : graph.tensors )
-            {
-                auto& tensor = item.second;
-                tensor.data.resize(volume_of(tensor.shape) * item_bytes(tensor.dtype));
-            }
-            
             for ( auto& op : graph.operations )
             {
                 auto it = rt::Executors.find(op.name);
