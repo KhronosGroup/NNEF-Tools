@@ -6,39 +6,39 @@ import flatbuffers
 from flatbuffers.compat import import_numpy
 np = import_numpy()
 
-class PackOptions(object):
+class WhileOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsPackOptions(cls, buf, offset):
+    def GetRootAsWhileOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
-        x = PackOptions()
+        x = WhileOptions()
         x.Init(buf, n + offset)
         return x
 
     @classmethod
-    def PackOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
+    def WhileOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
-    # PackOptions
+    # WhileOptions
     def Init(self, buf, pos):
         self._tab = flatbuffers.table.Table(buf, pos)
 
-    # PackOptions
-    def ValuesCount(self):
+    # WhileOptions
+    def CondSubgraphIndex(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-    # PackOptions
-    def Axis(self):
+    # WhileOptions
+    def BodySubgraphIndex(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-def PackOptionsStart(builder): builder.StartObject(2)
-def PackOptionsAddValuesCount(builder, valuesCount): builder.PrependInt32Slot(0, valuesCount, 0)
-def PackOptionsAddAxis(builder, axis): builder.PrependInt32Slot(1, axis, 0)
-def PackOptionsEnd(builder): return builder.EndObject()
+def WhileOptionsStart(builder): builder.StartObject(2)
+def WhileOptionsAddCondSubgraphIndex(builder, condSubgraphIndex): builder.PrependInt32Slot(0, condSubgraphIndex, 0)
+def WhileOptionsAddBodySubgraphIndex(builder, bodySubgraphIndex): builder.PrependInt32Slot(1, bodySubgraphIndex, 0)
+def WhileOptionsEnd(builder): return builder.EndObject()

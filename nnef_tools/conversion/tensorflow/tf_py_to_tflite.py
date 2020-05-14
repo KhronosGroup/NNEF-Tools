@@ -23,6 +23,7 @@ from nnef_tools.core import graph_utils
 from nnef_tools.core import matcher
 from nnef_tools.core import utils
 from nnef_tools.io.tensorflow.tf_graph import *
+from nnef_tools.io.tensorflow import tflite_io
 
 
 def _to_tflite_dtype(tf_py_dtype):
@@ -44,11 +45,7 @@ def convert(tf_graph, enable_default_conversion=False):
 
     for op in list(tf_graph.operations):
         # Conversion
-        assert enable_default_conversion or op.name in _DefaultConverters, \
-            "No tf_py_to_tflite converter for {}".format(op.name)
-
-        if op.name in _DefaultConverters:
-            _DefaultConverters[op.name](op)
+        _DefaultConverters.get(op.name, convert_custom)(op)
 
     graph_utils.remove_unreachable(tf_graph)
     tf_graph.generate_missing_names()
@@ -210,8 +207,10 @@ def convert_depthwise_conv2d(op):
                       depth_multiplier=op.outputs[0].shape[3] // op.inputs[0].shape[3],
                       fused_activation_function=op.attribs.get('fused_activation_function', 'NONE'))
     filter = op.inputs[1]
-    filter.shape = [1] + filter.shape[:-2] + [filter.shape[-2] * filter.shape[-1]]
-    filter.data = filter.data.reshape(filter.shape)
+    if not hasattr(filter, "shape_fixed"):
+        filter.shape = [1] + filter.shape[:-2] + [filter.shape[-2] * filter.shape[-1]]
+        filter.data = filter.data.reshape(filter.shape)
+        filter.shape_fixed = True
 
 
 def generic_convert_pool_2d(op, target_name):
@@ -445,6 +444,12 @@ def convert_tile(op):
                           dtype="INT32"))
     op.attribs = dict()
 
+def convert_custom(op):
+    assert tflite_io._custom_op_type_key not in op.attribs, \
+        "'{}' shall not be set as an attribute".format(tflite_io._custom_op_type_key)
+    op.attribs[tflite_io._custom_op_type_key] = op.name
+    op.name = "CUSTOM"
+
 
 # TODO remove unsqueeze/squeeze that cancel out each other
 _DefaultConverters = {
@@ -512,4 +517,5 @@ _DefaultConverters = {
     "tf.sin": partial(rename, target_name="SIN"),
     "tf.cos": partial(rename, target_name="COS"),
     "tf.tile": convert_tile,
+    "tf.nn.sigmoid": partial(rename, target_name="LOGISTIC")
 }

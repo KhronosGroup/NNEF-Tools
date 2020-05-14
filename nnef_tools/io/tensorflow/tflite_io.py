@@ -247,7 +247,8 @@ def _enumerate_options_getters(optionsClass):
     return {_camel_to_snake(name): func for name, func in optionsClass.__dict__.items()
             if not name.startswith('_')
             and name != 'Init' and not name.startswith('GetRootAs')
-            and not name.endswith('AsNumpy') and not name.endswith('Length')}
+            and not name.endswith('AsNumpy') and not name.endswith('Length')
+            and not isinstance(func, classmethod)}
 
 
 def _enumerate_options_length_getters(optionsClass):
@@ -478,6 +479,16 @@ def _ensure_numpy_array(x, dtype):
     else:
         return np.array(x, dtype=dtype)
 
+_custom_op_type_key = "__custom_op_type"
+_custom_op_options_key = "custom"
+def _builtin_code_and_custom_code(operator):
+    builtin_code = _BuiltinOperatorValueByName.get(operator.name, tflite_fb.BuiltinOperator.CUSTOM)
+    custom_code = None
+    if builtin_code == tflite_fb.BuiltinOperator.CUSTOM:
+        assert _custom_op_type_key in operator.attribs, \
+            "CUSTOM op name must be set as an attribute with the key '{}'".format(_custom_op_type_key)
+        custom_code = operator.attribs[_custom_op_type_key]
+    return (builtin_code, custom_code)
 
 def _build_quantization(builder, quant, dtype):
     if quant is None or quant.all_zero():
@@ -491,6 +502,7 @@ def _build_quantization(builder, quant, dtype):
     if dtype == "INT32":
         tflite_fb.QuantizationParametersStart(builder)
         tflite_fb.QuantizationParametersAddScale(builder, scale)
+        tflite_fb.QuantizationParametersAddZeroPoint(builder, zero_point)
         return tflite_fb.QuantizationParametersEnd(builder)
     else:
         tflite_fb.QuantizationParametersStart(builder)
@@ -500,10 +512,15 @@ def _build_quantization(builder, quant, dtype):
         tflite_fb.QuantizationParametersAddZeroPoint(builder, zero_point)
         return tflite_fb.QuantizationParametersEnd(builder)
 
+def _build_operator_code(builder, builtinCode, customCode):
+    customCode_hndl = None
+    if builtinCode == tflite_fb.BuiltinOperator.CUSTOM:
+        customCode_hndl = builder.CreateString(customCode)
 
-def _build_operator_code(builder, op_name):
     tflite_fb.OperatorCodeStart(builder)
-    tflite_fb.OperatorCodeAddBuiltinCode(builder, _BuiltinOperatorValueByName[op_name])
+    tflite_fb.OperatorCodeAddBuiltinCode(builder, builtinCode)
+    if customCode_hndl:
+        tflite_fb.OperatorCodeAddCustomCode(builder, customCode_hndl)
     return tflite_fb.OperatorCodeEnd(builder)
 
 
@@ -535,6 +552,17 @@ def _build_operator_options(builder, attribs, optionsClass):
     return ender(builder)
 
 
+def _build_operator_custom_options(builder, attribs):
+    assert _custom_op_options_key in attribs, \
+            "'{}' must be set as an attribute in a CUSTOM op to build custom options".format(_custom_op_options_key)
+    custom = attribs[_custom_op_options_key]
+
+    tflite_fb.OperatorStartCustomOptionsVector(builder, len(custom))
+    for b in reversed(custom):
+        builder.PrependUint8(b)
+    return builder.EndVector(len(custom))
+
+
 def _build_operator(builder, operation, op_code_index, tensor_index):
     inputs = [tensor_index[tensor] for tensor in operation.inputs]
     tflite_fb.OperatorStartInputsVector(builder, len(inputs))
@@ -550,7 +578,8 @@ def _build_operator(builder, operation, op_code_index, tensor_index):
 
     attribs = {name: value for name, value in operation.attribs.items()}
 
-    optionsType = _BuiltinOptionsByOperator[_BuiltinOperatorValueByName[operation.name]]
+    builtin_code, custom_code = _builtin_code_and_custom_code(operation)
+    optionsType = _BuiltinOptionsByOperator[builtin_code]
 
     if optionsType is None:
         optionsType = 0
@@ -562,14 +591,22 @@ def _build_operator(builder, operation, op_code_index, tensor_index):
     else:
         options = None
 
+    if custom_code and _custom_op_options_key in attribs:
+        custom_options = _build_operator_custom_options(builder, attribs)
+    else:
+        custom_options = None
+
     tflite_fb.OperatorStart(builder)
-    tflite_fb.OperatorAddOpcodeIndex(builder, op_code_index[operation.name])
+    tflite_fb.OperatorAddOpcodeIndex(builder, op_code_index[(builtin_code, custom_code)])
     tflite_fb.OperatorAddInputs(builder, inputs)
     tflite_fb.OperatorAddOutputs(builder, outputs)
     tflite_fb.OperatorAddBuiltinOptionsType(builder, optionsType)
 
     if options:
         tflite_fb.OperatorAddBuiltinOptions(builder, options)
+
+    if custom_options:
+        tflite_fb.OperatorAddCustomOptions(builder, custom_options)
 
     return tflite_fb.OperatorEnd(builder)
 
@@ -608,7 +645,8 @@ def read_tflite_graph_from_flatbuffers(filename):
 
     for i in range(subgraph.OperatorsLength()):
         operator = subgraph.Operators(i)
-        name = _BuiltinOperatorNameByValue[model.OperatorCodes(operator.OpcodeIndex()).BuiltinCode()]
+        operatorCode = model.OperatorCodes(operator.OpcodeIndex())
+        name = _BuiltinOperatorNameByValue[operatorCode.BuiltinCode()]
 
         options = operator.BuiltinOptions()
         optionsClass = _BuiltinOptionsClasses[operator.BuiltinOptionsType()]
@@ -623,6 +661,13 @@ def read_tflite_graph_from_flatbuffers(filename):
         else:
             attribs = {}
 
+        if operatorCode.BuiltinCode() == tflite_fb.BuiltinOperator.CUSTOM:
+            assert _custom_op_type_key not in attribs, \
+                "'{}' shall not be set as an attribute".format(_custom_op_type_key)
+            attribs[_custom_op_type_key] = operatorCode.CustomCode().decode('ascii')
+            assert _custom_op_options_key not in attribs, \
+                "'{}' shall not be set as an attribute".format(_custom_op_options_key)
+            attribs[_custom_op_options_key] = operator.CustomOptionsAsNumpy().tolist()
         TFOperation(graph, name, inputs, outputs, attribs)
 
     inputs = []
@@ -678,6 +723,10 @@ def write_tflite_graph_to_flatbuffers(graph, filename):
             bytes = tensor_data.reshape([-1]).view(np.uint8)
             buffers.append(_build_buffer(builder, bytes))
 
+    #metadata buffer
+    metadata_index = len(buffers)
+    buffers.append(_build_buffer(builder, np.frombuffer(b'1.14.0', dtype=np.uint8)))
+
     tflite_fb.ModelStartBuffersVector(builder, len(buffers))
     for buffer in reversed(buffers):
         builder.PrependUOffsetTRelative(buffer)
@@ -701,9 +750,10 @@ def write_tflite_graph_to_flatbuffers(graph, filename):
     op_codes = []
     op_code_index = {}
     for operation in graph.operations:
-        if operation.name not in op_code_index:
-            op_code_index[operation.name] = len(op_codes)
-            op_codes.append(_build_operator_code(builder, operation.name))
+        builtin_and_custom_codes = _builtin_code_and_custom_code(operation)
+        if builtin_and_custom_codes not in op_code_index:
+            op_code_index[builtin_and_custom_codes] = len(op_codes)
+            op_codes.append(_build_operator_code(builder, *builtin_and_custom_codes))
 
     tflite_fb.ModelStartOperatorCodesVector(builder, len(op_codes))
     for op_code in reversed(op_codes):
@@ -746,11 +796,21 @@ def write_tflite_graph_to_flatbuffers(graph, filename):
     builder.PrependUOffsetTRelative(subgraph)
     subgraphs = builder.EndVector(1)
 
+    metadata_name = builder.CreateString("min_runtime_version")
+    tflite_fb.MetadataStart(builder)
+    tflite_fb.MetadataAddName(builder, metadata_name)
+    tflite_fb.MetadataAddBuffer(builder, metadata_index)
+    metadata = tflite_fb.MetadataEnd(builder)
+    tflite_fb.ModelStartMetadataVector(builder, 1)
+    builder.PrependUOffsetTRelative(metadata)
+    metadata_vector = builder.EndVector(1)
+
     tflite_fb.ModelStart(builder)
     tflite_fb.ModelAddVersion(builder, OUTPUT_SCHEMA_VERSION)
     tflite_fb.ModelAddBuffers(builder, buffers)
     tflite_fb.ModelAddOperatorCodes(builder, op_codes)
     tflite_fb.ModelAddSubgraphs(builder, subgraphs)
+    tflite_fb.ModelAddMetadata(builder, metadata_vector)
     model = tflite_fb.ModelEnd(builder)
 
     FinishWithFileIdentifier(builder, model, OUTPUT_FILE_IDENTIFIER)

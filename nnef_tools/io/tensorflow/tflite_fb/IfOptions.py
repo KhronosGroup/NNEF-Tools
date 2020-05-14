@@ -6,39 +6,39 @@ import flatbuffers
 from flatbuffers.compat import import_numpy
 np = import_numpy()
 
-class PackOptions(object):
+class IfOptions(object):
     __slots__ = ['_tab']
 
     @classmethod
-    def GetRootAsPackOptions(cls, buf, offset):
+    def GetRootAsIfOptions(cls, buf, offset):
         n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, offset)
-        x = PackOptions()
+        x = IfOptions()
         x.Init(buf, n + offset)
         return x
 
     @classmethod
-    def PackOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
+    def IfOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
         return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
-    # PackOptions
+    # IfOptions
     def Init(self, buf, pos):
         self._tab = flatbuffers.table.Table(buf, pos)
 
-    # PackOptions
-    def ValuesCount(self):
+    # IfOptions
+    def ThenSubgraphIndex(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-    # PackOptions
-    def Axis(self):
+    # IfOptions
+    def ElseSubgraphIndex(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
-def PackOptionsStart(builder): builder.StartObject(2)
-def PackOptionsAddValuesCount(builder, valuesCount): builder.PrependInt32Slot(0, valuesCount, 0)
-def PackOptionsAddAxis(builder, axis): builder.PrependInt32Slot(1, axis, 0)
-def PackOptionsEnd(builder): return builder.EndObject()
+def IfOptionsStart(builder): builder.StartObject(2)
+def IfOptionsAddThenSubgraphIndex(builder, thenSubgraphIndex): builder.PrependInt32Slot(0, thenSubgraphIndex, 0)
+def IfOptionsAddElseSubgraphIndex(builder, elseSubgraphIndex): builder.PrependInt32Slot(1, elseSubgraphIndex, 0)
+def IfOptionsEnd(builder): return builder.EndObject()

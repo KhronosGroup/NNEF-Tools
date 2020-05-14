@@ -3,6 +3,8 @@
 # namespace: tflite_fb
 
 import flatbuffers
+from flatbuffers.compat import import_numpy
+np = import_numpy()
 
 class Operator(object):
     __slots__ = ['_tab']
@@ -13,6 +15,10 @@ class Operator(object):
         x = Operator()
         x.Init(buf, n + offset)
         return x
+
+    @classmethod
+    def OperatorBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
+        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # Operator
     def Init(self, buf, pos):
@@ -48,6 +54,11 @@ class Operator(object):
         return 0
 
     # Operator
+    def InputsIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
+        return o == 0
+
+    # Operator
     def Outputs(self, j):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
@@ -68,6 +79,11 @@ class Operator(object):
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
+
+    # Operator
+    def OutputsIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
+        return o == 0
 
     # Operator
     def BuiltinOptionsType(self):
@@ -109,6 +125,11 @@ class Operator(object):
         return 0
 
     # Operator
+    def CustomOptionsIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
+        return o == 0
+
+    # Operator
     def CustomOptionsFormat(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
         if o != 0:
@@ -137,7 +158,39 @@ class Operator(object):
             return self._tab.VectorLen(o)
         return 0
 
-def OperatorStart(builder): builder.StartObject(8)
+    # Operator
+    def MutatingVariableInputsIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
+        return o == 0
+
+    # Operator
+    def Intermediates(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        if o != 0:
+            a = self._tab.Vector(o)
+            return self._tab.Get(flatbuffers.number_types.Int32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
+        return 0
+
+    # Operator
+    def IntermediatesAsNumpy(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        if o != 0:
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Int32Flags, o)
+        return 0
+
+    # Operator
+    def IntermediatesLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # Operator
+    def IntermediatesIsNone(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
+        return o == 0
+
+def OperatorStart(builder): builder.StartObject(9)
 def OperatorAddOpcodeIndex(builder, opcodeIndex): builder.PrependUint32Slot(0, opcodeIndex, 0)
 def OperatorAddInputs(builder, inputs): builder.PrependUOffsetTRelativeSlot(1, flatbuffers.number_types.UOffsetTFlags.py_type(inputs), 0)
 def OperatorStartInputsVector(builder, numElems): return builder.StartVector(4, numElems, 4)
@@ -150,4 +203,6 @@ def OperatorStartCustomOptionsVector(builder, numElems): return builder.StartVec
 def OperatorAddCustomOptionsFormat(builder, customOptionsFormat): builder.PrependInt8Slot(6, customOptionsFormat, 0)
 def OperatorAddMutatingVariableInputs(builder, mutatingVariableInputs): builder.PrependUOffsetTRelativeSlot(7, flatbuffers.number_types.UOffsetTFlags.py_type(mutatingVariableInputs), 0)
 def OperatorStartMutatingVariableInputsVector(builder, numElems): return builder.StartVector(1, numElems, 1)
+def OperatorAddIntermediates(builder, intermediates): builder.PrependUOffsetTRelativeSlot(8, flatbuffers.number_types.UOffsetTFlags.py_type(intermediates), 0)
+def OperatorStartIntermediatesVector(builder, numElems): return builder.StartVector(4, numElems, 4)
 def OperatorEnd(builder): return builder.EndObject()

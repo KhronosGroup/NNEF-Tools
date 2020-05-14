@@ -250,7 +250,7 @@ def _read(parser_graph, with_weights=True):
 
         if parser_op.name not in ["external", "constant", "variable"]:
             NNEFOperation(graph=g, name=parser_op.name, attribs=dict(parser_op.attribs), inputs=inputs, outputs=outputs,
-                          dtype=NumpyDTypeByNNEFDType[parser_op.dtype] if parser_op.dtype else None)
+                          dtype=parser_op.dtype)
 
     input_tensors = []
 

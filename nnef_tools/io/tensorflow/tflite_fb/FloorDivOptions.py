@@ -3,6 +3,8 @@
 # namespace: tflite_fb
 
 import flatbuffers
+from flatbuffers.compat import import_numpy
+np = import_numpy()
 
 class FloorDivOptions(object):
     __slots__ = ['_tab']
@@ -13,6 +15,10 @@ class FloorDivOptions(object):
         x = FloorDivOptions()
         x.Init(buf, n + offset)
         return x
+
+    @classmethod
+    def FloorDivOptionsBufferHasIdentifier(cls, buf, offset, size_prefixed=False):
+        return flatbuffers.util.BufferHasIdentifier(buf, offset, b"\x54\x46\x4C\x33", size_prefixed=size_prefixed)
 
     # FloorDivOptions
     def Init(self, buf, pos):
