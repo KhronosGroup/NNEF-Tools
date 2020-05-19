@@ -515,7 +515,7 @@ def propagate_slice(op):
     starts = op.attribs['starts']
     ends = op.attribs['ends']
     axes = op.attribs.get('axes', list(range(len(starts))))
-    steps = op.attribs['steps']
+    steps = op.attribs.get('steps')
 
     op.inputs = (data,)
     return [infer.slice(input=data.shape,
