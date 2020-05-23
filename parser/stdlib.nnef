@@ -515,13 +515,16 @@ fragment min_max_linear_quantize(
     x: tensor<scalar>,
     min: tensor<scalar>,
     max: tensor<scalar>,
-    bits: integer )
+    bits: integer,
+    signed: logical,
+    symmetric: logical )
 -> ( y: tensor<scalar> )
 {
-    r = scalar(2 ^ bits - 1);
+    r = scalar(2 ^ bits - 1 - integer(signed && symmetric));
     z = clamp(x, min, max);
-    q = round((z - min) / (max - min) * r);
-    y = q / r * (max - min) + min;
+    p = scalar(2 ^ (bits - 1) - integer(symmetric) if signed else 0);
+    q = round((z - min) / (max - min) * r) - p;
+    y = (q + p) / r * (max - min) + min;
 }
 
 fragment zero_point_linear_quantize(
@@ -543,16 +546,11 @@ fragment linear_quantize(
     x: tensor<scalar>,
     min: tensor<scalar>,
     max: tensor<scalar>,
-    bits: integer,
-    zero_point: integer = 0,
-    scale: scalar = 0.0,
-    signed: logical = true,
-    symmetric: logical = false )
+    bits: integer )
 -> ( y: tensor<scalar> )
 {
-    y = min_max_linear_quantize(x, min, max, bits = bits) if scale == 0.0 else
-        zero_point_linear_quantize(x, zero_point = zero_point, scale = scale,
-                                   bits = bits, signed = signed, symmetric = symmetric);
+    y = min_max_linear_quantize(x, min = min, max = max, bits = bits,
+                                signed = false, symmetric = false);
 }
 
 fragment logarithmic_quantize(

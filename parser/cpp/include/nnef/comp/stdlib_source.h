@@ -398,7 +398,9 @@ namespace nnef {
         x: tensor<scalar>,
         min: tensor<scalar>,
         max: tensor<scalar>,
-        bits: integer )
+        bits: integer,
+        signed: logical,
+        symmetric: logical )
     -> ( y: tensor<scalar> );
     
     fragment zero_point_linear_quantize(
@@ -414,11 +416,7 @@ namespace nnef {
         x: tensor<scalar>,
         min: tensor<scalar>,
         max: tensor<scalar>,
-        bits: integer,
-        zero_point: integer = 0,
-        scale: scalar = 0.0,
-        signed: logical = true,
-        symmetric: logical = false )
+        bits: integer )
     -> ( y: tensor<scalar> );
     
     fragment logarithmic_quantize(

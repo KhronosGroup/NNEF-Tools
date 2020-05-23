@@ -682,6 +682,8 @@ namespace nnef
                 Param("min", ScalarTensor),
                 Param("max", ScalarTensor),
                 Param("bits", Integer),
+                Param("signed", Logical, LogicalTrue),
+                Param("symmetric", Logical, LogicalFalse),
             }, { Result("y", ScalarTensor) }),
             
             Prototype("zero_point_linear_quantize", {
@@ -698,10 +700,6 @@ namespace nnef
                 Param("min", ScalarTensor),
                 Param("max", ScalarTensor),
                 Param("bits", Integer),
-                Param("zero_point", Integer, IntegerZero),
-                Param("scale", Scalar, ScalarZero),
-                Param("signed", Logical, LogicalTrue),
-                Param("symmetric", Logical, LogicalFalse),
             }, { Result("y", ScalarTensor) }),
             
             Prototype("logarithmic_quantize", {
