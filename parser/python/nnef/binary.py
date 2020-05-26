@@ -41,6 +41,7 @@ def _numpy_dtype_split(dtype):
         np.int64: (ItemType.INT, 64),
         np.uint64: (ItemType.UINT, 64),
         np.bool: (ItemType.BOOL, 1),
+        np.bool_: (ItemType.BOOL, 1),
     }
     split = splits.get(dtype.type)
     if split is None:
