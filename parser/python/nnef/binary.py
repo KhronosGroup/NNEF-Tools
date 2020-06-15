@@ -17,27 +17,31 @@ import sys
 
 import numpy as np
 
-QUANT_CODE_FLOAT = 0x00
-QUANT_CODE_INTEGER = 0x01
-QUANT_CODE_LINEAR = 0x10
-QUANT_CODE_LOGARITHMIC = 0x11
+
+class ItemType:
+    FLOAT = 0
+    UINT = 1
+    QUINT = 2
+    QINT = 3
+    INT = 4
+    BOOL = 5
 
 
 def _numpy_dtype_split(dtype):
     splits = {
-        np.float16: (np.float, 16),
-        np.float32: (np.float, 32),
-        np.float64: (np.float, 64),
-        np.int8: (np.int, 8),
-        np.uint8: (np.uint, 8),
-        np.int16: (np.int, 16),
-        np.uint16: (np.uint, 16),
-        np.int32: (np.int, 32),
-        np.uint32: (np.uint, 32),
-        np.int64: (np.int, 64),
-        np.uint64: (np.uint, 64),
-        np.bool_: (np.uint, 1),
-        np.bool: (np.uint, 1),
+        np.float16: (ItemType.FLOAT, 16),
+        np.float32: (ItemType.FLOAT, 32),
+        np.float64: (ItemType.FLOAT, 64),
+        np.int8: (ItemType.INT, 8),
+        np.uint8: (ItemType.UINT, 8),
+        np.int16: (ItemType.INT, 16),
+        np.uint16: (ItemType.UINT, 16),
+        np.int32: (ItemType.INT, 32),
+        np.uint32: (ItemType.UINT, 32),
+        np.int64: (ItemType.INT, 64),
+        np.uint64: (ItemType.UINT, 64),
+        np.bool: (ItemType.BOOL, 1),
+        np.bool_: (ItemType.BOOL, 1),
     }
     split = splits.get(dtype.type)
     if split is None:
@@ -45,28 +49,31 @@ def _numpy_dtype_split(dtype):
     return split
 
 
-def _numpy_dtype_make(code, bits, signed=False):
-    if code not in [QUANT_CODE_FLOAT, QUANT_CODE_INTEGER, QUANT_CODE_LINEAR, QUANT_CODE_LOGARITHMIC]:
-        raise ValueError('unsupported data type code: {}'.format(code))
-
-    if code == QUANT_CODE_FLOAT and bits == 16:
-        return np.float16
-    elif code == QUANT_CODE_FLOAT and bits == 32:
-        return np.float32
-    elif code == QUANT_CODE_FLOAT and bits == 64:
-        return np.float64
-    elif code == QUANT_CODE_INTEGER and bits == 1:
-        return np.bool
-    elif bits == 8:
-        return np.int8 if code == QUANT_CODE_INTEGER and signed else np.uint8
-    elif bits == 16:
-        return np.int16 if code == QUANT_CODE_INTEGER and signed else np.uint16
-    elif bits == 32:
-        return np.int32 if code == QUANT_CODE_INTEGER and signed else np.uint32
-    elif bits == 64:
-        return np.int64 if code == QUANT_CODE_INTEGER and signed else np.uint64
-    else:
-        raise ValueError('unsupported combination of item type code ({}) and bits per item ({})'.format(code, bits))
+def _numpy_dtype_make(item_type, bits):
+    dtypes = {
+        (ItemType.FLOAT, 16): np.float16,
+        (ItemType.FLOAT, 32): np.float32,
+        (ItemType.FLOAT, 64): np.float64,
+        (ItemType.INT, 8): np.int8,
+        (ItemType.INT, 16): np.int16,
+        (ItemType.INT, 32): np.int32,
+        (ItemType.INT, 64): np.int64,
+        (ItemType.UINT, 8): np.uint8,
+        (ItemType.UINT, 16): np.uint16,
+        (ItemType.UINT, 32): np.uint32,
+        (ItemType.UINT, 64): np.uint64,
+        (ItemType.QINT, 16): np.int16,
+        (ItemType.QINT, 32): np.int32,
+        (ItemType.QINT, 64): np.int64,
+        (ItemType.QUINT, 16): np.uint16,
+        (ItemType.QUINT, 32): np.uint32,
+        (ItemType.QUINT, 64): np.uint64,
+        (ItemType.BOOL, 1): np.bool,
+    }
+    dtype = dtypes.get((item_type, bits))
+    if dtype is None:
+        raise ValueError('unsupported combination of item type ({}) and bits per item ({})'.format(item_type, bits))
+    return dtype
 
 
 MaxTensorRank = 8
@@ -102,18 +109,20 @@ def _fromfile(file, dtype, count):
     return data
 
 
-def write_tensor(file, tensor, version=(1, 0), quantization=None):
-    if quantization is None:
-        quantization = {}
+def write_tensor(file, tensor, quantized=False, version=(1, 0)):
     if isinstance(file, str):
         raise ValueError('file parameter must be a file object not a file name')
 
     _tofile(np.asarray([0x4E, 0xEF, version[0], version[1]], dtype=np.uint8), file)
 
-    dtype, bits = _numpy_dtype_split(tensor.dtype)
-    qbits = quantization.get('bits-per-item')
-    if qbits is not None and qbits != bits:
-        raise ValueError('incompatible bits per item ({}) and tensor dtype ({})'.format(qbits, tensor.dtype))
+    item_type, bits = _numpy_dtype_split(tensor.dtype)
+    if quantized:
+        if item_type == ItemType.INT:
+            item_type = ItemType.QINT
+        elif item_type == ItemType.UINT:
+            item_type = ItemType.QUINT
+        else:
+            raise ValueError("invalid tensor dtype '{}' for quantized tensor".format(tensor.dtype))
 
     count = int(np.prod(tensor.shape))
     data_length = (count + 7) // 8 if bits == 1 else count * (bits // 8)
@@ -125,31 +134,14 @@ def write_tensor(file, tensor, version=(1, 0), quantization=None):
     _tofile(np.asarray(tensor.shape, dtype=np.uint32), file)
     _tofile(np.asarray([0] * (MaxTensorRank - tensor.ndim), dtype=np.uint32), file)
 
-    code = quantization.get('code', QUANT_CODE_FLOAT if dtype == np.float else QUANT_CODE_INTEGER)
-    if (code == QUANT_CODE_FLOAT and dtype != np.float) or \
-            (code == QUANT_CODE_INTEGER and dtype != np.int and dtype != np.uint) or \
-            ((code == QUANT_CODE_LINEAR or code == QUANT_CODE_LOGARITHMIC) and dtype != np.uint):
-        raise ValueError('incompatible quantization code ({}) and tensor dtype ({})'.format(code, tensor.dtype))
-
-    _tofile(np.asarray([bits, code], dtype=np.uint32), file)
-
-    params = [0] * 8
-    if code == QUANT_CODE_LINEAR or code == QUANT_CODE_LOGARITHMIC:
-        params[0] = quantization['min']
-        params[1] = quantization['max']
-    elif code == QUANT_CODE_INTEGER:
-        params[0] = 0 if dtype == np.uint else 1
-    elif code != QUANT_CODE_FLOAT:
-        raise ValueError('unsupported item type code: {}'.format(code))
-
-    _tofile(np.asarray(params, dtype=np.float32), file)
-    _tofile(np.asarray([0] * 11, dtype=np.uint32), file)
+    _tofile(np.asarray([bits, item_type], dtype=np.uint32), file)
+    _tofile(np.asarray([0] * 19, dtype=np.uint32), file)
 
     data = np.packbits(tensor) if bits == 1 else tensor
     _tofile(data, file)
 
 
-def read_tensor(file):
+def read_tensor(file, return_quantization=False):
     if isinstance(file, str):
         raise ValueError('file parameter must be a file object not a file name')
 
@@ -174,12 +166,12 @@ def read_tensor(file):
     shape = _fromfile(file, dtype=np.uint32, count=MaxTensorRank)
     shape = shape[:rank]
 
-    [bits, code] = _fromfile(file, dtype=np.uint32, count=2)
-    params = _fromfile(file, dtype=np.float32, count=8)
-    _padding = _fromfile(file, dtype=np.uint32, count=11)
+    [bits, item_type] = _fromfile(file, dtype=np.uint32, count=2)
+    _reserved = _fromfile(file, dtype=np.uint32, count=19)
+    if item_type == ItemType.UINT and _reserved[0] != 0:
+        item_type = ItemType.INT
 
-    signed = params[0] != 0 if code == QUANT_CODE_INTEGER else False
-
+    quantized = item_type == ItemType.QINT or item_type == ItemType.QUINT
     count = int(np.prod(shape))
     if bits == 1:
         byte_count = int((count + 7) // 8)
@@ -188,20 +180,13 @@ def read_tensor(file):
             raise ValueError('could not read tensor data')
         data = np.unpackbits(data).astype(np.bool)[:count]
     else:
-        data = _fromfile(file, dtype=_numpy_dtype_make(code, bits, signed), count=count)
+        data = _fromfile(file, dtype=_numpy_dtype_make(item_type, bits), count=count)
         if len(data) != count:
             raise ValueError('could not read tensor data')
 
     tensor = data.reshape(shape)
 
-    quantization = {'op-code': code, 'bits-per-item': bits}
-    if code == QUANT_CODE_LINEAR or code == QUANT_CODE_LOGARITHMIC:
-        quantization['min'] = params[0]
-        quantization['max'] = params[1]
-    elif code != QUANT_CODE_FLOAT and code != QUANT_CODE_INTEGER:
-        raise ValueError('unsupported item type code: {}'.format(code))
-
-    return tensor, quantization
+    return (tensor, quantized) if return_quantization else tensor
 
 
 def _write_tensor_provisional(file, tensor, version=(1, 0)):

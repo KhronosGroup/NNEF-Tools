@@ -32,7 +32,7 @@ namespace nnef
     {
         enum { MaxRank = 8 };
 
-        enum QuantCode { Float = 0x00, Integer = 0x01, Linear = 0x10, Logarithmic = 0x11 };
+        enum ItemType { Float, Uint, Quint, Qint, Int, Bool };
 
         uint8_t magic[2];
         uint8_t version[2];
@@ -40,15 +40,14 @@ namespace nnef
         uint32_t rank;
         uint32_t extents[MaxRank];
         uint32_t bits_per_item;
-        uint32_t quant_code;
-        uint32_t quant_params[8];
-        uint8_t reserved[44];
+        uint32_t item_type;
+        uint32_t reserved[19];
     };
 
 
     template<typename T>
     inline void fill_tensor_header( TensorHeader& header, const size_t version[2], const size_t rank, const T* extents,
-                                   const size_t bits_per_item, const TensorHeader::QuantCode quant_code )
+                                   const size_t bits_per_item, const TensorHeader::ItemType item_type )
     {
         const char* magic = "N\xEF";
 
@@ -69,7 +68,7 @@ namespace nnef
         header.data_length = (uint32_t)((item_count * bits_per_item + 7) / 8);
         header.bits_per_item = (uint32_t)bits_per_item;
         header.rank = (uint32_t)rank;
-        header.quant_code = quant_code;
+        header.item_type = item_type;
 
         std::copy_n(extents, rank, header.extents);
     }
@@ -95,9 +94,9 @@ namespace nnef
             throw Error("data length is not compatible with extents and bits per item");
         }
 
-        if ( (header.quant_code & 0xffff0000) == 0 )     // Khronos-defined item type
+        if ( (header.item_type & 0xffff0000) == 0 )     // Khronos-defined item type
         {
-            const uint32_t code = (header.quant_code & 0x0000ffff);
+            const uint32_t code = (header.item_type & 0x0000ffff);
 
             switch ( code )
             {
@@ -108,15 +107,23 @@ namespace nnef
                         throw Error("invalid bits per item for float item type: %d", (int)header.bits_per_item);
                     }
                 }
-                case TensorHeader::Integer:
-                case TensorHeader::Linear:
-                case TensorHeader::Logarithmic:
+                case TensorHeader::Int:
+                case TensorHeader::Uint:
+                case TensorHeader::Quint:
+                case TensorHeader::Qint:
                 {
                     if ( header.bits_per_item > 64 )
                     {
                         throw Error("invalid bits per item for integer item type: %d", (int)header.bits_per_item);
                     }
                     break;
+                }
+                case TensorHeader::Bool:
+                {
+                    if ( header.bits_per_item != 1 && header.bits_per_item != 8 )
+                    {
+                        throw Error("invalid bits per item for bool item type: %d", (int)header.bits_per_item);
+                    }
                 }
                 default:
                 {
@@ -158,23 +165,51 @@ namespace nnef
         }
     }
 
-    inline void from_bytes( const char* bytes, const size_t count, const size_t bits_per_item, int* data )
+    inline void from_bytes( const char* bytes, const size_t count, const size_t bits_per_item, int* data, const bool is_signed )
     {
         if ( bits_per_item == 8 )
         {
-            std::copy_n((const int8_t*)bytes, count, data);
+            if ( is_signed )
+            {
+                std::copy_n((const int8_t*)bytes, count, data);
+            }
+            else
+            {
+                std::copy_n((const uint8_t*)bytes, count, data);
+            }
         }
         else if ( bits_per_item == 16 )
         {
-            std::copy_n((const int16_t*)bytes, count, data);
+            if ( is_signed )
+            {
+                std::copy_n((const int16_t*)bytes, count, data);
+            }
+            else
+            {
+                std::copy_n((const uint16_t*)bytes, count, data);
+            }
         }
         else if ( bits_per_item == 32 )
         {
-            std::copy_n((const int32_t*)bytes, count, data);
+            if ( is_signed )
+            {
+                std::copy_n((const int32_t*)bytes, count, data);
+            }
+            else
+            {
+                std::copy_n((const uint32_t*)bytes, count, data);
+            }
         }
         else if ( bits_per_item == 64 )
         {
-            std::copy_n((const int64_t*)bytes, count, data);
+            if ( is_signed )
+            {
+                std::copy_n((const int64_t*)bytes, count, data);
+            }
+            else
+            {
+                std::copy_n((const uint64_t*)bytes, count, data);
+            }
         }
         else
         {
@@ -203,9 +238,16 @@ namespace nnef
         std::copy_n(data, count, (float*)bytes);
     }
 
-    inline void to_bytes( const int* data, const size_t count, char* bytes )
+    inline void to_bytes( const int* data, const size_t count, char* bytes, const bool as_signed )
     {
-        std::copy_n(data, count, (int32_t*)bytes);
+        if ( as_signed )
+        {
+            std::copy_n(data, count, (int32_t*)bytes);
+        }
+        else
+        {
+            std::copy_n(data, count, (uint32_t*)bytes);
+        }
     }
 
     inline void to_bytes( const bool* data, const size_t count, char* bytes )

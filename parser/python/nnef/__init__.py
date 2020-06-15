@@ -26,12 +26,12 @@ Error = _nnef.Error             # subclass of exception
 Graph = _nnef.Graph             # namedtuple('Graph', ['name': str, 'tensors': typing.Dict[str, Tensor], 'operations': typing.List[Operation],
                                 #                       'inputs': typing.List[str], 'outputs': typing.List['str']])
 Tensor = _nnef.Tensor           # namedtuple('Tensor', ['name': str, 'dtype': str, 'shape': typing.List[int], 'data': numpy.ndarray,
-                                #                       'compression': typing.Dict[str, object], 'quantization': Dict[str, object]])
+                                #                       'quantization': Dict[str, object]])
 Operation = _nnef.Operation     # namedtuple('Operation', ['name': str, 'attribs': OrderedDict[str, object], 'inputs': OrderedDict[str, object],
                                 #                           'outputs': OrderedDict[str, object], 'dtype': str])
 
 
-Tensor.__new__.__defaults__ = (None, None, None, None)
+Tensor.__new__.__defaults__ = (None, None, None)
 Operation.__new__.__defaults__ = (None,)
 
 
@@ -52,7 +52,7 @@ def load_graph(path, stdlib=None, lowered=None):
             variable_filename = os.path.join(path, operation.attribs['label'] + '.dat')
             tensor_name = operation.outputs['output']
             with open(variable_filename) as variable_file:
-                data, compression = read_tensor(variable_file)
+                data = read_tensor(variable_file)
 
             data_shape = list(data.shape)
             shape = operation.attribs['shape']
@@ -61,7 +61,7 @@ def load_graph(path, stdlib=None, lowered=None):
                                   .format(data_shape, shape))
 
             tensor = graph.tensors[tensor_name]
-            graph.tensors[tensor_name] = _nnef.Tensor(tensor.name, tensor.dtype, data_shape, data, compression, tensor.quantization)
+            graph.tensors[tensor_name] = _nnef.Tensor(tensor.name, tensor.dtype, data_shape, data, tensor.quantization)
 
     return graph
 
@@ -87,4 +87,4 @@ def save_graph(graph, path, annotate_shapes=False):
             tensor = graph.tensors[tensor_name]
             if tensor.data is not None:
                 with open(variable_filename, 'wb') as variable_file:
-                    write_tensor(variable_file, tensor.data)
+                    write_tensor(variable_file, tensor.data, quantized=bool(tensor.quantization))

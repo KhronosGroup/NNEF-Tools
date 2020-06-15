@@ -493,7 +493,7 @@ def _get_shape(graph, value):
 def _set_shape(graph, value, shape):
     if isinstance(value, nnef.Identifier):
         tensor = graph.tensors[value]
-        graph.tensors[value] = nnef.Tensor(tensor.name, tensor.dtype, shape, tensor.data, tensor.compression, tensor.quantization)
+        graph.tensors[value] = nnef.Tensor(tensor.name, tensor.dtype, shape, tensor.data, tensor.quantization)
     elif isinstance(value, list):
         for v, s in zip(value, shape):
             _set_shape(graph, v, s)

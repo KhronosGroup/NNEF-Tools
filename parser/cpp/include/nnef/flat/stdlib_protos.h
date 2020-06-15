@@ -677,6 +677,24 @@ namespace nnef
             }, { Result("y", GenericTensors) }),
             
             
+            Prototype("min_max_linear_quantize", {
+                Param("x", ScalarTensor),
+                Param("min", ScalarTensor),
+                Param("max", ScalarTensor),
+                Param("bits", Integer),
+                Param("signed", Logical, LogicalTrue),
+                Param("symmetric", Logical, LogicalFalse),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("zero_point_linear_quantize", {
+                Param("x", ScalarTensor),
+                Param("zero_point", Integer),
+                Param("scale", Scalar),
+                Param("bits", Integer),
+                Param("signed", Logical),
+                Param("symmetric", Logical),
+            }, { Result("y", ScalarTensor) }),
+            
             Prototype("linear_quantize", {
                 Param("x", ScalarTensor),
                 Param("min", ScalarTensor),

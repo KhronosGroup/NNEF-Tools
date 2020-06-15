@@ -194,6 +194,10 @@ namespace nnef
     {
         TensorHeader header;
         is.read((char*)&header, sizeof(header));
+        if ( header.item_type == TensorHeader::Uint && header.reserved[0] != 0 )
+        {
+            header.item_type = TensorHeader::Int;
+        }
         
         try
         {
@@ -217,27 +221,34 @@ namespace nnef
 
         const size_t count = volume_of(tensor.shape);
         
-        if ( header.quant_code == TensorHeader::Float )
+        if ( header.item_type == TensorHeader::Float )
         {
             tensor.dtype = "scalar";
-            tensor.data.resize(count * item_bytes(tensor.dtype));
+            tensor.data.resize(count * sizeof(float));
             from_bytes(bytes.data(), count, header.bits_per_item, (float*)tensor.data.data());
         }
-        else if ( header.quant_code == TensorHeader::Integer && header.bits_per_item == 1 )
+        else if ( header.item_type == TensorHeader::Bool )
         {
             tensor.dtype = "logical";
-            tensor.data.resize(count * item_bytes(tensor.dtype));
+            tensor.data.resize(count * sizeof(bool));
             from_bytes(bytes.data(), count, header.bits_per_item, (bool*)tensor.data.data());
         }
-        else if ( header.quant_code == TensorHeader::Integer )
+        else if ( header.item_type == TensorHeader::Int || header.item_type == TensorHeader::Uint )
         {
             tensor.dtype = "integer";
-            tensor.data.resize(count * item_bytes(tensor.dtype));
-            from_bytes(bytes.data(), count, header.bits_per_item, (int*)tensor.data.data());
+            tensor.data.resize(count * sizeof(int));
+            from_bytes(bytes.data(), count, header.bits_per_item, (int*)tensor.data.data(), header.item_type == TensorHeader::Int);
+        }
+        else if ( header.item_type == TensorHeader::Qint || header.item_type == TensorHeader::Quint )
+        {
+            tensor.dtype = "scalar";
+            tensor.data.resize(header.data_length);
+            tensor.data = bytes;
+            tensor.quantization.emplace_back("signed", Value::logical(header.item_type == TensorHeader::Qint));
         }
         else
         {
-            error = "Unsupported tensor item-type code '" + std::to_string(header.quant_code) + "' and bits per item '" + std::to_string(header.bits_per_item) + "'";
+            error = "Unsupported tensor item-type '" + std::to_string(header.item_type) + "' and bits per item '" + std::to_string(header.bits_per_item) + "'";
             return false;
         }
         
@@ -252,23 +263,33 @@ namespace nnef
             return false;
         }
         
-        const TensorHeader::QuantCode quant_code = tensor.dtype == "scalar" ? TensorHeader::Float : TensorHeader::Integer;
+        const bool quantized = !tensor.quantization.empty();
+        const bool is_signed = (bool)tensor.quantization.get("signed", Value::logical(true));
+        const TensorHeader::ItemType item_type = quantized ? (is_signed ? TensorHeader::Qint : TensorHeader::Quint) :
+                                                 tensor.dtype == "scalar" ? TensorHeader::Float :
+                                                 tensor.dtype == "integer" ? TensorHeader::Int : TensorHeader::Bool;
         
         TensorHeader header;
         const size_t version[] = { 1, 0 };
-        fill_tensor_header(header, version, tensor.shape.size(), tensor.shape.data(), item_bits(tensor.dtype), quant_code);
+        fill_tensor_header(header, version, tensor.shape.size(), tensor.shape.data(), item_bits(tensor.dtype), item_type);
         
         const size_t count = volume_of(tensor.shape);
         std::vector<char> bytes(header.data_length);
         
         if ( tensor.dtype == "scalar" )
         {
-            to_bytes((const float*)tensor.data.data(), count, bytes.data());
+            if ( quantized )
+            {
+                bytes = tensor.data;
+            }
+            else
+            {
+                to_bytes((const float*)tensor.data.data(), count, bytes.data());
+            }
         }
         else if ( tensor.dtype == "integer" )
         {
-            to_bytes((const int*)tensor.data.data(), count, bytes.data());
-            header.quant_params[0] = 1;
+            to_bytes((const int*)tensor.data.data(), count, bytes.data(), true);
         }
         else if ( tensor.dtype == "logical" )
         {

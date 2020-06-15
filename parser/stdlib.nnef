@@ -511,15 +511,53 @@ fragment max_roi_align(
 
 # quantization operations
 
-fragment linear_quantize( x: tensor<scalar>, min: tensor<scalar>, max: tensor<scalar>, bits: integer ) -> ( y: tensor<scalar> )
+fragment min_max_linear_quantize(
+    x: tensor<scalar>,
+    min: tensor<scalar>,
+    max: tensor<scalar>,
+    bits: integer,
+    signed: logical,
+    symmetric: logical )
+-> ( y: tensor<scalar> )
 {
-    r = scalar(2 ^ bits - 1);
+    r = scalar(2 ^ bits - 1 - integer(signed && symmetric));
     z = clamp(x, min, max);
-    q = round((z - min) / (max - min) * r);
-    y = q / r * (max - min) + min;
+    p = scalar(2 ^ (bits - 1) - integer(symmetric) if signed else 0);
+    q = round((z - min) / (max - min) * r) - p;
+    y = (q + p) / r * (max - min) + min;
 }
 
-fragment logarithmic_quantize( x: tensor<scalar>, max: tensor<scalar>, bits: integer ) -> ( y: tensor<scalar> )
+fragment zero_point_linear_quantize(
+    x: tensor<scalar>,
+    zero_point: integer,
+    scale: scalar,
+    bits: integer,
+    signed: logical,
+    symmetric: logical )
+-> ( y: tensor<scalar> )
+{
+    z = round(x / scale) + scalar(zero_point);
+    r = scalar(2 ^ (bits - 1) - 1 if signed else 2 ^ bits - 1);
+    q = clamp(z, 0.0 if !signed else -r if symmetric else -r - 1.0, r);
+    y = (q - scalar(zero_point)) * scale;
+}
+
+fragment linear_quantize(
+    x: tensor<scalar>,
+    min: tensor<scalar>,
+    max: tensor<scalar>,
+    bits: integer )
+-> ( y: tensor<scalar> )
+{
+    y = min_max_linear_quantize(x, min = min, max = max, bits = bits,
+                                signed = false, symmetric = false);
+}
+
+fragment logarithmic_quantize(
+    x: tensor<scalar>,
+    max: tensor<scalar>,
+    bits: integer )
+-> ( y: tensor<scalar> )
 {
     m = ceil(log2(max));
     r = scalar(2 ^ bits - 1);

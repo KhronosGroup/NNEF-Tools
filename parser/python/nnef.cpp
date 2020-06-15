@@ -237,7 +237,6 @@ struct GraphCallback : public nnef::Parser::Callback
             PyObject* shape = buildPyNone();
             PyObject* dtype = PY_STRING_FROM_CSTR(nnef::toString(it.second));
             PyObject* data = buildPyNone();
-            PyObject* compression = buildPyNone();
             PyObject* quantization = PyDict_New();
             if ( quant.count(it.first) )
             {
@@ -247,7 +246,7 @@ struct GraphCallback : public nnef::Parser::Callback
                 }
             }
             
-            PyObject* tensor = PyObject_CallObject(Tensor, PyTuple_Pack(6, name, dtype, shape, data, compression, quantization));
+            PyObject* tensor = PyObject_CallObject(Tensor, PyTuple_Pack(5, name, dtype, shape, data, quantization));
             PyDict_SetItemString(tensors, it.first.c_str(), tensor);
         }
     }
@@ -461,7 +460,7 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
     OrderedDict = PyDict_GetItemString(dict, "OrderedDict");
     NamedTuple = PyDict_GetItemString(dict, "namedtuple");
 
-    Tensor = makeNamedTuple("Tensor", { "name", "dtype", "shape", "data", "compression", "quantization" });
+    Tensor = makeNamedTuple("Tensor", { "name", "dtype", "shape", "data", "quantization" });
     Py_INCREF(Tensor);
     PyModule_AddObject(module, "Tensor", Tensor);
 
