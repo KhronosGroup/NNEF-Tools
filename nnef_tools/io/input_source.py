@@ -215,7 +215,7 @@ def create_input(input_source, np_dtype, shape, allow_bigger_batch=False):
         return np.concatenate(tuple(imgs), 0)
     elif isinstance(input_source, NNEFTensorInput):
         with open(input_source.filename) as f:
-            return nnef.read_tensor(f)[0]
+            return nnef.read_tensor(f)
     else:
         assert False
 

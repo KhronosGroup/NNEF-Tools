@@ -156,7 +156,7 @@ def run_using_argv(argv):
             graph = reader(os.path.join(nnef_path, 'graph.nnef') if os.path.isdir(nnef_path) else nnef_path)
 
             if args.input is None:
-                inputs = tuple(nnef.read_tensor(sys.stdin)[0] for _ in range(len(graph.inputs)))
+                inputs = tuple(nnef.read_tensor(sys.stdin) for _ in range(len(graph.inputs)))
             elif len(args.input) == 1 and os.path.isdir(args.input[0]):
                 inputs = tuple(nnef_io.read_nnef_tensor(os.path.join(args.input[0], tensor.name + '.dat')) for tensor in graph.inputs)
             else:

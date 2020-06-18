@@ -73,7 +73,7 @@ def main():
             print("No input provided!", file=sys.stderr)
             exit(1)
 
-        tensor = nnef.read_tensor(sys.stdin)[0]
+        tensor = nnef.read_tensor(sys.stdin)
     else:
         tensor = read_nnef_tensor(args.tensor_path)
 
