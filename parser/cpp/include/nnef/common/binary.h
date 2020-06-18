@@ -106,6 +106,7 @@ namespace nnef
                     {
                         throw Error("invalid bits per item for float item type: %d", (int)header.bits_per_item);
                     }
+                    break;
                 }
                 case TensorHeader::Int:
                 case TensorHeader::Uint:
@@ -124,6 +125,7 @@ namespace nnef
                     {
                         throw Error("invalid bits per item for bool item type: %d", (int)header.bits_per_item);
                     }
+                    break;
                 }
                 default:
                 {
