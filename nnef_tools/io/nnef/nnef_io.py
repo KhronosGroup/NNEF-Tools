@@ -388,7 +388,7 @@ def _write_weights(nnef_graph, dir_path, raise_on_missing_weight=True):
 
 def read_nnef_tensor(filename):
     with open(filename, "rb") as file:
-        return nnef.read_tensor(file)[0]
+        return nnef.read_tensor(file)
 
 
 def write_nnef_tensor(filename, array):
