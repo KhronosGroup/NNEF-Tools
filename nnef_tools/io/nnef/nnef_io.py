@@ -219,7 +219,7 @@ def _read(parser_graph, with_weights=True):
             shape = parser_graph.tensors[str(result_)].shape
             tensor = NNEFTensor(graph=g,
                                 name=str(result_),
-                                shape=list(shape) if shape else None,
+                                shape=list(shape) if shape is not None else None,
                                 dtype=parser_graph.tensors[str(result_)].dtype,
                                 quantization=quantization)
 
