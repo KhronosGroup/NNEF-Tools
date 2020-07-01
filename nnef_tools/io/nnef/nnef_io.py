@@ -60,7 +60,8 @@ _InputShapeType = typing.Union[None,
 
 def read(path,  # type: str
          parser_configs=None,  # type: typing.Optional[typing.List[NNEFParserConfig]]
-         input_shape=None,  # type: _InputShapeType
+         input_shape=None,      # type: _InputShapeType
+         infer_shapes=True,
          ):
     # type: (...)->NNEFGraph
 
@@ -123,7 +124,9 @@ def read(path,  # type: str
                     else:
                         op.attribs['shape'] = input_shape
 
-        parser_config.infer_shapes(parser_graph)
+        if infer_shapes:
+            parser_config.infer_shapes(parser_graph)
+
         return _read(parser_graph=parser_graph, with_weights=with_weights)
 
     finally:
@@ -213,9 +216,10 @@ def _read(parser_graph, with_weights=True):
             else:
                 quantization = None
 
+            shape = parser_graph.tensors[str(result_)].shape
             tensor = NNEFTensor(graph=g,
                                 name=str(result_),
-                                shape=list(parser_graph.tensors[str(result_)].shape),
+                                shape=list(shape) if shape is not None else None,
                                 dtype=parser_graph.tensors[str(result_)].dtype,
                                 quantization=quantization)
 
@@ -507,13 +511,14 @@ def add_tflite_quantization_fragment_if_needed(nnef_graph, fragments):
 
 class Reader(object):
 
-    def __init__(self, parser_configs=None, unify=False, input_shape=None):
+    def __init__(self, parser_configs=None, unify=False, input_shape=None, infer_shapes=True):
         self._parser_configs = parser_configs
         self._unify = unify
         self._input_shape = input_shape
+        self._infer_shapes = infer_shapes
 
     def __call__(self, filename):
-        g = read(filename, parser_configs=self._parser_configs, input_shape=self._input_shape)
+        g = read(filename, parser_configs=self._parser_configs, input_shape=self._input_shape, infer_shapes=self._infer_shapes)
         if self._unify:
             nnef_unifier.unify(g)
         return g

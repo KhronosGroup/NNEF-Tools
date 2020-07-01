@@ -152,7 +152,7 @@ def run_using_argv(argv):
             parser_configs = NNEFParserConfig.load_configs(args.custom_operations, load_standard=True)
 
             # read without weights
-            reader = nnef_io.Reader(parser_configs=parser_configs)
+            reader = nnef_io.Reader(parser_configs=parser_configs, infer_shapes=False)
             graph = reader(os.path.join(nnef_path, 'graph.nnef') if os.path.isdir(nnef_path) else nnef_path)
 
             if args.input is None:
