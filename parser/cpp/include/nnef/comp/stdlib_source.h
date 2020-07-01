@@ -93,14 +93,46 @@ namespace nnef {
 
     # simplifier operations
 
-    fragment sqr( x: tensor<scalar> ) -> ( y: tensor<scalar> );
-    fragment sqrt( x: tensor<scalar> ) -> ( y: tensor<scalar> );
-    fragment rsqr( x: tensor<scalar> ) -> ( y: tensor<scalar> );
-    fragment rsqrt( x: tensor<scalar> ) -> ( y: tensor<scalar> );
-    fragment log2( x: tensor<scalar> ) -> ( y: tensor<scalar> );
-    fragment min( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<scalar> );
-    fragment max( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<scalar> );
-    fragment clamp( x: tensor<scalar>, a: tensor<scalar>, b: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment sqr( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = x ^ 2.0;
+    }
+
+    fragment sqrt( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = x ^ 0.5;
+    }
+
+    fragment rsqr( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = x ^ -2.0;
+    }
+
+    fragment rsqrt( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = x ^ -0.5;
+    }
+
+    fragment log2( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = log(x) / log(2.0);
+    }
+
+    fragment min( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<scalar> )
+    {
+        z = select(x < y, x, y);
+    }
+
+    fragment max( x: tensor<scalar>, y: tensor<scalar> ) -> ( z: tensor<scalar> )
+    {
+        z = select(x > y, x, y);
+    }
+
+    fragment clamp( x: tensor<scalar>, a: tensor<scalar>, b: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = max(min(x, b), a);
+    }
+
 
     # matrix multiplication
 
@@ -189,9 +221,24 @@ namespace nnef {
 
     # up/down-sampling operations
 
-    fragment nearest_downsample( input: tensor<scalar>, factor: integer[] ) -> ( output: tensor<scalar> );
-    fragment area_downsample( input: tensor<scalar>, factor: integer[] ) -> ( output: tensor<scalar> );
-    fragment nearest_upsample( input: tensor<scalar>, factor: integer[] ) -> ( output: tensor<scalar> );
+    fragment nearest_downsample( input: tensor<scalar>, factor: integer[] ) -> ( output: tensor<scalar> )
+    {
+        dims = 2 + length_of(factor);
+        output = box(input, size = [1] * dims, stride = [1,1] + factor, padding = [(0,0)] * dims);
+    }
+
+    fragment area_downsample( input: tensor<scalar>, factor: integer[] ) -> ( output: tensor<scalar> )
+    {
+        dims = 2 + length_of(factor);
+        output = box(input, size = [1,1] + factor, stride = [1,1] + factor, padding = [(0,0)] * dims, normalize = true);
+    }
+
+    fragment nearest_upsample( input: tensor<scalar>, factor: integer[] ) -> ( output: tensor<scalar> )
+    {
+        dims = 2 + length_of(factor);
+        output = debox(input, size = [1,1] + factor, stride = [1,1] + factor, padding = [(0,0)] * dims);
+    }
+
     fragment multilinear_upsample( input: tensor<scalar>, factor: integer[], method: string = 'symmetric', border: string = 'replicate' )
     -> ( output: tensor<scalar> );
 
@@ -206,21 +253,69 @@ namespace nnef {
     fragment any_reduce( input: tensor<logical>, axes: integer[] ) -> ( output: tensor<logical> );
     fragment all_reduce( input: tensor<logical>, axes: integer[] ) -> ( output: tensor<logical> );
 
-    fragment mean_reduce( input: tensor<scalar>, axes: integer[] ) -> ( output: tensor<scalar> );
-    fragment moments( input: tensor<scalar>, axes: integer[] ) -> ( mean: tensor<scalar>, variance: tensor<scalar> );
+    fragment mean_reduce( input: tensor<scalar>, axes: integer[] ) -> ( output: tensor<scalar> )
+    {
+        output = sum_reduce(input, axes = axes, normalize = true);
+    }
+
+    fragment moments( input: tensor<scalar>, axes: integer[] ) -> ( mean: tensor<scalar>, variance: tensor<scalar> )
+    {
+        mean = mean_reduce(input, axes = axes);
+        variance = mean_reduce(sqr(input - mean), axes = axes);
+    }
 
 
     # activation functions
 
-    fragment relu( x: tensor<scalar> ) -> ( y: tensor<scalar> );
-    fragment sigmoid( x: tensor<scalar> ) -> ( y: tensor<scalar> );
-    fragment tanh( x: tensor<scalar> ) -> ( y: tensor<scalar> );
-    fragment softabs( x: tensor<scalar>, epsilon: scalar ) -> ( y: tensor<scalar> );
-    fragment softmax( x: tensor<scalar>, axes: integer[] = [1] ) -> ( y: tensor<scalar> );
-    fragment softplus( x: tensor<scalar> ) -> ( y: tensor<scalar> );
-    fragment elu( x: tensor<scalar> ) -> ( y: tensor<scalar> );
-    fragment prelu( x: tensor<scalar>, alpha: tensor<scalar> ) -> ( y: tensor<scalar> );
-    fragment leaky_relu( x: tensor<scalar>, alpha: scalar ) -> ( y: tensor<scalar> );
+    fragment relu( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = max(x, 0.0);
+    }
+
+    fragment sigmoid( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = 1.0 / (1.0 + exp(-x));
+    }
+
+    fragment tanh( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = (exp(x) - exp(-x)) / (exp(x) + exp(-x));
+    }
+
+    fragment softabs( x: tensor<scalar>, epsilon: scalar ) -> ( y: tensor<scalar> )
+    {
+        y = sqrt(sqr(x) + epsilon);
+    }
+
+    fragment softmax( x: tensor<scalar>, axes: integer[] = [1] ) -> ( y: tensor<scalar> )
+    {
+        m = max_reduce(x, axes = axes);
+        e = exp(x - m);
+        y = e / sum_reduce(e, axes = axes);
+    }
+
+    fragment softplus( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = log(exp(x) + 1.0);
+    }
+
+    fragment elu( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = select(x < 0.0, exp(x) - 1.0, x);
+    }
+
+    fragment prelu( x: tensor<scalar>, alpha: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = select(x < 0.0, alpha * x, x);
+    }
+
+    fragment leaky_relu( x: tensor<scalar>, alpha: scalar ) -> ( y: tensor<scalar> )
+    {
+        y = prelu(x, alpha = alpha);
+    }
+    
+    
+    )STDLIB" /* break the raw literal in two because of max length limit */ R"STDLIB(
 
 
     # pooling operations
@@ -232,7 +327,11 @@ namespace nnef {
         padding: (integer,integer)[] = [],
         stride: integer[] = [],
         dilation: integer[] = [] )
-    -> ( output: tensor<scalar>, index: tensor<integer> );
+    -> ( output: tensor<scalar>, index: tensor<integer> )
+    {
+        index = argmax_pool(input, size = size, border = border, padding = padding, stride = stride, dilation = dilation);
+        output = sample(input, index, size = size, border = border, padding = padding, stride = stride, dilation = dilation);
+    }
 
     fragment max_pool(
         input: tensor<scalar>,
@@ -241,7 +340,10 @@ namespace nnef {
         padding: (integer,integer)[] = [],
         stride: integer[] = [],
         dilation: integer[] = [] )
-    -> ( output: tensor<scalar> );
+    -> ( output: tensor<scalar> )
+    {
+        output, index = max_pool_with_index(input, size = size, border = border, padding = padding, stride = stride, dilation = dilation);
+    }
 
     fragment avg_pool(
         input: tensor<scalar>,
@@ -250,7 +352,10 @@ namespace nnef {
         padding: (integer,integer)[] = [],
         stride: integer[] = [],
         dilation: integer[] = [] )
-    -> ( output: tensor<scalar> );
+    -> ( output: tensor<scalar> )
+    {
+        output = box(input, size = size, border = border, padding = padding, stride = stride, dilation = dilation, normalize = true);
+    }
 
     fragment rms_pool(
         input: tensor<scalar>,
@@ -259,7 +364,10 @@ namespace nnef {
         padding: (integer,integer)[] = [],
         stride: integer[] = [],
         dilation: integer[] = [] )
-    -> ( output: tensor<scalar> );
+    -> ( output: tensor<scalar> )
+    {
+        output = sqrt(avg_pool(sqr(input), size = size, border = border, padding = padding, stride = stride, dilation = dilation));
+    }
 
 
     # linear operations
@@ -268,7 +376,10 @@ namespace nnef {
         input: tensor<scalar>,
         filter: tensor<scalar>,
         bias: tensor<scalar> = 0.0 )
-    -> ( output: tensor<scalar> );
+    -> ( output: tensor<scalar> )
+    {
+        output = matmul(input, filter, transposeB = true) + bias;
+    }
 
     fragment separable_conv(
         input: tensor<scalar>,
@@ -280,7 +391,12 @@ namespace nnef {
         stride: integer[] = [],
         dilation: integer[] = [],
         groups: integer = 1 )
-    -> ( output: tensor<scalar> );
+    -> ( output: tensor<scalar> )
+    {
+        filtered = conv(input, plane_filter, border = border, padding = padding,
+                        stride = stride, dilation = dilation, groups = 0);
+        output = conv(filtered, point_filter, bias, groups = groups);
+    }
 
     fragment separable_deconv(
         input: tensor<scalar>,
@@ -293,7 +409,12 @@ namespace nnef {
         dilation: integer[] = [],
         output_shape: integer[] = [],
         groups: integer = 1 )
-    -> ( output: tensor<scalar> );
+    -> ( output: tensor<scalar> )
+    {
+        filtered = deconv(input, point_filter, groups = groups);
+        output = deconv(filtered, plane_filter, bias, border = border, padding = padding,
+                        stride = stride, dilation = dilation, output_shape = output_shape, groups = 0);
+    }
 
 
     # normalization operations
@@ -304,49 +425,47 @@ namespace nnef {
         alpha: scalar = 1.0,
         beta: scalar = 0.5,
         bias: scalar = 1.0 )
-    -> ( output: tensor<scalar> );
+    -> ( output: tensor<scalar> )
+    {
+        sigma = bias + alpha * box(sqr(input), size = size, normalize = true);
+        output = input / (sigma ^ beta);
+    }
 
-    fragment local_mean_normalization(
-        input: tensor<scalar>,
-        size: integer[] )
-    -> ( output: tensor<scalar> );
+    fragment local_mean_normalization( input: tensor<scalar>, size: integer[] ) -> ( output: tensor<scalar> )
+    {
+        mean = box(input, size = size, normalize = true);
+        output = sub(input, mean);
+    }
 
-    fragment local_variance_normalization(
-        input: tensor<scalar>,
-        size: integer[],
-        bias: scalar = 0.0,
-        epsilon: scalar = 0.0 )
-    -> ( output: tensor<scalar> );
+    fragment local_variance_normalization( input: tensor<scalar>, size: integer[], bias: scalar = 0.0, epsilon: scalar = 0.0 ) -> ( output: tensor<scalar> )
+    {
+        sigma = sqrt(box(sqr(input), size = size, normalize = true));
+        output = input / max(sigma + bias, epsilon);
+    }
 
-    fragment local_contrast_normalization(
-        input: tensor<scalar>,
-        size: integer[],
-        bias: scalar = 0.0,
-        epsilon: scalar = 0.0 )
-    -> ( output: tensor<scalar> );
+    fragment local_contrast_normalization( input: tensor<scalar>, size: integer[], bias: scalar = 0.0, epsilon: scalar = 0.0 ) -> ( output: tensor<scalar> )
+    {
+        centered = local_mean_normalization(input, size = size);
+        output = local_variance_normalization(centered, size = size, bias = bias, epsilon = epsilon);
+    }
 
-    fragment l1_normalization(
-        input: tensor<scalar>,
-        axes: integer[],
-        bias: scalar = 0.0,
-        epsilon: scalar = 0.0 )
-    -> ( output: tensor<scalar> );
+    fragment l1_normalization( input: tensor<scalar>, axes: integer[], bias: scalar = 0.0, epsilon: scalar = 0.0 ) -> ( output: tensor<scalar> )
+    {
+        sigma = sum_reduce(abs(input), axes = axes);
+        output = input / max(sigma + bias, epsilon);
+    }
 
-    fragment l2_normalization(
-        input: tensor<scalar>,
-        axes: integer[],
-        bias: scalar = 0.0,
-        epsilon: scalar = 0.0 )
-    -> ( output: tensor<scalar> );
+    fragment l2_normalization( input: tensor<scalar>, axes: integer[], bias: scalar = 0.0, epsilon: scalar = 0.0 ) -> ( output: tensor<scalar> )
+    {
+        sigma = sqrt(sum_reduce(sqr(input), axes = axes));
+        output = input / max(sigma + bias, epsilon);
+    }
 
-    fragment batch_normalization(
-        input: tensor<scalar>,
-        mean: tensor<scalar>,
-        variance: tensor<scalar>,
-        offset: tensor<scalar>,
-        scale: tensor<scalar>,
-        epsilon: scalar )
-    -> ( output: tensor<scalar> );
+    fragment batch_normalization( input: tensor<scalar>, mean: tensor<scalar>, variance: tensor<scalar>, offset: tensor<scalar>, scale: tensor<scalar>, epsilon: scalar )
+    -> ( output: tensor<scalar> )
+    {
+        output = offset + scale * (input - mean) / sqrt(variance + epsilon);
+    }
 
 
     # roi operations
@@ -380,7 +499,13 @@ namespace nnef {
         output_size: integer[],
         sampling_rate: integer[],
         resize_method: string = 'symmetric' )
-    -> ( output: tensor<scalar> );
+    -> ( output: tensor<scalar> )
+    {
+        size = [for i in range_of(output_size) yield output_size[i] * sampling_rate[i]];
+        resized = roi_resample(input, rois, batch_index, output_size = size,
+                             method = resize_method);
+        output = avg_pool(resized, size = sampling_rate, stride = sampling_rate);
+    }
 
     fragment max_roi_align(
         input: tensor<scalar>,
@@ -389,7 +514,13 @@ namespace nnef {
         output_size: integer[],
         sampling_rate: integer[],
         resize_method: string = 'symmetric' )
-    -> ( output: tensor<scalar> );
+    -> ( output: tensor<scalar> )
+    {
+        size = [for i in range_of(output_size) yield output_size[i] * sampling_rate[i]];
+        resized = roi_resample(input, rois, batch_index, output_size = size,
+                             method = resize_method);
+        output = max_pool(resized, size = sampling_rate, stride = sampling_rate);
+    }
 
 
     # quantization operations
@@ -401,8 +532,15 @@ namespace nnef {
         bits: integer,
         signed: logical,
         symmetric: logical )
-    -> ( y: tensor<scalar> );
-    
+    -> ( y: tensor<scalar> )
+    {
+        r = scalar(2 ^ bits - 1 - integer(signed && symmetric));
+        z = clamp(x, min, max);
+        p = scalar(2 ^ (bits - 1) - integer(symmetric) if signed else 0);
+        q = round((z - min) / (max - min) * r) - p;
+        y = (q + p) / r * (max - min) + min;
+    }
+
     fragment zero_point_linear_quantize(
         x: tensor<scalar>,
         zero_point: integer,
@@ -410,26 +548,49 @@ namespace nnef {
         bits: integer,
         signed: logical,
         symmetric: logical )
-    -> ( y: tensor<scalar> );
-    
+    -> ( y: tensor<scalar> )
+    {
+        z = round(x / scale) + scalar(zero_point);
+        r = scalar(2 ^ (bits - 1) - 1 if signed else 2 ^ bits - 1);
+        q = clamp(z, 0.0 if !signed else -r if symmetric else -r - 1.0, r);
+        y = (q - scalar(zero_point)) * scale;
+    }
+
     fragment linear_quantize(
         x: tensor<scalar>,
         min: tensor<scalar>,
         max: tensor<scalar>,
         bits: integer )
-    -> ( y: tensor<scalar> );
-    
+    -> ( y: tensor<scalar> )
+    {
+        y = min_max_linear_quantize(x, min = min, max = max, bits = bits,
+                                    signed = false, symmetric = false);
+    }
+
     fragment logarithmic_quantize(
         x: tensor<scalar>,
         max: tensor<scalar>,
         bits: integer )
-    -> ( y: tensor<scalar> );
+    -> ( y: tensor<scalar> )
+    {
+        m = ceil(log2(max));
+        r = scalar(2 ^ bits - 1);
+        q = round(clamp(log2(abs(x)), m - r, m));
+        y = sign(x) * 2.0 ^ q;
+    }
 
 
     # misc operations
 
-    fragment copy_n<?>( x: tensor<?>, times: integer ) -> ( y: tensor<?>[] );
-    fragment add_n( x: tensor<scalar>[] ) -> ( y: tensor<scalar> );
+    fragment copy_n<?>( x: tensor<?>, times: integer ) -> ( y: tensor<?>[] )
+    {
+        y = [x] * times;
+    }
+
+    fragment add_n( x: tensor<scalar>[] ) -> ( y: tensor<scalar> )
+    {
+        y = x[0] + add_n(x[1:]) if length_of(x) > 0 else constant(shape = [1], value = [0.0]);
+    }
 
 
     )STDLIB";
