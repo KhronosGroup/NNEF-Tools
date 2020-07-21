@@ -215,12 +215,12 @@ namespace nnef { namespace rt
         tensor_view operator[]( const size_t idx ) const
         {
             const size_t size = volume / *shape;
-            return (tensor_view){ rank - 1, size, shape + 1, data + size * idx };
+            return tensor_view{ rank - 1, size, shape + 1, data + size * idx };
         }
         
         operator tensor_view<const T>() const
         {
-            return (tensor_view<const T>){ rank, volume, shape, data };
+            return tensor_view<const T>{ rank, volume, shape, data };
         }
     };
 

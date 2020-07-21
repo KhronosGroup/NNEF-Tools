@@ -50,13 +50,13 @@ namespace nnef { namespace rt
     template<typename T>
     tensor_view<T> _tensor_view( const Tensor& tensor )
     {
-        return (tensor_view<T>){ tensor.shape.size(), volume_of(tensor.shape), tensor.shape.data(), (T*)tensor.data.data() };
+        return tensor_view<T>{ tensor.shape.size(), volume_of(tensor.shape), tensor.shape.data(), (T*)tensor.data.data() };
     }
 
     template<typename T>
     tensor_view<T> _tensor_view( const T& value )
     {
-        return (tensor_view<T>){ 0, 1, nullptr, (T*)&value };
+        return tensor_view<T>{ 0, 1, nullptr, (T*)&value };
     }
 
     template<typename T>
@@ -287,7 +287,7 @@ namespace nnef { namespace rt
         {
             if ( border == "constant" )
             {
-                const T volume = volume_of(sizeShape);
+                const T volume = (T)volume_of(sizeShape);
                 binary((tensor_view<const T>)output_view, _tensor_view<const T>(volume), output_view, std::divides<T>());
             }
             else if ( border == "ignore" )
@@ -642,7 +642,7 @@ namespace nnef { namespace rt
         { "sign", make_unary_executor<float>([]( float x ){ return x > 0.f ? 1.f : x < 0.f ? -1.f : 0.f; }) },
         { "exp", make_unary_executor<float>([]( float x ){ return std::exp(x); }) },
         { "log", make_unary_executor<float>([]( float x ){ return std::log(x); }) },
-        { "log2", make_unary_executor<float>([]( float x ){ return std::log(x) / std::log(2); }) },
+        { "log2", make_unary_executor<float>([]( float x ){ return std::log(x) / std::log(2.f); }) },
         { "sin", make_unary_executor<float>([]( float x ){ return std::sin(x); }) },
         { "cos", make_unary_executor<float>([]( float x ){ return std::cos(x); }) },
         { "round", make_unary_executor<float>([]( float x ){ return std::round(x); }) },
