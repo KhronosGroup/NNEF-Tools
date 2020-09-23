@@ -991,6 +991,11 @@ namespace nnef
 		return quantize_shape(input, Shape(), max, bits);
 	}
     
+	inline Shape zero_point_linear_quantize_shape( const Shape& input, const Value& zero_point, const Value& scale, const Value& bits )
+	{
+		return quantize_shape(input, Shape(), Shape(), bits);
+	}
+
 }   // namespace nnef
 
 

@@ -561,6 +561,8 @@ namespace nnef
         
         { "linear_quantize", make_shape_func(linear_quantize_shape) },
         { "logarithmic_quantize", make_shape_func(logarithmic_quantize_shape) },
+        { "min_max_linear_quantize", make_shape_func(linear_quantize_shape) },
+        { "zero_point_linear_quantize", make_shape_func(zero_point_linear_quantize_shape) },
         
         { "add", make_shape_func(binary_shape) },
         { "sub", make_shape_func(binary_shape) },
