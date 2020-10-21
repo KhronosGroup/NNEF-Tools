@@ -1,4 +1,4 @@
-# Copyright (c) 2017 The Khronos Group Inc.
+# Copyright (c) 2020 The Khronos Group Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,128 +14,600 @@
 
 from __future__ import division, print_function, absolute_import
 
-from collections import OrderedDict
-
+from ..model import *
+from ..utils import types
+import numpy as np
+import functools
+import inspect
+import math
+import copy
 import six
-
-from nnef_tools.conversion.conversion_info import *
-
-_SourceTensorT = typing.TypeVar('_SourceTensorT', bound='Tensor')
-_SourceOperationT = typing.TypeVar('_SourceOperationT', bound='Operation')
-_SourceGraphT = typing.TypeVar('_SourceGraphT', bound='Graph')
-_TargetTensorT = typing.TypeVar('_TargetTensorT', bound='Tensor')
-_TargetOperationT = typing.TypeVar('_TargetOperationT', bound='Operation')
-_TargetGraphT = typing.TypeVar('_TargetGraphT', bound='Graph')
-
-_OpConverter = typing.Callable[["Converter", _SourceOperationT, _TargetGraphT], None]
-_TargetTensorListOrTuple = typing.Union[typing.List[_TargetTensorT], typing.Tuple[_TargetTensorT]]
+import re
 
 
-class Converter(typing.Generic[_SourceTensorT, _SourceOperationT, _SourceGraphT,
-                               _TargetTensorT, _TargetOperationT, _TargetGraphT]):
+class Transform:
 
-    def __init__(self, op_converter_by_name, default_op_converter=None):
-        # type: (typing.Dict[str, _OpConverter], typing.Optional[_OpConverter])->None
-        self._op_converter_by_name = op_converter_by_name
-        self._default_op_converter = default_op_converter
-        self._target_tensor_by_source = {}  # type: typing.Dict[_SourceTensorT, _TargetTensorT]
+    def __init__(self, type, name=None, inputs=None, outputs=None, attribs=None,
+                 defaults=None, using=None, cond=None, custom=False):
+        self.type = type
+        self.name = name or '!_name_'
+        self.inputs = inputs or ()
+        self.outputs = outputs or ()
+        self.attribs = attribs or {}
+        self.defaults = defaults
+        self.using = using or {}
+        self.cond = cond
+        self.custom = custom
 
-    @property
-    def default_op_converter(self):
-        # type: ()->_OpConverter
-        return self._default_op_converter
+    def with_type(self, type):
+        return Transform(type=type, name=self.name, inputs=self.inputs, outputs=self.outputs, attribs=self.attribs,
+                         defaults=self.defaults, using=self.using, cond=self.cond, custom=self.custom)
 
-    def converted_tensor(self, source_tensor):
-        # type: (_SourceTensorT) -> _TargetTensorT
-        return self._target_tensor_by_source[source_tensor]
 
-    def converted_tensors(self, source_tensors):
-        # type: (typing.Iterable[_SourceTensorT]) -> _TargetTensorListOrTuple
-        if isinstance(source_tensors, tuple):
-            return tuple(self._target_tensor_by_source[t] for t in source_tensors)
-        return list(self._target_tensor_by_source[t] for t in source_tensors)
+class ConversionError(Exception):
 
-    def create_graph(self, source_graph):
-        # type:(_SourceGraphT)->_TargetGraphT
+    def __init__(self, message):
+        Exception.__init__(self, message)
+
+
+class Converter:
+
+    @staticmethod
+    def find_public_methods(obj):
+        methods = inspect.getmembers(obj, predicate=inspect.ismethod)
+        return {name: func for name, func in methods if not name.startswith('_')}
+
+    @staticmethod
+    def find_public_functions(obj):
+        methods = inspect.getmembers(obj, predicate=inspect.isfunction)
+        return {name: func for name, func in methods if not name.startswith('_')}
+
+    @staticmethod
+    def decomposed_operations():
+        return []       # return list of decomposed NNEF ops in subclass if converting from NNEF
+
+    @staticmethod
+    def defined_operations():
+        return {}       # return dictionary of NNEF operator (fragment) definitions in subclass if converting to NNEF
+
+    @staticmethod
+    def custom_shapes():
+        return {}       # return dictionary of custom shape functions for NNEF fragments defined by the converter
+
+    @staticmethod
+    def unpack_transforms(transforms):
+        unpacked = {}
+        for key, value in six.iteritems(transforms):
+            assert isinstance(value, Transform)
+
+            if isinstance(key, tuple):
+                if isinstance(value, Transform) and isinstance(value.type, tuple):
+                    for key_item, type_item in zip(key, value.type):
+                        value_item = copy.deepcopy(value)
+                        value_item.type = type_item
+                        unpacked[key_item] = value_item
+                else:
+                    for item in key:
+                        unpacked[item] = value
+            else:
+                unpacked[key] = value
+
+        return unpacked
+
+    @staticmethod
+    def merge_transforms(default_transforms, custom_transforms):
+        if custom_transforms is None:
+            return default_transforms
+
+        transforms = dict(default_transforms)
+        transforms.update(custom_transforms)
+        return transforms
+
+    def __init__(self, transforms, functions=None, mirror_unsupported=False):
+        self._graph = None
+        self._transforms = transforms
+        self._callables = self.find_public_methods(self)
+        if functions:
+            self._callables.update({name: functools.partial(func, self) for name, func in six.iteritems(functions)})
+        self._mirror_unsupported = mirror_unsupported
+
+    def __call__(self, graph):
+        unknown_tensors = [tensor for tensor in graph.tensors if tensor.shape is None and len(tensor.consumers)]
+        if len(unknown_tensors):
+            names = ["'{}'".format(tensor.name) for tensor in unknown_tensors if tensor.name]
+            raise ConversionError("Input graph contains tensors with unknown shape: " +
+                                  ", ".join(names) if len(names) else "(no names)")
+
+        self._graph = Graph(name=graph.name)
+        self._tensor_map = {tensor: self._copy_tensor_(tensor) for tensor in graph.tensors}
+        self._tensor_map.update({val: key for key, val in six.iteritems(self._tensor_map)})
+
+        self._prepare(self._graph)
+
+        for op in graph.operations:
+            transform = self._transforms.get(op.type)
+            if isinstance(transform, Transform) and transform.type is None:
+                continue
+
+            if transform is not None:
+                if self._convert(op, transform) is None:
+                    raise ConversionError(
+                        "Conversion for operation type '{}' with the given parameters is not implemented".format(
+                            op.type))
+            else:
+                if self._mirror_unsupported:
+                    self._mirror(op)
+                else:
+                    raise ConversionError("Conversion for operation type '{}' is not implemented".format(op.type))
+
+        self._graph.remove_tensors([tensor for tensor in self._graph.tensors
+                                    if len(tensor.producers) == 0 and len(tensor.consumers) == 0])
+
+        self._graph.inputs = tuple(self._tensor_map[tensor] for tensor in graph.inputs if self._tensor_map[tensor].graph)
+        self._graph.outputs = tuple(self._tensor_map[tensor] for tensor in graph.outputs if self._tensor_map[tensor].graph)
+
+        return self._graph
+
+    def _global_attribs(self):
+        return {}
+
+    def _prepare(self, graph):
+        pass
+
+    def _convert(self, op, transform):
+        op_inputs = list(self._tensor_map[tensor] for tensor in op.inputs)
+        op_outputs = list(self._tensor_map[tensor] for tensor in op.outputs)
+        op_attribs = self._add_default_attribs(op.attribs, transform.defaults, op_inputs, op_outputs, op.type, op.name)
+
+        using = {'_type_': op.type, '_name_': op.name, **self._global_attribs()}
+        for key, item in six.iteritems(transform.using):
+            value = self._evaluate(op_attribs, op_inputs, op_outputs, item, using)
+            self._check_value(value, 'using', key, op.type, op.name)
+            using[key] = value
+
+        if transform.cond is not None:
+            if not self._evaluate(op_attribs, op_inputs, op_outputs, transform.cond, using):
+                return None
+
+        type = self._evaluate(op_attribs, op_inputs, op_outputs, transform.type, using)
+        self._check_value(type, 'field', 'type', op.type, op.name)
+
+        name = self._evaluate(op_attribs, op_inputs, op_outputs, transform.name, using)
+        self._check_value(name, 'field', 'name', op.type, op.name)
+
+        attribs = {}
+        for key, item in six.iteritems(transform.attribs):
+            value = self._evaluate(op_attribs, op_inputs, op_outputs, item, using)
+            if value is not None:
+                attribs[key] = value
+
+        for key, value in six.iteritems(attribs):
+            self._check_value(value, 'attribute', key, op.type, op.name)
+
+        if isinstance(transform.inputs, list):
+            inputs = self._evaluate_tensor_list(op_attribs, op_inputs, op_outputs, transform.inputs, using)
+        elif isinstance(transform.inputs, tuple):
+            inputs = tuple(self._filter_none(self._evaluate(op_attribs, op_inputs, op_outputs, item, using)
+                                             for item in transform.inputs))
+        else:
+            inputs = (self._evaluate(op_attribs, op_inputs, op_outputs, transform.inputs, using),)
+
+        for idx, item in enumerate(inputs):
+            self._check_value(item, 'input', idx, op.type, op.name, tensor=True)
+
+        offset = len(self._graph.operations)
+
+        if isinstance(transform.outputs, list):
+            outputs = self._evaluate_tensor_list(op_attribs, op_inputs, op_outputs, transform.outputs, using)
+        elif isinstance(transform.outputs, tuple):
+            outputs = tuple(self._filter_none(self._evaluate(op_attribs, op_inputs, op_outputs, item, using)
+                                              for item in transform.outputs))
+        else:
+            outputs = (self._evaluate(op_attribs, op_inputs, op_outputs, transform.outputs, using),)
+
+        for idx, item in enumerate(outputs):
+            self._check_value(item, 'output', idx, op.type, op.name, tensor=True)
+
+        op = Operation(self._graph, type=type, name=name, attribs=attribs, inputs=inputs, outputs=outputs,
+                       custom=transform.custom)
+        self._graph.reverse(offset)
+        return op
+
+    def _mirror(self, op):
+        inputs_type = tuple if isinstance(op.inputs, tuple) else list
+        outputs_type = tuple if isinstance(op.outputs, tuple) else list
+
+        op_inputs = inputs_type(self._tensor_map[tensor] for tensor in op.inputs)
+        op_outputs = outputs_type(self._tensor_map[tensor] for tensor in op.outputs)
+
+        return Operation(self._graph, type=op.type, name=op.name, attribs=op.attribs,
+                         inputs=op_inputs, outputs=op_outputs, custom=True)
+
+    def _add_default_attribs(self, attribs, defaults, inputs, outputs, op_type, op_name):
+        if defaults is None:
+            return attribs
+
+        attribs = dict(attribs)
+        for key, value in six.iteritems(defaults):
+            if key not in attribs:
+                value = self._evaluate({}, inputs, outputs, value)
+                self._check_value(value, 'default', key, op_type, op_name)
+                attribs[key] = value
+
+        return attribs
+
+    def _evaluate(self, attribs, inputs, outputs, arg, using={}):
+        if isinstance(arg, str) and arg[0] == '!':
+            try:
+                return eval(arg[1:], {'I': inputs, 'O': outputs, **attribs, **using, **self._callables,
+                                      'np': np, 'math': math})
+            except Exception as e:
+                return e
+        return arg
+
+    def _evaluate_tensor_list(self, attribs, inputs, outputs, arg, using):
+        values = []
+        for item in arg:
+            value = self._evaluate(attribs, inputs, outputs, item, using)
+            if isinstance(value, Tensor) or isinstance(value, Exception):
+                values.append(value)
+            else:
+                assert isinstance(value, (list, tuple))
+                values += list(value)
+        return values
+
+    def _filter_none(self, items):
+        return (item for item in items if item is not None)
+
+    def _check_value(self, value, kind, key, op_type, op_name, tensor=False):
+        if isinstance(value, Exception):
+            raise ConversionError("Could not evaluate {kind} '{key}' while converting operator '{type}'; {cause}"
+                                  .format(kind=kind, key=key, type=op_type, name=op_name,
+                                          cause=str(value) or repr(value)))
+        if tensor and not isinstance(value, Tensor):
+            raise ConversionError("While converting operator '{op_type}', {kind} '{key}' must result in a tensor, "
+                                  "but found {value_type}"
+                                  .format(kind=kind, key=key, op_type=op_type, value_type=type(value)))
+
+    def _copy_tensor_(self, tensor):
+        return Tensor(self._graph, name=tensor.name, dtype=tensor.dtype, shape=tensor.shape,
+                      data=tensor.data, quant=copy.deepcopy(tensor.quant))
+
+    def _read_constant(self, tensor, type):
         raise NotImplementedError()
 
-    def convert_tensors(self, source_graph, target_graph):
-        # type: (_SourceGraphT, _TargetGraphT)->None
-        self._target_tensor_by_source = {}
-        for source_tensor in source_graph.tensors:
-            self._target_tensor_by_source[source_tensor] = self.convert_tensor(source_tensor, target_graph)
-
-    def set_inputs_and_outputs(self, source_graph, target_graph):
-        # type: (_SourceGraphT, _TargetGraphT)->None
-
-        if source_graph.input_ids is not None:
-            target_graph.inputs = OrderedDict((name, self._target_tensor_by_source[tensor])
-                                              for name, tensor in zip(source_graph.input_ids, source_graph.inputs))
-        else:
-            target_graph.inputs = [self._target_tensor_by_source[tensor] for tensor in source_graph.inputs]
-
-        if source_graph.output_ids is not None:
-            target_graph.outputs = OrderedDict((name, self._target_tensor_by_source[tensor])
-                                               for name, tensor in zip(source_graph.output_ids, source_graph.outputs))
-        else:
-            target_graph.outputs = [self._target_tensor_by_source[tensor] for tensor in source_graph.outputs]
-
-    def convert_tensor(self, source_tensor, target_graph):
-        # type: (_SourceTensorT, _TargetGraphT)->_TargetTensorT
+    def _make_constant(self, graph, dtype, value, inline):
         raise NotImplementedError()
 
-    def convert_operations(self, source_graph, target_graph):
-        # type: (_SourceGraphT, _TargetGraphT)->None
-        for source_op in source_graph.operations:
-            self.convert_operation(source_op, target_graph)
+    def _const_operation(self, output, value):
+        raise NotImplementedError()
 
-    def convert_operation(self, source_op, target_graph):
-        # type: (_SourceOperationT, _TargetGraphT)->None
+    def _transpose_operation(self, input, output, perm):
+        raise NotImplementedError()
 
-        assert hasattr(source_op, "name"), \
-            "If the source operations do not have names, you have to override this method"
+    def _reshape_operation(self, input, output, shape):
+        raise NotImplementedError()
 
-        op_converter = self._op_converter_by_name.get(source_op.name)
-        if op_converter is not None:
-            op_converter(self, source_op, target_graph)
-        elif self._default_op_converter is not None:
-            self._default_op_converter(self, source_op, target_graph)
+    def _squeeze_operation(self, input, output, axes):
+        raise NotImplementedError()
+
+    def _unsqueeze_operation(self, input, output, axes):
+        raise NotImplementedError()
+
+    def _scale_operation(self, input, output, scalar):
+        raise NotImplementedError()
+
+    @staticmethod
+    def _permute(items, perm):
+        permuted = list(items)
+        for i in range(len(perm)):
+            permuted[i] = items[perm[i]]
+        return type(items)(permuted)
+
+    @staticmethod
+    def _inverse_permute(items, perm):
+        permuted = list(items)
+        for i in range(len(perm)):
+            permuted[perm[i]] = items[i]
+        return type(items)(permuted)
+
+    def _pre_transpose(self, input, perm):
+        shape = self._permute(input.shape, perm)
+        output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
+        self._transpose_operation(input, output, perm)
+        return output
+
+    def _post_transpose(self, output, perm):
+        shape = self._inverse_permute(output.shape, perm)
+        input = Tensor(output.graph, dtype=output.dtype, shape=shape, quant=copy.deepcopy(output.quant))
+        self._transpose_operation(input, output, perm)
+        return input
+
+    def _pre_squeeze(self, input, axes):
+        shape = self.squeeze_shape(input.shape, axes)
+        output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
+        self._squeeze_operation(input, output, axes)
+        return output
+
+    def _pre_unsqueeze(self, input, axes):
+        shape = self.unsqueeze_shape(input.shape, axes)
+        output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
+        self._unsqueeze_operation(input, output, axes)
+        return output
+
+    def _post_squeeze(self, output, axes):
+        shape = self.unsqueeze_shape(output.shape, axes)
+        input = Tensor(output.graph, dtype=output.dtype, shape=shape, quant=copy.deepcopy(output.quant))
+        self._squeeze_operation(input, output, axes)
+        return input
+
+    def _post_unsqueeze(self, output, axes):
+        shape = self.squeeze_shape(output.shape, axes)
+        input = Tensor(output.graph, dtype=output.dtype, shape=shape, quant=copy.deepcopy(output.quant))
+        self._unsqueeze_operation(input, output, axes)
+        return input
+
+    def _reshape(self, input, shape):
+        output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
+        self._reshape_operation(input, output, shape)
+        return output
+
+    def _shape_of(self, value):
+        if isinstance(value, (list, tuple)):
+            length = len(value)
+            return (length,) + self._shape_of(value[0]) if length > 0 else (0,)
+        elif isinstance(value, np.ndarray):
+            return value.shape
         else:
-            assert False, "No converter for operation '{}'".format(source_op.name)
+            return ()
 
-    # noinspection PyMethodMayBeStatic
-    def can_include_in_conversion_info(self, source_tensor, target_tensor):
-        # type: (_SourceTensorT, _TargetTensorT)->bool
+    def squeeze_shape(self, shape, axes):
+        return type(shape)(shape[i] for i in range(len(shape)) if i not in axes)
 
-        return source_tensor.name and target_tensor.name
+    def unsqueeze_shape(self, shape, axes):
+        for axis in axes:
+            shape = shape[:axis] + (1,) + shape[axis:]
+        return shape
 
-    def create_conversion_info(self, source_graph, target_graph):
-        # type: (_SourceGraphT, _TargetGraphT)->ConversionInfo
+    def nxc_to_ncx(self, items, cond=True):
+        return items[0:1] + items[-1:] + items[1:-1] if cond else items
 
-        source_tensor_by_target = {target: source for source, target in six.iteritems(self._target_tensor_by_source)}
+    def ncx_to_nxc(self, items, cond=True):
+        return items[0:1] + items[2:] + items[1:2] if cond else items
 
-        return ConversionInfo([
-            TensorInfo(source_name=source_tensor_by_target[t].name,
-                       target_name=t.name,
-                       target_shape=t.shape,
-                       target_dtype=t.dtype,
-                       is_input=t in target_graph.inputs,
-                       is_output=t in target_graph.outputs,
-                       is_variable=t.is_variable)
-            for t in target_graph.tensors
-            if t in source_tensor_by_target and self.can_include_in_conversion_info(source_tensor_by_target[t], t)
-        ])
+    def xcn_to_ncx(self, items, cond=True):
+        return items[-1:] + items[-2:-1] + items[:-2] if cond else items
 
-    def convert_graph(self, source_graph):
-        # type: (_SourceGraphT)->_TargetGraphT
-        target_graph = self.create_graph(source_graph)
-        self.convert_tensors(source_graph, target_graph)
-        self.set_inputs_and_outputs(source_graph, target_graph)
-        self.convert_operations(source_graph, target_graph)
-        return target_graph
+    def ncx_to_xcn(self, items, cond=True):
+        return items[2:] + items[1:2] + items[0:1] if cond else items
 
-    def __call__(self, source_graph):
-        # type: (_SourceGraphT)->typing.Tuple[_TargetGraphT, ConversionInfo]
-        target_graph = self.convert_graph(source_graph)
-        conversion_info = self.create_conversion_info(source_graph, target_graph)
-        return target_graph, conversion_info
+    def cxn_to_ncx(self, items, cond=True):
+        return items[-1:] + items[:-1] if cond else items
+
+    def ncx_to_cxn(self, items, cond=True):
+        return items[1:] + items[:1] if cond else items
+
+    def nxc_to_ncx_perm(self, rank):
+        return self.nxc_to_ncx(list(range(rank)))
+
+    def ncx_to_nxc_perm(self, rank):
+        return self.ncx_to_nxc(list(range(rank)))
+
+    def xcn_to_ncx_perm(self, rank):
+        return self.xcn_to_ncx(list(range(rank)))
+
+    def ncx_to_xcn_perm(self, rank):
+        return self.ncx_to_xcn(list(range(rank)))
+
+    def cxn_to_ncx_perm(self, rank):
+        return self.cxn_to_ncx(list(range(rank)))
+
+    def ncx_to_cxn_perm(self, rank):
+        return self.ncx_to_cxn(list(range(rank)))
+
+    def axis_nxc_to_ncx(self, value, rank):
+        if isinstance(value, (list, tuple)):
+            return type(value)(self.axis_nxc_to_ncx(v, rank) for v in value)
+        else:
+            if value < 0:
+                value += rank
+            return 0 if value == 0 else 1 if value == rank - 1 else value + 1
+
+    def axis_ncx_to_nxc(self, value, rank):
+        if isinstance(value, (list, tuple)):
+            return type(value)(self.axis_ncx_to_nxc(v, rank) for v in value)
+        else:
+            if value < 0:
+                value += rank
+            return 0 if value == 0 else rank - 1 if value == 1 else value - 1
+
+    def ensure_positive(self, axis, rank):
+        if isinstance(axis, (list, tuple)):
+            return type(axis)(self.ensure_positive(item, rank) for item in axis)
+        else:
+            return axis + rank if axis < 0 else axis
+
+    def as_const(self, arg, type=None):
+        return self._read_constant(arg, type=type)
+
+    def is_const(self, arg, type=None):
+        if arg.data is not None:
+            return True
+        try:
+            self._read_constant(arg, type=type)
+            return True
+        except ConversionError:
+            return False
+
+    def is_zero(self, arg):
+        return self.is_const(arg) and len(arg.shape) == 0 and self.as_const(arg) == 0
+
+    def as_tensor(self, arg, dtype, inline=None):
+        return self._make_constant(self._graph, dtype=dtype, value=arg, inline=inline)
+
+    def new_tensor(self, shape, dtype):
+        return Tensor(self._graph, dtype=dtype, shape=shape)
+
+    def is_integer_upsample(self, input_shape, output_shape):
+        return all(output % input == 0 for input, output in zip(input_shape, output_shape))
+
+    def is_integer_downsample(self, input_shape, output_shape):
+        return all(input % output == 0 for input, output in zip(input_shape, output_shape))
+
+    def upsample_factor(self, input_shape, output_shape):
+        return [output // input for input, output in zip(input_shape, output_shape)]
+
+    def downsample_factor(self, input_shape, output_shape):
+        return [input // output for input, output in zip(input_shape, output_shape)]
+
+    def from_numpy(self, array, type=None):
+        return types.from_numpy(array, type)
+
+    def to_numpy(self, value, dtype=None):
+        return types.to_numpy(value, dtype)
+
+    def flexible_batch(self, output_shape, batch):
+        return [0] + output_shape[1:] if output_shape[0] == batch else output_shape
+
+    def fixed_batch(self, output_shape, batch):
+        return [batch] + output_shape[1:] if output_shape[0] == 0 else output_shape
+
+
+class ConverterToNNEF(Converter):
+
+    def __init__(self, transforms, functions=None, mirror_unsupported=False):
+        Converter.__init__(self, transforms, functions, mirror_unsupported)
+
+    def _insert_externals_and_constants(self, graph):
+        for tensor in graph.tensors:
+            mapped = self._tensor_map[tensor]
+            if mapped.producer is None:
+                if mapped.data is None:
+                    Operation(graph, type='external', inputs=(), outputs=tensor,
+                              attribs={'shape': list(tensor.shape), 'dtype': tensor.dtype})
+                else:
+                    Operation(graph, type='constant', inputs=(), outputs=tensor,
+                              attribs={'shape': list(tensor.shape), 'dtype': tensor.dtype, 'value': mapped.data})
+
+    def _ensure_valid_ids(self, graph):
+        if graph.name is not None:
+            graph.name = self.ensure_valid_id(graph.name)
+
+        for tensor in graph.tensors:
+            if tensor.name is not None:
+                tensor.name = self.ensure_valid_id(tensor.name)
+
+    def _read_constant(self, tensor, type):
+        if tensor.producer.type == 'constant':
+            value = tensor.producer.attribs['value']
+            return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else \
+                types.cast(value, type=type) if type is not None else value
+        else:
+            raise ConversionError('trying to evaluate non-constant tensor')
+
+    def _make_constant(self, graph, dtype, value, inline):
+        if isinstance(value, tuple):
+            value = list(value)
+        shape = value.shape if isinstance(value, np.ndarray) else (len(value),) if isinstance(value, list) else ()
+        isarray = isinstance(value, np.ndarray) or isinstance(value, list)
+
+        tensor = Tensor(graph, dtype=dtype, shape=shape)
+        if inline:
+            tensor.data = types.to_numpy(value, dtype)
+        else:
+            self._const_operation(tensor, value=value if isarray else [value])
+        return tensor
+
+    def _is_constant(self, tensor):
+        if tensor.producer:
+            return tensor.producer.type == 'constant'
+        else:
+            return tensor.data is not None
+
+    def _const_operation(self, output, value):
+        Operation(output.graph, type='constant', inputs=(), outputs=output,
+                  attribs={'value': value, 'dtype': output.dtype, 'shape': list(output.shape)})
+
+    def _transpose_operation(self, input, output, perm):
+        Operation(input.graph, type='transpose', inputs=input, outputs=output, attribs={'axes': perm})
+
+    def _reshape_operation(self, input, output, shape):
+        Operation(input.graph, type='reshape', inputs=input, outputs=output, attribs={'shape': list(shape)})
+
+    def _squeeze_operation(self, input, output, axes):
+        Operation(input.graph, type='squeeze', inputs=input, outputs=output, attribs={'axes': axes})
+
+    def _unsqueeze_operation(self, input, output, axes):
+        Operation(input.graph, type='unsqueeze', inputs=input, outputs=output, attribs={'axes': axes})
+
+    def _scale_operation(self, input, output, scalar):
+        if not isinstance(scalar, Tensor):
+            scalar = self.as_tensor(scalar, np.float32)
+
+        Operation(input.graph, type='mul', inputs=(input, scalar), outputs=output)
+
+    def _bias_operation(self, input, output, bias):
+        if not isinstance(bias, Tensor):
+            bias = self.as_tensor(bias, np.float32)
+
+        Operation(input.graph, type='add', inputs=(input, bias), outputs=output)
+
+    def _transform_constant(self, tensor, func):
+        data = func(tensor.producer.attribs['value'])
+        tensor.shape = data.shape
+        tensor.producer.attribs['value'] = data
+        tensor.producer.attribs['shape'] = list(data.shape)
+
+    @staticmethod
+    def remove_unused_constants(graph):
+        ops = [op for op in graph.operations if op.type == 'constant' and not op.output.has_consumer]
+        tensors = [op.output for op in ops]
+        graph.outputs = [tensor for tensor in graph.outputs if tensor not in tensors]
+        graph.remove_operations(ops, unlink=True)
+        graph.remove_tensors(tensors)
+
+    @staticmethod
+    def inline_scalar_constants(graph):
+        for op in graph.operations:
+            if op.type == 'constant':
+                value = op.attribs['value']
+                if isinstance(value, np.ndarray) and len(value.shape) == 0:
+                    op.output.data = value
+                    graph.remove_operation(op, unlink=True)
+
+    @staticmethod
+    def convert_constants_to_variables(graph):
+        variables = 0
+        for op in graph.operations:
+            if op.type == 'constant':
+                value = op.attribs['value']
+                if isinstance(value, np.ndarray):
+                    variables += 1
+                    op.type = 'variable'
+                    op.attribs['label'] = op.name if op.name else 'variable' + str(variables)
+                    op.output.data = value
+                    del op.attribs['value']
+
+    @staticmethod
+    def ensure_valid_id(name):
+        return re.sub('[^_0-9a-zA-Z]+', '_', name)
+
+
+class ConverterFromNNEF(Converter):
+
+    @staticmethod
+    def decomposed_operations():
+        return ['separable_conv', 'separable_deconv', 'rms_pool',
+                'local_mean_normalization', 'local_variance_normalization', 'local_contrast_normalization',
+                'l1_normalization', 'moments']
+
+    def __init__(self, transforms, functions=None, mirror_unsupported=False):
+        Converter.__init__(self, transforms, functions, mirror_unsupported)
+
+    @staticmethod
+    def convert_variables_to_constants(graph):
+        for op in graph.operations:
+            if op.type == 'variable':
+                op.type = 'constant'
+                op.attribs['value'] = op.output.data
+                del op.attribs['label']

@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-
-# Copyright (c) 2017 The Khronos Group Inc.
+# Copyright (c) 2020 The Khronos Group Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,100 +12,64 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import division, print_function, absolute_import
-
+from .utils import stdio
+import numpy as np
+import argparse
+import nnef
 import sys
 
-# Python2: Ensure that load from current directory is enabled, but load from the directory of the script is disabled
-if len(sys.path) == 0:
-    sys.path.append('')
-if sys.path[0] != '':
-    sys.path[0] = ''
 
-import argparse
-
-import numpy as np
-import nnef
-
-from nnef_tools.io.input_source import RandomInput, create_input
-from nnef_tools.io.nnef.nnef_io import write_nnef_tensor
-from nnef_tools.core import utils
+def _is_lambda(v):
+    LAMBDA = lambda: 0
+    return isinstance(v, type(LAMBDA)) and v.__name__ == LAMBDA.__name__
 
 
-def get_args(argv):
-    parser = argparse.ArgumentParser(
-        description="NNEF-Tools/random_tensor.py: Create a random tensor",
-        formatter_class=argparse.RawTextHelpFormatter)
-
-    parser.add_argument('params',
-                        nargs='*',
-                        default=["uniform", "0", "1"],
-                        help="The parameters of the random generator. Possible parametrizations:\n"
-                             "uniform MIN MAX (default dtype: float32, range: [MIN, MAX])\n"
-                             "normal MIN MAX (default dtype: float32)\n"
-                             "binomial NUM TRUE_PROB (default dtype: int32, range: [0, NUM])\n"
-                             "bernoulli TRUE_PROB (default dtype: bool)\n"
-                             "Default: uniform 0 1")
-
-    parser.add_argument('--output', required=False,
-                        help="The path of the output tensor, e.g. tensor.dat.\n"
-                             "By default the standard output is used, but only if the command is piped or redirected.")
-
-    parser.add_argument("--shape",
-                        nargs='*',
-                        required=True,
-                        type=int,
-                        help="Target shape\n"
-                             "E.g. 1 3 224 224")
-
-    parser.add_argument("--seed",
-                        required=False,
-                        default=-1,
-                        type=int,
-                        help="Seed to use for random generation.\n"
-                             "Default: -1 (Get the seed from /dev/urandom or the clock)")
-
-    parser.add_argument("--dtype",
-                        required=False,
-                        help="Numpy dtype of the generated tensor. For the default, see params:")
-
-    return parser.parse_args(args=argv[1:])
+def uniform(min=0, max=1):
+    return lambda shape: np.random.uniform(min, max, shape)
 
 
-def main():
+def normal(mean=0, std=1):
+    return lambda shape: np.random.normal(mean, std, shape)
+
+
+def bernoulli(prob=0.5):
+    return lambda shape: np.random.uniform(0, 1, shape) < prob
+
+
+def main(args):
+    if args.output is None:
+        if not stdio.is_stdout_piped():
+            print("Output must be piped", file=sys.stderr)
+            return -1
+        stdio.set_stdout_to_binary()
+
     try:
-        args = get_args(sys.argv)
-
-        if not args.output:
-            if sys.stdout.isatty():
-                raise utils.NNEFToolsException("No output provided.")
-            utils.set_stdout_to_binary()
-
-        if args.dtype is None:
-            distribution = args.params[0]
-            if distribution == 'binomial':
-                args.dtype = "int32"
-            elif distribution == 'bernoulli':
-                args.dtype = "bool"
-            else:
-                args.dtype = "float32"
-
-        args.params[1:] = [float(param) for param in args.params[1:]]
-
-        if args.seed != -1:
-            np.random.seed(args.seed)
-
-        random_input = RandomInput(*args.params)
-        arr = create_input(random_input, np_dtype=np.dtype(args.dtype), shape=args.shape)
-
-        if args.output:
-            write_nnef_tensor(args.output, arr)
-        else:
-            nnef.write_tensor(sys.stdout, arr)
+        distribution = eval(args.distribution)
+        if not _is_lambda(distribution):
+            distribution = distribution()
     except Exception as e:
-        print('Error: {}'.format(e), file=sys.stderr)
-        exit(1)
+        print("Could not evaluate distribution: " + str(e), file=sys.stderr)
+        return -1
+
+    tensor = distribution(args.shape).astype(np.dtype(args.dtype))
+
+    if args.output is not None:
+        with open(args.output, 'wb') as file:
+            nnef.write_tensor(file, tensor)
+    else:
+        nnef.write_tensor(sys.stdout, tensor)
+        
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('distribution', type=str,
+                        help='The distribution to generate values from')
+    parser.add_argument('--shape', type=int, nargs='+', required=True,
+                        help='The dimensions of the tensor to generate')
+    parser.add_argument('--dtype', type=str, default='float32',
+                        help='The data-type of the resulting tensor')
+    parser.add_argument('--output', type=str, default=None,
+                        help='File name to save the result into')
+    exit(main(parser.parse_args()))
