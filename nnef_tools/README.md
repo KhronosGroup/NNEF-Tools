@@ -11,8 +11,8 @@ To install the `nnef_tools` package into a Python environment, clone the NNEF-To
 ```
 python setup.py install
 ```
-
-However, the scripts in the `nnef_tools` folder can also be run without installation (using the `-m` option to `python`).
+ 
+Afterwards, the scripts in the `nnef_tools` folder can be run using the `-m` option to `python`, as in the examples below. From the main folder of the repo, the scripts can also be run with the same `-m` option without installation.
 
 ## Usage
 
