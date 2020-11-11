@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-
-# Copyright (c) 2017 The Khronos Group Inc.
+# Copyright (c) 2020 The Khronos Group Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,686 +12,310 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import division, print_function, absolute_import
-
-import sys
-
-# Python2: Ensure that load from current directory is enabled, but load from the directory of the script is disabled
-if len(sys.path) == 0:
-    sys.path.append('')
-if sys.path[0] != '':
-    sys.path[0] = ''
-
-import argparse
+from .conversion import *
+from .model import utils
 import importlib
-import os
-import typing
+import argparse
 import six
 
-from nnef_tools.conversion import conversion_info
-from nnef_tools.core import utils
-from nnef_tools.io.nnef.parser_config import NNEFParserConfig
-from nnef_tools.optimization.data_format_optimizer import IOTransform
 
-
-def parse_io_transform(s):
-    if not s:
-        return IOTransform.IDENTITY
-
-    # import possible IOTransforms into local scope
-    locals().update({k: v for k, v in six.iteritems(IOTransform.__dict__) if not k.startswith('_')})
-
-    try:
-        return eval(s)
-    except Exception as e:
-        print('Error: Can not evaluate the --io-transformation parameter: {}.'.format(s), file=sys.stderr)
-        exit(1)
-
-
-def parse_input_shapes(s):
-    if not s:
-        return None
-
-    try:
-        return eval(s)
-    except Exception:
-        print('Error: Can not evaluate the --input-shape parameter: {}.'.format(s), file=sys.stderr)
-        exit(1)
-
-
-def try_eval_tf(__import, __fun_name):
-    exec("import tensorflow as tf")
-    exec("from nnef_tools.io.tensorflow.tf_py.tf_py_compat import tf_internal as _tf")
-    try:
-        if __import:
-            exec(__import)
-        return eval(__fun_name)
-    except (ImportError, NameError):
-        # print("Custom function not found: {}".format(__import))
-        return None
-
-
-def try_import(__import):
-    if __import:
-        try:
-            exec(__import)
-            return True
-        except ImportError:
-            # print("Custom function not found: {}".format(import_))
-            return False
-    return False
-
-
-def get_tf_py_custom_traceable_functions(module_names):
-    from nnef_tools.io.tensorflow.tf_py.tf_py_definitions import TraceableFunction
-    custom_traceable_functions = []
-    for module_name in module_names:
-        module = importlib.import_module(module_name)
-        if hasattr(module, "TENSORFLOW_PY_SIGNATURES"):
-            opdefs = module.TENSORFLOW_PY_SIGNATURES
-            for opdef in opdefs:
-                funs = []
-                for import_, fun_name in zip(opdef.imports, opdef.op_names):
-                    fun = try_eval_tf(import_, fun_name)
-                    if fun is not None:
-                        funs.append(fun)
-
-                custom_traceable_functions.append(TraceableFunction(opdef.op_proto, funs))
-    return custom_traceable_functions
-
-
-def get_tf_py_imports_and_op_protos(module_names):
-    imports = []
-    op_protos = []
-    for module_name in module_names:
-        module = importlib.import_module(module_name)
-        if hasattr(module, "TENSORFLOW_PY_SIGNATURES"):
-            opdefs = module.TENSORFLOW_PY_SIGNATURES
-            for opdef in opdefs:
-                imports_for_this_op = []
-                for import_, fun_name in zip(opdef.imports, opdef.op_names):
-                    if try_import(import_):
-                        imports_for_this_op.append(import_.strip())
-                op_protos.append(opdef.op_proto)
-                if imports_for_this_op:
-                    imports.append("\n".join(imports_for_this_op))
-    return "\n".join(imports), op_protos
-
-
-def get_reader(input_format,
-               output_format,
-               input_shape=None,
-               model_outputs=None,
-               permissive=False,
-               with_weights=True,
-               custom_converters=None):
-    if input_format == 'nnef':
-        from nnef_tools.io.nnef.nnef_io import Reader
-
-        configs = [NNEFParserConfig.STANDARD_CONFIG]
-
-        if output_format in ['tensorflow-pb', 'tensorflow-py', 'tensorflow-lite']:
-            from nnef_tools.conversion.tensorflow import nnef_to_tf
-            configs.append(nnef_to_tf.ParserConfig)
-        elif output_format in ['onnx']:
-            from nnef_tools.conversion.onnx import nnef_to_onnx
-            configs.append(nnef_to_onnx.ParserConfig)
-        elif output_format in ['caffe']:
-            from nnef_tools.conversion.caffe import nnef_to_caffe
-            configs.append(nnef_to_caffe.ParserConfig)
-        elif output_format in ['caffe2']:
-            from nnef_tools.conversion.caffe2 import nnef_to_caffe2
-            configs.append(nnef_to_caffe2.ParserConfig)
-        else:
-            assert False
-
-        configs += NNEFParserConfig.load_configs(custom_converters, load_standard=False)
-
-        return Reader(parser_configs=configs, unify=(output_format in ['caffe', 'caffe2']))
-    elif input_format == 'tensorflow-pb':
-        from nnef_tools.io.tensorflow.tf_pb_io import Reader
-        return Reader(convert_to_tf_py=True, input_shape=input_shape, output_names=model_outputs)
-    elif input_format == 'tensorflow-py':
-        from nnef_tools.io.tensorflow.tf_py_io import Reader
-        custom_traceable_functions = get_tf_py_custom_traceable_functions(custom_converters) if custom_converters else None
-        return Reader(expand_gradients=True, custom_traceable_functions=custom_traceable_functions)
-    elif input_format == 'tensorflow-lite':
-        from nnef_tools.io.tensorflow.tflite_io import Reader
-        return Reader(convert_to_tf_py=True)
+def get_reader(input_format, decomposed, fold_constants, custom_shapes):
+    if input_format == 'tf':
+        from .io.tf.graphdef import Reader
+        return Reader(fold_constants=fold_constants)
+    elif input_format == 'tflite':
+        from .io.tf.lite import Reader
+        return Reader()
+    elif input_format == 'nnef':
+        from .io.nnef import Reader
+        return Reader(decomposed=decomposed, custom_shapes=custom_shapes)
     elif input_format == 'onnx':
-        from nnef_tools.io.onnx.onnx_io import Reader
-        custom_shapes = get_custom_shape_functions(input_format, custom_converters) if custom_converters else None
-        return Reader(infer_shapes=True,
-                      input_shape=input_shape,
-                      custom_shapes=custom_shapes,
-                      output_names=model_outputs)
-    elif input_format == 'caffe':
-        from nnef_tools.io.caffe.caffe_io import Reader
-        return Reader()
+        from .io.onnx import Reader
+        return Reader(simplify=fold_constants)
     elif input_format == 'caffe2':
-        from nnef_tools.io.caffe2.caffe2_io import Reader
+        from .io.caffe2 import Reader
         return Reader()
+    elif input_format == 'caffe':
+        from .io.caffe2 import Reader
+        return Reader(legacy=True)
     else:
-        assert False
+        return None
 
 
-def get_custom_converters(input_format, output_format, module_names):
-    format = input_format if input_format != "nnef" else output_format
-    if format == "tensorflow-pb":
-        format = "tensorflow-py"
+def get_writer(output_format, fragments, generate_fragments, annotate_shapes, compression):
+    if output_format == 'tf':
+        from .io.tf.graphdef import Writer
+        return Writer()
+    elif output_format == 'tflite':
+        from .io.tf.lite import Writer
+        return Writer()
+    elif output_format == 'nnef':
+        from .io.nnef import Writer
+        return Writer(fragments=fragments, generate_custom_fragments=generate_fragments,
+                      annotate_shapes=annotate_shapes, compression=compression)
+    elif output_format == 'onnx':
+        from .io.onnx import Writer
+        return Writer()
+    elif output_format == 'caffe2':
+        from .io.caffe2 import Writer
+        return Writer()
+    else:
+        return None
 
-    direction = "exporters" if input_format != "nnef" else "importers"
-    attrname = (format + '_' + direction).replace('-', '_').upper()
 
-    custom_converter_by_op_name = {}
+def get_converter(input_format, output_format, io_transpose, custom_transforms, custom_functions,
+                  mirror_unsupported, keep_io_names):
+    if input_format == 'tf' and output_format == 'nnef':
+        from .conversion.tf_to_nnef import Converter
+        return Converter(io_transpose=io_transpose,
+                         custom_transforms=custom_transforms,
+                         custom_functions=custom_functions,
+                         mirror_unsupported=mirror_unsupported,
+                         keep_io_names=keep_io_names)
+    elif input_format == 'nnef' and output_format == 'tf':
+        from .conversion.nnef_to_tf import Converter
+        return Converter(io_transpose=io_transpose,
+                         custom_transforms=custom_transforms,
+                         custom_functions=custom_functions,
+                         mirror_unsupported=mirror_unsupported)
+    elif input_format == 'tflite' and output_format == 'nnef':
+        from .conversion.tflite_to_nnef import Converter
+        return Converter(io_transpose=io_transpose,
+                         custom_transforms=custom_transforms,
+                         custom_functions=custom_functions,
+                         mirror_unsupported=mirror_unsupported,
+                         keep_io_names=keep_io_names)
+    elif input_format == 'nnef' and output_format == 'tflite':
+        from .conversion.nnef_to_tflite import Converter
+        return Converter(io_transpose=io_transpose,
+                         custom_transforms=custom_transforms,
+                         custom_functions=custom_functions,
+                         mirror_unsupported=mirror_unsupported)
+    elif (input_format == 'onnx' or input_format == 'caffe2' or input_format == 'caffe') and output_format == 'nnef':
+        from .conversion.onnx_to_nnef import Converter
+        return Converter(custom_transforms=custom_transforms,
+                         custom_functions=custom_functions,
+                         mirror_unsupported=mirror_unsupported)
+    elif input_format == 'nnef' and (output_format == 'onnx' or output_format == 'caffe2'):
+        from .conversion.nnef_to_onnx import Converter
+        return Converter(custom_transforms=custom_transforms,
+                         custom_functions=custom_functions,
+                         mirror_unsupported=mirror_unsupported)
+    else:
+        return None
 
+
+def get_optimizer(format, keep_io_names):
+    if format == 'nnef':
+        from .optimization.nnef_optimizer import Optimizer
+        return Optimizer(keep_io_names=keep_io_names)
+    elif format == 'tf':
+        from .optimization.tf_optimizer import Optimizer
+        return Optimizer(keep_io_names=keep_io_names)
+    elif format == 'tflite':
+        from .optimization.tflite_optimizer import Optimizer
+        return Optimizer(keep_io_names=keep_io_names)
+    elif format == 'onnx':
+        from .optimization.onnx_optimizer import Optimizer
+        return Optimizer(keep_io_names=keep_io_names)
+    else:
+        return None
+
+
+def get_custom_converters(module_names):
+    CUSTOM_TRANSFORMS = "CUSTOM_TRANSFORMS"
+
+    transforms = {}
+    functions = {}
     for module_name in module_names:
         module = importlib.import_module(module_name)
-        if hasattr(module, attrname):
-            custom_converter_by_op_name.update(getattr(module, attrname))
+        if hasattr(module, CUSTOM_TRANSFORMS):
+            transforms.update(getattr(module, CUSTOM_TRANSFORMS))
 
-    return custom_converter_by_op_name
+        functions.update(Converter.find_public_functions(module))
+
+    return transforms, functions
 
 
-def get_custom_shape_functions(input_format, module_names):
-    attrname = "{}_SHAPES".format(input_format.upper())
-    custom_shapes = {}
+def get_custom_shapes(module_names):
+    CUSTOM_SHAPES = "CUSTOM_SHAPES"
+
+    shapes = {}
     for module_name in module_names:
         module = importlib.import_module(module_name)
-        if hasattr(module, attrname):
-            custom_shapes.update(getattr(module, attrname))
+        if hasattr(module, CUSTOM_SHAPES):
+            shapes.update(getattr(module, CUSTOM_SHAPES))
 
-    return custom_shapes
+    return shapes
 
 
-def get_converter(input_format, output_format, prefer_nchw=False, permissive=False, enable_default_conversion=False,
-                  enable_fragment_definitions=False, custom_converters=None):
-    if input_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite'] and output_format == 'nnef':
-        from nnef_tools.conversion.tensorflow.tf_to_nnef import Converter
-        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
-                                        if custom_converters else None)
-        return Converter(enable_imprecise_image_resize=permissive,
-                         custom_converter_by_op_name=custom_converter_by_op_name,
-                         enable_default_conversion=enable_default_conversion,
-                         generate_unknown_opdefs=enable_fragment_definitions)
-    elif input_format == 'nnef' and output_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite']:
-        from nnef_tools.conversion.tensorflow.nnef_to_tf import Converter
+def get_custom_fragments(module_names):
+    CUSTOM_FRAGMENTS = "CUSTOM_FRAGMENTS"
 
-        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
-                                        if custom_converters else None)
+    fragments = {}
+    for module_name in module_names:
+        module = importlib.import_module(module_name)
+        if hasattr(module, CUSTOM_FRAGMENTS):
+            fragments.update(getattr(module, CUSTOM_FRAGMENTS))
 
-        return Converter(prefer_nhwc=not prefer_nchw,
-                         enable_imprecise_image_resize=permissive,
-                         enable_imprecise_padding_border=permissive,
-                         custom_converter_by_op_name=custom_converter_by_op_name)
-    elif input_format == 'onnx' and output_format == 'nnef':
-        from nnef_tools.conversion.onnx.onnx_to_nnef import Converter
+    return fragments
 
-        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
-                                       if custom_converters else None)
 
-        return Converter(custom_converter_by_op_name=custom_converter_by_op_name)
-    elif input_format == 'nnef' and output_format == 'onnx':
-        from nnef_tools.conversion.onnx.nnef_to_onnx import Converter
-
-        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
-                                       if custom_converters else None)
-
-        return Converter(enable_imprecise_image_resize=permissive,
-                         custom_converter_by_op_name=custom_converter_by_op_name)
-    elif input_format == 'caffe' and output_format == 'nnef':
-        from nnef_tools.conversion.caffe.caffe_to_nnef import Converter
-
-        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
-                                       if custom_converters else None)
-
-        return Converter(custom_converter_by_op_name=custom_converter_by_op_name)
-    elif input_format == 'nnef' and output_format == 'caffe':
-        from nnef_tools.conversion.caffe.nnef_to_caffe import Converter
-
-        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
-                                       if custom_converters else None)
-
-        return Converter(custom_converter_by_op_name=custom_converter_by_op_name)
-    elif input_format == 'caffe2' and output_format == 'nnef':
-        from nnef_tools.conversion.caffe2.caffe2_to_nnef import Converter
-
-        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
-                                       if custom_converters else None)
-
-        return Converter(custom_converter_by_op_name=custom_converter_by_op_name)
-    elif input_format == 'nnef' and output_format == 'caffe2':
-        from nnef_tools.conversion.caffe2.nnef_to_caffe2 import Converter
-
-        custom_converter_by_op_name = (get_custom_converters(input_format, output_format, custom_converters)
-                                       if custom_converters else None)
-
-        return Converter(custom_converter_by_op_name=custom_converter_by_op_name)
+def needs_conversion(input_format, output_format):
+    if input_format == 'caffe2' and output_format == 'onnx':
+        return False
+    elif input_format == 'onnx' and output_format == 'caffe2':
+        return False
+    elif input_format == 'caffe' and (output_format == 'onnx' or output_format == 'caffe2'):
+        return False
     else:
-        assert False
+        return input_format != output_format
 
 
-def get_data_format_optimizer(input_format, output_format, io_transformation):
-    if output_format == 'nnef':
-        from nnef_tools.optimization.nnef.nnef_data_format_optimizer import Optimizer
-        return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
-    elif output_format in ['tensorflow-py', 'tensorflow-pb', 'tensorflow-lite']:
-        from nnef_tools.optimization.tensorflow.tf_data_format_optimizer import Optimizer
-        return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
-    elif output_format == 'onnx':
-        from nnef_tools.optimization.onnx.onnx_data_format_optimizer import Optimizer
-        return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
-    elif output_format == 'caffe':
-        return lambda g: None
-    elif output_format == 'caffe2':
-        from nnef_tools.optimization.caffe2.caffe2_data_format_optimizer import Optimizer
-        return Optimizer(io_transform=io_transformation, merge_transforms_into_variables=True)
-    else:
-        assert False
+def main(args):
+    io_transpose = False if args.io_transpose is None else True if len(args.io_transpose) == 0 else args.io_transpose
 
+    custom_transforms, custom_functions = get_custom_converters(args.custom_converters) \
+        if args.custom_converters is not None else (None, None)
 
-def get_writer(input_format, output_format, compress, with_weights=True, custom_converters=None):
-    if output_format == 'nnef':
-        from nnef_tools.io.nnef.nnef_io import Writer
-        fragments = NNEFParserConfig.combine_configs(
-            NNEFParserConfig.load_configs(custom_converters, load_standard=False)
-        ).fragments
-        return Writer(write_weights=with_weights,
-                      fragments=fragments,
-                      only_print_used_fragments=True,
-                      compression_level=compress if compress >= 0 else 0)
-    elif output_format == 'tensorflow-py':
-        from nnef_tools.io.tensorflow.tf_py_io import Writer
+    converter = None
+    if needs_conversion(args.input_format, args.output_format):
+        converter = get_converter(args.input_format, args.output_format, io_transpose,
+                                  custom_transforms, custom_functions,
+                                  args.mirror_unsupported, args.keep_io_names)
+        if converter is None:
+            print("Unsupported conversion: {} to {}".format(args.input_format, args.output_format))
+            return -1
 
-        if custom_converters:
-            custom_imports, custom_op_protos = get_tf_py_imports_and_op_protos(custom_converters)
-        else:
-            custom_imports, custom_op_protos = None, None
+    decomposed = converter.decomposed_operations() if converter else []
+    fragments = converter.defined_operations() if converter else {}
+    custom_shapes = converter.custom_shapes() if converter else {}
 
-        return Writer(write_weights=with_weights, custom_op_protos=custom_op_protos, custom_imports=custom_imports)
-    elif output_format == 'tensorflow-pb':
-        from nnef_tools.io.tensorflow.tf_pb_io import Writer
-        return Writer(convert_from_tf_py=True)
-    elif output_format == 'tensorflow-lite':
-        from nnef_tools.io.tensorflow.tflite_io import Writer
-        return Writer(convert_from_tf_py=True)
-    elif output_format == 'onnx':
-        from nnef_tools.io.onnx.onnx_io import Writer
-        return Writer()
-    elif output_format == 'caffe':
-        from nnef_tools.io.caffe.caffe_io import Writer
-        return Writer()
-    elif output_format == 'caffe2':
-        from nnef_tools.io.caffe2.caffe2_io import Writer
-        return Writer()
-    else:
-        assert False
+    if args.decompose is not None:
+        decomposed += args.decompose
 
+    if args.custom_shapes is not None:
+        custom_shapes.update(get_custom_shapes(args.custom_shapes))
 
-def get_extension(output_format, compress):
-    if output_format == 'nnef':
-        if compress >= 0:
-            return ".nnef.tgz"
-        else:
-            return ".nnef"
-    elif output_format == 'tensorflow-py':
-        return ".py"
-    elif output_format == 'tensorflow-pb':
-        return ".pb"
-    elif output_format == 'onnx':
-        return ".onnx"
-    elif output_format == 'tensorflow-lite':
-        return ".tflite"
-    elif output_format == 'caffe':
-        return ".prototxt"
-    elif output_format == 'caffe2':
-        return ""  # directory
-    else:
-        assert False
+    if args.custom_fragments is not None:
+        fragments.update(get_custom_fragments(args.custom_fragments))
 
+    reader = get_reader(args.input_format, decomposed=decomposed, fold_constants=args.fold_constants,
+                        custom_shapes=custom_shapes)
+    if reader is None:
+        print("Unsupported input-format: {}".format(args.input_format))
+        return -1
 
-def get_output_path(output_format, output_directory, output_prefix, compress):
-    return os.path.join(output_directory, output_prefix + get_extension(output_format, compress))
+    writer = get_writer(args.output_format, fragments=fragments, generate_fragments=args.generate_custom_fragments,
+                        annotate_shapes=args.annotate_shapes, compression=args.compress)
+    if writer is None:
+        print("Unsupported output-format: {}".format(args.output_format))
+        return -1
 
+    default_output_model = args.input_model + '.' + (args.output_format if args.output_format != 'tf' else 'pb')
 
-def fix_extension(path, ext):
-    if path.endswith(ext):
-        return path
-    return path + ext
+    reader_kwargs = {}
+    if args.input_shapes is not None:
+        input_shapes = eval(args.input_shapes)
+        if not isinstance(input_shapes, dict) or not all(isinstance(name, str) and isinstance(shape, tuple)
+                                                        for name, shape in six.iteritems(input_shapes)):
+            print("'Input-shape' must be a dict of strings to tuples")
+            return -1
 
-
-def fix_output_path(output_format, output_path, compress):
-    return fix_extension(output_path, get_extension(output_format, compress))
-
-
-def ensure_dirs(dir):
-    if not os.path.exists(dir):
-        os.makedirs(dir)
-
-
-def convert_using_premade_objects(in_filename, out_filename, out_info_filename, reader, converter,
-                                  data_format_optimizer, writer):
-    source_graph = reader(*in_filename)
-    target_graph, conv_info = converter(source_graph)
-    opt_info = data_format_optimizer(target_graph) if data_format_optimizer is not None else None
-    if os.path.dirname(out_filename):
-        ensure_dirs(os.path.dirname(out_filename))
-    write_info = writer(target_graph, out_filename)
-
-    if out_info_filename:
-        combined_info = conversion_info.compose(conv_info, opt_info, write_info)
-        ensure_dirs(os.path.dirname(out_info_filename))
-        conversion_info.dump(combined_info, out_info_filename)
-
-
-def convert(input_format,
-            output_format,
-            input_model,
-            output_path,
-            input_shape=None,
-            model_outputs=None,
-            prefer_nchw=False,
-            io_transformation=None,
-            compress=False,
-            permissive=False,
-            with_weights=True,
-            enable_default_conversion=False,
-            enable_fragment_definitions=False,
-            custom_converters=None,
-            conversion_info=False  # type: typing.Union[bool, str, None]
-            ):
-    target_is_parent_dir = False
-    if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef']:
-        output_prefix = os.path.basename(os.path.abspath(input_model[0]))
-        if output_format == 'caffe2':
-            output_prefix += '.caffe2'
-    elif input_format == 'caffe':
-        output_prefix = os.path.basename(os.path.abspath(input_model[1]))
-    elif input_format == 'caffe2':
-        output_prefix = os.path.basename(os.path.abspath(input_model[0]))
-        parent_dir_name = os.path.basename(os.path.dirname(os.path.abspath(input_model[0])))
-        if output_prefix == 'predict_net.pb' and parent_dir_name:
-            output_prefix = parent_dir_name
-            target_is_parent_dir = True
-    elif input_format == 'tensorflow-py':
-        output_prefix = input_model[0].split('.')[-1]
-    else:
-        assert False
-
-    if output_path:
-        if output_path.endswith('/') or output_path.endswith('\\'):
-            output_path = get_output_path(output_format=output_format,
-                                          output_directory=os.path.abspath(output_path),
-                                          output_prefix=output_prefix,
-                                          compress=compress)
-        else:
-            output_path = fix_output_path(output_format=output_format,
-                                          output_path=output_path,
-                                          compress=compress)
-    else:
-        if input_format in ['tensorflow-pb', 'tensorflow-lite', 'onnx', 'nnef', 'caffe2']:
-            if target_is_parent_dir:
-                output_dir = os.path.dirname(os.path.dirname(os.path.abspath(input_model[0])))
-            else:
-                output_dir = os.path.dirname(os.path.abspath(input_model[0]))
-            if not output_dir:
-                output_dir = '.'
-        elif input_format == 'caffe':
-            output_dir = os.path.dirname(os.path.abspath(input_model[1]))
-            if not output_dir:
-                output_dir = '.'
-        else:
-            output_dir = '.'
-
-        output_path = get_output_path(output_format=output_format,
-                                      output_directory=output_dir,
-                                      output_prefix=output_prefix,
-                                      compress=compress)
-
-    if conversion_info is True:
-        conversion_info = output_path + ".conversion.json"
-    elif conversion_info:
-        if conversion_info.endswith('/') or conversion_info.endswith('\\'):
-            conversion_info += os.path.basename(output_path) + '.conversion.json'
-        else:
-            conversion_info = fix_extension(conversion_info, '.json')
-
-    convert_using_premade_objects(in_filename=input_model,
-                                  out_filename=output_path,
-                                  out_info_filename=conversion_info,
-                                  reader=get_reader(input_format=input_format,
-                                                    output_format=output_format,
-                                                    input_shape=input_shape,
-                                                    model_outputs=model_outputs,
-                                                    permissive=permissive,
-                                                    with_weights=with_weights,
-                                                    custom_converters=custom_converters),
-                                  converter=get_converter(input_format=input_format,
-                                                          output_format=output_format,
-                                                          prefer_nchw=prefer_nchw,
-                                                          permissive=permissive,
-                                                          enable_default_conversion=enable_default_conversion,
-                                                          enable_fragment_definitions=enable_fragment_definitions,
-                                                          custom_converters=custom_converters),
-                                  data_format_optimizer=get_data_format_optimizer(input_format=input_format,
-                                                                                  output_format=output_format,
-                                                                                  io_transformation=io_transformation),
-                                  writer=get_writer(input_format=input_format,
-                                                    output_format=output_format,
-                                                    compress=compress,
-                                                    with_weights=with_weights,
-                                                    custom_converters=custom_converters))
-
-
-def get_args(argv):
-    parser = argparse.ArgumentParser(description="NNEFTools/convert: Neural network conversion tool",
-                                     formatter_class=argparse.RawTextHelpFormatter,
-                                     epilog="""Tips:
-- If you refer to a Python package or module that is not in the current directory,
-please add its location to PYTHONPATH.
-- Quote parameters if they contain spaces or special characters.""")
-
-    parser.add_argument("--input-format",
-                        choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx', 'caffe',
-                                 'caffe2'],
-                        required=True,
-                        help="""Input format""")
-    parser.add_argument("--output-format",
-                        choices=['nnef', 'tensorflow-pb', 'tensorflow-py', 'tensorflow-lite', 'onnx', 'caffe',
-                                 'caffe2'],
-                        required=True,
-                        help="""Output format""")
-    parser.add_argument("--input-model",
-                        nargs='+',
-                        required=True,
-                        help="""nnef: path of NNEF file, directory or nnef.tgz file.
-    In case of a single NNEF file, no weights are loaded.
-onnx: filename.onnx
-tensorflow-pb: filename.pb
-tensorflow-py: package.module.function [filename.ckpt]
-tensorflow-lite: filename.tflite
-caffe: filename.prototxt filename.caffemodel
-caffe2: predict_net.pb init_net.pb value_info.json or directory
-""")
-
-    parser.add_argument("--output-model",
-                        help="""Path of output file.
-If it ends with '/' or '\\', it is considered a directory and the filename is auto-generated, similarly to the default.
-Default: tensorflow-py: {function name}.{output extension}, others: {input path}.{output extension}
-Example for default name generation: module.function -> function.nnef
-                                     directory/network.onnx -> directory/network.onnx.nnef
-caffe2: this must be a directory""")
-
-    parser.add_argument("--io-transformation",
-                        default="IDENTITY",
-                        help="""The transformation to apply to input and output tensors.
-It can be a single transformation (applied to all IO tensors) or a tensor_name->transformation dict.
-Available transformations:
-- Transpose(axes: List[int])
-- IDENTITY
-- SMART_NHWC_TO_NCHW
-- SMART_NCHW_TO_NHWC
-The 'SMART' transformations work like a Transpose for rank >= 3 and IDENTITY otherwise.
-Default: IDENTITY
-Not supported if output-format is caffe
-""")
-
-    parser.add_argument('--input-shape',
-                        help="""onnx, tensorflow-pb:
-The shape of input tensors might be incomplete in the input model.
-For example they could be [?, 224, 224, 3] (unknown batch size) or ? (unknown rank and shape).
-
-Set all missing dimensions to 10 (if the rank is known):
---input-shape=10
-
-Set all input shapes to [10, 224, 224, 3]:
---input-shape="[10, 224, 224, 3]"
-
-Set different input shapes for each input:
---input-shape="{'input_name_1': [10, 224, 224, 3], 'input_name_2': [10, 299, 299, 3]}"
-To get the input names, and (possibly incomplete) input shapes, you can run the converter without --input-shape, 
-they will be listed if any of them is incomplete.
-   
-Default: Unknown dimensions are set to 1. If the rank is unknown this option can not be omitted.
-""")
-
-    parser.add_argument('--model-outputs',
-                        nargs='+',
-                        help="""tensorflow-pb: names of tensors to be treated as outputs, the resof the graph is stripped away""")
-
-    parser.add_argument("--prefer-nchw",
-                        action="store_true",
-                        help="""tensorflow-py/pb: Generate the NCHW version of operations where both NHWC and NCHW is available""")
-
-    parser.add_argument("--compress",
-                        nargs='?',
-                        default=-1,
-                        const=0,
-                        type=int,
-                        help="""nnef: Create a compressed model.nnef.tgz file.
-Optionally a number can be specified between 0-9 to set the compression level (default=0).
-Stronger compression is slower.""")
-
-    parser.add_argument("--permissive",
-                        action="store_true",
-                        help="""Allow some imprecise conversions""")
-
-    parser.add_argument("--default-conversion",
-                        action="store_true",
-                        help="""Enable default conversions""")
-
-    parser.add_argument("--fragment-definitions",
-                        action="store_true",
-                        help="""Enable automatic generation of fragment definitions for unknown ops""")
-
-    parser.add_argument('--custom-converters',
-                        nargs='*',
-                        help="""Modules of custom converters, e.g. package1.module1 [package2.module2 ...]""")
-
-    parser.add_argument("--conversion-info",
-                        nargs='?',
-                        default=False,
-                        const=True,
-                        help="""Set this to write a conversion info file. 
-Without an argument: Write to {output path}.conversion.json. 
-With an argument: Write to the path defined by the argument.""")
-
-    args = parser.parse_args(args=argv[1:])
-
-    if args.output_format == 'caffe' and args.io_transformation != "IDENTITY":
-        print("Error: --io-transformation is not supported for Caffe", file=sys.stderr)
-        exit(1)
-
-    args.io_transformation = parse_io_transform(args.io_transformation)
-
-    allowed_input_length = {
-        'nnef': [1],
-        'onnx': [1],
-        'tensorflow-pb': [1],
-        'tensorflow-py': [1, 2],
-        'tensorflow-lite': [1],
-        'caffe': [2],
-        'caffe2': [1, 3],
-    }
-    if not len(args.input_model) in allowed_input_length[args.input_format]:
-        print("Error: {} values specified to --input-model, allowed: {}"
-              .format(len(args.input_model), ', '.join(str(i) for i in allowed_input_length[args.input_format])),
-              file=sys.stderr)
-        exit(1)
-
-    if args.input_format == 'caffe2' and len(args.input_model) == 1:
-        args.input_model = [os.path.join(args.input_model[0], 'predict_net.pb'),
-                            os.path.join(args.input_model[0], 'init_net.pb'),
-                            os.path.join(args.input_model[0], 'value_info.json')]
-
-    if args.input_format == 'tensorflow-pb':
-        args.input_shape = parse_input_shapes(args.input_shape)
-    elif args.input_format == 'onnx':
-        args.input_shape = parse_input_shapes(args.input_shape)
-    else:
-        args.input_shape = None
-
-    args.no_weights = False
-
-    if sum(format == 'nnef' for format in [args.input_format, args.output_format]) != 1:
-        print("Error: Either input or output format must be nnef.", file=sys.stderr)
-        exit(1)
-
-    if args.input_format == 'tensorflow-py' and len(args.input_model) < 2:
-        args.no_weights = True
-
-    if not (-1 <= args.compress <= 9):
-        print("Error: If --compress is set, it must be in the range [0-9].")
-        exit(1)
-
-    if args.compress >= 0 and args.output_format != 'nnef':
-        print("Error: --compress can now be only used with NNEF as output format.")
-        exit(1)
-
-    if (args.input_format == "nnef"
-            and not os.path.isdir(args.input_model[0])
-            and not args.input_model[0].endswith('.tgz')):
-        args.no_weights = True
-
-    return args
-
-
-def convert_using_argv(argv):
-    args = get_args(argv)
-
-    if 'tensorflow-py' in [args.input_format, args.output_format]:
-        if 'TF_CPP_MIN_LOG_LEVEL' not in os.environ:
-            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-        import tensorflow as tf
-        if not tf.test.is_gpu_available():
-            print('Warning: Tensorflow is using CPU. Some operations are only supported in the GPU version.',
-                  file=sys.stderr)
+        reader_kwargs['input_shapes'] = input_shapes
 
     try:
-        convert(input_format=args.input_format,
-                output_format=args.output_format,
-                input_model=args.input_model,
-                output_path=args.output_model,
-                input_shape=args.input_shape,
-                model_outputs=args.model_outputs,
-                prefer_nchw=args.prefer_nchw,
-                io_transformation=args.io_transformation,
-                compress=args.compress,
-                permissive=args.permissive,
-                with_weights=not args.no_weights,
-                enable_default_conversion=args.default_conversion,
-                enable_fragment_definitions=args.fragment_definitions,
-                custom_converters=args.custom_converters,
-                conversion_info=args.conversion_info)
-    except utils.NNEFToolsException as e:
-        print("Error: " + str(e), file=sys.stderr)
-        exit(1)
+        graph = reader(args.input_model, **reader_kwargs)
 
+        if args.input_names is not None or args.output_names is not None:
+            not_found_names = []
 
-# Call this if you don't want to reload the whole program for each run
-def convert_using_command(command):
-    return convert_using_argv(utils.command_to_argv(command))
+            if args.input_names is not None:
+                input_names = set(args.input_names)
+                inputs = [tensor for tensor in graph.tensors if tensor.name in input_names]
+
+                if len(inputs) != len(input_names):
+                    found_names = [tensor.name for tensor in inputs]
+                    not_found_names.append([input_name for input_name in input_names if input_name not in found_names])
+                else:
+                    graph.inputs = inputs
+
+            if args.output_names is not None:
+                output_names = set(args.output_names)
+                outputs = [tensor for tensor in graph.tensors if tensor.name in output_names]
+
+                if len(outputs) != len(output_names):
+                    found_names = [tensor.name for tensor in outputs]
+                    not_found_names.append([output_name for output_name in output_names if output_name not in found_names])
+                else:
+                    graph.outputs = outputs
+
+            if len(not_found_names) > 0:
+                print("Could not find tensor(s) in graph: {}".format(not_found_names))
+                return -1
+
+            utils.remove_unreachable(graph)
+
+        optimizer = get_optimizer(args.input_format, args.keep_io_names)
+        if optimizer:
+            graph = optimizer(graph, only_required=True)
+
+        if converter:
+            graph.sort()
+            graph = converter(graph)
+
+        if args.optimize:
+            optimizer = get_optimizer(args.output_format, args.keep_io_names)
+            if optimizer:
+                graph = optimizer(graph)
+
+        print("Writing '{}'".format(args.output_model or default_output_model))
+        writer(graph, args.output_model or default_output_model)
+
+        return 0
+    except ConversionError as e:
+        print(e)
+        return -1
 
 
 if __name__ == '__main__':
-    convert_using_argv(sys.argv)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input-model', type=str, required=True,
+                        help='The input model')
+    parser.add_argument('--output-model', type=str, default=None,
+                        help='The output model')
+    parser.add_argument('--input-format', type=str, required=True, choices=['tf', 'tflite', 'onnx', 'nnef', 'caffe2', 'caffe'],
+                        help='The format of the input model')
+    parser.add_argument('--output-format', type=str, required=True, choices=['tf', 'tflite', 'onnx', 'nnef', 'caffe2'],
+                        help='The format of the output model')
+    parser.add_argument('--input-shapes', type=str, default=None,
+                        help='The (dict of) shape(s) to use for input(s).')
+    parser.add_argument('--io-transpose', type=str, nargs='*', default=None,
+                        help='The inputs/outputs to transpose')
+    parser.add_argument('--fold-constants', action='store_true',
+                        help='Enable folding of constant ops')
+    parser.add_argument('--optimize', action='store_true',
+                        help='Turn on optimization of resulting NNEF model')
+    parser.add_argument('--custom-converters', type=str, nargs='+',
+                        help='Module(s) containing custom converter code')
+    parser.add_argument('--custom-shapes', type=str, nargs='+',
+                        help='Module(s) containing custom shape inference code (when converting to NNEF)')
+    parser.add_argument('--custom-fragments', type=str, nargs='+',
+                        help='Module(s) containing custom fragment code (when converting to NNEF)')
+    parser.add_argument('--mirror-unsupported', action='store_true',
+                        help='Enable mirror-conversion of unsupported operations')
+    parser.add_argument('--generate-custom-fragments', action='store_true',
+                        help='Enable automatic generation of fragments for custom operations')
+    parser.add_argument('--keep-io-names', action='store_true',
+                        help='Keep the names of model inputs/outputs if possible')
+    parser.add_argument('--decompose', type=str, nargs='*', default=None,
+                        help='Names of operators to be decomposed by NNEF parser')
+    parser.add_argument('--input-names', type=str, nargs='+',
+                        help='Names of input tensor where the graph is cut before conversion')
+    parser.add_argument('--output-names', type=str, nargs='+',
+                        help='Names of output tensor where the graph is cut before conversion')
+    parser.add_argument('--annotate-shapes', action='store_true',
+                        help='Add tensor shapes as comments to NNEF output model')
+    parser.add_argument('--compress', type=int, nargs='?', default=None, const=1,
+                        help='Compress output NNEF folder at the given compression level')
+    exit(main(parser.parse_args()))

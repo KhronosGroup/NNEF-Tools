@@ -16,7 +16,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='nnef_tools',
-      version='0.1',
+      version='1.0',
       description='A package for managing NNEF files',
       url='https://github.com/KhronosGroup/NNEF-Tools',
       author='Viktor Gyenes',
@@ -24,7 +24,6 @@ setup(name='nnef_tools',
       license='Apache 2.0',
       classifiers=
       [
-          'Development Status :: 4 - Beta',
           'Intended Audience :: Developers',
           'License :: OSI Approved :: Apache Software License',
           'Programming Language :: Python :: 2',

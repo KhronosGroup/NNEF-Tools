@@ -24,13 +24,18 @@ NNEF Tests folder contains tests to verify installation and unit tests.
 [NNEF Parser](parser#nnef-parser-project) folder contains `C++` and `Python` source code for a sample NNEF graph parser.
 
 ## Release Notes
-### Change in shape inference compared to previous version (04.10.2019)
 
-According to a change in version 1.0.1 of the NNEF specification, the `shape_of` operator in NNEF syntax is deprecated, and the parser does not support it. This enables the decoupling of parsing from shape inference, allowing parsing to succeed even if shape information is not available for all operations, such as custom defined operations before the graph definition. Shape inference can still be run after training, furthermore it can be customized (via function pointers) for custom defined operations.
+### Reworked NNEF Tools (10.21.2020)
+
+The tools for converting models to NNEF and transforming NNEF models has been thoroughly reworked to make them more robust and unified and easier to maintain. The basic functionality of the main scripts has been kept, however their parameterization has been simplified and unified in some places; please refer to the readme and the help (`-h` option) of the respective scripts for more details. The scripts cover the following major areas of functionality: model conversion, optimization, execution and visualization. A GMAC calculator is also provide, and further utility scripts may be added in the future.  
 
 ### Change in quantization information in binary files (06.12.2020)
 
 According to the change in version 1.0.3 of the NNEF specification, quantization algorithm information has been deprecated in the tensor binary file format. The tensor binary only stores the item-type of the tensor data, and the binary reader does not return quantization information (also used to be called 'compression' info). Furthermore, the mapping between stored item-types and data-types in the structural description has been clarified, so that the reader of a tensor binary can tell what the data-type of the read tensor is. This enhances the reader as it can now properly map the binary data to C++ or Python numpy types upon reading. The C++ code has been updated to perform such a mapping, and is now able to return a typed array instead of just plain bytes.
+
+### Change in shape inference compared to previous version (04.10.2019)
+
+According to a change in version 1.0.1 of the NNEF specification, the `shape_of` operator in NNEF syntax is deprecated, and the parser does not support it. This enables the decoupling of parsing from shape inference, allowing parsing to succeed even if shape information is not available for all operations, such as custom defined operations before the graph definition. Shape inference can still be run after training, furthermore it can be customized (via function pointers) for custom defined operations.
 
 ### TENSOR BINARY BUG FIX (10.19.2018)
 
