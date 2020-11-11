@@ -111,7 +111,7 @@ int nnef_graph_execute( nnef_graph_t graph, char *perror )
     return 1;
 }
 
-size_t nnef_graph_input_names( nnef_graph_t graph, char** inputs )
+size_t nnef_graph_input_names( nnef_graph_t graph, const char** inputs )
 {
     const Graph* nnef_graph = (const Graph*)graph;
 
@@ -119,13 +119,13 @@ size_t nnef_graph_input_names( nnef_graph_t graph, char** inputs )
     {
         for ( size_t i = 0; i < nnef_graph->inputs.size(); ++i )
         {
-            inputs[i] = (char*)nnef_graph->inputs[i].c_str();
+            inputs[i] = nnef_graph->inputs[i].c_str();
         }
     }
     return nnef_graph->inputs.size();
 }
 
-size_t nnef_graph_output_names( nnef_graph_t graph, char** outputs )
+size_t nnef_graph_output_names( nnef_graph_t graph, const char** outputs )
 {
     const Graph* nnef_graph = (const Graph*)graph;
 
@@ -133,13 +133,13 @@ size_t nnef_graph_output_names( nnef_graph_t graph, char** outputs )
     {
         for ( size_t i = 0; i < nnef_graph->outputs.size(); ++i )
         {
-            outputs[i] = (char*)nnef_graph->outputs[i].c_str();
+            outputs[i] = nnef_graph->outputs[i].c_str();
         }
     }
     return nnef_graph->outputs.size();
 }
 
-nnef_tensor_t nnef_graph_find_tensor( nnef_graph_t graph, char* tensor_name )
+nnef_tensor_t nnef_graph_find_tensor( nnef_graph_t graph, const char* tensor_name )
 {
     const Graph *nnef_graph = (const Graph*)graph;
     if ( nnef_graph == NULL )
@@ -151,10 +151,10 @@ nnef_tensor_t nnef_graph_find_tensor( nnef_graph_t graph, char* tensor_name )
     return it != nnef_graph->tensors.end() ? (nnef_tensor_t)&it->second : NULL;
 }
 
-char* nnef_graph_name( nnef_graph_t graph )
+const char* nnef_graph_name( nnef_graph_t graph )
 {
     const Graph *nnef_graph = (const Graph*)graph;
-    return (char*)nnef_graph->name.c_str();
+    return nnef_graph->name.c_str();
 }
 
 
@@ -173,10 +173,16 @@ void nnef_tensor_release( nnef_tensor_t tensor )
     }
 }
 
-char* nnef_tensor_name( nnef_tensor_t tensor )
+const char* nnef_tensor_name( nnef_tensor_t tensor )
 {
     const Tensor *nnef_tensor = (const Tensor*)tensor;
-    return (char*)nnef_tensor->name.c_str();
+    return nnef_tensor->name.c_str();
+}
+
+const char* nnef_tensor_dtype( nnef_tensor_t tensor )
+{
+    const Tensor *nnef_tensor = (const Tensor*)tensor;
+    return nnef_tensor->dtype.c_str();
 }
 
 size_t nnef_tensor_rank( nnef_tensor_t tensor )
@@ -185,20 +191,10 @@ size_t nnef_tensor_rank( nnef_tensor_t tensor )
     return nnef_tensor->shape.size();
 }
 
-char* nnef_tensor_dtype( nnef_tensor_t tensor )
+const int* nnef_tensor_dims( nnef_tensor_t tensor )
 {
     const Tensor *nnef_tensor = (const Tensor*)tensor;
-    return (char*)nnef_tensor->dtype.c_str();
-}
-
-size_t nnef_tensor_dims( nnef_tensor_t tensor, int* dims )
-{
-    const Tensor *nnef_tensor = (const Tensor*)tensor;
-    for ( size_t i = 0; i < nnef_tensor->shape.size(); ++i )
-    {
-        dims[i] = nnef_tensor->shape[i];
-    }
-    return nnef_tensor->shape.size();
+    return nnef_tensor->shape.data();
 }
 
 void* nnef_tensor_data( nnef_tensor_t tensor )

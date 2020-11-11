@@ -105,7 +105,7 @@ extern "C" {
      *
      * @return input count
      */
-    EXPORTDLL size_t nnef_graph_input_names( nnef_graph_t graph, char** inputs );
+    EXPORTDLL size_t nnef_graph_input_names( nnef_graph_t graph, const char** inputs );
 
     /*
      * Query output names from NNEF graph
@@ -115,7 +115,7 @@ extern "C" {
      *
      * @return output count
      */
-    EXPORTDLL size_t nnef_graph_output_names( nnef_graph_t graph, char** outputs );
+    EXPORTDLL size_t nnef_graph_output_names( nnef_graph_t graph, const char** outputs );
 
     /*
      * Find tensor in NNEF graph by name
@@ -125,7 +125,7 @@ extern "C" {
      *
      * @return tensor
      */
-    EXPORTDLL nnef_tensor_t nnef_graph_find_tensor( nnef_graph_t graph, char* tensor_name );
+    EXPORTDLL nnef_tensor_t nnef_graph_find_tensor( nnef_graph_t graph, const char* tensor_name );
     
     /*
      * Query name of an NNEF graph
@@ -134,7 +134,7 @@ extern "C" {
      *
      * @return graph name
      */
-    EXPORTDLL char* nnef_graph_name( nnef_graph_t graph );
+    EXPORTDLL const char* nnef_graph_name( nnef_graph_t graph );
 
     
     
@@ -157,7 +157,16 @@ extern "C" {
      *
      * @return tensor name
      */
-    EXPORTDLL char* nnef_tensor_name( nnef_tensor_t tensor );
+    EXPORTDLL const char* nnef_tensor_name( nnef_tensor_t tensor );
+    
+    /*
+     * Query tensor data-type
+     *
+     * @param tensor: tensor
+     *
+     * @return data-type name
+     */
+    EXPORTDLL const char* nnef_tensor_dtype( nnef_tensor_t tensor );
     
     /*
      * Query tensor rank
@@ -169,22 +178,13 @@ extern "C" {
     EXPORTDLL size_t nnef_tensor_rank( nnef_tensor_t tensor );
 
     /*
-     * Query tensor data-type
-     *
-     * @param tensor: tensor
-     *
-     * @return data-type name
-     */
-    EXPORTDLL char *nnef_tensor_dtype( nnef_tensor_t tensor );
-
-    /*
      * Query tensor dims
      *
      * @param tensor: tensor
      *
      * @return tensor rank
      */
-    EXPORTDLL size_t nnef_tensor_dims( nnef_tensor_t tensor, int* dims );
+    EXPORTDLL const int* nnef_tensor_dims( nnef_tensor_t tensor );
     
     /*
      * Query tensor data
