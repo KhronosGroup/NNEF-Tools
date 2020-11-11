@@ -22,6 +22,7 @@ message(STATUS "Build executables in: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 # nnef library
 add_library(${PROJECT_NAME}
+        include/cnnef.h
         include/nnef.h
         include/nnef/common/binary.h
         include/nnef/common/dictionary.h
@@ -42,6 +43,7 @@ add_library(${PROJECT_NAME}
         include/nnef/flat/quant_parser.h
         include/nnef/flat/stdlib_protos.h
         src/nnef.cpp
+        src/cnnef.cpp
         )
 
 # build interface include dir is used when this cmake is included into
