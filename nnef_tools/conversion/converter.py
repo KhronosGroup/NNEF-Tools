@@ -124,6 +124,12 @@ class Converter:
 
         self._prepare(self._graph)
 
+        if not self._mirror_unsupported:
+            unsupported = {"'{}'".format(op.type) for op in graph.operations if op.type not in self._transforms}
+            if len(unsupported) != 0:
+                raise ConversionError("Conversion for operation type(s) {} is not implemented".
+                                      format(", ".join(unsupported)))
+
         for op in graph.operations:
             transform = self._transforms.get(op.type)
             if isinstance(transform, Transform) and transform.type is None:
