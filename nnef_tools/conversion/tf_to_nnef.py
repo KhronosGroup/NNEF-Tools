@@ -520,6 +520,7 @@ _Transforms = Converter.unpack_transforms({
     ('Pad', 'MirrorPad'):
         Transform(
             type='pad',
+            cond='!mode in ["CONSTANT", "REFLECT", "SYMMETRIC"]',
             defaults={
                 'mode': 'CONSTANT',
             },
@@ -530,7 +531,7 @@ _Transforms = Converter.unpack_transforms({
             outputs='!transpose_like(O[0], I[0])',
             attribs={
                 'padding': '![tuple(item) for item in paddings]',
-                'border': '!"reflect-even"  if mode == "SYMMETRIC" else mode.lower()',
+                'border': '!"reflect" if mode == "REFLECT" else "reflect-even" if mode == "SYMMETRIC" else "constant"',
             }
         ),
     'Slice':

@@ -257,13 +257,29 @@ _Transforms = Converter.unpack_transforms({
             inputs=('!I[0]', '!I[1]'),
             outputs='!transpose_like(O[0], I[0])',
         ),
+    ('PAD', 'MIRROR_PAD'):
+        Transform(
+            type='pad',
+            cond='!mode < 2',
+            defaults={
+                'mode': None,
+            },
+            using={
+                'paddings': '!transpose_list_like(as_const(I[1]), ref=I[0])',
+            },
+            inputs='!I[0]',
+            outputs='!transpose_like(O[0], I[0])',
+            attribs={
+                'padding': '![tuple(item) for item in paddings]',
+                'border': '!"reflect" if mode == 0 else "reflect-even" if mode == 1 else "constant"',
+            }
+        ),
     'IDENTITY': _TFTransforms['Identity'],
     'TRANSPOSE': _TFTransforms['Transpose'],
     'SPLIT': _TFTransforms['Split'],
     'SPLIT_V': _TFTransforms['SplitV'],
     'PACK': _TFTransforms['Pack'],
     'UNPACK': _TFTransforms['Unpack'],
-    'PAD': _TFTransforms['Pad'],
     'TILE': _TFTransforms['Tile'],
     'SQUEEZE': _TFTransforms['Squeeze'],
     'EXPAND_DIMS': _TFTransforms['ExpandDims'],

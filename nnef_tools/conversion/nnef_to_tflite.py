@@ -324,6 +324,20 @@ _Transforms = Converter.unpack_transforms({
             inputs=('!I[0]', '!I[1]'),
             outputs='!transpose_like(O[0], I[0])',
         ),
+    'pad':
+        Transform(
+            type='!"PAD" if border == "constant" else "MIRROR_PAD"',
+            cond='!border in ["constant", "reflect", "reflect-even"]',
+            using={'paddings': '![list(item) for item in padding]'},
+            inputs=(
+                '!I[0]',
+                '!as_tensor(ncx_to_nxc(paddings, cond=transposed(I[0])), np.int32)',
+            ),
+            outputs='!transpose_like(O[0], I[0])',
+            attribs={
+                'mode': '!0 if border == "reflect" else 1 if border == "reflect-even" else None',
+            },
+        ),
     # 'copy': _TFTransforms['copy'].with_type('IDENTITY'),  # only works in TF 2.3
     'transpose': _TFTransforms['transpose'].with_type('TRANSPOSE'),
     'split': _TFTransforms['split'].with_type('SPLIT_V'),
@@ -374,7 +388,6 @@ _Transforms = Converter.unpack_transforms({
     'argmax_reduce': _TFTransforms['argmax_reduce'].with_type('ARG_MAX'),
     'stack': _TFTransforms['stack'].with_type('PACK'),
     'unstack': _TFTransforms['unstack'].with_type('UNPACK'),
-    'pad': _TFTransforms['pad'].with_type('PAD'),
     'tile': _TFTransforms['tile'].with_type('TILE'),
     'slice': _TFTransforms['slice'].with_type('STRIDED_SLICE'),
     'softmax': _TFTransforms['softmax'].with_type('SOFTMAX'),
