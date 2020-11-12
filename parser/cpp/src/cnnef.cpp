@@ -16,7 +16,7 @@
 
 #include "cnnef.h"
 #include "nnef.h"
-#include <string>
+#include <cstring>
 
 
 using namespace nnef;
