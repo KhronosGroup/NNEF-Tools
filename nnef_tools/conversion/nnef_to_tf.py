@@ -703,10 +703,10 @@ _Transforms = Converter.unpack_transforms({
             type='Select',
             inputs=(
                 '!I[0]',
-                '!convert_binarg(I[1], I[2])',
-                '!convert_binarg(I[2], I[1])',
+                '!convert_binarg(I[1], I[0])',
+                '!convert_binarg(I[2], I[0])',
             ),
-            outputs='!transpose_output(O[0]) if transposed(I[1]) or transposed(I[2]) else O[0]',
+            outputs='!transpose_like(O[0], I[0])',
             attribs={
                 'T': '!I[1].dtype if not _lite_ else None',
             }

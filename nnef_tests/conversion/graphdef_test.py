@@ -579,6 +579,13 @@ class TestCases(TestEnv):
 
         self._test_conversion('not')
 
+    def test_cast(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.int32)
+        cast = tf.cast(input, dtype=tf.int8)
+        output = tf.cast(cast, dtype=tf.int32)
+
+        self._test_conversion('cast')
+
     def test_select(self):
         cond = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.bool)
         left = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)

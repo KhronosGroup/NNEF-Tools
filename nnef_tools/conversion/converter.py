@@ -137,9 +137,10 @@ class Converter:
 
             if transform is not None:
                 if self._convert(op, transform) is None:
+                    attribs = {key: value for key, value in six.iteritems(op.attribs) if not key.startswith('_')}
                     raise ConversionError(
-                        "Conversion for operation type '{}' with the given parameters is not implemented".format(
-                            op.type))
+                        "Conversion for operation type '{}' with attributes {} is not implemented".
+                            format(op.type, attribs))
             else:
                 if self._mirror_unsupported:
                     self._mirror(op)
@@ -481,6 +482,22 @@ class Converter:
 
 class ConverterToNNEF(Converter):
 
+    _DtypeFromNumpy = {
+        np.float16: 'scalar',
+        np.float32: 'scalar',
+        np.float64: 'scalar',
+        np.int8: 'integer',
+        np.uint8: 'integer',
+        np.int16: 'integer',
+        np.uint16: 'integer',
+        np.int32: 'integer',
+        np.uint32: 'integer',
+        np.int64: 'integer',
+        np.uint64: 'integer',
+        np.bool: 'logical',
+        np.bool_: 'logical',
+    }
+
     def __init__(self, transforms, functions=None, mirror_unsupported=False):
         Converter.__init__(self, transforms, functions, mirror_unsupported)
 
@@ -597,6 +614,10 @@ class ConverterToNNEF(Converter):
     @staticmethod
     def ensure_valid_id(name):
         return re.sub('[^_0-9a-zA-Z]+', '_', name)
+
+    @staticmethod
+    def nnef_dtype(dtype):
+        return ConverterToNNEF._DtypeFromNumpy[dtype]
 
 
 class ConverterFromNNEF(Converter):
