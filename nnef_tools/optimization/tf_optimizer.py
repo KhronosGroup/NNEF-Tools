@@ -25,6 +25,7 @@ class Optimizer:
     def __call__(self, graph, only_required=False):
         self._fix_inputs_without_producer(graph)
         replace_chain(graph, ['SpaceToBatchND', 'Conv2D', 'BatchToSpaceND'], self._replace_dilated_conv)
+        replace_chain(graph, ['Cast'], self._replace_bool_cast)
         if not only_required:
             self._remove_unused_constants(graph)
         return graph
@@ -83,6 +84,18 @@ class Optimizer:
 
         op.attribs['dilations'] = [1] + dilations + [1] if is_nxc else [1, 1] + dilations
         op.attribs['padding'] = 'SAME'
+
+    @staticmethod
+    def _replace_bool_cast(cast):
+        if cast.input.dtype == np.bool and cast.output.dtype != np.bool:
+            ones = Tensor(cast.graph, dtype=cast.output.dtype, shape=(), data=np.array(1, dtype=cast.output.dtype))
+            zeros = Tensor(cast.graph, dtype=cast.output.dtype, shape=(), data=np.array(0, dtype=cast.output.dtype))
+            Operation(cast.graph, type='Select', inputs=(cast.input, ones, zeros), outputs=cast.output)
+        elif cast.input.dtype != np.bool and cast.output.dtype == np.bool:
+            zeros = Tensor(cast.graph, dtype=cast.input.dtype, shape=(), data=np.array(0, dtype=cast.input.dtype))
+            Operation(cast.graph, type='NotEqual', inputs=(cast.input, zeros), outputs=cast.output)
+        else:
+            return False
 
     @staticmethod
     def _is_constant(tensor):

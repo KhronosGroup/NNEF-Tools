@@ -19,6 +19,7 @@ import nnef_tools.io.tf.graphdef as graphdef
 import nnef_tools.conversion.tf_to_nnef as tf_to_nnef
 import nnef_tools.conversion.nnef_to_tf as nnef_to_tf
 import nnef_tools.optimization.nnef_optimizer as nnef_opt
+import nnef_tools.optimization.tf_optimizer as tf_opt
 import unittest
 import tempfile
 try:
@@ -38,6 +39,7 @@ class TestEnv(unittest.TestCase):
     def setUp(self) -> None:
         self._tf_reader = graphdef.Reader(fold_constants=True)
         self._tf_writer = graphdef.Writer()
+        self._tf_optimizer = tf_opt.Optimizer()
         self._tf_to_nnef_converter = tf_to_nnef.Converter(io_transpose=self._io_transpose)
         self._nnef_to_tf_converter = nnef_to_tf.Converter(io_transpose=self._io_transpose)
         self._nnef_reader = nnef_io.Reader(custom_shapes=self._nnef_to_tf_converter.custom_shapes(),
@@ -93,6 +95,7 @@ class TestEnv(unittest.TestCase):
 
     def _convert_to_nnef(self, filename, input_shapes=None):
         tf_graph = self._tf_reader(filename, input_shapes=input_shapes)
+        tf_graph = self._tf_optimizer(tf_graph)
         nnef_graph = self._tf_to_nnef_converter(tf_graph)
         if self._optimize:
             nnef_graph = self._nnef_optimizer(nnef_graph)
@@ -585,6 +588,12 @@ class TestCases(TestEnv):
         output = tf.cast(cast, dtype=tf.int32)
 
         self._test_conversion('cast')
+
+    def test_cast_float_bool(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = tf.cast(input, dtype=tf.bool)
+
+        self._test_conversion('cast_float_bool')
 
     def test_select(self):
         cond = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.bool)
