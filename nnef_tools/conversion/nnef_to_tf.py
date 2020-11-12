@@ -632,7 +632,8 @@ _Transforms = Converter.unpack_transforms({
         ),
     'pad':
         Transform(
-            type='Pad',
+            type='!"Pad" if border == "constant" else "MirrorPad"',
+            cond='!border in ["constant", "reflect", "reflect-even"]',
             using={'paddings': '![list(item) for item in padding]'},
             inputs=(
                 '!I[0]',
@@ -641,6 +642,7 @@ _Transforms = Converter.unpack_transforms({
             outputs='!transpose_like(O[0], I[0])',
             attribs={
                 'T': '!I[0].dtype if not _lite_ else None',
+                'mode': '!"REFLECT" if border == "reflect" else "SYMMETRIC" if border == "reflect-even" else None',
             },
         ),
     'tile':

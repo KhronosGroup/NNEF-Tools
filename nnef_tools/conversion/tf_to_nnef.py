@@ -517,14 +517,20 @@ _Transforms = Converter.unpack_transforms({
             inputs=('!I[0]', '!I[1]', '!I[2]'),
             outputs='!transpose_like(O[0], I[0])',
         ),
-    'Pad':
+    ('Pad', 'MirrorPad'):
         Transform(
             type='pad',
-            using={'paddings': '!transpose_list_like(as_const(I[1]), ref=I[0])'},
+            defaults={
+                'mode': 'CONSTANT',
+            },
+            using={
+                'paddings': '!transpose_list_like(as_const(I[1]), ref=I[0])',
+            },
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
             attribs={
                 'padding': '![tuple(item) for item in paddings]',
+                'border': '!"reflect-even"  if mode == "SYMMETRIC" else mode.lower()',
             }
         ),
     'Slice':

@@ -692,6 +692,18 @@ class TestCases(TestEnv):
 
         self._test_conversion('pad')
 
+    def test_pad_mirror(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = tf.pad(input, paddings=[[0, 0], [1, 2], [1, 2], [0, 0]], mode='REFLECT')
+
+        self._test_conversion('pad_reflect')
+
+    def test_pad_symmetric(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = tf.pad(input, paddings=[[0, 0], [1, 2], [1, 2], [0, 0]], mode='SYMMETRIC')
+
+        self._test_conversion('pad_symmetric')
+
     def test_slice(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
         output = tf.slice(input, begin=[0, 1, 1, 0], size=[4, 30, 30, 3])
