@@ -12,14 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ..model.utils import replace_chain
+import six
+
 
 class Optimizer:
 
-    def __init__(self, keep_io_names=False):
+    def __init__(self, keep_io_names=False, custom_optimizers=None):
         self._keep_io_names = keep_io_names
+        self._custom_optimizers = custom_optimizers or {}
 
     def __call__(self, graph, only_required=False):
         self._fix_batchnorm_spatial(graph)
+        for chain, replacer in six.iteritems(self._custom_optimizers):
+            replace_chain(graph, chain, replacer)
         return graph
 
     @staticmethod

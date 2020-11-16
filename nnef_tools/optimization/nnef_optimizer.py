@@ -18,8 +18,9 @@ from ..model.graph import *
 
 class Optimizer:
 
-    def __init__(self, keep_io_names=False):
+    def __init__(self, keep_io_names=False, custom_optimizers=None):
         self._keep_io_names = keep_io_names
+        self._custom_optimizers = custom_optimizers or {}
 
     def __call__(self, graph, only_required=False):
         self._fix_inputs_as_output(graph)
@@ -64,6 +65,10 @@ class Optimizer:
                 changed |= replace_chain(graph, [{'conv', 'deconv', 'linear'}, {'mul', 'div'}], self._merge_linear_mul)
                 changed |= replace_chain(graph, ['matmul', {'add', 'sub'}], self._merge_matmul_bias)
                 changed |= replace_chain(graph, [{'conv', 'deconv'}, 'batch_normalization'], self._merge_conv_batch_norm)
+
+                for chain, replacer in six.iteritems(self._custom_optimizers):
+                    changed |= replace_chain(graph, chain, replacer)
+
                 changed |= self._remove_unused_variables(graph)
 
         generate_tensor_names_from_op_type(graph, keep_io_names=self._keep_io_names)

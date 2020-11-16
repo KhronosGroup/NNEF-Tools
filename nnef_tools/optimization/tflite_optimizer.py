@@ -18,11 +18,14 @@ from ..model.graph import *
 
 class Optimizer:
 
-    def __init__(self, keep_io_names=False):
+    def __init__(self, keep_io_names=False, custom_optimizers=None):
         self._keep_io_names = keep_io_names
+        self._custom_optimizers = custom_optimizers or {}
 
     def __call__(self, graph, only_required=False):
         replace_chain(graph, ['RESHAPE', 'RESHAPE', 'PACK', 'PACK', 'RESHAPE'], self._replace_resize_nearest)
+        for chain, replacer in six.iteritems(self._custom_optimizers):
+            replace_chain(graph, chain, replacer)
         return graph
 
     @staticmethod

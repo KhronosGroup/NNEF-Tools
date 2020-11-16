@@ -19,13 +19,16 @@ from ..utils.types import from_numpy
 
 class Optimizer:
 
-    def __init__(self, keep_io_names=False):
+    def __init__(self, keep_io_names=False, custom_optimizers=None):
         self._keep_io_names = keep_io_names
+        self._custom_optimizers = custom_optimizers or {}
 
     def __call__(self, graph, only_required=False):
         self._fix_inputs_without_producer(graph)
         replace_chain(graph, ['SpaceToBatchND', 'Conv2D', 'BatchToSpaceND'], self._replace_dilated_conv)
         replace_chain(graph, ['Cast'], self._replace_bool_cast)
+        for chain, replacer in six.iteritems(self._custom_optimizers):
+            replace_chain(graph, chain, replacer)
         if not only_required:
             self._remove_unused_constants(graph)
         return graph

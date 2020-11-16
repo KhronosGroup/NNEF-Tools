@@ -105,19 +105,19 @@ def get_converter(input_format, output_format, io_transpose, custom_transforms, 
         return None
 
 
-def get_optimizer(format, keep_io_names):
+def get_optimizer(format, keep_io_names, custom_optimizers=None):
     if format == 'nnef':
         from .optimization.nnef_optimizer import Optimizer
-        return Optimizer(keep_io_names=keep_io_names)
+        return Optimizer(keep_io_names=keep_io_names, custom_optimizers=custom_optimizers)
     elif format == 'tf':
         from .optimization.tf_optimizer import Optimizer
-        return Optimizer(keep_io_names=keep_io_names)
+        return Optimizer(keep_io_names=keep_io_names, custom_optimizers=custom_optimizers)
     elif format == 'tflite':
         from .optimization.tflite_optimizer import Optimizer
-        return Optimizer(keep_io_names=keep_io_names)
+        return Optimizer(keep_io_names=keep_io_names, custom_optimizers=custom_optimizers)
     elif format == 'onnx':
         from .optimization.onnx_optimizer import Optimizer
-        return Optimizer(keep_io_names=keep_io_names)
+        return Optimizer(keep_io_names=keep_io_names, custom_optimizers=custom_optimizers)
     else:
         return None
 
@@ -159,6 +159,20 @@ def get_custom_fragments(module_names):
             fragments.update(getattr(module, CUSTOM_FRAGMENTS))
 
     return fragments
+
+
+def get_custom_optimizers(module_names):
+    CUSTOM_OPTIMIZERS = "CUSTOM_OPTIMIZERS"
+
+    optimizers = {}
+    for module_name in module_names:
+        module = importlib.import_module(module_name)
+        if hasattr(module, CUSTOM_OPTIMIZERS):
+            optimizers.update(getattr(module, CUSTOM_OPTIMIZERS))
+
+    print(optimizers)
+
+    return optimizers
 
 
 def needs_conversion(input_format, output_format):
@@ -265,7 +279,8 @@ def main(args):
             graph = converter(graph)
 
         if args.optimize:
-            optimizer = get_optimizer(args.output_format, args.keep_io_names)
+            custom_optimizers = get_custom_optimizers(args.custom_optimizers) if args.custom_optimizers is not None else None
+            optimizer = get_optimizer(args.output_format, keep_io_names=args.keep_io_names, custom_optimizers=custom_optimizers)
             if optimizer:
                 graph = optimizer(graph)
 
@@ -302,6 +317,8 @@ if __name__ == '__main__':
                         help='Module(s) containing custom shape inference code (when converting to NNEF)')
     parser.add_argument('--custom-fragments', type=str, nargs='+',
                         help='Module(s) containing custom fragment code (when converting to NNEF)')
+    parser.add_argument('--custom-optimizers', type=str, nargs='+',
+                        help='Module(s) containing custom optimizer code (when converting to NNEF)')
     parser.add_argument('--mirror-unsupported', action='store_true',
                         help='Enable mirror-conversion of unsupported operations')
     parser.add_argument('--generate-custom-fragments', action='store_true',
