@@ -309,17 +309,19 @@ _Transforms = Converter.unpack_transforms({
                 'groups': '!1 if not depthwise else 0',
             }
         ),
-    ('MaxPool', 'AvgPool'):
+    ('MaxPool', 'AvgPool', 'MaxPoolWithArgmax'):
         Transform(
-            type=('max_pool', 'avg_pool'),
+            type=('max_pool', 'avg_pool', 'max_pool_with_index'),
             defaults={
                 'explicit_paddings': [],
+                'data_format': 'NHWC',
             },
             inputs=(
                 '!transpose_input(I[0], data_format)',
             ),
             outputs=(
                 '!transpose_output(O[0], data_format)',
+                '!transpose_output(O[1], data_format) if len(O) > 1 else None',
             ),
             attribs={
                 'size': '!nxc_to_ncx(ksize) if is_nxc(data_format) else ksize',

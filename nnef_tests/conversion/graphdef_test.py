@@ -193,6 +193,12 @@ class TestCases(TestEnv):
 
         self._test_conversion('max_pool2d')
 
+    def test_max_pool2d_with_index(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        maximum, index = tf.nn.max_pool_with_argmax(input, ksize=[1, 3, 3, 1], strides=[1, 2, 2, 1], padding='SAME')
+
+        self._test_conversion('max_pool2d_with_index')
+
     def test_avg_pool2d(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
         output = tf.nn.avg_pool2d(input, ksize=3, strides=1, padding='SAME')

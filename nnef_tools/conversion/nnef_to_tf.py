@@ -388,21 +388,22 @@ _Transforms = Converter.unpack_transforms({
                 'T': '!I[0].dtype',
             }
         ),
-    ('max_pool', 'avg_pool'):
+    ('max_pool', 'avg_pool', 'max_pool_with_index'):
         Transform(
-            type=('MaxPool', 'AvgPool'),
+            type=('MaxPool', 'AvgPool', 'MaxPoolWithArgmax'),
             inputs=(
                 '!transpose_input(I[0])',
             ),
             outputs=(
                 '!transpose_output(O[0])',
+                '!transpose_output(O[1]) if len(O) > 1 else None',
             ),
             attribs={
                 'ksize': '!ncx_to_nxc(size) if is_nxc() else size',
                 'strides': '!ncx_to_nxc(stride) if is_nxc() else stride',
                 'padding': '!convert_padding(padding)',
                 'explicit_paddings': '!convert_explicit_paddings(padding)',
-                'data_format': '!data_format(I[0].rank - 2)',
+                'data_format': '!data_format(I[0].rank - 2) if _type_ != "max_pool_with_index" else None',
                 'T': '!I[0].dtype',
             }
         ),
