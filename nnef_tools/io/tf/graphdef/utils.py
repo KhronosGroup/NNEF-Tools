@@ -294,11 +294,10 @@ def set_input_shapes(graph_def, input_shapes):
     return reinfer_shapes(graph_def)
 
 
-def retain_reachables_from_outputs(graph_def, outputs):
+def retain_reachables_from_outputs(graph_def, output_names):
     graph = import_graph_def(graph_def)
 
-    reachables = {tensor.op.name for tensor in outputs}
-    reachables = _find_reachables_backward(graph, reachables)
+    reachables = _find_reachables_backward(graph, set(output_names))
 
     return _retain_nodes(graph_def, reachables)
 
@@ -306,8 +305,8 @@ def retain_reachables_from_outputs(graph_def, outputs):
 def insert_rename_identities(graph_def, tensor_rename):
     for tensor, name in six.iteritems(tensor_rename):
         tensor_name = _remove_zero_index(tensor.name)
-        graph_def.node.append(_make_identity_node(tensor_name, name,
-                                                  tensor.dtype.as_numpy_dtype,
-                                                  tuple(tensor.shape.as_list())))
-
+        if name != tensor_name:
+            graph_def.node.append(_make_identity_node(tensor_name, name,
+                                                      tensor.dtype.as_numpy_dtype,
+                                                      tuple(tensor.shape.as_list())))
     return graph_def

@@ -28,14 +28,16 @@ composite_function = composite.function
 
 
 def save_default_graph(filename, session, outputs, input_shapes=None, fold_constants=True, collapse_composites=True):
-    output_names = [tensor.name[:-2] if tensor.name.endswith(':0') else tensor.name for tensor in outputs]
+    if not isinstance(outputs, dict):
+        outputs = {tensor: tensor.name[:-2] if tensor.name.endswith(':0') else tensor.name.replace(':', '_')
+                   for tensor in outputs}
+
+    output_names = list(outputs.values())
 
     graph_def = export_graph_def(tf.get_default_graph())
+    graph_def = insert_rename_identities(graph_def, outputs)
     graph_def = graph_util.convert_variables_to_constants(session, graph_def, output_names)
-    graph_def = retain_reachables_from_outputs(graph_def, outputs.keys() if isinstance(outputs, dict) else outputs)
-
-    if isinstance(outputs, dict):
-        graph_def = insert_rename_identities(graph_def, outputs)
+    graph_def = retain_reachables_from_outputs(graph_def, output_names)
 
     if input_shapes:
         graph_def = set_input_shapes(graph_def, input_shapes)
