@@ -638,3 +638,9 @@ class ConverterFromNNEF(Converter):
                 op.type = 'constant'
                 op.attribs['value'] = op.output.data
                 del op.attribs['label']
+
+    @staticmethod
+    def fill_data_in_constants(graph):
+        for op in graph.operations:
+            if op.type == 'constant':
+                op.output.data = op.attribs['value']

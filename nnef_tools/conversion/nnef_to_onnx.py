@@ -35,6 +35,7 @@ class Converter(_Converter):
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
 
     def __call__(self, graph):
+        self.fill_data_in_constants(graph)
         self.convert_variables_to_constants(graph)
         graph = _Converter.__call__(self, graph)
         self._fix_inline_constants(graph)

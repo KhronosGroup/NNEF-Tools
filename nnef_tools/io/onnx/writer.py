@@ -220,5 +220,6 @@ class Writer(object):
 
     def __call__(self, graph, filename):
         model_proto = build_model(graph, self._ir_version, self._opset_version)
+        onnx.checker.check_model(model_proto)
         with open(filename, 'wb') as file:
             file.write(model_proto.SerializeToString())
