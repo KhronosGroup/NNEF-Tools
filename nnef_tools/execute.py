@@ -169,7 +169,8 @@ class TFExecutor(Executor):
         consumed = {tensor for op in ops for tensor in op.inputs}
 
         self.inputs = [op.outputs[0] for op in ops if op.type == 'Placeholder']
-        self.outputs = [tensor for op in ops if len(op.inputs) for tensor in op.outputs if tensor not in consumed]
+        self.outputs = [tensor for op in ops if len(op.inputs) for tensor in op.outputs
+                        if tensor not in consumed and tensor.name.endswith(':0')]
 
     def input_info(self):
         return [TensorInfo(tensor.name, tuple(tensor.shape.as_list()), tensor.dtype.as_numpy_dtype())
