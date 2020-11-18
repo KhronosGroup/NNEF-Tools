@@ -172,11 +172,11 @@ class TFExecutor(Executor):
         self.outputs = [tensor for op in ops if len(op.inputs) for tensor in op.outputs if tensor not in consumed]
 
     def input_info(self):
-        return [TensorInfo(tensor.name, tuple(tensor.shape.as_list()), tensor.dtype.as_numpy_dtype())
+        return [TensorInfo(tensor.name, tuple(tensor.shape.as_list()), tensor.dtype.as_numpy_dtype)
                 for tensor in self.inputs]
 
     def output_info(self):
-        return [TensorInfo(tensor.name, tuple(tensor.shape.as_list()), tensor.dtype.as_numpy_dtype())
+        return [TensorInfo(tensor.name, tuple(tensor.shape.as_list()), tensor.dtype.as_numpy_dtype)
                 for tensor in self.outputs]
 
     def __call__(self, inputs, output_names=None, collect_statistics=False):
