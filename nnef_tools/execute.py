@@ -189,8 +189,7 @@ class TFExecutor(Executor):
             if len(invalid):
                 raise ValueError('Invalid tensor name(s): {}'.format(invalid))
 
-            outputs = {tensor.name: tensor
-                       for op in ops if len(op.inputs) for tensor in op.outputs if tensor.name in output_names}
+            outputs = {tensor.name: tensor for op in ops for tensor in op.outputs if tensor.name in output_names}
         else:
             outputs = {tensor.name: tensor for tensor in self.outputs}
 
