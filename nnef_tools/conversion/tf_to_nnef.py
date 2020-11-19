@@ -390,10 +390,14 @@ _Transforms = Converter.unpack_transforms({
     'Squeeze':
         Transform(
             type='squeeze',
+            using={
+                'shape': '!ncx_to_nxc(I[0].shape) if transposed(I[0]) else I[0].shape',
+            },
             inputs='!undo_transpose(I[0])',
             outputs='!O[0]',
             attribs={
-                'axes': '!ensure_list(ensure_positive(squeeze_dims, I[0].rank)) if len(squeeze_dims) != 0 else [i for i, x in enumerate(I[0].shape) if x == 1]',
+                'axes': '!ensure_list(ensure_positive(squeeze_dims, I[0].rank)) if len(squeeze_dims) != 0 else'
+                        ' [i for i, x in enumerate(shape) if x == 1]',
                 'dtype': '!T',
             }
         ),

@@ -293,6 +293,13 @@ class TestCases(TestEnv):
 
         self._test_conversion('squeeze')
 
+    def test_squeeze_all(self):
+        input = tf.placeholder(shape=(4, 32, 32, 1), dtype=tf.float32)
+        squeezed = tf.squeeze(input)
+        output = tf.expand_dims(squeezed, axis=[3])
+
+        self._test_conversion('squeeze_all')
+
     def test_transpose(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
         trans = tf.transpose(input, perm=(0, 3, 1, 2))
