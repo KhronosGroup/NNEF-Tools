@@ -675,11 +675,14 @@ _Transforms = Converter.unpack_transforms({
     'LRN':
         Transform(
             type='local_response_normalization',
-            inputs='!I[0]',
-            outputs='!transpose_like(O[0], I[0])',
+            using={
+                'size': '!(radius if _lite_ else depth_radius) * 2 + 1'
+            },
+            inputs='!transpose_input(I[0])',
+            outputs='!transpose_output(O[0])',
             attribs={
-                'size': '![1, radius if _lite_ else depth_radius] + [1] * (I[0].rank - 2)',
-                'alpha': '!alpha',
+                'size': '![1, size] + [1] * (I[0].rank - 2)',
+                'alpha': '!alpha * size',
                 'beta': '!beta',
                 'bias': '!bias',
             }
