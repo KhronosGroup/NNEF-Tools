@@ -367,6 +367,16 @@ _Transforms = Converter.unpack_transforms({
                 'ratios': '!as_const(I[1])',
             }
         ),
+    'Shape':
+        Transform(
+            type='constant',
+            outputs='!O[0]',
+            attribs={
+                'shape': '!list([I[0].rank])',
+                'dtype': '!out_type',
+                'value': '!ensure_list(I[0].shape)',
+            }
+        ),
     'Reshape':
         Transform(
             type='reshape',
