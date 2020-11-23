@@ -764,13 +764,16 @@ _Transforms = Converter.unpack_transforms({
     'local_response_normalization':
         Transform(
             type='LRN',
-            cond='!size[0] == 1 and all(s == 1 for s in size[2:])',
+            using={
+                'channel': '!1 if transposed(I[0]) else len(size) - 1',
+            },
+            cond='!all(s == 1 or i == channel for i, s in enumerate(size))',
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
             attribs={
-                'depth_radius': '!size[1] if not _lite_ else None',
-                'radius': '!size[1] if _lite_ else None',
-                'alpha': '!alpha',
+                'depth_radius': '!size[channel] // 2 if not _lite_ else None',
+                'radius': '!size[channel] // 2 if _lite_ else None',
+                'alpha': '!alpha / size[channel]',
                 'beta': '!beta',
                 'bias': '!bias',
             }

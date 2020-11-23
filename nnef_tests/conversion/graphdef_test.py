@@ -790,8 +790,8 @@ class TestCases(TestEnv):
         self._test_conversion('upsample-linear')
 
     def test_lrn(self):
-        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
-        output = tf.nn.local_response_normalization(input, depth_radius=3)
+        input = tf.placeholder(shape=(4, 32, 32, 8), dtype=tf.float32)
+        output = tf.nn.local_response_normalization(input, depth_radius=2)
 
         self._test_conversion('lrn')
 
