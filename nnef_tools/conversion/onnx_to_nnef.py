@@ -619,7 +619,9 @@ _Transforms = Converter.unpack_transforms({
             ]),
             cond='!((mode == "nearest" and (upsample or downsample)) or (mode == "linear" and upsample)) and'
                  ' sizes[0] == I[0].shape[0] and sizes[1] == I[0].shape[1] and'
-                 ' (coordinate_transformation_mode == "half_pixel" or coordinate_transformation_mode == "asymmetric" or'
+                 ' (coordinate_transformation_mode == "half_pixel" or'
+                 ' coordinate_transformation_mode == "pytorch_half_pixel" or'
+                 ' coordinate_transformation_mode == "asymmetric" or'
                  ' coordinate_transformation_mode == "align_corners")',
             inputs='!I[0]',
             outputs='!O[0]',
@@ -627,8 +629,9 @@ _Transforms = Converter.unpack_transforms({
                 'factor': '!upsample_factor(I[0].shape[2:], sizes[2:]) if upsample else'
                           ' downsample_factor(I[0].shape[2:], sizes[2:])',
                 'method': '!("aligned" if coordinate_transformation_mode == "align_corners" else'
-                          ' "symmetric" if coordinate_transformation_mode == "half_pixel" else "asymmetric")'
-                          ' if mode == "linear" else None',
+                          ' "symmetric" if coordinate_transformation_mode == "half_pixel" or '
+                          ' coordinate_transformation_mode == "pytorch_half_pixel" else'
+                          ' "asymmetric") if mode == "linear" else None',
             }
         ),
     'Constant':
