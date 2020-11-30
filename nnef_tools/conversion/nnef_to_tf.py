@@ -778,4 +778,14 @@ _Transforms = Converter.unpack_transforms({
                 'bias': '!bias',
             }
         ),
+    'add_n':
+        Transform(
+            type='AddN',
+            inputs=['!I[:]'],
+            outputs='!transpose_like(O[0], I[0])',
+            attribs={
+                'T': '!O[0].dtype',
+                'N': '!len(I)',
+            },
+        ),
 })

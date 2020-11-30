@@ -694,4 +694,10 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
         ),
+    'AddN':
+        Transform(
+            type='add_n',
+            inputs=['!I[:]'],
+            outputs='!transpose_like(O[0], I[0])'
+        ),
 })

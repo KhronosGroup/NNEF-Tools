@@ -395,4 +395,5 @@ _Transforms = Converter.unpack_transforms({
     'nearest_upsample': _TFTransforms['nearest_upsample'].with_type('RESIZE_NEAREST_NEIGHBOR'),
     'nearest_downsample': _TFTransforms['nearest_downsample'].with_type('RESIZE_NEAREST_NEIGHBOR'),
     'multilinear_upsample': _TFTransforms['multilinear_upsample'].with_type('RESIZE_BILINEAR'),
+    'add_n': _TFTransforms['add_n'].with_type('ADD_N'),
 })

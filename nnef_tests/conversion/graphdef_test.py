@@ -801,6 +801,12 @@ class TestCases(TestEnv):
 
         self._test_conversion('l2_normalize')
 
+    def test_add_n(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = tf.add_n([input, input, input])
+
+        self._test_conversion('add_n')
+
 
 class NetworkTestCases(TestEnv):
 
