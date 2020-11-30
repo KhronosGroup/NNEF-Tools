@@ -189,10 +189,10 @@ class Optimizer:
         if not Optimizer._is_channelwise_shape(bias.shape):
             return False
 
-        if matmul.attribs['transposeA']:
+        if 'transposeA' in matmul.attribs.keys() and matmul.attribs['transposeA']:
             return False
 
-        if not matmul.attribs['transposeB']:
+        if 'transposeB' in matmul.attribs.keys() and not matmul.attribs['transposeB']:
             producer = matmul.inputs[1].producer
             data = matmul.inputs[1].data
             if data is None or producer.type != 'variable':
