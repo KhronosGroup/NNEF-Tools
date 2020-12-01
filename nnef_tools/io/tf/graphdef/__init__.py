@@ -16,7 +16,7 @@ from .reader import Reader
 from .writer import Writer
 from .composite import replace_composites_with_py_functions, reset_composites
 from .utils import set_input_shapes, fold_constant_tensors, retain_reachables_from_outputs, insert_rename_identities
-from .utils import import_graph_def, export_graph_def
+from .utils import import_graph_def, export_graph_def, check_finite
 from tensorflow.python.framework import graph_util
 try:
     import tensorflow.compat.v1 as tf
@@ -35,16 +35,21 @@ def save_default_graph(filename, session, outputs, input_shapes=None, fold_const
     output_names = list(outputs.values())
 
     graph_def = export_graph_def(tf.get_default_graph())
+    check_finite(graph_def)
     graph_def = insert_rename_identities(graph_def, outputs)
     graph_def = graph_util.convert_variables_to_constants(session, graph_def, output_names)
     graph_def = retain_reachables_from_outputs(graph_def, output_names)
+    check_finite(graph_def)
 
     if input_shapes:
         graph_def = set_input_shapes(graph_def, input_shapes)
+        check_finite(graph_def)
     if fold_constants:
         graph_def = fold_constant_tensors(graph_def)
+        check_finite(graph_def)
     if collapse_composites:
         graph_def = replace_composites_with_py_functions(graph_def)
+        check_finite(graph_def)
 
     with open(filename, 'wb') as file:
         file.write(graph_def.SerializeToString())

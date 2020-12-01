@@ -14,6 +14,7 @@
 
 from .protobuf import *
 from .writer import _build_attribute
+from .reader import _get_attributes
 import numpy as np
 import six
 try:
@@ -310,3 +311,12 @@ def insert_rename_identities(graph_def, tensor_rename):
                                                       tensor.dtype.as_numpy_dtype,
                                                       tuple(tensor.shape.as_list())))
     return graph_def
+
+
+def check_finite(graph_def):
+    for node in graph_def.node:
+        attribs = _get_attributes(node.attr)
+        for key, value in six.iteritems(attribs):
+            if isinstance(value, np.ndarray) and not np.all(np.isfinite(value)):
+                raise ValueError("Attribute '{}' of op '{}' named '{}' contains nan or inf".
+                                 format(key, node.op, node.name))
