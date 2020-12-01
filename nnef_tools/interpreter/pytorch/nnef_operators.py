@@ -80,14 +80,27 @@ def _positive_pad(input, padding, border='constant', value=0.0):
 
     assert padding
     assert len(input.shape) in (3, 4, 5)
-    assert padding[:2] == [(0, 0), (0, 0)]
+    assert padding[:2] == [(0, 0), (0, 0)] or (padding[0] == (0, 0) and padding[-1] == (0, 0))
     assert border in ("constant", "reflect", "replicate")
 
+    rank = len(input.shape)
+    needs_transpose = padding[0] == (0, 0) and padding[1] != (0, 0) and padding[-1] == (0, 0)
+    if needs_transpose:
+        padding = padding[1:-1]
+        input = input.permute([0, rank - 1] + list(range(1, rank - 1)))
+    else:
+        padding = padding[2:]
+
     pad = []
-    for p, q in reversed(padding[2:]):
+    for p, q in reversed(padding):
         pad += [p, q]
 
-    return F.pad(input=input, pad=pad, mode=border, value=value) if not all(p == 0 for p in pad) else input
+    padded = F.pad(input=input, pad=pad, mode=border, value=value) if not all(p == 0 for p in pad) else input
+
+    if needs_transpose:
+        padded = padded.permute([0] + list(range(2, rank)) + [1])
+
+    return padded
 
 
 def nnef_pad(input, padding, border='constant', value=0.0):
@@ -97,8 +110,11 @@ def nnef_pad(input, padding, border='constant', value=0.0):
         "nnef.pad does not support empty list as padding"
     assert len(input.shape) in (3, 4, 5), \
         "nnef.pad is only implemented for 3D, 4D, 5D tensors; got: {}D.".format(len(input.shape))
-    assert padding[:2] == [(0, 0), (0, 0)],\
+    assert padding[:2] == [(0, 0), (0, 0)] or (padding[0] == (0, 0) and padding[-1] == (0, 0)), \
         "nnef.pad is not implemented in N, C dimensions; got: {}.".format(padding)
+
+    if all(p <= 1 and q <= 1 for p, q in padding) and border == "reflect-even":
+        border = "replicate"
 
     assert border in ("constant", "reflect", "replicate"), \
         "nnef.pad is only implemented with 'constant', 'reflect' and 'replicate' border; got: {}.".format(border)
