@@ -14,6 +14,7 @@
 
 from .conversion import *
 from .model import utils
+import numpy as np
 import importlib
 import argparse
 import six
@@ -186,6 +187,32 @@ def needs_conversion(input_format, output_format):
         return input_format != output_format
 
 
+def check_nan_or_inf(graph, which):
+    valid = True
+    for tensor in graph.tensors:
+        if tensor.data is not None:
+            if np.any(np.isnan(tensor.data)):
+                print("{} graph contains nan in tensor '{}'".format(which, tensor.name))
+                valid = False
+            if np.any(np.isinf(tensor.data)):
+                print("{} graph contains inf in tensor '{}'".format(which, tensor.name))
+                valid = False
+
+    for op in graph.operations:
+        for key, value in six.iteritems(op.attribs):
+            if isinstance(value, np.ndarray):
+                if np.any(np.isnan(value)):
+                    print("{} graph contains nan in attribute '{}' of operator '{}'".format(which, key, op.type) +
+                          " named '{}'".format(op.name) if op.name is not None else "")
+                    valid = False
+                if np.any(np.isinf(value)):
+                    print("{} graph contains inf in attribute '{}' of operator '{}'".format(which, key, op.type) +
+                          " named '{}'".format(op.name) if op.name is not None else "")
+                    valid = False
+
+    return valid
+
+
 def main(args):
     io_transpose = False if args.io_transpose is None else True if len(args.io_transpose) == 0 else args.io_transpose
 
@@ -241,6 +268,9 @@ def main(args):
     try:
         graph = reader(args.input_model, **reader_kwargs)
 
+        if not check_nan_or_inf(graph, 'Input'):
+            return -1
+
         if args.input_names is not None or args.output_names is not None:
             not_found_names = []
 
@@ -274,15 +304,24 @@ def main(args):
         if optimizer:
             graph = optimizer(graph, only_required=True)
 
+            if not check_nan_or_inf(graph, 'Optimized input'):
+                return -1
+
         if converter:
             graph.sort()
             graph = converter(graph)
+
+            if not check_nan_or_inf(graph, 'Converted'):
+                return -1
 
         if args.optimize:
             custom_optimizers = get_custom_optimizers(args.custom_optimizers) if args.custom_optimizers is not None else None
             optimizer = get_optimizer(args.output_format, keep_io_names=args.keep_io_names, custom_optimizers=custom_optimizers)
             if optimizer:
                 graph = optimizer(graph)
+
+                if not check_nan_or_inf(graph, 'Optimized output'):
+                    return -1
 
         print("Writing '{}'".format(args.output_model or default_output_model))
         writer(graph, args.output_model or default_output_model)
