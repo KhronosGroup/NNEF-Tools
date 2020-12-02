@@ -317,6 +317,14 @@ def check_finite(graph_def):
     for node in graph_def.node:
         attribs = _get_attributes(node.attr)
         for key, value in six.iteritems(attribs):
-            if isinstance(value, np.ndarray) and not np.all(np.isfinite(value)):
+            if isinstance(value, np.ndarray) and np.issubdtype(value.dtype, np.number) and not np.all(np.isfinite(value)):
                 raise ValueError("Attribute '{}' of op '{}' named '{}' contains nan or inf".
                                  format(key, node.op, node.name))
+
+
+def check_variables(session):
+    variables = tf.global_variables()
+    for variable in variables:
+        value = session.run(variable)
+        if np.issubdtype(value.dtype, np.number) and not np.all(np.isfinite(value)):
+            raise ValueError("Variable '{}' contains nan or inf".format(variable.name))
