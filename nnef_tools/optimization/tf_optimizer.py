@@ -87,16 +87,26 @@ class Optimizer:
 
         op.attribs['dilations'] = [1] + dilations + [1] if is_nxc else [1, 1] + dilations
         op.attribs['padding'] = 'SAME'
+        if '_output_shapes' in op.attribs:
+            op.attribs['_output_shapes'] = batch_to_space.attribs['_output_shapes']
 
     @staticmethod
     def _replace_bool_cast(cast):
         if cast.input.dtype == np.bool and cast.output.dtype != np.bool:
-            ones = Tensor(cast.graph, dtype=cast.output.dtype, shape=(), data=np.array(1, dtype=cast.output.dtype))
-            zeros = Tensor(cast.graph, dtype=cast.output.dtype, shape=(), data=np.array(0, dtype=cast.output.dtype))
-            Operation(cast.graph, type='Select', inputs=(cast.input, ones, zeros), outputs=cast.output)
+            ones = Tensor(cast.graph, name=cast.name + '/ones', dtype=cast.output.dtype, shape=cast.output.shape,
+                          data=np.full(fill_value=1, dtype=cast.output.dtype, shape=cast.output.shape))
+            zeros = Tensor(cast.graph, name=cast.name + '/zeros', dtype=cast.output.dtype, shape=cast.output.shape,
+                           data=np.full(fill_value=0, dtype=cast.output.dtype, shape=cast.output.shape))
+            Optimizer._make_constant_producer(ones)
+            Optimizer._make_constant_producer(zeros)
+            Operation(cast.graph, type='Select', name=cast.name, inputs=(cast.input, ones, zeros), outputs=cast.output,
+                      attribs={'T': cast.output.dtype})
         elif cast.input.dtype != np.bool and cast.output.dtype == np.bool:
-            zeros = Tensor(cast.graph, dtype=cast.input.dtype, shape=(), data=np.array(0, dtype=cast.input.dtype))
-            Operation(cast.graph, type='NotEqual', inputs=(cast.input, zeros), outputs=cast.output)
+            zeros = Tensor(cast.graph, name=cast.name + '/zeros', dtype=cast.input.dtype, shape=(),
+                           data=np.array(0, dtype=cast.input.dtype))
+            Optimizer._make_constant_producer(zeros)
+            Operation(cast.graph, type='NotEqual', name=cast.name, inputs=(cast.input, zeros), outputs=cast.output,
+                      attribs={'T': cast.output.dtype})
         else:
             return False
 
@@ -117,3 +127,8 @@ class Optimizer:
         rank = len(input)
         return all(output[i] == (input[i] + stride[i] - 1) // stride[i]
                    for i in (range(1, rank - 1) if is_nxc else range(2, rank)))
+
+    @staticmethod
+    def _make_constant_producer(tensor):
+        Operation(tensor.graph, type='Const', name=tensor.name, outputs=tensor,
+                  attribs={'dtype': tensor.dtype, 'value': tensor.data})
