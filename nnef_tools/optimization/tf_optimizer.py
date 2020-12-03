@@ -83,7 +83,7 @@ class Optimizer:
         if not same_padding:
             return False
 
-        op = conv.copy_with(inputs=(input, filter), outputs=output, attribs=dict(conv.attribs))
+        op = conv.copy_with(inputs=(input, filter, *conv.inputs[2:]), outputs=output, attribs=dict(conv.attribs))
 
         op.attribs['dilations'] = [1] + dilations + [1] if is_nxc else [1, 1] + dilations
         op.attribs['padding'] = 'SAME'
