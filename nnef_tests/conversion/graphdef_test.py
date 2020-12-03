@@ -187,6 +187,13 @@ class TestCases(TestEnv):
 
         self._test_conversion('depthwise_conv2d_transpose')
 
+    def test_conv2d_dilated(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        filter = tf.constant(np.random.random(size=(5, 5, 3, 16)), dtype=tf.float32)
+        output = tf.nn.conv2d(input, filter, strides=1, dilations=2, padding='SAME')
+
+        self._test_conversion('conv2d_dilated')
+
     def test_max_pool2d(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
         output = tf.nn.max_pool2d(input, ksize=3, strides=1, padding='SAME')
