@@ -100,6 +100,19 @@ def read_input(file, name, shape, dtype, transpose):
     return transpose_channels_first_to_last(data) if transpose else data
 
 
+def compute_statistics(array):
+    if array.size == 0:
+        return Statistics(num=0, min=0.0, max=0.0, sum=0.0, ssum=0.0)
+
+    return Statistics(
+        num=array.size,
+        min=float(np.min(array)),
+        max=float(np.max(array)),
+        sum=float(np.sum(array)),
+        ssum=float(np.sum(array * array)),
+    )
+
+
 class RandomInputSource:
 
     def __init__(self, distribution):
@@ -181,19 +194,6 @@ class TFExecutor(Executor):
         return [TensorInfo(tensor.name, tuple(tensor.shape.as_list()), tensor.dtype.as_numpy_dtype)
                 for tensor in self.outputs]
 
-    def _compute_statistics(self, array):
-        num = array.size
-        if num == 0:
-            return Statistics(num=0, min=0.0, max=0.0, sum=0.0, ssum=0.0)
-        else:
-            return Statistics(
-                num=num,
-                min=float(np.min(array)),
-                max=float(np.max(array)),
-                sum=float(np.sum(array)),
-                ssum=float(np.sum(array * array)),
-            )
-
     def __call__(self, inputs, output_names=None, collect_statistics=False):
         ops = self.graph.get_operations()
 
@@ -216,7 +216,7 @@ class TFExecutor(Executor):
 
                 stats = {}
                 for name, array in six.iteritems(values):
-                    stats[name] = self._compute_statistics(array)
+                    stats[name] = compute_statistics(array)
 
                 return outputs, stats
         else:
@@ -264,7 +264,10 @@ class TFLiteExecutor(Executor):
             outputs = {tensor['name']: self.interpreter.get_tensor(tensor['index'])
                        for tensor in self.interpreter.get_output_details()}
 
-        return outputs, None
+        stats = {tensor['name']: compute_statistics(self.interpreter.get_tensor(tensor['index']))
+                 for tensor in self.interpreter.get_tensor_details()} if collect_statistics else None
+
+        return outputs, stats
 
 
 class ONNXExecutor(Executor):
