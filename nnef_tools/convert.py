@@ -96,7 +96,8 @@ def get_converter(input_format, output_format, io_transpose, custom_transforms, 
         from .conversion.onnx_to_nnef import Converter
         return Converter(custom_transforms=custom_transforms,
                          custom_functions=custom_functions,
-                         mirror_unsupported=mirror_unsupported)
+                         mirror_unsupported=mirror_unsupported,
+                         keep_io_names=keep_io_names)
     elif input_format == 'nnef' and (output_format == 'onnx' or output_format == 'caffe2'):
         from .conversion.nnef_to_onnx import Converter
         return Converter(custom_transforms=custom_transforms,
