@@ -361,14 +361,15 @@ class Optimizer:
 
     @staticmethod
     def _merge_pad_with_sliding(pad, sliding):
+        offset = 2 if sliding.type == 'conv' or sliding.type == 'deconv' else 0
         padding = pad.attribs['padding']
 
         if not all(p == 0 and q == 0 for p, q in sliding.attribs['padding']) or \
-                len(padding) < 2 or not all(p == 0 and q == 0 for p, q in padding[:2]):
+                len(padding) < offset or not all(p == 0 and q == 0 for p, q in padding[:offset]):
             return False
 
         attribs = dict(sliding.attribs)
-        attribs['padding'] = pad.attribs['padding'][2:]
+        attribs['padding'] = pad.attribs['padding'][offset:]
         attribs['border'] = pad.attribs['border']
 
         sliding.copy_with(inputs=(pad.input, *sliding.inputs[1:]), attribs=attribs)
