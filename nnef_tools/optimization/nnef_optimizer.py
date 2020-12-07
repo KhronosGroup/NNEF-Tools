@@ -59,12 +59,18 @@ class Optimizer:
 
                 changed |= self._merge_reshape_sequence(graph)
 
-                changed |= replace_chain(graph, [{'mul', 'div'}, {'conv', 'deconv', 'linear'}], self._merge_mul_linear,
-                                         allow_forks=True)
-                changed |= replace_chain(graph, [{'conv', 'deconv', 'linear'}, {'add', 'sub'}], self._merge_linear_add)
-                changed |= replace_chain(graph, [{'conv', 'deconv', 'linear'}, {'mul', 'div'}], self._merge_linear_mul)
-                changed |= replace_chain(graph, ['matmul', {'add', 'sub'}], self._merge_matmul_bias)
-                changed |= replace_chain(graph, [{'conv', 'deconv'}, 'batch_normalization'], self._merge_conv_batch_norm)
+                changed |= replace_chain(graph, ['pad', {'conv', 'deconv', 'max_pool', 'avg_pool'}],
+                                         self._merge_pad_with_sliding)
+                changed |= replace_chain(graph, [{'mul', 'div'}, {'conv', 'deconv', 'linear'}],
+                                         self._merge_mul_linear, allow_forks=True)
+                changed |= replace_chain(graph, [{'conv', 'deconv', 'linear'}, {'add', 'sub'}],
+                                         self._merge_linear_add)
+                changed |= replace_chain(graph, [{'conv', 'deconv', 'linear'}, {'mul', 'div'}],
+                                         self._merge_linear_mul)
+                changed |= replace_chain(graph, ['matmul', {'add', 'sub'}],
+                                         self._merge_matmul_bias)
+                changed |= replace_chain(graph, [{'conv', 'deconv'}, 'batch_normalization'],
+                                         self._merge_conv_batch_norm)
 
                 for chain, replacer in six.iteritems(self._custom_optimizers):
                     changed |= replace_chain(graph, chain, replacer)
@@ -352,3 +358,17 @@ class Optimizer:
         graph.remove_operations(ops, unlink=True)
         graph.remove_tensors(tensors)
         return len(ops) != 0
+
+    @staticmethod
+    def _merge_pad_with_sliding(pad, sliding):
+        padding = pad.attribs['padding']
+
+        if not all(p == 0 and q == 0 for p, q in sliding.attribs['padding']) or \
+                len(padding) < 2 or not all(p == 0 and q == 0 for p, q in padding[:2]):
+            return False
+
+        attribs = dict(sliding.attribs)
+        attribs['padding'] = pad.attribs['padding'][2:]
+        attribs['border'] = pad.attribs['border']
+
+        sliding.copy_with(inputs=(pad.input, *sliding.inputs[1:]), attribs=attribs)
