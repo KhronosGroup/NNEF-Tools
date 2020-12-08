@@ -272,7 +272,7 @@ class TFLiteExecutor(Executor):
 
 class ONNXExecutor(Executor):
 
-    def __init__(self, model_path):
+    def __init__(self, model_path, require_intermediates=False):
         import onnxruntime
 
         options = onnxruntime.SessionOptions()
@@ -281,26 +281,54 @@ class ONNXExecutor(Executor):
         options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
 
         self.session = onnxruntime.InferenceSession(model_path, sess_options=options)
+        self.inputs = [TensorInfo(tensor.name, tensor.shape, _onnx_dtype_to_numpy[tensor.type])
+                       for tensor in self.session.get_inputs()]
+        self.outputs = [TensorInfo(tensor.name, tensor.shape, _onnx_dtype_to_numpy[tensor.type])
+                        for tensor in self.session.get_outputs()]
+
+        if require_intermediates:
+            import onnx
+            from onnx.shape_inference import infer_shapes
+
+            model = onnx.load_model(model_path)
+            model = infer_shapes(model)
+
+            for info in model.graph.value_info:
+                output_info = model.graph.output.add()
+                output_info.ParseFromString(info.SerializeToString())
+
+            self.session = onnxruntime.InferenceSession(model.SerializeToString(), sess_options=options)
 
     def input_info(self):
-        return [TensorInfo(tensor.name, tensor.shape, _onnx_dtype_to_numpy[tensor.type])
-                for tensor in self.session.get_inputs()]
+        return self.inputs
 
     def output_info(self):
-        return [TensorInfo(tensor.name, tensor.shape, _onnx_dtype_to_numpy[tensor.type])
-                for tensor in self.session.get_outputs()]
+        return self.outputs
 
     def __call__(self, inputs, output_names=None, collect_statistics=False):
         if output_names is not None:
-            names = [name for name in output_names if name not in inputs]
-            values = self.session.run(names, inputs)
-            outputs = {name: value for name, value in zip(names, values)}
-            outputs.update({name: inputs[name] for name in output_names if name in inputs})
+            inputs_as_outputs = {name: inputs[name] for name in output_names if name in inputs}
+            output_names = [name for name in output_names if name not in inputs]
         else:
-            values = self.session.run([output.name for output in self.session.get_outputs()], inputs)
-            outputs = {output.name: value for output, value in zip(self.session.get_outputs(), values)}
+            output_names = [output.name for output in self.outputs]
+            inputs_as_outputs = {}
 
-        return outputs, None
+        if collect_statistics:
+            fetch_names = [tensor.name for tensor in self.session.get_outputs()]
+            values = self.session.run(fetch_names, inputs)
+            outputs = {name: value for name, value in zip(fetch_names, values) if name in set(output_names)}
+
+            stats = {}
+            for name, value in zip(fetch_names, values):
+                stats[name] = compute_statistics(value)
+        else:
+            values = self.session.run(output_names, inputs)
+            outputs = {name: value for name, value in zip(output_names, values)}
+            stats = None
+
+        outputs.update(inputs_as_outputs)
+
+        return outputs, stats
 
 
 class NNEFExecutor(Executor):
@@ -325,13 +353,13 @@ class NNEFExecutor(Executor):
             return self.interpreter(inputs, output_names, collect_statistics), None
 
 
-def get_executor(format, model_path, custom_operators, decomposed):
+def get_executor(format, model_path, require_intermediates, custom_operators, decomposed):
     if format == 'tf':
         return TFExecutor(model_path)
     elif format == 'tflite':
         return TFLiteExecutor(model_path)
     elif format == 'onnx':
-        return ONNXExecutor(model_path)
+        return ONNXExecutor(model_path, require_intermediates)
     elif format == 'nnef':
         return NNEFExecutor(model_path, custom_operators, decomposed)
     else:
@@ -418,7 +446,7 @@ def main(args):
     collect_statistics = args.statistics is not None
 
     try:
-        executor = get_executor(args.format, args.model, custom_operators, args.decompose)
+        executor = get_executor(args.format, args.model, collect_statistics, custom_operators, args.decompose)
 
         input_info = executor.input_info()
         if args.batch_size is not None:
