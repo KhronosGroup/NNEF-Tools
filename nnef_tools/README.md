@@ -292,3 +292,20 @@ python -m nnef_tools.gmac my_model.nnef --include-pooling
 ```
 
 The calculation requires shape inference, so in case of custom operators, the `--custom-shapes` option should be used (same as for `convert.py`).
+
+## Troubleshooting
+
+Several things can go wrong during various stages of conversion, and sometimes it's hard to find where it exactly happened. Here are a few tips on how to get started:
+* If the export process starts from Python code in a framework such as TensorFlow or PyTorch, the first step is saving the model into a framework specific format, such as TensorFlow protobuf or ONNX in case of PyTorch. 
+    * Check the resulting model to see if it accurately reflects the framework code. TensorBoard or Netron viewer can be used for this purpose.
+    * If there is an error in this step, try to turn off certain flags during saving. For example in `nnef_tools.io.tf.graphdef.save_default_graph`, try turning off `fold_constants` and `collapse_composites` flag. The first merges operations on constant tensors, the second one merges composite operators into a single piece. By turning them off, errors in these transformation steps can be excluded.
+* If the conversion from any model format to NNEF fails, typical reasons are as follows:
+    * Conversion of some operator is not implemented. In this case, adding a custom converter using the `--custom-converters` option can solve the problem.
+    * There is a bug in the converter; for example it does not support some parameter/version of an operator. In this case file a bug for `nnef_tools`.
+* After the conversion to NNEF succeeds, check the converted model by executing it (`nnef_tools.execute`) on some (maybe random) inputs.
+    * Execution may itself fail if there are custom operators in the model, in which case custom executors can be injected with the `--custom-operators` option.
+    * If executed on non-random inputs, the outputs can be compared to results obtained from executing the same model in the original framework, or after saving it and executing the saved model (`nnef_tools.execute`). By comparing the results of those three stages, it is possible to tell in which stage something goes wrong. However, make sure to feed the same inputs to all stages, and beware that NNEF dimension order (channels first) is different from TensorFlow dimension order (channels last).
+    * If the failing stage is the saving step, see above for turning off certain options too see if those are the culprits.
+    * If the failing stage is the conversion step, first make sure to isolate optimizations by not using the `--optimize` option. The same goes for the `--fold-constants` option to see if that causes problems.
+    * If conversion fails even without optimization and constant folding, it is usually due to the conversion of one of the operations, which must be found. Ideally, one would compare the outputs of each operation in a sequence, however this is hard to generate and map onto each other automatically due to non 1-1 mappings during the conversion. However, generating statistics (`nnef_tools.execute --statistics`) for a single input for both models allows manual comparison of how execution proceeds in the two models and finding where the first difference occurs.
+* When in doubt about some of the tools and this documentation does not provide enough information, check the help of the command-line tool itself (`-h` or `--help`) option.
