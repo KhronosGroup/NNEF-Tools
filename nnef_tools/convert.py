@@ -17,6 +17,7 @@ from .model import utils
 import numpy as np
 import importlib
 import argparse
+import json
 import six
 
 
@@ -315,17 +316,36 @@ def main(args):
             if not check_nan_or_inf(graph, 'Converted'):
                 return -1
 
+        tensor_mapping = converter.tensor_mapping() if args.tensor_mapping is not None and converter else None
+
         if args.optimize:
             custom_optimizers = get_custom_optimizers(args.custom_optimizers) if args.custom_optimizers is not None else None
             optimizer = get_optimizer(args.output_format, keep_io_names=args.keep_io_names, custom_optimizers=custom_optimizers)
             if optimizer:
+                tensor_lookup = {tensor.name: tensor for tensor in graph.tensors if tensor.name is not None} \
+                    if args.tensor_mapping is not None else None
+
                 graph = optimizer(graph)
 
                 if not check_nan_or_inf(graph, 'Optimized output'):
                     return -1
 
-        print("Writing '{}'".format(args.output_model or default_output_model))
+                if args.tensor_mapping is not None:
+                    if converter:
+                        tensor_mapping = {src: tensor_lookup[dst].name for src, dst in six.iteritems(tensor_mapping)
+                                          if tensor_lookup[dst].graph is graph}
+                    else:
+                        tensor_mapping = {name: tensor.name for name, tensor in six.iteritems(tensor_lookup)
+                                          if tensor.graph is graph}
+
         writer(graph, args.output_model or default_output_model)
+        print("Written '{}'".format(args.output_model or default_output_model))
+
+        if args.tensor_mapping is not None:
+            with open(args.tensor_mapping, 'w') as file:
+                json.dump(tensor_mapping, file, indent=4)
+
+            print("Written '{}'".format(args.tensor_mapping))
 
         return 0
     except ConversionError as e:
@@ -339,9 +359,11 @@ if __name__ == '__main__':
                         help='The input model')
     parser.add_argument('--output-model', type=str, default=None,
                         help='The output model')
-    parser.add_argument('--input-format', type=str, required=True, choices=['tf', 'tflite', 'onnx', 'nnef', 'caffe2', 'caffe'],
+    parser.add_argument('--input-format', type=str, required=True,
+                        choices=['tf', 'tflite', 'onnx', 'nnef', 'caffe2', 'caffe'],
                         help='The format of the input model')
-    parser.add_argument('--output-format', type=str, required=True, choices=['tf', 'tflite', 'onnx', 'nnef', 'caffe2'],
+    parser.add_argument('--output-format', type=str, required=True,
+                        choices=['tf', 'tflite', 'onnx', 'nnef', 'caffe2'],
                         help='The format of the output model')
     parser.add_argument('--input-shapes', type=str, default=None,
                         help='The (dict of) shape(s) to use for input(s).')
@@ -371,6 +393,8 @@ if __name__ == '__main__':
                         help='Names of input tensor where the graph is cut before conversion')
     parser.add_argument('--output-names', type=str, nargs='+',
                         help='Names of output tensor where the graph is cut before conversion')
+    parser.add_argument('--tensor-mapping', type=str, nargs='?', default=None, const='tensor_mapping.json',
+                        help='Export mapping of tensor names from input to output model')
     parser.add_argument('--annotate-shapes', action='store_true',
                         help='Add tensor shapes as comments to NNEF output model')
     parser.add_argument('--compress', type=int, nargs='?', default=None, const=1,

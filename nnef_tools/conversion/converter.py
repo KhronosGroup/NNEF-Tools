@@ -155,6 +155,10 @@ class Converter:
 
         return self._graph
 
+    def tensor_mapping(self):
+        return {key.name: value.name for key, value in six.iteritems(self._tensor_map)
+                if value.graph == self._graph and key.name is not None and value.name is not None}
+
     def _global_attribs(self):
         return {}
 
