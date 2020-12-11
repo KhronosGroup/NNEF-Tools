@@ -93,6 +93,7 @@ The following further options can be used when the output format is NNEF:
 * The `--compress` option generates a compressed `tgz` file. It can also take a further compression level argument. 
 * The `--annotate-shapes` flag generates the graph description with the shapes of tensors annotated in comments.
 * The `--output-names` option takes a list of tensor names, and considers those as outputs, and only converts the sub-graph required to compute those outputs.
+* The `--tensor-mapping` option allows to save the mapping of tensor names (mapping from the input model to the output model) into a separate json file. 
 
 
 ## Conversion from TF Python code
@@ -205,7 +206,7 @@ The `Transform` can further contain a `using={'id': '!expr', ...}` field, which 
 
 Furthermore, by adding an optional `cond='!expr'` field to the `Transform`, it is possible to achieve conditional conversion, only when the given expression evaluates to `True`. Otherwise, the converter treats it as if there was no converter provided for the given operator. This is to allow conversion of operations with only certain attribute values.
 
-See `custom/custom_transforms.py` for more details.
+See `custom/custom_transforms_example.py` for more details.
 
 Similarly to the above mechanism, custom shape inference functions and custom operator definitions (fragments) can be plugged in to converters that convert from NNEF using the `--custom-shapes` and `--custom-fragments` option. This may be required for custom NNEF operators defined as fragments in the input when such fragments are not decomposed. The fragments and shape inference functions must be defined in python module(s) supplied after the `--custom-shape` or `--custom-fragments` option. The module may look like this:
 
@@ -234,6 +235,22 @@ CUSTOM_FRAGMENTS = {
 
 Furthermore, the `--decompose` option can be used to let the NNEF parser decompose the (composite) operators listed after the option (as separate args).
 
+Additionally, with a similar mechanism, custom optimization passes can also be injected to the converter. The optimizer can match sequential sub-graphs (chains), and replace them with another sequence of operations. To provide custom optimizer passes, the chains of operations to be replaced must be mapped onto functions that perform generate the replacement sequence after checking the chain to bre replaced for validity:   
+
+```
+def replace_my_chain(a, b, c):   # a, b, c will contain the matched chain of ops in order when this is called
+    ...     # check attributes of the chain a, b, c to see if it should really be replaced; 
+            # if not, return False (do not modify the graph before all checks)
+    ...     # create new tensors and operations in the graph that will replace the chain
+    ...     # either return nothing (None), or any non-False value 
+
+CUSTOM_OPTIMIZERS = {
+    ('a', 'b', 'c'): replace_my_chain,      # use a tuple as key, since list is not hashable
+}
+```
+
+See `custom/custom_optimizers_example.py` for mode info.
+
 ## Executing a model and saving activations
 
 A separate tool (`execute.py`) is available for executing a model. It requires a model and a format to be specified. 
@@ -250,17 +267,14 @@ Alternatively, inputs can be random generated, and selected activations may be w
 python -m nnef_tools.execute my_model.pb --format tf --random "uniform(0,1)" --seed 0 --output-path . --output-names "{'tensor-name1': 'save-name1', ...}"
 ```
 
-If a model specifies batch size of 1 in its inputs, batched execution can be performed using the `--batch-size` option, supplying the desired batch size. If the supplied batch size is 0, it means that the (common) batch size of the actual inputs is used. Furthermore, when the supplied batch size equals the one defined by the model, execution will be done one-by-one instead of a single batch, which may be useful for reducing the memory footprint.
+Further options to the model executor:
 
-The tool is also able to generate activation statistics using the `--statistics` flag (followed by an optional output file name) and save it in json format to the output path (only available when format is NNEF). 
-
-Further tools are available for generating random tensors (`random_tensor.py`) and converting images to tensors (`image_tensor.py`). These tools write their results to the output stream and can be directed into a file or piped to `execute.py`.
-
-Inputs and outputs (or activations) may need transposing before feeding into execution or after execution upon saving. This can be achieved with the `--io-transpose` flag. If no further arguments are listed, all tensors are transposed, but the transposed tensors can be controlled by enumerating a list of tensor names (as separate args). Inputs read from the input stream are transposed from channels first to last, while the outputs that are written to the output stream or saved are transposed from channels last to first if the format dictates so (TF/Lite).
-
-Similarly to the converter, the `--decompose` option can be used to let the NNEF parser decompose the (composite) operators listed after the option (as separate args).
-
-Custom operators can be injected to the executor by supplying a python module after the `--custom-operators` option. The contents of the module may look like this:
+* The `--batch-size` option can be used to perform batched execution if a model specifies batch size of 1 in its inputs, supplying the desired batch size. If the supplied batch size is 0, it means that the (common) batch size of the actual inputs is used. Furthermore, when the supplied batch size equals the one defined by the model, execution will be done one-by-one instead of a single batch, which may be useful for reducing the memory footprint.
+* The `--statistics` flag (followed by an optional output file name) can be used to generate activation statistics and save it in json format to the output path. 
+* The `--tensor-mapping` option can be used to provide a tensor name mapping obtained from the conversion step to the executor, used in remapping tensor names when generating statistics. This may be useful for comparing executions of the same model in different formats.
+* Inputs and outputs (or activations) may need transposing before feeding into execution or after execution upon saving. This can be achieved with the `--io-transpose` flag. If no further arguments are listed, all tensors are transposed, but the transposed tensors can be controlled by enumerating a list of tensor names (as separate args). Inputs read from the input stream are transposed from channels first to last, while the outputs that are written to the output stream or saved are transposed from channels last to first if the format dictates so (TF/Lite).
+* The `--decompose` option can be used to let the NNEF parser decompose the (composite) operators listed after the option (as separate args).
+* The `--custom-operators` option can be used to inject custom operators to the executor by supplying a python module after the option. The contents of the module may look like this:
 
 ```
 def my_custom_op(input1, ..., attrib1, ...):
@@ -271,7 +285,9 @@ CUSTOM_OPERATORS = {
 }
 ```
 
-See `custom/custom_operators.py` for more info.
+See `custom/custom_operators_example.py` for more info.
+
+Further tools are available for generating random tensors (`random_tensor.py`) and converting images to tensors (`image_tensor.py`). These tools write their results to the output stream and can be directed into a file or piped to `execute.py`.
 
 ## Visualizing a model
 
@@ -307,5 +323,5 @@ Several things can go wrong during various stages of conversion, and sometimes i
     * If executed on non-random inputs, the outputs can be compared to results obtained from executing the same model in the original framework, or after saving it and executing the saved model (`nnef_tools.execute`). By comparing the results of those three stages, it is possible to tell in which stage something goes wrong. However, make sure to feed the same inputs to all stages, and beware that NNEF dimension order (channels first) is different from TensorFlow dimension order (channels last).
     * If the failing stage is the saving step, see above for turning off certain options too see if those are the culprits.
     * If the failing stage is the conversion step, first make sure to isolate optimizations by not using the `--optimize` option. The same goes for the `--fold-constants` option to see if that causes problems.
-    * If conversion fails even without optimization and constant folding, it is usually due to the conversion of one of the operations, which must be found. Ideally, one would compare the outputs of each operation in a sequence, however this is hard to generate and map onto each other automatically due to non 1-1 mappings during the conversion. However, generating statistics (`nnef_tools.execute --statistics`) for a single input for both models allows manual comparison of how execution proceeds in the two models and finding where the first difference occurs.
+    * If conversion fails even without optimization and constant folding, it is usually due to the conversion of one of the operations, which must be found. Ideally, one would compare the intermediate tensors after each operation in a sequence, but exact comparison is hard to do automatically due to non 1-1 mappings during the conversion. However, generating statistics (`nnef_tools.execute --statistics`) for the same input for both models allows comparison of how execution proceeds in the two models and finding where the first difference occurs.
 * When in doubt about some of the tools and this documentation does not provide enough information, check the help of the command-line tool itself (`-h` or `--help`) option.
