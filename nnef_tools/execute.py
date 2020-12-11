@@ -314,7 +314,9 @@ class ONNXExecutor(Executor):
             inputs_as_outputs = {}
 
         if collect_statistics:
-            fetch_names = [tensor.name for tensor in self.session.get_outputs()]
+            original_outputs = [output.name for output in self.outputs]
+            fetch_names = [tensor.name for tensor in self.session.get_outputs()
+                           if tensor.name not in original_outputs] + original_outputs
             values = self.session.run(fetch_names, inputs)
             outputs = {name: value for name, value in zip(fetch_names, values) if name in set(output_names)}
 
@@ -493,6 +495,13 @@ def main(args):
     if isinstance(output_names, dict):
         outputs = {output_names[name]: value for name, value in six.iteritems(outputs)}
 
+    if args.tensor_mapping is not None:
+        with open(args.tensor_mapping) as file:
+            tensor_mapping = json.load(file)
+
+        if stats is not None:
+            stats = {tensor_mapping.get(key, key): value for key, value in six.iteritems(stats)}
+
     if args.output_path is not None:
         for name, value in six.iteritems(outputs):
             filename = os.path.join(args.output_path, name + ".dat")
@@ -542,4 +551,6 @@ if __name__ == '__main__':
                         help='Module(s) containing custom operator code')
     parser.add_argument('--batch-size', type=int, default=None,
                         help='Specify batch-size for single-batch models')
+    parser.add_argument('--tensor-mapping', type=str, default=None,
+                        help='Use mapping of tensor names for statistics')
     exit(main(parser.parse_args()))
