@@ -521,6 +521,15 @@ _Transforms = Converter.unpack_transforms({
                 'repeats': '!as_const(I[1])',
             }
         ),
+    'Expand':
+        Transform(
+            type='tile',
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'repeats': '![O[0].shape[i] // I[0].shape[i] for i in range(I[0].rank)]',
+            }
+        ),
     'Slice':
         Transform(
             type='slice',

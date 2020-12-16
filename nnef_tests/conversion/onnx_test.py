@@ -715,6 +715,19 @@ class TestCases(TestEnv):
         self._test_conversion('tile', [node], [input], [output], constants=[repeats],
                               values={'repeats': [1, 1, 2, 2]})
 
+    def test_expand(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 3, 1, 1])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 3, 32, 32])
+        repeats = helper.make_tensor_value_info('shape', TensorProto.INT64, [4])
+        node = helper.make_node(
+            op_type='Expand',
+            inputs=['input', 'shape'],
+            outputs=['output'],
+        )
+
+        self._test_conversion('expand', [node], [input], [output], constants=[repeats],
+                              values={'shape': [4, 3, 32, 32]})
+
     def test_slice(self):
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
         output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 30, 30])
