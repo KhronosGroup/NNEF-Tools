@@ -502,18 +502,20 @@ def main(args):
         if stats is not None:
             stats = {tensor_mapping.get(key, key): value for key, value in six.iteritems(stats)}
 
+    if stats is not None:
+        write_statistics(args.statistics, stats)
+        print('Written {}'.format(args.statistics))
+
     if args.output_path is not None:
         for name, value in six.iteritems(outputs):
             filename = os.path.join(args.output_path, name + ".dat")
             write_nnef_tensor(filename, value)
             print('Written {}'.format(filename))
-
-        if stats is not None:
-            filename = os.path.join(args.output_path, args.statistics)
-            write_statistics(filename, stats)
-            print('Written {}'.format(filename))
     else:
         if not stdio.is_stdout_piped():
+            if collect_statistics:
+                return 0
+
             print('Output must be piped', file=sys.stderr)
             return -1
 
