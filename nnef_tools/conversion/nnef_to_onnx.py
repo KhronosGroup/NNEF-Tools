@@ -162,7 +162,7 @@ _Transforms = Converter.unpack_transforms({
                 'pads': '!convert_pads(padding, truncate=True)',
                 'strides': '!stride[2:]',
                 'dilations': '!dilation[2:] if _type_ == "max_pool" and not all(d == 1 for d in dilation[2:]) else None',
-                'count_include_pad': '!1 if border == "constant" else 0 if _type_ == "avg_pool" else None',
+                'count_include_pad': '!(1 if border == "constant" else 0) if _type_ == "avg_pool" else None',
             }
         ),
     ('min_reduce', 'max_reduce', 'mean_reduce', 'sum_reduce'):
