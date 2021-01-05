@@ -22,8 +22,12 @@ import numpy as np
 import unittest
 import tempfile
 import onnx
+import os
 from onnx import helper, TensorProto
 from onnx.mapping import NP_TYPE_TO_TENSOR_TYPE
+
+
+UNITTEST_FOLDER = os.environ.get('UNITTEST_FOLDER')
 
 
 class TestEnv(unittest.TestCase):
@@ -42,8 +46,8 @@ class TestEnv(unittest.TestCase):
         "tensor(bool)": np.bool,
     }
 
-    _network_folder = '/Users/viktor.gyenes/Khronos/unittest/onnx/nets/'
-    _output_folder = '/Users/viktor.gyenes/Khronos/unittest/onnx/ops/'
+    _network_folder = os.path.join(UNITTEST_FOLDER, 'onnx/nets/') if UNITTEST_FOLDER else None
+    _output_folder = os.path.join(UNITTEST_FOLDER, 'onnx/ops/') if UNITTEST_FOLDER else None
     _optimize = True
 
     def setUp(self) -> None:
@@ -981,6 +985,8 @@ class TestCases(TestEnv):
         self._test_binary('Greater', output_dtype=TensorProto.BOOL)
 
 
+@unittest.skipIf(TestEnv._network_folder is None or not os.path.isdir(TestEnv._network_folder),
+                 "no network test folder provided")
 class NetworkTestCases(TestEnv):
 
     def test_alexnet(self):

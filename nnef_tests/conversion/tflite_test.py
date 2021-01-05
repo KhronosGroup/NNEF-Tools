@@ -21,6 +21,7 @@ import nnef_tools.optimization.nnef_optimizer as nnef_opt
 import nnef_tools.optimization.tflite_optimizer as tflite_opt
 import unittest
 import tempfile
+import os
 try:
     import tensorflow.compat.v1 as tf
     tf.disable_v2_behavior()
@@ -28,10 +29,13 @@ except ImportError:
     import tensorflow as tf
 
 
+UNITTEST_FOLDER = os.environ.get('UNITTEST_FOLDER')
+
+
 class TestEnv(unittest.TestCase):
 
-    _network_folder = '/Users/viktor.gyenes/Khronos/unittest/tflite/nets/'
-    _output_folder = '/Users/viktor.gyenes/Khronos/unittest/tflite/ops/'
+    _network_folder = os.path.join(UNITTEST_FOLDER, 'tflite/nets/') if UNITTEST_FOLDER else None
+    _output_folder = os.path.join(UNITTEST_FOLDER, 'tflite/ops/') if UNITTEST_FOLDER else None
     _mirror_unsupported = False
     _io_transpose = True
     _optimize = True
@@ -99,7 +103,7 @@ class TestEnv(unittest.TestCase):
             return np.random.random(shape).astype(dtype)
 
     def _test_conversion(self, name, inputs, outputs, epsilon=1e-5):
-        filename = tempfile.mktemp() if self._output_folder is None else TestEnv._output_folder + name + '.tflite'
+        filename = tempfile.mktemp() if self._output_folder is None else self._output_folder + name + '.tflite'
         self._save_default_graph(inputs, outputs, filename)
         self._test_conversion_from_file(filename, epsilon=epsilon)
 
@@ -618,6 +622,8 @@ class TestCases(TestEnv):
         self._test_conversion('add_n', [input], [output])
 
 
+@unittest.skipIf(TestEnv._network_folder is None or not os.path.isdir(TestEnv._network_folder),
+                 "no network test folder provided")
 class NetworkTestCases(TestEnv):
 
     def test_inception_v1(self):
@@ -637,9 +643,3 @@ class NetworkTestCases(TestEnv):
 
     def test_mobilenet_v2(self):
         self._test_conversion_from_file(self._network_folder + 'mobilenet_v2.tflite')
-
-    def test_automl_model1(self):
-        self._test_conversion_from_file(self._network_folder + 'automl_model1.tflite')
-
-    def test_automl_model2(self):
-        self._test_conversion_from_file(self._network_folder + 'automl_model2.tflite')

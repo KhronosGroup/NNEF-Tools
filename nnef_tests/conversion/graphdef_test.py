@@ -22,6 +22,7 @@ import nnef_tools.optimization.nnef_optimizer as nnef_opt
 import nnef_tools.optimization.tf_optimizer as tf_opt
 import unittest
 import tempfile
+import os
 try:
     import tensorflow.compat.v1 as tf
     tf.disable_v2_behavior()
@@ -29,10 +30,13 @@ except ImportError:
     import tensorflow as tf
 
 
+UNITTEST_FOLDER = os.environ.get('UNITTEST_FOLDER')
+
+
 class TestEnv(unittest.TestCase):
 
-    _network_folder = '/Users/viktor.gyenes/Khronos/unittest/tf/nets/'
-    _output_folder = '/Users/viktor.gyenes/Khronos/unittest/tf/ops/'
+    _network_folder = os.path.join(UNITTEST_FOLDER, 'tf/nets/') if UNITTEST_FOLDER else None
+    _output_folder = os.path.join(UNITTEST_FOLDER, 'tf/ops/') if UNITTEST_FOLDER else None
     _io_transpose = True
     _optimize = True
 
@@ -815,6 +819,8 @@ class TestCases(TestEnv):
         self._test_conversion('add_n')
 
 
+@unittest.skipIf(TestEnv._network_folder is None or not os.path.isdir(TestEnv._network_folder),
+                 "no network test folder provided")
 class NetworkTestCases(TestEnv):
 
     def test_mobilenet_v1(self):
