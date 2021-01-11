@@ -38,6 +38,7 @@ namespace nnef
         static const Type* IntegerTensor = tensorType(Typename::Integer);
         static const Type* LogicalTensor = tensorType(Typename::Logical);
         static const Type* GenericTensor = tensorType(Typename::Generic);
+        static const Type* TypelessTensor = tensorType();
 
         static const Type* Integers = arrayType(Integer);
         static const Type* Generics = arrayType(Generic);
@@ -149,6 +150,15 @@ namespace nnef
                 Param("repeats", Integers),
             }, { Result("output", GenericTensor) }),
             
+            Prototype("gather", {
+                Param("input", GenericTensor),
+                Param("indices", IntegerTensor),
+                Param("axis", Integer, IntegerZero),
+            }, { Result("output", GenericTensor) }),
+            
+            Prototype("cast", {
+                Param("input", TypelessTensor),
+            }, { Result("output", GenericTensor) }),
 
             Prototype("add", {
                 Param("x", ScalarTensor),
@@ -268,6 +278,46 @@ namespace nnef
                 Param("x", ScalarTensor),
             }, { Result("y", ScalarTensor) }),
             
+            Prototype("tan", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("asin", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("acos", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("atan", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("sinh", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("cosh", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("tanh", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("asinh", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("acosh", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("atanh", {
+                Param("x", ScalarTensor),
+            }, { Result("y", ScalarTensor) }),
+            
             Prototype("abs", {
                 Param("x", ScalarTensor),
             }, { Result("y", ScalarTensor) }),
@@ -321,14 +371,25 @@ namespace nnef
                 Param("x", ScalarTensor),
             }, { Result("y", ScalarTensor) }),
             
-            Prototype("tanh", {
+            Prototype("elu", {
+                Param("x", ScalarTensor),
+                Param("alpha", ScalarTensor, ScalarOne),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("selu", {
+                Param("x", ScalarTensor),
+                Param("alpha", ScalarTensor, Value::scalar(1.67326319)),
+                Param("lambda", ScalarTensor, Value::scalar(1.05070102)),
+            }, { Result("y", ScalarTensor) }),
+            
+            Prototype("gelu", {
                 Param("x", ScalarTensor),
             }, { Result("y", ScalarTensor) }),
             
-            Prototype("elu", {
+            Prototype("silu", {
                 Param("x", ScalarTensor),
             }, { Result("y", ScalarTensor) }),
-
+            
             Prototype("prelu", {
                 Param("x", ScalarTensor),
                 Param("alpha", ScalarTensor),

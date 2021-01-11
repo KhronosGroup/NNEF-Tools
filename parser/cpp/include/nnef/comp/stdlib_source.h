@@ -46,6 +46,8 @@ namespace nnef {
     fragment unstack<?>( value: tensor<?>, axis: integer ) -> ( values: tensor<?>[] );
     fragment tile<?>( input: tensor<?>, repeats: integer[] ) -> ( output: tensor<?> );
     fragment pad( input: tensor<scalar>, padding: (integer, integer)[], border: string = 'constant', value: scalar = 0.0 ) -> ( output: tensor<scalar> );
+    fragment gather<?>( input: tensor<?>, indices: tensor<integer>, axis: integer = 0 ) -> ( output: tensor<?> );
+    fragment cast<?>( input: tensor<> ) -> ( output: tensor<?> );
 
 
     # element-wise arithmetic operations
@@ -60,6 +62,16 @@ namespace nnef {
     fragment log( x: tensor<scalar> ) -> ( y: tensor<scalar> );
     fragment sin( x: tensor<scalar> ) -> ( y: tensor<scalar> );
     fragment cos( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment tan( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment sinh( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment cosh( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment tanh( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment asin( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment acos( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment atan( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment asinh( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment acosh( x: tensor<scalar> ) -> ( y: tensor<scalar> );
+    fragment atanh( x: tensor<scalar> ) -> ( y: tensor<scalar> );
     fragment abs( x: tensor<scalar> ) -> ( y: tensor<scalar> );
     fragment sign( x: tensor<scalar> ) -> ( y: tensor<scalar> );
     fragment rcp( x: tensor<scalar> ) -> ( y: tensor<scalar> );
@@ -277,11 +289,6 @@ namespace nnef {
         y = 1.0 / (1.0 + exp(-x));
     }
 
-    fragment tanh( x: tensor<scalar> ) -> ( y: tensor<scalar> )
-    {
-        y = (exp(x) - exp(-x)) / (exp(x) + exp(-x));
-    }
-
     fragment softabs( x: tensor<scalar>, epsilon: scalar ) -> ( y: tensor<scalar> )
     {
         y = sqrt(sqr(x) + epsilon);
@@ -299,9 +306,28 @@ namespace nnef {
         y = log(exp(x) + 1.0);
     }
 
-    fragment elu( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    fragment elu( x: tensor<scalar>, alpha: scalar = 1.0 ) -> ( y: tensor<scalar> )
     {
-        y = select(x < 0.0, exp(x) - 1.0, x);
+        y = select(x < 0.0, alpha * (exp(x) - 1.0), x);
+    }
+    
+    fragment selu( x: tensor<scalar>, alpha: scalar = 1.67326319, lambda: scalar = 1.05070102 ) -> ( y: tensor<scalar> )
+    {
+        y = lambda * select(x < 0.0, alpha * (exp(x) - 1.0), x);
+    }
+
+    fragment gelu( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        # the exact definition of gelu is x * Phi(x) where Phi(x) is the
+        # CDF of the standard normal distribution, which can be approximated
+        # for example by sigmoid(1.702 * x)
+
+        y = x * sigmoid(1.702 * x);
+    }
+
+    fragment silu( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+    {
+        y = x * sigmoid(x);
     }
 
     fragment prelu( x: tensor<scalar>, alpha: tensor<scalar> ) -> ( y: tensor<scalar> )

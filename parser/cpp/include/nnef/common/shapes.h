@@ -897,6 +897,20 @@ namespace nnef
         }
         return output;
     }
+    
+    inline Shape gather_shape( const Shape& input, const Shape& indices, const Value& axis )
+    {
+        check_axis_compatible_with_rank(axis, input.size());
+        
+        const size_t idx = axis.integer();
+        
+        Shape output(input.size() + indices.size() - 1);
+        std::copy_n(input.begin(), idx, output.begin());
+        std::copy_n(indices.begin(), indices.size(), output.begin() + idx);
+        std::copy(input.begin() + idx + 1, input.end(), output.begin() + idx + indices.size());
+        
+        return output;
+    }
 
     inline Shape matmul_shape( const Shape& A, const Shape& B, const Value& trA, const Value& trB )
     {

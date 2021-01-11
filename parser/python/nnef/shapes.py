@@ -379,6 +379,13 @@ def pad_shape(input, padding, **kwargs):
     return [p + i + q for i, (p, q) in zip(input, padding)]
 
 
+def gather_shape(input, indices, axis):
+    rank = len(input)
+    assert 0 <= axis < rank, "'axis' must be in range [0,{}), found {}".format(rank, axis)
+
+    return input[:axis] + indices + input[axis+1:]
+
+
 def matmul_shape(A, B, transposeA, transposeB):
     assert len(A) == len(B), "argument rank mismatch ({} vs {})".format(len(A), len(B))
     assert len(A) >= 2, "rank of arguments must be at least 2, found {}".format(len(A))
@@ -553,6 +560,16 @@ _StandardShapeFuncs = {
     'log': unary_shape,
     'sin': unary_shape,
     'cos': unary_shape,
+    'tan': unary_shape,
+    'asin': unary_shape,
+    'acos': unary_shape,
+    'atan': unary_shape,
+    'sinh': unary_shape,
+    'cosh': unary_shape,
+    'tanh': unary_shape,
+    'asinh': unary_shape,
+    'acosh': unary_shape,
+    'atanh': unary_shape,
     'abs': unary_shape,
     'sign': unary_shape,
     'floor': unary_shape,
@@ -564,9 +581,11 @@ _StandardShapeFuncs = {
     'rsqrt': unary_shape,
     'log2': unary_shape,
     'sigmoid': unary_shape,
-    'tanh': unary_shape,
     'relu': unary_shape,
     'elu': unary_shape,
+    'selu': unary_shape,
+    'gelu': unary_shape,
+    'silu': unary_shape,
     'softabs': unary_shape,
     'softplus': unary_shape,
     'leaky_relu': unary_shape,
@@ -634,6 +653,8 @@ _StandardShapeFuncs = {
     'slice': slice_shape,
     'tile': tile_shape,
     'pad': pad_shape,
+    'cast': unary_shape,
+    'gather': gather_shape,
     'matmul': matmul_shape,
     'linear': linear_shape,
     'softmax': softmax_shape,
