@@ -189,6 +189,9 @@ def build_attribute(key, value, attribute_proto):
     elif isinstance(value, str):
         attribute_proto.type = build_attribute_type('STRING')
         attribute_proto.s = value.encode('utf-8')
+    elif isinstance(value, (type, np.dtype)):
+        attribute_proto.type = build_attribute_type('INT')
+        attribute_proto.i = build_dtype(value)
     elif isinstance(value, (list, tuple)):
         if len(value) == 0:
             attribute_proto.type = build_attribute_type('INTS')  # TODO better
