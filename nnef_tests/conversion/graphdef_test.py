@@ -486,6 +486,12 @@ class TestCases(TestEnv):
 
         self._test_conversion('elu')
 
+    def test_selu(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = tf.nn.selu(input)
+
+        self._test_conversion('selu')
+
     def test_relu6(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
         output = tf.nn.relu6(input)
@@ -503,12 +509,6 @@ class TestCases(TestEnv):
         output = tf.nn.sigmoid(input)
 
         self._test_conversion('sigmoid')
-
-    def test_tanh(self):
-        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
-        output = tf.nn.tanh(input)
-
-        self._test_conversion('tanh')
 
     def test_softplus(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
@@ -539,6 +539,30 @@ class TestCases(TestEnv):
         output = tf.math.cos(input)
 
         self._test_conversion('cos')
+
+    def test_tan(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = tf.math.tan(input)
+
+        self._test_conversion('tan')
+
+    def test_sinh(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = tf.math.sinh(input)
+
+        self._test_conversion('sinh')
+
+    def test_cosh(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = tf.math.cosh(input)
+
+        self._test_conversion('cosh')
+
+    def test_tanh(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = tf.math.tanh(input)
+
+        self._test_conversion('tanh')
 
     def test_sign(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)

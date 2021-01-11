@@ -554,11 +554,13 @@ _Transforms = Converter.unpack_transforms({
                 'T': '!I[0].dtype if I[0].dtype != np.bool and not _lite_ else None',
             }
         ),
-    ('copy', 'relu', 'relu6', 'elu', 'sigmoid', 'tanh', 'softplus', 'exp', 'log', 'sin', 'cos', 'sign',
-     'abs', 'neg', 'rcp', 'floor', 'ceil', 'round', 'sqr', 'sqrt', 'rsqrt', 'not'):
+    ('copy', 'relu', 'relu6', 'elu', 'selu', 'gelu', 'silu', 'sigmoid', 'softplus', 'exp', 'log',
+     'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
+     'neg', 'rcp', 'sign', 'abs', 'floor', 'ceil', 'round', 'sqr', 'sqrt', 'rsqrt', 'not'):
         Transform(
-            type=('Identity', 'Relu', 'Relu6', 'Elu', 'Sigmoid', 'Tanh', 'Softplus', 'Exp', 'Log', 'Sin', 'Cos', 'Sign',
-                  'Abs', 'Neg', 'Reciprocal', 'Floor', 'Ceil', 'Round', 'Square', 'Sqrt', 'Rsqrt', 'LogicalNot'),
+            type=('Identity', 'Relu', 'Relu6', 'Elu', 'Selu', 'Gelu', 'Silu', 'Sigmoid', 'Softplus', 'Exp', 'Log',
+                  'Sin', 'Cos', 'Tan', 'Asin', 'Acos', 'Atan', 'Sinh', 'Cosh', 'Tanh', 'Asinh', 'Acosh', 'Atanh',
+                  'Neg', 'Reciprocal', 'Sign', 'Abs', 'Floor', 'Ceil', 'Round', 'Square', 'Sqrt', 'Rsqrt', 'LogicalNot'),
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
             attribs={

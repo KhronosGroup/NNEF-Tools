@@ -213,11 +213,13 @@ _Transforms = Converter.unpack_transforms({
                 'spatial': '!0 if I[1].rank == I[0].rank else None',
             }
         ),
-    ('relu', 'sigmoid', 'tanh', 'softplus', 'not', 'copy', 'elu', 'abs', 'sign',
-     'cos', 'sin', 'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round'):
+    ('relu', 'sigmoid', 'tanh', 'softplus', 'selu', 'not', 'copy', 'elu', 'abs', 'sign',
+     'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
+     'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round'):
         Transform(
-            type=('Relu', 'Sigmoid', 'Tanh', 'Softplus', 'Not', 'Identity', 'Elu', 'Abs', 'Sign',
-                  'Cos', 'Sin', 'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round'),
+            type=('Relu', 'Sigmoid', 'Tanh', 'Softplus', 'Selu', 'Not', 'Identity', 'Elu', 'Abs', 'Sign',
+                  'Sin', 'Cos', 'Tan', 'Asin', 'Acos', 'Atan', 'Sinh', 'Cosh', 'Tanh', 'Asinh', 'Acosh', 'Atanh',
+                  'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round'),
             inputs='!I[0]',
             outputs='!O[0]',
         ),

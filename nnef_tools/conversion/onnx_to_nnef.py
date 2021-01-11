@@ -279,11 +279,13 @@ _Transforms = Converter.unpack_transforms({
                 'epsilon': '!epsilon',
             }
         ),
-    ('Relu', 'Sigmoid', 'Tanh', 'Softplus', 'Not', 'Identity', 'Elu', 'Abs', 'Sign',
-     'Cos', 'Sin', 'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round'):
+    ('Relu', 'Sigmoid', 'Tanh', 'Softplus', 'Selu', 'Not', 'Identity', 'Elu', 'Abs', 'Sign',
+     'Sin', 'Cos', 'Tan', 'Asin', 'Acos', 'Atan', 'Sinh', 'Cosh', 'Tanh', 'Asinh', 'Acosh', 'Atanh',
+     'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round'):
         Transform(
-            type=('relu', 'sigmoid', 'tanh', 'softplus', 'not', 'copy', 'elu', 'abs', 'sign',
-                  'cos', 'sin', 'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round'),
+            type=('relu', 'sigmoid', 'tanh', 'softplus', 'selu', 'not', 'copy', 'elu', 'abs', 'sign',
+                  'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
+                  'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round'),
             inputs='!I[0]',
             outputs='!O[0]',
         ),

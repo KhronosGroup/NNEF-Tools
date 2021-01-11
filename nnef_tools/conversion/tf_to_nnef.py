@@ -454,11 +454,13 @@ _Transforms = Converter.unpack_transforms({
             ),
             outputs='!transpose_output(O[0]) if transposed(I[0]) or transposed(I[1]) else O[0]',
         ),
-    ('Identity', 'Relu', 'Relu6', 'Elu', 'Sigmoid', 'Tanh', 'Softplus', 'Exp', 'Log', 'Sin', 'Cos', 'Sign',
-     'Abs', 'Neg', 'Reciprocal', 'Floor', 'Ceil', 'Round', 'Square', 'Sqrt', 'Rsqrt', 'LogicalNot'):
+    ('Identity', 'Relu', 'Relu6', 'Elu', 'Selu', 'Gelu', 'Silu', 'Swish', 'Sigmoid', 'Softplus', 'Exp', 'Log',
+     'Sin', 'Cos', 'Tan', 'Asin', 'Acos', 'Atan', 'Sinh', 'Cosh', 'Tanh', 'Asinh', 'Acosh', 'Atanh',
+     'Neg', 'Reciprocal', 'Sign', 'Abs', 'Floor', 'Ceil', 'Round', 'Square', 'Sqrt', 'Rsqrt', 'LogicalNot'):
         Transform(
-            type=('copy', 'relu', 'relu6', 'elu', 'sigmoid', 'tanh', 'softplus', 'exp', 'log', 'sin', 'cos', 'sign',
-                  'abs', 'neg', 'rcp', 'floor', 'ceil', 'round', 'sqr', 'sqrt', 'rsqrt', 'not'),
+            type=('copy', 'relu', 'relu6', 'elu', 'selu', 'gelu', 'silu', 'silu', 'sigmoid', 'softplus', 'exp', 'log',
+                  'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
+                  'neg', 'rcp', 'sign', 'abs', 'floor', 'ceil', 'round', 'sqr', 'sqrt', 'rsqrt', 'not'),
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
         ),

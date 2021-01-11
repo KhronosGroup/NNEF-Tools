@@ -909,6 +909,9 @@ class TestCases(TestEnv):
     def test_softplus(self):
         self._test_unary('Softplus')
 
+    def test_selu(self):
+        self._test_unary('Selu')
+
     def test_not(self):
         self._test_unary('Not', dtype=TensorProto.BOOL)
 
@@ -921,11 +924,32 @@ class TestCases(TestEnv):
     def test_sign(self):
         self._test_unary('Sign')
 
+    def test_sin(self):
+        self._test_unary('Sin')
+
     def test_cos(self):
         self._test_unary('Cos')
 
-    def test_sin(self):
-        self._test_unary('Sin')
+    def test_tan(self):
+        self._test_unary('Tan')
+
+    def test_asin(self):
+        self._test_unary('Asin')
+
+    def test_acos(self):
+        self._test_unary('Acos')
+
+    def test_atan(self):
+        self._test_unary('Atan')
+
+    def test_sinh(self):
+        self._test_unary('Sinh')
+
+    def test_cosh(self):
+        self._test_unary('Cosh')
+
+    def test_tanh(self):
+        self._test_unary('Tanh')
 
     def test_exp(self):
         self._test_unary('Exp')
