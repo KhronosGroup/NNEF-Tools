@@ -621,6 +621,12 @@ class TestCases(TestEnv):
 
         self._test_conversion('add_n', [input], [output])
 
+    def test_cast(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.int32)
+        output = tf.cast(input, tf.float32)
+
+        self._test_conversion('cast', [input], [output])
+
 
 @unittest.skipIf(TestEnv._network_folder is None or not os.path.isdir(TestEnv._network_folder),
                  "no network test folder provided")

@@ -882,6 +882,18 @@ class TestCases(TestEnv):
         self._test_conversion('resize_nearest_downsample', [node], [input], [output], constants=[scales, roi],
                               values={'scales': [1.0, 1.0, 0.5, 0.5], 'roi': []})
 
+    def test_cast(self):
+        input = helper.make_tensor_value_info('input', TensorProto.INT32, [1, 4, 32, 32])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 4, 32, 32])
+        node = helper.make_node(
+            op_type='Cast',
+            inputs=['input'],
+            outputs=['output'],
+            to=TensorProto.FLOAT,
+        )
+
+        self._test_conversion('cast', [node], [input], [output])
+
     def test_min_recude(self):
         self._test_reduce('ReduceMin', keepdims=False)
 

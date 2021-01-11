@@ -338,6 +338,16 @@ _Transforms = Converter.unpack_transforms({
                 'mode': '!0 if border == "reflect" else 1 if border == "reflect-even" else None',
             },
         ),
+    'cast':
+        Transform(
+            type='CAST',
+            inputs='!I[0]',
+            outputs='!transpose_like(O[0], I[0])',
+            attribs={
+                'in_data_type': '!I[0].dtype',
+                'out_data_type': '!O[0].dtype',
+            },
+        ),
     # 'copy': _TFTransforms['copy'].with_type('IDENTITY'),  # only works in TF 2.3
     'transpose': _TFTransforms['transpose'].with_type('TRANSPOSE'),
     'split': _TFTransforms['split'].with_type('SPLIT_V'),

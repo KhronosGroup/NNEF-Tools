@@ -790,4 +790,14 @@ _Transforms = Converter.unpack_transforms({
                 'N': '!len(I)',
             },
         ),
+    'cast':
+        Transform(
+            type='Cast',
+            inputs='!I[0]',
+            outputs='!transpose_like(O[0], I[0])',
+            attribs={
+                'SrcT': '!I[0].dtype',
+                'DstT': '!O[0].dtype',
+            },
+        ),
 })

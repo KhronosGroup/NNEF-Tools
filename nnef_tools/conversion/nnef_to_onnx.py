@@ -488,4 +488,13 @@ _Transforms = Converter.unpack_transforms({
                 'mode': 'nearest',
             }
         ),
+    'cast':
+        Transform(
+            type='Cast',
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'to': '!O[0].dtype',
+            }
+        ),
 })

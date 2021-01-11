@@ -342,4 +342,5 @@ _Transforms = Converter.unpack_transforms({
     'RESIZE_NEAREST_NEIGHBOR': _TFTransforms['ResizeNearestNeighbor'],
     'RESIZE_BILINEAR': _TFTransforms['ResizeBilinear'],
     'ADD_N': _TFTransforms['AddN'],
+    'CAST': _TFTransforms['Cast'],
 })

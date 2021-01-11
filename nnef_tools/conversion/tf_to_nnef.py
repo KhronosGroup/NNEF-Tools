@@ -691,10 +691,15 @@ _Transforms = Converter.unpack_transforms({
         ),
     'Cast':
         Transform(
-            cond='!nnef_dtype(O[0].dtype) == nnef_dtype(I[0].dtype)',
-            type='copy',
+            using={
+                'same_type': '!nnef_dtype(O[0].dtype) == nnef_dtype(I[0].dtype)',
+            },
+            type='!"copy" if same_type else "cast"',
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
+            attribs={
+                'dtype': '!O[0].dtype if not same_type else None',
+            },
         ),
     'AddN':
         Transform(

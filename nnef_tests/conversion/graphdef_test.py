@@ -632,10 +632,16 @@ class TestCases(TestEnv):
 
     def test_cast(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.int32)
+        output = tf.cast(input, dtype=tf.float32)
+
+        self._test_conversion('cast')
+
+    def test_cast_ints(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.int32)
         cast = tf.cast(input, dtype=tf.int8)
         output = tf.cast(cast, dtype=tf.int32)
 
-        self._test_conversion('cast')
+        self._test_conversion('cast_ints')
 
     def test_cast_float_bool(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)

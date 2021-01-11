@@ -619,8 +619,7 @@ class ConverterToNNEF(Converter):
     def ensure_valid_id(name):
         return re.sub('[^_0-9a-zA-Z]+', '_', name)
 
-    @staticmethod
-    def nnef_dtype(dtype):
+    def nnef_dtype(self, dtype):
         return ConverterToNNEF._DtypeFromNumpy[dtype]
 
 
