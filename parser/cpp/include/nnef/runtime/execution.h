@@ -128,6 +128,21 @@ namespace nnef { namespace rt
         };
     }
     
+    template<typename T, typename F, typename... S>
+    Executor make_unary_executor_ext( const F func, const S& ...attrib )
+    {
+        return [=]( const Operation& op, TensorDict& tensors )
+        {
+            auto& x = op.inputs.get("x");
+            auto& y = op.outputs.get("y");
+            
+            unary(_tensor_view<const T>(x, tensors), _tensor_view<T>(y, tensors), [&]( const T x )
+            {
+                return func(x, op.inputs.get(attrib).scalar()...);
+            });
+        };
+    }
+    
     template<typename T, typename R = T, typename F>
     Executor make_binary_executor( const F func )
     {
@@ -469,6 +484,23 @@ namespace nnef { namespace rt
     }
 
     DISPATCH_BY_DTYPE(slice)
+    
+    template<typename T>
+    void _execute_gather( const Operation& op, TensorDict& tensors )
+    {
+        auto& input = op.inputs.get("input");
+        auto& indices = op.inputs.get("indices");
+        auto& output = op.outputs.get("output");
+        auto& axis = op.attribs.get("axis").integer();
+        
+        auto input_view = _tensor_view<T>(input, tensors);
+        auto indices_view = _tensor_view<const int>(indices, tensors);
+        auto output_view = _tensor_view<T>(output, tensors);
+        
+        gather<T>(input_view, indices_view, output_view, axis);
+    }
+    
+    DISPATCH_BY_DTYPE(gather)
 
     template<typename T>
     void _execute_cast( const Operation& op, TensorDict& tensors )
@@ -700,8 +732,12 @@ namespace nnef { namespace rt
         { "sigmoid", make_unary_executor<float>([]( float x ){ return 1.f / (1.f + std::exp(-x)); }) },
         { "tanh", make_unary_executor<float>([]( float x ){ return std::tanh(x); }) },
         { "relu", make_unary_executor<float>([]( float x ){ return std::max(x, 0.f); }) },
-//        { "elu", make_unary_executor<float>([]( float x ){ return x < 0.f ? alpha * (std::exp(x) - 1.f) : x; }) },
-//        { "selu", make_unary_executor<float>([]( float x ){ return lambda * (x < 0.f ? alpha * (std::exp(x) - 1.f) : x); }) },
+        { "leaky_relu", make_unary_executor_ext<float>([]( float x, float alpha )
+            { return x < 0.f ? alpha * x : x; }, "alpha") },
+        { "elu", make_unary_executor_ext<float>([]( float x, float alpha )
+            { return x < 0.f ? alpha * (std::exp(x) - 1.f) : x; }, "alpha") },
+        { "selu", make_unary_executor_ext<float>([]( float x, float alpha, float lambda )
+            { return lambda * (x < 0.f ? alpha * (std::exp(x) - 1.f) : x); }, "alpha", "lambda") },
         { "gelu", make_unary_executor<float>([]( float x ){ return x / (1.f + std::exp(-1.702f * x)); }) },
         { "silu", make_unary_executor<float>([]( float x ){ return x / (1.f + std::exp(-x)); }) },
         { "softplus", make_unary_executor<float>([]( float x ){ return std::log(std::exp(x) + 1.f); }) },
@@ -755,6 +791,8 @@ namespace nnef { namespace rt
         { "pad", execute_pad<float> },
         { "tile", execute_tile },
         { "slice", execute_slice },
+        { "gather", execute_gather },
+        { "cast", execute_cast },
         
         { "matmul", execute_matmul<float> },
         { "linear", execute_linear<float> },

@@ -808,6 +808,29 @@ namespace nnef { namespace rt
         };
         return funcs[input.rank - 1](input, output, offset);
     }
+    
+    template<typename T, typename I>
+    void _gather( const T* input, const I* indices, T* output, const size_t b, const size_t d, const size_t n, const size_t m )
+    {
+        for ( size_t k = 0; k < b; ++k, input += d * m )
+        {
+            for ( size_t i = 0; i < n; ++i, output += m )
+            {
+                std::copy_n(input + indices[i] * m, m, output);
+            }
+        }
+    }
+    
+    template<typename T, typename I>
+    void gather( tensor_view<const T> input, tensor_view<const I> indices, tensor_view<T> output, const size_t axis )
+    {
+        const size_t b = nd_volume(axis, input.shape);
+        const size_t d = input.shape[axis];
+        const size_t n = nd_volume(indices.rank, indices.shape);
+        const size_t m = nd_volume(input.rank - axis - 1, input.shape + axis + 1);
+        
+        _gather(input.data, indices.data, output.data, b, d, n, m);
+    }
 
 }}   // namespace nnef::rt
 
