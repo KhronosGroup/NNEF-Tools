@@ -75,7 +75,8 @@ def _build_graph(nnef_graph):
 
         attribs = dict(nnef_op.attribs)
         if nnef_op.dtype is not None:
-            attribs['dtype'] = _DtypeToNumpy[nnef_op.dtype]
+            attribs['dtype'] = outputs[0].dtype if nnef_op.name == 'constant' or nnef_op.name == 'variable' else \
+                _DtypeToNumpy[nnef_op.dtype]
 
         offset = 2 if nnef_op.name.endswith('conv') else 0
         _substitute_empty_array('stride', attribs, inputs, offset)
