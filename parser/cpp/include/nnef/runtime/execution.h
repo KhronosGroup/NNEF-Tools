@@ -471,6 +471,38 @@ namespace nnef { namespace rt
     DISPATCH_BY_DTYPE(slice)
 
     template<typename T>
+    void _execute_cast( const Operation& op, TensorDict& tensors )
+    {
+        auto& input = op.inputs.get("input");
+        auto& output = op.outputs.get("output");
+
+        auto& input_dtype = tensors.at(input.identifier()).dtype;
+        auto output_view = _tensor_view<T>(output, tensors);
+        
+        if ( input_dtype == "scalar" )
+        {
+            auto input_view = _tensor_view<const Value::scalar_t>(input, tensors);
+            std::copy_n(input_view.data, input_view.volume, output_view.data);
+        }
+        else if ( input_dtype == "integer" )
+        {
+            auto input_view = _tensor_view<const Value::integer_t>(input, tensors);
+            std::copy_n(input_view.data, input_view.volume, output_view.data);
+        }
+        else if ( input_dtype == "logical" )
+        {
+            auto input_view = _tensor_view<const Value::logical_t>(input, tensors);
+            std::copy_n(input_view.data, input_view.volume, output_view.data);
+        }
+        else
+        {
+            throw std::runtime_error("operation 'cast' from dtype string is not implemented");
+        }
+    }
+
+    DISPATCH_BY_DTYPE(cast)
+
+    template<typename T>
     void execute_matmul( const Operation& op, TensorDict& tensors )
     {
         auto& A = op.inputs.get("A");
@@ -645,6 +677,16 @@ namespace nnef { namespace rt
         { "log2", make_unary_executor<float>([]( float x ){ return std::log(x) / std::log(2.f); }) },
         { "sin", make_unary_executor<float>([]( float x ){ return std::sin(x); }) },
         { "cos", make_unary_executor<float>([]( float x ){ return std::cos(x); }) },
+        { "tan", make_unary_executor<float>([]( float x ){ return std::tan(x); }) },
+        { "asin", make_unary_executor<float>([]( float x ){ return std::asin(x); }) },
+        { "acos", make_unary_executor<float>([]( float x ){ return std::acos(x); }) },
+        { "atan", make_unary_executor<float>([]( float x ){ return std::atan(x); }) },
+        { "sinh", make_unary_executor<float>([]( float x ){ return std::sinh(x); }) },
+        { "cosh", make_unary_executor<float>([]( float x ){ return std::cosh(x); }) },
+        { "tanh", make_unary_executor<float>([]( float x ){ return std::tanh(x); }) },
+        { "asinh", make_unary_executor<float>([]( float x ){ return std::asinh(x); }) },
+        { "acosh", make_unary_executor<float>([]( float x ){ return std::acosh(x); }) },
+        { "atanh", make_unary_executor<float>([]( float x ){ return std::atanh(x); }) },
         { "round", make_unary_executor<float>([]( float x ){ return std::round(x); }) },
         { "floor", make_unary_executor<float>([]( float x ){ return std::floor(x); }) },
         { "ceil", make_unary_executor<float>([]( float x ){ return std::ceil(x); }) },
@@ -658,7 +700,10 @@ namespace nnef { namespace rt
         { "sigmoid", make_unary_executor<float>([]( float x ){ return 1.f / (1.f + std::exp(-x)); }) },
         { "tanh", make_unary_executor<float>([]( float x ){ return std::tanh(x); }) },
         { "relu", make_unary_executor<float>([]( float x ){ return std::max(x, 0.f); }) },
-        { "elu", make_unary_executor<float>([]( float x ){ return x < 0.f ? std::exp(x) - 1.f : x; }) },
+//        { "elu", make_unary_executor<float>([]( float x ){ return x < 0.f ? alpha * (std::exp(x) - 1.f) : x; }) },
+//        { "selu", make_unary_executor<float>([]( float x ){ return lambda * (x < 0.f ? alpha * (std::exp(x) - 1.f) : x); }) },
+        { "gelu", make_unary_executor<float>([]( float x ){ return x / (1.f + std::exp(-1.702f * x)); }) },
+        { "silu", make_unary_executor<float>([]( float x ){ return x / (1.f + std::exp(-x)); }) },
         { "softplus", make_unary_executor<float>([]( float x ){ return std::log(std::exp(x) + 1.f); }) },
         
         { "add", make_binary_executor<float>(std::plus<float>()) },

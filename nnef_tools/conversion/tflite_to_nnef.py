@@ -274,6 +274,15 @@ _Transforms = Converter.unpack_transforms({
                 'border': '!"reflect" if mode == 0 else "reflect-even" if mode == 1 else "constant"',
             }
         ),
+    'GATHER':
+        Transform(
+            type='gather',
+            inputs=('!I[0]', '!I[1]'),
+            outputs='!transpose_like(O[0], I[0])',
+            attribs={
+                'axis': '!transpose_axis_like(axis, I[0])',
+            },
+        ),
     'IDENTITY': _TFTransforms['Identity'],
     'TRANSPOSE': _TFTransforms['Transpose'],
     'SPLIT': _TFTransforms['Split'],

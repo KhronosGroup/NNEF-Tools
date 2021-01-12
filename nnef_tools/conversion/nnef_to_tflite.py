@@ -338,6 +338,15 @@ _Transforms = Converter.unpack_transforms({
                 'mode': '!0 if border == "reflect" else 1 if border == "reflect-even" else None',
             },
         ),
+    'gather':
+        Transform(
+            type='GATHER',
+            inputs=('!I[0]', '!I[1]'),
+            outputs='!transpose_like(O[0], I[0])',
+            attribs={
+                'axis': '!transpose_axis_like(axis, I[0])',
+            },
+        ),
     'cast':
         Transform(
             type='CAST',

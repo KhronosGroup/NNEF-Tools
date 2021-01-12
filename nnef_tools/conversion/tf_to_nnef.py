@@ -701,6 +701,18 @@ _Transforms = Converter.unpack_transforms({
                 'dtype': '!O[0].dtype if not same_type else None',
             },
         ),
+    ('Gather', 'GatherV2'):
+        Transform(
+            type='gather',
+            using={
+                'axis': '!transpose_axis_like(as_const(I[2]), ref=I[0])'
+            },
+            inputs=('!I[0]', '!I[1]'),
+            outputs='!transpose_like(O[0], I[0])',
+            attribs={
+                'axis': '!axis',
+            },
+        ),
     'AddN':
         Transform(
             type='add_n',

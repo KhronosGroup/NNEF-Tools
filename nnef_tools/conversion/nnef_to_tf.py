@@ -337,7 +337,7 @@ _Transforms = Converter.unpack_transforms({
             type='Const',
             outputs='!O[0]',
             attribs={
-                'dtype': '!dtype',
+                'dtype': '!O[0].dtype',
                 'value': '!value if isinstance(value, np.ndarray) else as_numpy(value[0] if shape == [] else value)',
             }
         ),
@@ -798,6 +798,21 @@ _Transforms = Converter.unpack_transforms({
             attribs={
                 'SrcT': '!I[0].dtype',
                 'DstT': '!O[0].dtype',
+            },
+        ),
+    'gather':
+        Transform(
+            type='GatherV2',
+            inputs=(
+                '!I[0]',
+                '!I[1]',
+                '!as_tensor(transpose_axis_like(axis, I[0]), np.int32)',
+            ),
+            outputs='!transpose_like(O[0], I[0])',
+            attribs={
+                'Tparams': '!I[0].dtype',
+                'Tindices': '!I[1].dtype',
+                'Taxis': np.int32,
             },
         ),
 })
