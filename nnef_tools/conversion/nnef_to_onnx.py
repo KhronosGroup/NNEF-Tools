@@ -488,6 +488,15 @@ _Transforms = Converter.unpack_transforms({
                 'mode': 'nearest',
             }
         ),
+    'gather':
+        Transform(
+            type='Gather',
+            inputs=('!I[0]', '!I[1]'),
+            outputs='!O[0]',
+            attribs={
+                'axis': '!axis',
+            },
+        ),
     'cast':
         Transform(
             type='Cast',

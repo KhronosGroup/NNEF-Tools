@@ -658,18 +658,11 @@ _Transforms = Converter.unpack_transforms({
         ),
     'Gather':
         Transform(
-            using={
-                'index': '!ensure_scalar(as_const(I[1]))',
-                'axes': '![ensure_positive(axis, I[0].rank)]',
-            },
-            cond='!index is not None and len(I[1].shape) == 0',
-            type='slice',
-            inputs='!I[0]',
-            outputs='!squeeze_output(O[0], axes)',
+            type='gather',
+            inputs=('!I[0]', '!I[1]'),
+            outputs='!O[0]',
             attribs={
-                'axes': '!axes',
-                'begin': '![index]',
-                'end': '![index + 1]',
+                'axis': '!ensure_positive(axis, I[0].rank)',
             },
         ),
     'Cast':
