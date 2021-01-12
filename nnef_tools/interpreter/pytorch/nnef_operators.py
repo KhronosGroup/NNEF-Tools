@@ -26,6 +26,26 @@ import math
 
 # Helpers
 
+
+_numpy_dtype_to_torch = {
+    np.int8: torch.int8,
+    np.int16: torch.int16,
+    np.int32: torch.int32,
+    np.int64: torch.int64,
+    np.uint8: torch.uint8,
+    np.float: torch.float,
+    np.double: torch.double,
+    np.float16: torch.float16,
+    np.float32: torch.float32,
+    np.float64: torch.float64,
+    np.int: torch.int,
+    np.short: torch.short,
+    np.long: torch.long,
+    np.bool: torch.bool,
+    np.bool_: torch.bool,
+}
+
+
 def _expand_to_rank(input, rank):
     # type: (torch.Tensor, int)->torch.Tensor
     rank_diff = rank - len(input.shape)
@@ -1004,6 +1024,15 @@ def nnef_unsqueeze(input, axes):
     return input.reshape(nnef.shapes.unsqueeze_shape(input.shape, axes))
 
 
+def nnef_cast(input, dtype):
+    return input.to(_numpy_dtype_to_torch[dtype])
+
+
+def nnef_gather(input, indices, axis):
+    assert(len(indices.shape) == 1, "gather is only implemented for 1D indices")
+    return input.index_select(dim=axis, index=indices)
+
+
 """
 The supported operators
 """
@@ -1073,11 +1102,13 @@ Operators = {
     'moments': nnef_moments,
     'relu': F.relu,
     'sigmoid': torch.sigmoid,
-    'tanh': torch.tanh,
     'softabs': lambda x, epsilon: torch.sqrt(torch.pow(x, 2.0) + epsilon),
     'softmax': nnef_softmax,
     'softplus': lambda x: torch.log(torch.exp(x) + 1.0),
     'elu': F.elu,
+    'selu': F.selu,
+    'gelu': F.gelu,
+    'silu': lambda x: x * torch.sigmoid(x),
     'prelu': lambda x, alpha: F.prelu(x, alpha),
     'leaky_relu': lambda x, alpha: F.leaky_relu(x, alpha),
     'max_pool_with_index': nnef_max_pool_with_index,
@@ -1106,8 +1137,20 @@ Operators = {
     'copy_n': nnef_copy_n,
     'sin': lambda x: torch.sin(x),
     'cos': lambda x: torch.cos(x),
+    'tan': lambda x: torch.tan(x),
+    'asin': lambda x: torch.asin(x),
+    'acos': lambda x: torch.acos(x),
+    'atan': lambda x: torch.atan(x),
+    'sinh': lambda x: torch.sinh(x),
+    'cosh': lambda x: torch.cosh(x),
+    'tanh': lambda x: torch.tanh(x),
+    'asinh': lambda x: torch.asinh(x),
+    'acosh': lambda x: torch.acosh(x),
+    'atanh': lambda x: torch.atanh(x),
     'tile': lambda input, repeats: input.repeat(*repeats),
     'pad': nnef_pad,
+    'cast': nnef_cast,
+    'gather': nnef_gather,
     'any_reduce': lambda input, axes: _nnef_generic_reduce(input, axes=axes, f=torch.any),
     'all_reduce': lambda input, axes: _nnef_generic_reduce(input, axes=axes, f=torch.all),
 }

@@ -94,7 +94,7 @@ class NNEFModule(torch.nn.Module):
 
                 training_attribs = self._training_attributes.get(op.type, {})
                 attribs = {**op.attribs, **training_attribs}
-                if 'dtype' in attribs and op.type != 'constant':
+                if 'dtype' in attribs and op.type != 'constant' and op.type != 'cast':
                     del attribs['dtype']
 
                 inputs = [get_tensor(tensor.name) if tensor.name else torch.tensor(tensor.data) for tensor in op.inputs]

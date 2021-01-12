@@ -528,7 +528,7 @@ namespace nnef { namespace rt
         }
         else
         {
-            throw std::runtime_error("operation 'cast' from dtype string is not implemented");
+            throw std::runtime_error("operation 'cast' from dtype 'string' is not implemented");
         }
     }
 
