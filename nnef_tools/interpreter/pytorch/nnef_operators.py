@@ -1029,8 +1029,13 @@ def nnef_cast(input, dtype):
 
 
 def nnef_gather(input, indices, axis):
-    assert(len(indices.shape) == 1, "gather is only implemented for 1D indices")
-    return input.index_select(dim=axis, index=indices)
+    shape = list(indices.shape)
+    if len(shape) != 1:
+        indices = torch.flatten(indices)
+    result = input.index_select(dim=axis, index=indices)
+    if len(shape) != 1:
+        result = torch.reshape(result, shape=input.shape[:axis] + shape + input.shape[axis + 1:])
+    return result
 
 
 """
