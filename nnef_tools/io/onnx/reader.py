@@ -295,19 +295,9 @@ def onnx_model_to_graph(onnx_model):
     return _get_graph(onnx_model.graph)
 
 
-def read_protobuf(filename, input_shapes, simplify):
-    model_proto = onnx.load_model(filename)
-    _add_value_info_for_constants(model_proto)
-
-    if simplify:
-        from onnxsim import simplify as _simplify
-        model_proto, _ = _simplify(model_proto, input_shapes=input_shapes, perform_optimization=False)
-    if input_shapes:
-        _set_input_shapes(model_proto.graph, input_shapes)
-
-    model_proto = infer_shapes(model_proto)
-
-    return onnx_model_to_graph(model_proto)
+def read_tensor(filename):
+    with open(filename, 'rb') as file:
+        return _get_tensor_data(onnx.load_tensor(file))
 
 
 class Reader(object):
@@ -316,4 +306,15 @@ class Reader(object):
         self._simplify = simplify
 
     def __call__(self, filename, input_shapes=None):
-        return read_protobuf(filename, input_shapes, self._simplify)
+        model_proto = onnx.load_model(filename)
+        _add_value_info_for_constants(model_proto)
+
+        if self._simplify:
+            from onnxsim import simplify
+            model_proto, _ = simplify(model_proto, input_shapes=input_shapes, perform_optimization=False)
+        if input_shapes:
+            _set_input_shapes(model_proto.graph, input_shapes)
+
+        model_proto = infer_shapes(model_proto)
+
+        return onnx_model_to_graph(model_proto)

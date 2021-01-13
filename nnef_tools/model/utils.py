@@ -15,16 +15,18 @@
 
 def generate_tensor_names_from_op_type(graph, keep_io_names=False):
     op_counts = {}
-    for tensor in graph.tensors:
-        if keep_io_names and tensor.name is not None and (tensor in graph.inputs or tensor in graph.outputs):
-            continue
 
-        if tensor.producer is not None:
-            op_type = tensor.producer.type
-            idx = op_counts.get(op_type, 0) + 1
-            op_counts[op_type] = idx
-            tensor.name = op_type + str(idx)
-        else:
+    for op in graph.operations:
+        for tensor in op.outputs:
+            if keep_io_names and tensor.name is not None and (tensor in graph.inputs or tensor in graph.outputs):
+                continue
+
+            idx = op_counts.get(op.type, 0) + 1
+            op_counts[op.type] = idx
+            tensor.name = op.type + str(idx)
+
+    for tensor in graph.tensors:
+        if tensor.producer is None:
             tensor.name = None
 
 
