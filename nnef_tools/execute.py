@@ -42,7 +42,7 @@ _onnx_dtype_to_numpy = {
 _nnef_dtype_to_numpy = {
     'scalar': np.float32,
     'integer': np.int32,
-    'bool': np.bool,
+    'logical': np.bool,
 }
 
 _numpy_dtype_remap = {
