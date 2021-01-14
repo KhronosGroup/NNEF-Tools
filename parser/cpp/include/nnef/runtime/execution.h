@@ -138,7 +138,7 @@ namespace nnef { namespace rt
             
             unary(_tensor_view<const T>(x, tensors), _tensor_view<T>(y, tensors), [&]( const T x )
             {
-                return func(x, op.inputs.get(attrib).scalar()...);
+                return func(x, op.attribs.get(attrib).scalar()...);
             });
         };
     }
