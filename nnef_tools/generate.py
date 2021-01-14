@@ -19,34 +19,53 @@ import sys
 import os
 
 
-_nnef_dtype_to_numpy = {
-    'scalar': np.float32,
-    'integer': np.int32,
-    'bool': np.bool,
-}
-
-
-def _is_lambda(v):
+def _is_lambda(value):
     LAMBDA = lambda: 0
-    return isinstance(v, type(LAMBDA)) and v.__name__ == LAMBDA.__name__
+    return isinstance(value, type(LAMBDA)) and value.__name__ == LAMBDA.__name__
 
 
-def uniform(min=0, max=1):
-    return lambda shape: np.random.uniform(min, max, shape)
+def _ensure_lambda(value):
+    return value() if not _is_lambda(value) else value
 
 
-def normal(mean=0, std=1):
-    return lambda shape: np.random.normal(mean, std, shape)
+def uniform(min=0.0, max=1.0):
+    return lambda shape: np.random.uniform(min, max, shape).astype(np.float32)
+
+
+def normal(mean=0.0, std=1.0):
+    return lambda shape: np.random.normal(mean, std, shape).astype(np.float32)
+
+
+def bernoulli(prob=0.5):
+    return lambda shape: np.random.uniform(0.0, 1.0, shape) > prob
+
+
+def integers(min=0, max=100):
+    return lambda shape: np.random.randint(min, max, shape).astype(np.int32)
 
 
 def main(args):
     if args.seed is not None:
         np.random.seed(args.seed)
 
+    distributions = {
+        'scalar': uniform(0.0, 1.0),
+        'integer': integers(0, 100),
+        'logical': bernoulli(0.5),
+    }
+
     try:
-        distribution = eval(args.random)
-        if not _is_lambda(distribution):
-            distribution = distribution()
+        random = eval(args.random)
+        if isinstance(random, dict):
+            distributions.update({key: _ensure_lambda(value) for key, value in random.items()})
+        else:
+            random = _ensure_lambda(random)
+            if args.random.startswith('integers'):
+                distributions['integer'] = random
+            elif args.random.startswith('bernoulli'):
+                distributions['logical'] = random
+            else:
+                distributions['scalar'] = random
     except Exception as e:
         print("Could not evaluate distribution: " + str(e), file=sys.stderr)
         return -1
@@ -57,7 +76,7 @@ def main(args):
         if args.weights and op.name == 'variable':
             label = op.attribs['label']
             shape = op.attribs['shape']
-            data = distribution(shape).astype(_nnef_dtype_to_numpy[op.dtype])
+            data = distributions[op.dtype](shape)
             filename = os.path.join(args.model, label + '.dat')
 
             os.makedirs(os.path.split(filename)[0], exist_ok=True)
@@ -70,7 +89,7 @@ def main(args):
         if args.inputs and op.name == 'external':
             name = op.outputs['output']
             shape = op.attribs['shape']
-            data = distribution(shape).astype(_nnef_dtype_to_numpy[op.dtype])
+            data = distributions[op.dtype](shape)
             filename = os.path.join(args.model, args.inputs, name + '.dat')
 
             os.makedirs(os.path.split(filename)[0], exist_ok=True)
@@ -88,7 +107,7 @@ if __name__ == '__main__':
     parser.add_argument('model', type=str,
                         help='The model to generate')
     parser.add_argument('--random', type=str, required=True,
-                        help='Random distribution for input generation')
+                        help='Random distribution for input generation, possibly per dtype')
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed for input generation')
     parser.add_argument('--weights', action='store_true',
