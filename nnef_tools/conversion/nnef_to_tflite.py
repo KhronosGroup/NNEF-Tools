@@ -283,7 +283,7 @@ _Transforms = Converter.unpack_transforms({
             inputs=(
                 '!I[0]',
                 '!I[1]',
-                '!I[2] if not is_zero(I[2]) else None',
+                '!squeeze_vector(I[2]) if not is_zero(I[2]) else None',
             ),
             outputs='!O[0]',
             attribs={

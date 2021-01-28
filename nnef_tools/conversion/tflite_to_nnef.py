@@ -238,7 +238,7 @@ _Transforms = Converter.unpack_transforms({
             inputs=(
                 '!I[0] if keep_num_dims else flatten(I[0])',
                 '!I[1]',
-                '!I[2] if len(I) > 2 else None',
+                '!unsqueeze_vector(I[2]) if len(I) > 2 else None',
             ),
             outputs='!activation(O[0], fused_activation_function)',
         ),
