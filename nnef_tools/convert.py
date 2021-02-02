@@ -173,8 +173,6 @@ def get_custom_optimizers(module_names):
         if hasattr(module, CUSTOM_OPTIMIZERS):
             optimizers.update(getattr(module, CUSTOM_OPTIMIZERS))
 
-    print(optimizers)
-
     return optimizers
 
 
