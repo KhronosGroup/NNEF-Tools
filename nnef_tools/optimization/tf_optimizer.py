@@ -25,7 +25,7 @@ class Optimizer:
 
     def __call__(self, graph, only_required=False):
         self._fix_inputs_without_producer(graph)
-        replace_chain(graph, ['SpaceToBatchND', 'Conv2D', 'BatchToSpaceND'], self._replace_dilated_conv)
+        replace_chain(graph, ['SpaceToBatchND', {'Conv2D', 'DepthwiseConv2dNative'}, 'BatchToSpaceND'], self._replace_dilated_conv)
         replace_chain(graph, ['Cast'], self._replace_bool_cast)
         for chain, replacer in six.iteritems(self._custom_optimizers):
             replace_chain(graph, chain, replacer)
