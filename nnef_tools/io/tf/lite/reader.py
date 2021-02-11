@@ -27,6 +27,8 @@ import six
 
 def _get_quantization(tensor):
     quant = tensor.Quantization()
+    if quant is None:
+        return None
 
     if quant.MinLength() == 0:
         min = None
