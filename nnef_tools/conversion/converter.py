@@ -630,7 +630,7 @@ class ConverterFromNNEF(Converter):
     def decomposed_operations():
         return ['separable_conv', 'separable_deconv', 'rms_pool',
                 'local_mean_normalization', 'local_variance_normalization', 'local_contrast_normalization',
-                'l1_normalization', 'moments']
+                'l1_normalization', 'moments', 'axpb']
 
     def __init__(self, transforms, functions=None, mirror_unsupported=False):
         Converter.__init__(self, transforms, functions, mirror_unsupported)

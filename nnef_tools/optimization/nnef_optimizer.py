@@ -16,6 +16,14 @@ from ..model.utils import bypass_and_remove, generate_tensor_names_from_op_type,
 from ..model.graph import *
 
 
+_AXPB_FRAGMENT = """
+fragment axpb( x: tensor<scalar>, a: tensor<scalar>, b: tensor<scalar> ) -> ( y: tensor<scalar> )
+{
+    y = a * x + b;
+}
+"""
+
+
 class Optimizer:
 
     def __init__(self, keep_io_names=False, custom_optimizers=None):
@@ -71,6 +79,7 @@ class Optimizer:
                                          self._merge_matmul_bias)
                 changed |= replace_chain(graph, [{'conv', 'deconv'}, 'batch_normalization'],
                                          self._merge_conv_batch_norm)
+                changed |= replace_chain(graph, ['batch_normalization'], self._merge_batch_norm)
 
                 for chain, replacer in six.iteritems(self._custom_optimizers):
                     changed |= replace_chain(graph, chain, replacer)
@@ -79,6 +88,12 @@ class Optimizer:
 
         generate_tensor_names_from_op_type(graph, keep_io_names=self._keep_io_names)
         return graph
+
+    @staticmethod
+    def defined_operations():
+        return {
+            'axpb': _AXPB_FRAGMENT,
+        }
 
     @staticmethod
     def _fix_inputs_without_producer(graph):
@@ -285,6 +300,29 @@ class Optimizer:
         else:
             bias = Optimizer._add_variable(conv.graph, data=bias, name=conv.output.name + '_bias')
             conv.copy_with(inputs=(*conv.inputs[:2], bias), outputs=bn.output)
+
+    @staticmethod
+    def _merged_batch_norm_params(mean, variance, offset, scale, epsilon):
+        std = np.sqrt(variance + epsilon)
+        factor = scale / std
+        return factor, offset - factor * mean
+
+    @staticmethod
+    def _merge_batch_norm(bn):
+        if any(tensor.quant for tensor in bn.inputs):
+            return False
+
+        scale, offset = Optimizer._merged_batch_norm_params(
+                                    bn.inputs[1].data,
+                                    bn.inputs[2].data,
+                                    bn.inputs[3].data if len(bn.inputs) > 3 else 0,
+                                    bn.inputs[4].data if len(bn.inputs) > 4 else 1,
+                                    bn.attribs['epsilon'])
+
+        scale = Optimizer._add_variable(bn.graph, data=scale, name=bn.output.name + '_scale')
+        offset = Optimizer._add_variable(bn.graph, data=offset, name=bn.output.name + '_offset')
+
+        Operation(graph=bn.graph, type='axpb', inputs=(bn.inputs[0], scale, offset), outputs=bn.output)
 
     @staticmethod
     def _merge_mul_linear(mul, linear):

@@ -53,13 +53,14 @@ class TestEnv(unittest.TestCase):
     def setUp(self) -> None:
         self._onnx_reader = onnx_io.Reader(simplify=True)
         self._onnx_writer = onnx_io.Writer()
+        self._nnef_optimizer = nnef_opt.Optimizer()
+        self._onnx_optimizer = onnx_opt.Optimizer()
         self._onnx_to_nnef_converter = onnx_to_nnef.Converter()
         self._nnef_to_onnx_converter = nnef_to_onnx.Converter()
         self._nnef_reader = nnef_io.Reader(custom_shapes=self._nnef_to_onnx_converter.custom_shapes(),
                                            decomposed=self._nnef_to_onnx_converter.decomposed_operations())
-        self._nnef_writer = nnef_io.Writer(fragments=self._onnx_to_nnef_converter.defined_operations())
-        self._nnef_optimizer = nnef_opt.Optimizer()
-        self._onnx_optimizer = onnx_opt.Optimizer()
+        self._nnef_writer = nnef_io.Writer(fragments={**self._onnx_to_nnef_converter.defined_operations(),
+                                                      **self._nnef_optimizer.defined_operations()})
 
     def tearDown(self) -> None:
         pass
@@ -454,7 +455,7 @@ class TestCases(TestEnv):
             outputs=['output'],
         )
 
-        self._test_conversion('max_pool3d', [node], [input], [output], [mean, variance, offset, scale])
+        self._test_conversion('batch_norm', [node], [input], [output], [mean, variance, offset, scale])
 
     def test_transpose(self):
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])

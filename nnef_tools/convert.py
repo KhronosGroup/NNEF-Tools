@@ -325,6 +325,9 @@ def main(args):
 
                 graph = optimizer(graph)
 
+                if hasattr(optimizer, 'defined_operations'):
+                    fragments.update(optimizer.defined_operations())
+
                 if not check_nan_or_inf(graph, 'Optimized output'):
                     return -1
 

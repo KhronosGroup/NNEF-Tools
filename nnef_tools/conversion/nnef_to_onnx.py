@@ -17,7 +17,7 @@ from .converter import ConverterFromNNEF as _Converter, Transform, ConversionErr
 from ..model import Tensor, Operation
 from ..utils import types
 import numpy as np
-from nnef.shapes import pool_shape, reduce_shape, normalize_shape
+from nnef.shapes import pool_shape, reduce_shape
 
 
 class Converter(_Converter):
