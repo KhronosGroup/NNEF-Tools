@@ -16,14 +16,6 @@ from ..model.utils import bypass_and_remove, generate_tensor_names_from_op_type,
 from ..model.graph import *
 
 
-_AXPB_FRAGMENT = """
-fragment axpb( x: tensor<scalar>, a: tensor<scalar>, b: tensor<scalar> ) -> ( y: tensor<scalar> )
-{
-    y = a * x + b;
-}
-"""
-
-
 class Optimizer:
 
     def __init__(self, keep_io_names=False, custom_optimizers=None):
@@ -88,12 +80,6 @@ class Optimizer:
 
         generate_tensor_names_from_op_type(graph, keep_io_names=self._keep_io_names)
         return graph
-
-    @staticmethod
-    def defined_operations():
-        return {
-            'axpb': _AXPB_FRAGMENT,
-        }
 
     @staticmethod
     def _fix_inputs_without_producer(graph):
@@ -322,7 +308,10 @@ class Optimizer:
         scale = Optimizer._add_variable(bn.graph, data=scale, name=bn.output.name + '_scale')
         offset = Optimizer._add_variable(bn.graph, data=offset, name=bn.output.name + '_offset')
 
-        Operation(graph=bn.graph, type='axpb', inputs=(bn.inputs[0], scale, offset), outputs=bn.output)
+        scaled = Tensor(graph=bn.graph, name=bn.output.name + '_scaled', shape=bn.output.shape, dtype=bn.output.dtype)
+
+        Operation(graph=bn.graph, type='mul', inputs=(bn.inputs[0], scale), outputs=scaled)
+        Operation(graph=bn.graph, type='add', inputs=(scaled, offset), outputs=bn.output)
 
     @staticmethod
     def _merge_mul_linear(mul, linear):

@@ -59,8 +59,7 @@ class TestEnv(unittest.TestCase):
         self._nnef_to_onnx_converter = nnef_to_onnx.Converter()
         self._nnef_reader = nnef_io.Reader(custom_shapes=self._nnef_to_onnx_converter.custom_shapes(),
                                            decomposed=self._nnef_to_onnx_converter.decomposed_operations())
-        self._nnef_writer = nnef_io.Writer(fragments={**self._onnx_to_nnef_converter.defined_operations(),
-                                                      **self._nnef_optimizer.defined_operations()})
+        self._nnef_writer = nnef_io.Writer(fragments=self._onnx_to_nnef_converter.defined_operations())
 
     def tearDown(self) -> None:
         pass
