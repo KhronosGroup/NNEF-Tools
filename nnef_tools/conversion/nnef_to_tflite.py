@@ -133,7 +133,7 @@ class Converter(_TFConverter):
                       outputs=output)
         else:
             Operation(input.graph, type='RESHAPE', inputs=(input, self.as_tensor(output.shape, np.int32)),
-                      outputs=output)
+                      outputs=output, attribs={'new_shape': output.shape})
 
     def _transpose_operation(self, input, output, perm):
         Operation(input.graph, type='TRANSPOSE', inputs=(input, self.as_tensor(perm, np.int32)),

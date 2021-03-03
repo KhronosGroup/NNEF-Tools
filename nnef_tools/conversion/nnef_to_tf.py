@@ -463,14 +463,17 @@ _Transforms = Converter.unpack_transforms({
     'unsqueeze':
         Transform(
             type='!"ExpandDims" if len(axes) == 1 else "Reshape"',
+            using={
+                'new_shape': '!unsqueeze_shape(I[0].shape, axes)',
+            },
             inputs=(
                 '!undo_transpose(I[0])',
-                '!as_tensor(axes, np.int32) if len(axes) == 1 else '
-                 'as_tensor(unsqueeze_shape(I[0].shape, axes), np.int32)',
+                '!as_tensor(axes if len(axes) == 1 else new_shape, np.int32)',
             ),
             outputs='!O[0]',
             attribs={
                 'T': '!dtype if not _lite_ else None',
+                'new_shape': '!new_shape if _lite_ else None',
             }
         ),
     'stack':
