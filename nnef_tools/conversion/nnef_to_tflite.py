@@ -161,8 +161,9 @@ class Converter(_TFConverter):
 
         Operation(input.graph, type='PAD', inputs=(input, paddings), outputs=output, attribs={})
 
-    def convert_padding(self, value):
-        return 'SAME' if value == [] else 'VALID'   # explicit padding goes into a separate op
+    def is_same_padding(self, input_size, output_size, stride):
+        same = all(o == i // s for i, o, s in zip(input_size, output_size, stride))
+        return same
 
     def pad_input(self, input, paddings):
         if all(item == (0, 0) for item in paddings):
@@ -184,9 +185,11 @@ _Transforms = Converter.unpack_transforms({
             using={
                 'depthwise': '!groups == 0',
                 'channels': '!I[0].shape[-1 if transposed(I[0]) else 1]',
+                'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
+                            ' O[0].shape[2:], stride)',
             },
             inputs=(
-                '!pad_input(transpose_input(I[0]), [(0, 0), (0, 0)] + padding)',
+                '!transpose_input(I[0]) if same_pad else pad_input(transpose_input(I[0]), [(0, 0), (0, 0)] + padding)',
                 '!transpose_filter(I[1], format="NXC" if not depthwise else "CXN", depthwise=depthwise)',
                 '!squeeze_vector(I[2])',
             ),
@@ -196,7 +199,7 @@ _Transforms = Converter.unpack_transforms({
                 'stride_w': '!stride[1]',
                 'dilation_h_factor': '!dilation[0]',
                 'dilation_w_factor': '!dilation[1]',
-                'padding': '!convert_padding(padding)',
+                'padding': '!"SAME" if same_pad else "VALID"',
                 'depth_multiplier': '!O[0].shape[1] // channels if depthwise else None',
             }
         ),
@@ -207,25 +210,32 @@ _Transforms = Converter.unpack_transforms({
             using={
                 'depthwise': '!groups == 0',
                 'channels': '!O[0].shape[1]',
+                'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
+                            ' O[0].shape[2:], stride)',
             },
             inputs=(
                 '!as_tensor(ncx_to_nxc(output_shape), np.int32)',
                 '!transpose_filter(I[1], format="CXN" if not depthwise else "NXC", depthwise=depthwise)',
-                '!pad_input(transpose_input(I[0]), [(0, 0), (0, 0)] + padding)',
+                '!transpose_input(I[0]) if same_pad else pad_input(transpose_input(I[0]), [(0, 0), (0, 0)] + padding)',
             ),
             outputs='!bias_add(transpose_output(O[0]), squeeze_vector(I[2]) if I[2].rank == 2 else I[2])',
             attribs={
                 'stride_h': '!stride[0]',
                 'stride_w': '!stride[1]',
-                'padding': '!convert_padding(padding)',
+                'padding': '!"SAME" if same_pad else "VALID"',
                 'depth_multiplier': '!I[1].shape[0] // channels if depthwise else None',
             }
         ),
     ('max_pool', 'avg_pool'):
         Transform(
+            cond='!size[0] == 1 and size[1] == 1 and stride[0] == 1 and stride[1] == 1',
             type=('MAX_POOL_2D', 'AVERAGE_POOL_2D'),
+            using={
+                'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
+                            ' O[0].shape[2:], stride[2:])',
+            },
             inputs=(
-                '!pad_input(transpose_input(I[0]), [(0, 0), (0, 0)] + padding)',
+                '!transpose_input(I[0]) if same_pad else pad_input(transpose_input(I[0]), padding)',
             ),
             outputs=(
                 '!transpose_output(O[0])',
@@ -235,7 +245,7 @@ _Transforms = Converter.unpack_transforms({
                 'filter_width': '!size[3]',
                 'stride_h': '!stride[2]',
                 'stride_w': '!stride[3]',
-                'padding': '!convert_padding(padding)',
+                'padding': '!"SAME" if same_pad else "VALID"',
             }
         ),
     'reshape':
