@@ -115,8 +115,9 @@ class Converter:
         unknown_tensors = [tensor for tensor in graph.tensors if tensor.shape is None and len(tensor.consumers)]
         if len(unknown_tensors):
             names = ["'{}'".format(tensor.name) for tensor in unknown_tensors if tensor.name]
-            raise ConversionError("Input graph contains tensors with unknown shape: " +
-                                  ", ".join(names) if len(names) else "(no names)")
+            raise ConversionError(("Input graph contains tensors with unknown shape: " +
+                                  ", ".join(names) if len(names) else "(no names)") +
+                                  "\nTry the --fold-constants option to eliminate unnecessary constant sub-graphs")
 
         self._graph = Graph(name=graph.name)
         self._tensor_map = {tensor: self._copy_tensor_(tensor) for tensor in graph.tensors}
