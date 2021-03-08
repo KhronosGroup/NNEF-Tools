@@ -9,7 +9,7 @@ import os
 _CONV_OPS = ['conv', 'deconv', 'separable_conv', 'separable_deconv']
 
 
-def make_quantization(min, max, mean, std, signed, symmetric):
+def make_quantization(min, max, signed, symmetric):
     if min > 0:
         min = 0
     if max < 0:
@@ -68,8 +68,16 @@ def main(args):
     for tensor in model.tensors:
         stat = stats.get(tensor.name)
         if stat is not None:
-            tensor.quant = make_quantization(stat['min'], stat['max'], stat['mean'], stat['std'],
-                                             args.signed, args.symmetric)
+
+            if args.percentile is not None:
+                lo = max(stat['mean'] - args.percentile * stat['std'], stat['min'])
+                hi = min(stat['mean'] + args.percentile * stat['std'], stat['max'])
+            else:
+                lo = stat['min']
+                hi = stat['max']
+
+            tensor.quant = make_quantization(lo, hi, args.signed, args.symmetric)
+
             if tensor.data is not None:
                 tensor.data = quantize_params(tensor.data, tensor.quant['zero_point'], tensor.quant['scale'],
                                               args.signed, args.symmetric)
@@ -102,4 +110,7 @@ if __name__ == '__main__':
                         help='Whether to quantize symmetrically and force zero-point to 0')
     parser.add_argument('--wide-bias', action='store_true',
                         help='Whether to quantize biases into int32 values')
+    parser.add_argument('--percentile', type=float, default=None,
+                        help='Define ranges with approximate normal distribution percentiles;'
+                             'provide number of standard deviations from mean to be used')
     exit(main(parser.parse_args()))
