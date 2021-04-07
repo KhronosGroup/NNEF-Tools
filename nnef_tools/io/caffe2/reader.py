@@ -61,6 +61,10 @@ def _caffe_to_caffe2(prototxt, caffemodel):
             _fix_conv_pool_param(layer.pooling_param)
         elif layer.type == 'Eltwise':
             _fix_eltwise_param(layer.eltwise_param)
+        elif layer.type == 'BatchNorm':
+            model_layer = _find_model_layer(caffemodel, layer.name)
+            model_blobs = model_layer.blobs if model_layer is not None else []
+            _fix_batch_norm_param(layer.batch_norm_param, model_blobs)
 
     predict_net, params = TranslateModel(prototxt, caffemodel, is_test=True, remove_legacy_pad=False, input_dims=[])
 
@@ -76,6 +80,16 @@ def _caffe_to_caffe2(prototxt, caffemodel):
     value_info = {name: (onnx.TensorProto.FLOAT, shape) for name, shape in zip(input_names, input_shapes)}
 
     return predict_net, init_net, value_info
+
+
+def _find_model_layer(caffemodel, name):
+    for layer in caffemodel.layer:
+        if layer.name == name:
+            return layer
+    for layer in caffemodel.layers:
+        if layer.name == name:
+            return layer
+    return None
 
 
 def _fix_conv_pool_param(param):
@@ -100,6 +114,12 @@ def _fix_eltwise_param(param):
     if len(param.coeff) > 0 and all(c == 1 for c in param.coeff):
         for i in reversed(range(len(param.coeff))):
             del param.coeff[i]
+
+
+def _fix_batch_norm_param(param, blobs):
+    if len(blobs) > 2:
+        if blobs[2].data[0] == 0:
+            blobs[2].data[0] = 1
 
 
 def _caffe2_net_to_onnx_model(predict_net, init_net, value_info):
