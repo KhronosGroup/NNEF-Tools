@@ -21,6 +21,7 @@ from ...utils.types import as_str
 from google.protobuf import text_format
 from collections.abc import Sequence
 from caffe2.python.workspace import GlobalInit
+from caffe2.python.utils import CaffeBlobToNumpyArray
 import json
 import sys
 import os
