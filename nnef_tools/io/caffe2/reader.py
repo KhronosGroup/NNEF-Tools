@@ -157,16 +157,14 @@ def _remove_unrecognized_attributes(net_def):
 
 
 def load_caffe_model(path):
-    from .caffe.proto import caffe_pb2
-
     base, ext = os.path.splitext(path)
     assert ext == '.prototxt'
 
     with open(path) as file:
-        prototxt = caffe_pb2.NetParameter()
+        prototxt = caffe.proto.caffe_pb2.NetParameter()
         text_format.Merge(file.read(), prototxt)
     with open(base + '.caffemodel', 'rb') as file:
-        caffemodel = caffe_pb2.NetParameter()
+        caffemodel = caffe.proto.caffe_pb2.NetParameter()
         caffemodel.ParseFromString(file.read())
 
     return prototxt, caffemodel
