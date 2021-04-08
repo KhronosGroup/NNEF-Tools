@@ -25,6 +25,25 @@ import json
 import sys
 import os
 
+try:
+    import caffe
+except ImportError:
+    from . import caffe
+    sys.modules['caffe'] = caffe
+
+from caffe2.python.caffe_translator import TranslateModel, TranslatorRegistry, ConvertTensorProtosToInitNet, AddArgument
+
+
+def _HookedTranslateLayer(layer, pretrained_blobs, is_test, **kwargs):
+    _pre_translate(layer, pretrained_blobs)
+    ops, params = _TranslateLayer(layer, pretrained_blobs, is_test, **kwargs)
+    _post_translate(layer, pretrained_blobs, ops, params)
+    return ops, params
+
+
+_TranslateLayer = TranslatorRegistry.TranslateLayer
+TranslatorRegistry.TranslateLayer = _HookedTranslateLayer
+
 
 GlobalInit(['caffe2', '--caffe2_log_level=2'])
 
@@ -33,14 +52,6 @@ _UnrecognizedAttribs = {'ws_nbytes_limit'}
 
 
 def _caffe_to_caffe2(prototxt, caffemodel):
-    try:
-        import caffe
-    except ImportError:
-        from . import caffe
-        sys.modules['caffe'] = caffe
-
-    from caffe2.python.caffe_translator import TranslateModel, ConvertTensorProtosToInitNet
-
     if prototxt.layer[0].type == 'Input':
         input_names = list(prototxt.layer[0].top)
         input_shapes = list(item.dim for item in prototxt.layer[0].input_param.shape)
@@ -53,18 +64,6 @@ def _caffe_to_caffe2(prototxt, caffemodel):
             input_shapes = [None] * len(input_names)
             for i in range(len(input_names)):
                 input_shapes[i] = input_dims[4 * i: 4 * (i+1)]
-
-    for layer in prototxt.layer:
-        if layer.type == 'Convolution':
-            _fix_conv_pool_param(layer.convolution_param)
-        elif layer.type == 'Pooling':
-            _fix_conv_pool_param(layer.pooling_param)
-        elif layer.type == 'Eltwise':
-            _fix_eltwise_param(layer.eltwise_param)
-        elif layer.type == 'BatchNorm':
-            model_layer = _find_model_layer(caffemodel, layer.name)
-            model_blobs = model_layer.blobs if model_layer is not None else []
-            _fix_batch_norm_param(layer.batch_norm_param, model_blobs)
 
     predict_net, params = TranslateModel(prototxt, caffemodel, is_test=True, remove_legacy_pad=False, input_dims=[])
 
@@ -82,14 +81,28 @@ def _caffe_to_caffe2(prototxt, caffemodel):
     return predict_net, init_net, value_info
 
 
-def _find_model_layer(caffemodel, name):
-    for layer in caffemodel.layer:
-        if layer.name == name:
-            return layer
-    for layer in caffemodel.layers:
-        if layer.name == name:
-            return layer
-    return None
+_DeconvGroups = {}
+
+
+def _pre_translate(layer, blobs):
+    if layer.type == 'Convolution':
+        _fix_conv_pool_param(layer.convolution_param)
+    elif layer.type == 'Deconvolution':
+        _fix_conv_pool_param(layer.convolution_param)
+        if layer.convolution_param.group != 1:
+            _DeconvGroups[layer.name] = layer.convolution_param.group
+            layer.convolution_param.group = 0   # to trick the conversion check
+    elif layer.type == 'Pooling':
+        _fix_conv_pool_param(layer.pooling_param)
+    elif layer.type == 'Eltwise':
+        _fix_eltwise_param(layer.eltwise_param)
+    elif layer.type == 'BatchNorm':
+        _fix_batch_norm_param(layer.batch_norm_param, blobs)
+
+
+def _post_translate(layer, blobs, ops, params):
+    if layer.type == 'Deconvolution' and layer.convolution_param.group == 0:
+        AddArgument(ops[0], 'group', _DeconvGroups[layer.name])
 
 
 def _fix_conv_pool_param(param):
