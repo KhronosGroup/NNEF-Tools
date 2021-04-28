@@ -115,6 +115,9 @@ class Reader(object):
                 tgz_extract(path, folder)
                 path = folder
 
+            if not os.path.isdir(path):
+                raise IOError("NNEF model must be a (compressed) folder, but an uncompressed file was provided")
+
             nnef_graph = nnef.load_graph(path, stdlib=self._stdlib, lowered=self._decomposed)
             if self._infer_shapes:
                 nnef.infer_shapes(nnef_graph, external_shapes=input_shapes or {}, custom_shapes=self._custom_shapes or {})

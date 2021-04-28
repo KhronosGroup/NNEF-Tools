@@ -346,7 +346,7 @@ def main(args):
             print("Written '{}'".format(args.tensor_mapping))
 
         return 0
-    except ConversionError as e:
+    except (IOError, ConversionError) as e:
         print(e)
         return -1
 
