@@ -539,7 +539,7 @@ _Transforms = Converter.unpack_transforms({
                 'ends': '!as_const(I[2])',
                 'steps': '!as_const(I[4]) if len(I) > 4 else None',
             },
-            cond='steps is None or all(s == 1 for s in steps)',
+            cond='!steps is None or all(s == 1 for s in steps)',
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
