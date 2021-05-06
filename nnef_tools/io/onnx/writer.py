@@ -55,9 +55,9 @@ def build_model(graph, ir_version, opset_version):
 def build_graph(graph, graph_proto):
     # type: (Graph, onnx.GraphProto)->None
 
-    for op in graph.operations:
+    for idx, op in enumerate(graph.operations):
         node_proto = graph_proto.node.add()
-        build_node(op, node_proto)
+        build_node(op, node_proto, idx)
 
     if graph.name is not None:
         graph_proto.name = graph.name
@@ -154,7 +154,7 @@ def build_quantization(tensor, graph_proto):
         item.value = value_tensor_name
 
 
-def build_node(op, node_proto):
+def build_node(op, node_proto, idx):
     # type: (Operation, onnx.NodeProto)->None
 
     inputs = op.inputs
@@ -166,6 +166,7 @@ def build_node(op, node_proto):
         node_proto.output.append(output.name)
 
     node_proto.op_type = op.type
+    node_proto.name = op.name or (op.type + str(idx))
 
     for k, v in six.iteritems(attribs):
         attribute_proto = node_proto.attribute.add()

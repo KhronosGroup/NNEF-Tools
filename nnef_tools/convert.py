@@ -173,8 +173,6 @@ def get_custom_optimizers(module_names):
         if hasattr(module, CUSTOM_OPTIMIZERS):
             optimizers.update(getattr(module, CUSTOM_OPTIMIZERS))
 
-    print(optimizers)
-
     return optimizers
 
 
@@ -202,7 +200,7 @@ def check_nan_or_inf(graph, which):
 
     for op in graph.operations:
         for key, value in six.iteritems(op.attribs):
-            if isinstance(value, np.ndarray):
+            if isinstance(value, np.ndarray) and np.issubdtype(value.dtype.type, np.floating):
                 if np.any(np.isnan(value)):
                     print("{} graph contains nan in attribute '{}' of operator '{}'".format(which, key, op.type) +
                           " named '{}'".format(op.name) if op.name is not None else "")
@@ -348,7 +346,7 @@ def main(args):
             print("Written '{}'".format(args.tensor_mapping))
 
         return 0
-    except ConversionError as e:
+    except (IOError, ConversionError) as e:
         print(e)
         return -1
 

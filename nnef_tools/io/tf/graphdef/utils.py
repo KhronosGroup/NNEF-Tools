@@ -229,6 +229,9 @@ def _retain_reachables_from_placeholders(graph_def):
     graph = import_graph_def(graph_def)
 
     reachables = {op.name for op in graph.get_operations() if op.type == 'Placeholder'}
+    if len(reachables) == 0:
+        return graph_def
+
     reachables = _find_reachables_forward(graph, reachables)
     reachables = _find_reachables_backward(graph, reachables)
 

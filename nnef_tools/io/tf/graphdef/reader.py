@@ -77,7 +77,11 @@ def _get_tensor(tensor_proto):
                                            fields=['half_val', 'float_val', 'double_val', 'int_val', 'int64_val',
                                                    'bool_val', 'string_val', 'uint32_val', 'uint64_val',
                                                    'resource_handle_val', 'scomplex_val', 'dcomplex_val'])
-        assert items is not None, "tensor items are empty, dtype = {}".format(dtype)
+
+        if items is None and any(s == 0 for s in shape):
+            items = []
+
+        assert items is not None, "tensor items are empty, dtype = {}, shape = {}".format(dtype, shape)
 
         items = [item for item in items]
         if len(items) == int(np.prod(shape)):
@@ -141,8 +145,10 @@ def _add_output_shapes(graph_def):
     except ImportError:
         import tensorflow as tf
 
-    tf.import_graph_def(graph_def, name='')
-    return tf.get_default_graph().as_graph_def(add_shapes=True)
+    graph = tf.Graph()
+    with graph.as_default():
+        tf.import_graph_def(graph_def, name='')
+        return graph.as_graph_def(add_shapes=True)
 
 
 def _get_dtypes(graph_def):

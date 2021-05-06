@@ -19,23 +19,39 @@ from caffe2.proto import caffe2_pb2
 from ..onnx.reader import onnx_model_to_graph
 from ...utils.types import as_str
 from google.protobuf import text_format
+from collections.abc import Sequence
+from caffe2.python.workspace import GlobalInit
 import json
 import sys
 import os
+
+try:
+    import caffe
+except ImportError:
+    from . import caffe
+    sys.modules['caffe'] = caffe
+
+from caffe2.python.caffe_translator import TranslateModel, TranslatorRegistry, ConvertTensorProtosToInitNet, AddArgument
+
+
+def _HookedTranslateLayer(layer, pretrained_blobs, is_test, **kwargs):
+    _pre_translate(layer, pretrained_blobs)
+    ops, params = _TranslateLayer(layer, pretrained_blobs, is_test, **kwargs)
+    _post_translate(layer, pretrained_blobs, ops, params)
+    return ops, params
+
+
+_TranslateLayer = TranslatorRegistry.TranslateLayer
+TranslatorRegistry.TranslateLayer = _HookedTranslateLayer
+
+
+GlobalInit(['caffe2', '--caffe2_log_level=2'])
 
 
 _UnrecognizedAttribs = {'ws_nbytes_limit'}
 
 
 def _caffe_to_caffe2(prototxt, caffemodel):
-    try:
-        import caffe
-    except ImportError:
-        from . import caffe
-        sys.modules['caffe'] = caffe
-
-    from caffe2.python.caffe_translator import TranslateModel, ConvertTensorProtosToInitNet
-
     if prototxt.layer[0].type == 'Input':
         input_names = list(prototxt.layer[0].top)
         input_shapes = list(item.dim for item in prototxt.layer[0].input_param.shape)
@@ -65,6 +81,60 @@ def _caffe_to_caffe2(prototxt, caffemodel):
     return predict_net, init_net, value_info
 
 
+_DeconvGroups = {}
+
+
+def _pre_translate(layer, blobs):
+    if layer.type == 'Convolution':
+        _fix_conv_pool_param(layer.convolution_param)
+    elif layer.type == 'Deconvolution':
+        _fix_conv_pool_param(layer.convolution_param)
+        if layer.convolution_param.group != 1:
+            _DeconvGroups[layer.name] = layer.convolution_param.group
+            layer.convolution_param.group = 0   # to trick the conversion check
+    elif layer.type == 'Pooling':
+        _fix_conv_pool_param(layer.pooling_param)
+    elif layer.type == 'Eltwise':
+        _fix_eltwise_param(layer.eltwise_param)
+    elif layer.type == 'BatchNorm':
+        _fix_batch_norm_param(layer.batch_norm_param, blobs)
+
+
+def _post_translate(layer, blobs, ops, params):
+    if layer.type == 'Deconvolution' and layer.convolution_param.group == 0:
+        AddArgument(ops[0], 'group', _DeconvGroups[layer.name])
+
+
+def _fix_conv_pool_param(param):
+    if isinstance(param.kernel_size, Sequence) and len(param.kernel_size) == 2:
+        param.kernel_h = param.kernel_size[0]
+        param.kernel_w = param.kernel_size[1]
+        del param.kernel_size[1]
+        del param.kernel_size[0]
+    if isinstance(param.stride, Sequence) and len(param.stride) == 2:
+        param.stride_h = param.stride[0]
+        param.stride_w = param.stride[1]
+        del param.stride[1]
+        del param.stride[0]
+    if isinstance(param.pad, Sequence) and len(param.pad) == 2:
+        param.pad_h = param.pad[0]
+        param.pad_w = param.pad[1]
+        del param.pad[1]
+        del param.pad[0]
+
+
+def _fix_eltwise_param(param):
+    if len(param.coeff) > 0 and all(c == 1 for c in param.coeff):
+        for i in reversed(range(len(param.coeff))):
+            del param.coeff[i]
+
+
+def _fix_batch_norm_param(param, blobs):
+    if len(blobs) > 2:
+        if blobs[2].data[0] == 0:
+            blobs[2].data[0] = 1
+
+
 def _caffe2_net_to_onnx_model(predict_net, init_net, value_info):
     graph = caffe2.python.onnx.frontend.caffe2_net_to_onnx_graph(predict_net, init_net, value_info)
     if not graph.name:
@@ -87,16 +157,14 @@ def _remove_unrecognized_attributes(net_def):
 
 
 def load_caffe_model(path):
-    from .caffe.proto import caffe_pb2
-
     base, ext = os.path.splitext(path)
     assert ext == '.prototxt'
 
     with open(path) as file:
-        prototxt = caffe_pb2.NetParameter()
+        prototxt = caffe.proto.caffe_pb2.NetParameter()
         text_format.Merge(file.read(), prototxt)
     with open(base + '.caffemodel', 'rb') as file:
-        caffemodel = caffe_pb2.NetParameter()
+        caffemodel = caffe.proto.caffe_pb2.NetParameter()
         caffemodel.ParseFromString(file.read())
 
     return prototxt, caffemodel

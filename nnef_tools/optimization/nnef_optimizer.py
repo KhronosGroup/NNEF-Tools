@@ -71,6 +71,7 @@ class Optimizer:
                                          self._merge_matmul_bias)
                 changed |= replace_chain(graph, [{'conv', 'deconv'}, 'batch_normalization'],
                                          self._merge_conv_batch_norm)
+                changed |= replace_chain(graph, ['batch_normalization'], self._merge_batch_norm)
 
                 for chain, replacer in six.iteritems(self._custom_optimizers):
                     changed |= replace_chain(graph, chain, replacer)
@@ -285,6 +286,32 @@ class Optimizer:
         else:
             bias = Optimizer._add_variable(conv.graph, data=bias, name=conv.output.name + '_bias')
             conv.copy_with(inputs=(*conv.inputs[:2], bias), outputs=bn.output)
+
+    @staticmethod
+    def _merged_batch_norm_params(mean, variance, offset, scale, epsilon):
+        std = np.sqrt(variance + epsilon)
+        factor = scale / std
+        return factor, offset - factor * mean
+
+    @staticmethod
+    def _merge_batch_norm(bn):
+        if any(tensor.quant for tensor in bn.inputs):
+            return False
+
+        scale, offset = Optimizer._merged_batch_norm_params(
+                                    bn.inputs[1].data,
+                                    bn.inputs[2].data,
+                                    bn.inputs[3].data if len(bn.inputs) > 3 else 0,
+                                    bn.inputs[4].data if len(bn.inputs) > 4 else 1,
+                                    bn.attribs['epsilon'])
+
+        scale = Optimizer._add_variable(bn.graph, data=scale, name=bn.output.name + '_scale')
+        offset = Optimizer._add_variable(bn.graph, data=offset, name=bn.output.name + '_offset')
+
+        scaled = Tensor(graph=bn.graph, name=bn.output.name + '_scaled', shape=bn.output.shape, dtype=bn.output.dtype)
+
+        Operation(graph=bn.graph, type='mul', inputs=(bn.inputs[0], scale), outputs=scaled)
+        Operation(graph=bn.graph, type='add', inputs=(scaled, offset), outputs=bn.output)
 
     @staticmethod
     def _merge_mul_linear(mul, linear):
