@@ -560,7 +560,6 @@ _Transforms = Converter.unpack_transforms({
     'StridedSlice':
         Transform(
             type='slice',
-            cond='!all(item == 1 for item in stride)',
             using=OrderedDict([
                 ('ref', '!I[0] if new_axis_mask == 0 else None'),
                 ('rank', '!I[0].rank + bit_count(new_axis_mask)'),
@@ -598,6 +597,7 @@ _Transforms = Converter.unpack_transforms({
                 'axes': '![i for i in range(rank) if i in axes]',
                 'begin': '![b for i, b in enumerate(transpose_list_like(masked_beg, ref)) if i in axes]',
                 'end': '![e for i, e in enumerate(transpose_list_like(masked_end, ref)) if i in axes]',
+                'stride': '![s for i, s in enumerate(transpose_list_like(stride, ref)) if i in axes]',
             }
         ),
     ('ArgMin', 'ArgMax'):

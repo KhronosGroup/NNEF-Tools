@@ -747,6 +747,22 @@ class TestCases(TestEnv):
         self._test_conversion('slice', [node], [input], [output], constants=[starts, ends, axes],
                               values={'starts': [1, 1], 'ends': [-1, -1], 'axes': [2, 3]})
 
+    def test_flip(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 30, 30])
+        starts = helper.make_tensor_value_info('starts', TensorProto.INT64, [2])
+        ends = helper.make_tensor_value_info('ends', TensorProto.INT64, [2])
+        axes = helper.make_tensor_value_info('axes', TensorProto.INT64, [2])
+        steps = helper.make_tensor_value_info('steps', TensorProto.INT64, [2])
+        node = helper.make_node(
+            op_type='Slice',
+            inputs=['input', 'starts', 'ends', 'axes', 'steps'],
+            outputs=['output'],
+        )
+
+        self._test_conversion('flip', [node], [input], [output], constants=[starts, ends, axes, steps],
+                              values={'starts': [-2, -2], 'ends': [0, 0], 'axes': [2, 3], 'steps': [-1, -1]})
+
     def test_l1_normalization(self):
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 16, 32, 32])
         output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 16, 32, 32])

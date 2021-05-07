@@ -116,6 +116,7 @@ namespace nnef
                 Param("axes", Integers),
                 Param("begin", Integers),
                 Param("end", Integers),
+                Param("stride", Integers, EmptyArray),
             }, { Result("output", GenericTensor) }),
 
             Prototype("stack", {

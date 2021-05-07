@@ -46,6 +46,10 @@ _numpy_dtype_to_torch = {
 }
 
 
+def _clamp(x, a, b):
+    return max(a, min(b, x))
+
+
 def _expand_to_rank(input, rank):
     # type: (torch.Tensor, int)->torch.Tensor
     rank_diff = rank - len(input.shape)
@@ -799,17 +803,35 @@ def nnef_split(value, axis, ratios):
     return torch.split(value, split_size_or_sections=sections, dim=axis)
 
 
-def nnef_slice(input, axes, begin, end):
-    # type:(torch.Tensor, List[int], List[int], List[int])->torch.Tensor
+def nnef_slice(input, axes, begin, end, stride=None):
+    # type:(torch.Tensor, List[int], List[int], List[int], List[int])->torch.Tensor
+
+    if stride is None:
+        stride = [1] * len(axes)
+
+    assert all(s == 1 or s == -1 for s in stride)
 
     shape = list(input.shape)
 
-    for axis, b, e in zip(axes, begin, end):
+    for axis, b, e, s in zip(axes, begin, end, stride):
         if b < 0:
+            b += shape[axis]
+        if e < 0:
             e += shape[axis]
-        if e <= 0:
-            e += shape[axis]
-        input = input.narrow(dim=axis, start=b, length=(e - b))
+        elif e == 0 and s == 1:
+            e = shape[axis]
+
+        b = _clamp(b, -1, shape[axis])
+        e = _clamp(e, -1, shape[axis])
+
+        if s == 1:
+            input = input.narrow(dim=axis, start=b, length=(e - b))
+        else:
+            input = input.narrow(dim=axis, start=e + 1, length=(b - e))
+
+    flip_axes = [axis for axis, str in zip(axes, stride) if str == -1]
+    if len(flip_axes) != 0:
+        input = torch.flip(input, dims=flip_axes)
 
     return input
 

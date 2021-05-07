@@ -15,6 +15,10 @@
 import nnef
 
 
+def _clamp(x, a, b):
+    return max(a, min(b, x))
+
+
 def _ensure_rank(array, rank, value=1):
     return array if len(array) == rank else array + [value] * rank
 
@@ -342,26 +346,35 @@ def unstack_shape(value, axis):
     return [value[:axis] + value[axis+1:]] * value[axis]
 
 
-def slice_shape(input, axes, begin, end):
+def slice_shape(input, axes, begin, end, stride):
     rank = len(input)
+
+    if len(stride) == 0:
+        stride = [1] * len(axes)
+
+    if all(s == 1 for s in stride):
+        end = [input[axis] if offs == 0 else offs for axis, offs in zip(axes, end)]
 
     assert len(begin) == len(axes), \
         "length of 'begin' ({}) does not equal length of 'axes' ({})".format(len(begin), len(axes))
     assert len(end) == len(axes), \
         "length of 'end' ({}) does not equal length of 'axes' ({})".format(len(end), len(axes))
+    assert len(stride) == len(axes), \
+        "length of 'stride' ({}) does not equal length of 'axes' ({})".format(len(begin), len(axes))
     assert all(0 <= axis < rank for axis in axes), "'axes' must be in range [0,{}), found {}".format(rank, axes)
 
-    begin = [offs + input[axis] if offs < 0 else offs for axis, offs in zip(axes, begin)]
-    end = [offs + input[axis] if offs <= 0 else offs for axis, offs in zip(axes, end)]
+    begin = [_clamp(offs + input[axis] if offs < 0 else offs, -1, input[axis]) for axis, offs in zip(axes, begin)]
+    end = [_clamp(offs + input[axis] if offs < 0 else offs, -1, input[axis]) for axis, offs in zip(axes, end)]
 
-    assert all(last > first for first, last in zip(begin, end)), \
-        "slice range ({},{}) is empty".format(begin, end)
-    assert all(first >= 0 and last <= input[axis] for axis, first, last in zip(axes, begin, end)), \
-        "slice range ({},{}) is out of tensor shape {}".format(begin, end, input)
+    assert all(s != 0 for s in stride), "'stride' must be non-zero"
+
+    assert all(0 <= first <= last if str > 0 else last <= first < input[axis]
+               for axis, first, last, str in zip(axes, begin, end, stride)), \
+        "slice range ({}:{}:{}) is invalid".format(begin, end, stride)
 
     output = list(input)
-    for axis, first, last in zip(axes, begin, end):
-        output[axis] = last - first
+    for axis, first, last, str in zip(axes, begin, end, stride):
+        output[axis] = (last - first) // str
     return output
 
 

@@ -39,7 +39,7 @@ namespace nnef {
     fragment transpose<?>( input: tensor<?>, axes: integer[] ) -> ( output: tensor<?> );
     fragment concat<?>( values: tensor<?>[], axis: integer ) -> ( value: tensor<?> );
     fragment split<?>( value: tensor<?>, axis: integer, ratios: integer[] ) -> ( values: tensor<?>[] );
-    fragment slice<?>( input: tensor<?>, axes: integer[], begin: integer[], end: integer[] ) -> ( output: tensor<?> );
+    fragment slice<?>( input: tensor<?>, axes: integer[], begin: integer[], end: integer[], stride: integer[] = [] ) -> ( output: tensor<?> );
     fragment squeeze<?>( input: tensor<?>, axes: integer[] ) -> ( output: tensor<?> );
     fragment unsqueeze<?>( input: tensor<?>, axes: integer[] ) -> ( output: tensor<?> );
     fragment stack<?>( values: tensor<?>[], axis: integer ) -> ( value: tensor<?> );

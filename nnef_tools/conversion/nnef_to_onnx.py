@@ -422,6 +422,7 @@ _Transforms = Converter.unpack_transforms({
                 '!as_tensor(begin, np.int64)',
                 '!as_tensor(end, np.int64)',
                 '!as_tensor(axes, np.int64)',
+                '!as_tensor(stride, np.int64)',
             ),
             outputs='!O[0]',
         ),

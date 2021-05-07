@@ -246,6 +246,12 @@ class TestCases(TestEnv):
 
         self._test_conversion('strided_slice', [input], [output])
 
+    def test_strided_slice_flip(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = input[:, -2:0:-1, -2:0:-1, :]
+
+        self._test_conversion('strided_slice_flip', [input], [output])
+
     def test_gather(self):
         input = tf.placeholder(shape=(4, 32, 32, 16), dtype=tf.float32)
         indices = tf.constant(np.random.random_integers(size=(24,), low=0, high=15), dtype=tf.int32)

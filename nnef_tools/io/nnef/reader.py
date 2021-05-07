@@ -78,9 +78,8 @@ def _build_graph(nnef_graph):
             attribs['dtype'] = outputs[0].dtype if nnef_op.name == 'constant' or nnef_op.name == 'variable' else \
                 _DtypeToNumpy[nnef_op.dtype]
 
-        offset = 2 if nnef_op.name.endswith('conv') else 0
-        _substitute_empty_array('stride', attribs, inputs, offset)
-        _substitute_empty_array('dilation', attribs, inputs, offset)
+        _substitute_empty_array(nnef_op.name, 'stride', attribs, inputs)
+        _substitute_empty_array(nnef_op.name, 'dilation', attribs, inputs)
 
         custom = nnef_op.name not in nnef.StandardOperations
 
@@ -92,10 +91,17 @@ def _build_graph(nnef_graph):
     return graph
 
 
-def _substitute_empty_array(key, attribs, inputs, offset):
+def _substitute_empty_array(op, key, attribs, inputs):
     value = attribs.get(key)
-    if value is not None and len(value) == 0 and len(inputs) > 0 and inputs[0].rank is not None:
-        attribs[key] = [1] * (inputs[0].rank - offset)
+    if value is not None and len(value) == 0:
+        rank = None
+        if op == 'slice':
+            rank = len(attribs['axes'])
+        elif len(inputs) > 0 and inputs[0].rank is not None:
+            rank = inputs[0].rank - 2 if op.endswith('conv') else inputs[0].rank
+
+        if rank is not None:
+            attribs[key] = [1] * rank
 
 
 class Reader(object):

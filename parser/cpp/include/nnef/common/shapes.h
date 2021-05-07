@@ -764,9 +764,10 @@ namespace nnef
         return outputShape;
     }
 
-    inline Shape slice_shape( const Shape& input, const Value& axes, const Value& begin, const Value& end )
+    inline Shape slice_shape( const Shape& input, const Value& axes, const Value& begin, const Value& end, const Value& stride )
     {
         check(begin.size() == axes.size() && end.size() == axes.size(), "'axes', 'begin' and 'end' arrays must have the same length");
+        check(stride.size() == 0 || stride.size() == axes.size(), "'stride' must have the same length as 'axes'");
         
         check_axes_compatible_with_rank(axes, input.size());
         
@@ -775,6 +776,7 @@ namespace nnef
         {
             auto axis = axes[i].integer();
             auto extent = input[axis];
+            auto str = stride.size() ? stride[i].integer() : 1;
             
             auto first = begin[i].integer();
             if ( first < 0 )
@@ -783,15 +785,46 @@ namespace nnef
             }
             
             auto last = end[i].integer();
-            if ( last <= 0 )
+            if ( last < 0 )
             {
                 last += extent;
             }
+            else if ( last == 0 && str == 1 )
+            {
+                last = extent;
+            }
             
-            check(last > first, "slice range (%d,%d) is empty for axis %d", (int)first, (int)last, (int)axis);
-            check(first >= 0 && last <= extent, "slice range (%d,%d) is out of tensor shape for axis %d", (int)first, (int)last, (int)axis);
+            if ( first < 0 )
+            {
+                first = -1;
+            }
+            if ( first > extent )
+            {
+                first = extent;
+            }
+            if ( last < 0 )
+            {
+                last = -1;
+            }
+            if ( last > extent )
+            {
+                last = extent;
+            }
             
-            output[axis] = last - first;
+            check(str != 0, "'stride' must be non-zero");
+            
+            if ( str > 0 )
+            {
+                check(first >= 0 && last >= first, "slice range (%d:%d:%d) is invalid for axis %d",
+                      (int)first, (int)last, (int)str, (int)axis);
+            }
+            else
+            {
+                check(first < extent && last <= first, "slice range (%d:%d:%d) is invalid for axis %d",
+                      (int)first, (int)last, (int)str, (int)axis);
+            }
+            
+            output[axis] = (last - first) / str;
         }
         return output;
     }

@@ -800,6 +800,12 @@ class TestCases(TestEnv):
 
         self._test_conversion('strided_slice-new_axis')
 
+    def test_strided_slice_flip(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = input[:, -2:0:-1, -2:0:-1, :]
+
+        self._test_conversion('strided_slice-flip')
+
     def test_tile(self):
         input = tf.placeholder(shape=(4, 1, 1, 3), dtype=tf.float32)
         output = tf.tile(input, multiples=(1, 32, 32, 1))
