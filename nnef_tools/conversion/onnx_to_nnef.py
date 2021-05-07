@@ -65,6 +65,8 @@ fragment mean_variance_normalization(
 }
 """
 
+_INT_MAX = 2 ** 31 - 1
+
 
 class Converter(_Converter):
 
@@ -160,6 +162,9 @@ class Converter(_Converter):
 
     def ensure_scalar(self, arg):
         return arg[0] if isinstance(arg, list) and len(arg) == 1 else arg
+
+    def limit_range(self, x):
+        return _INT_MAX if x > _INT_MAX else -_INT_MAX if x < -_INT_MAX else x
 
 
 _Transforms = Converter.unpack_transforms({
@@ -537,8 +542,8 @@ _Transforms = Converter.unpack_transforms({
             type='slice',
             defaults={
                 'axes': '!as_const(I[3]) if len(I) > 3 else list(range(I[0].rank))',
-                'starts': '!as_const(I[1])',
-                'ends': '!as_const(I[2])',
+                'starts': '![limit_range(x) for x in as_const(I[1])]',
+                'ends': '![limit_range(x) for x in as_const(I[2])]',
                 'steps': '!as_const(I[4]) if len(I) > 4 else None',
             },
             inputs='!I[0]',

@@ -320,6 +320,9 @@ class Converter(_Converter):
                 bits |= (1 << idx)
         return bits
 
+    def out_of_range(self, x, limit):
+        return x >= limit or x <= -limit
+
 
 _Transforms = Converter.unpack_transforms({
     'external':
@@ -683,9 +686,10 @@ _Transforms = Converter.unpack_transforms({
             attribs={
                 'T': '!I[0].dtype if not _lite_ else None',
                 'Index': '!np.int32',
-                'begin_mask': '!as_bits([1 if i not in axis else 0 for i in dims])',
-                'end_mask': '!as_bits([1 if i not in axis or (ends[axis.index(i)] == 0 and strs[axis.index(i)] == 1)'
-                            ' else 0 for i in dims])',
+                'begin_mask': '!as_bits([1 if d not in axis or out_of_range(begs[axis.index(d)], I[0].shape[i]) else 0'
+                              ' for i, d in enumerate(dims)])',
+                'end_mask': '!as_bits([1 if d not in axis or (ends[axis.index(d)] == 0 and strs[axis.index(d)] == 1)'
+                            ' or out_of_range(ends[axis.index(d)], I[0].shape[i]) else 0 for i, d in enumerate(dims)])',
                 'ellipsis_mask': 0,
                 'new_axis_mask': 0,
                 'shrink_axis_mask': 0,

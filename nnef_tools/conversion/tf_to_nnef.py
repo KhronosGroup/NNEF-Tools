@@ -26,6 +26,8 @@ fragment relu6( input: tensor<scalar> ) -> ( output: tensor<scalar> )
 }
 """
 
+_INT_MAX = 2 ** 31 - 1
+
 
 class Converter(_Converter):
 
@@ -239,6 +241,12 @@ class Converter(_Converter):
         low_bits = mask & ((1 << index) - 1)
         high_bits = (mask & ~((1 << (index + 1)) - 1)) << (count - 1)
         return low_bits | value_bits | high_bits
+
+    def beg_index(self, stride):
+        return _INT_MAX if stride < 0 else 0
+
+    def end_index(self, stride):
+        return _INT_MAX if stride > 0 else -_INT_MAX
 
 
 _Transforms = Converter.unpack_transforms({
@@ -578,11 +586,11 @@ _Transforms = Converter.unpack_transforms({
                                   'if ellipsis_index is not None else new_axis_mask'),
                 ('shrink_axis_mask', '!replace_bit_with(shrink_axis_mask, ellipsis_index, ellipsis_count, 0) '
                                      'if ellipsis_index is not None else shrink_axis_mask'),
-                ('masked_beg', '![0 if is_bit_set(begin_mask,i) else b '
-                               'for i, b in enumerate(beg)]'),
-                ('masked_end', '![0 if is_bit_set(end_mask,i) else b + 1 '
+                ('masked_beg', '![beg_index(s) if is_bit_set(begin_mask,i) else b '
+                               'for i, (b, s) in enumerate(zip(beg,stride))]'),
+                ('masked_end', '![end_index(s) if is_bit_set(end_mask,i) else b + 1 '
                                'if is_bit_set(shrink_axis_mask,i) else e '
-                               'for i, (b, e) in enumerate(zip(beg,end))]'),
+                               'for i, (b, e, s) in enumerate(zip(beg,end,stride))]'),
                 ('axes', '!transpose_axis_like([i for i in range(rank) '
                          'if not (is_bit_set(begin_mask,i) and is_bit_set(end_mask,i)) '
                          'and not is_bit_set(new_axis_mask,i)], ref, rank)'),
