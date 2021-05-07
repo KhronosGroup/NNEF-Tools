@@ -781,14 +781,14 @@ namespace nnef { namespace rt
     }
 
     template<size_t D, typename T>
-    void _slice( tensor_view<const T> input, tensor_view<T> output, const int offset[] )
+    void _slice( tensor_view<const T> input, tensor_view<T> output, const int offset[], const int stride[] )
     {
         int input_index[D];
         nd_loop<D,int>(output.shape, [&]( const int output_index[] )
         {
             for_n<D>([&]( const size_t k )
             {
-                input_index[k] = output_index[k] + offset[k];
+                input_index[k] = offset[k] + stride[k] * output_index[k];
             });
             
             at<D>(output, output_index) = at<D>(input, input_index);
@@ -796,7 +796,7 @@ namespace nnef { namespace rt
     }
 
     template<typename T>
-    void slice( tensor_view<const T> input, tensor_view<T> output, const int offset[] )
+    void slice( tensor_view<const T> input, tensor_view<T> output, const int offset[], const int stride[] )
     {
         static decltype(&_slice<1,T>) funcs[] =
         {
@@ -806,7 +806,7 @@ namespace nnef { namespace rt
             _slice<4,T>,
             _slice<5,T>,
         };
-        return funcs[input.rank - 1](input, output, offset);
+        return funcs[input.rank - 1](input, output, offset, stride);
     }
     
     template<typename T, typename I>

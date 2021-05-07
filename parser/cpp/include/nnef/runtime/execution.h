@@ -467,6 +467,7 @@ namespace nnef { namespace rt
         auto& output = op.outputs.get("output");
         auto& axes = op.attribs.get("axes");
         auto& begin = op.attribs.get("begin");
+        auto& stride = op.attribs.get("stride");
         
         auto input_view = _tensor_view<T>(input, tensors);
         auto output_view = _tensor_view<T>(output, tensors);
@@ -475,12 +476,29 @@ namespace nnef { namespace rt
         check_supported_rank(op.name, d, 5);
         
         std::vector<int> offset(d, 0);
+        std::vector<int> step(d, 1);
         for ( size_t i = 0; i < axes.size(); ++i )
         {
-            offset[axes[i].integer()] = begin[i].integer();
+            auto axis = axes[i].integer();
+            auto offs = begin[i].integer();
+            if ( offs < 0 )
+            {
+                offs += input_view.shape[axis];
+            }
+            if ( offs < 0 )
+            {
+                offs = -1;
+            }
+            if ( offs > input_view.shape[axis] )
+            {
+                offs = input_view.shape[axis];
+            }
+            
+            offset[axis] = offs;
+            step[axis] = stride.size() ? stride[i].integer() : 1;
         }
         
-        slice<T>(input_view, output_view, offset.data());
+        slice<T>(input_view, output_view, offset.data(), step.data());
     }
 
     DISPATCH_BY_DTYPE(slice)
@@ -671,7 +689,9 @@ namespace nnef { namespace rt
                 multilinear_upsample2x_asymmetric(_tensor_view<T>(padded_input), _tensor_view<T>(padded_output));
             }
             
-            slice(_tensor_view<const T>(padded_output), output_view, output_padding.data());
+            const Shape stride(input_view.rank, 1);
+            
+            slice(_tensor_view<const T>(padded_output), output_view, output_padding.data(), stride.data());
         }
         else
         {
