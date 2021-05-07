@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from setuptools import setup, find_packages
+import shutil
 
 
 setup(name='nnef_tools',
@@ -32,3 +33,7 @@ setup(name='nnef_tools',
       keywords='nnef',
       packages=['nnef_tools'] + ['nnef_tools.' + package for package in find_packages(where='nnef_tools')]
       )
+
+shutil.rmtree('build')
+shutil.rmtree('dist')
+shutil.rmtree('nnef_tools.egg-info')
