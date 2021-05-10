@@ -16,6 +16,11 @@ from setuptools import setup, Extension
 import shutil
 
 
+shutil.rmtree('build')
+shutil.rmtree('dist')
+shutil.rmtree('nnef.egg-info')
+
+
 module = Extension('_nnef',
                    sources=['nnef.cpp'],
                    include_dirs=['../cpp/include'],
@@ -41,7 +46,3 @@ setup(name='nnef',
       packages=['nnef'],
       ext_modules=[module]
       )
-
-shutil.rmtree('build')
-shutil.rmtree('dist')
-shutil.rmtree('nnef.egg-info')
