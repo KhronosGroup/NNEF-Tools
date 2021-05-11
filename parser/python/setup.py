@@ -14,11 +14,15 @@
 
 from setuptools import setup, Extension
 import shutil
+import os
 
 
-shutil.rmtree('build')
-shutil.rmtree('dist')
-shutil.rmtree('nnef.egg-info')
+if os.path.exists('build'):
+    shutil.rmtree('build')
+if os.path.exists('dist'):
+    shutil.rmtree('dist')
+if os.path.exists('nnef.egg-info'):
+    shutil.rmtree('nnef.egg-info')
 
 
 module = Extension('_nnef',
