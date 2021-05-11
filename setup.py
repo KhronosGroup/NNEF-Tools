@@ -14,11 +14,15 @@
 
 from setuptools import setup, find_packages
 import shutil
+import os
 
 
-shutil.rmtree('build')
-shutil.rmtree('dist')
-shutil.rmtree('nnef_tools.egg-info')
+if os.path.exists('build'):
+    shutil.rmtree('build')
+if os.path.exists('dist'):
+    shutil.rmtree('dist')
+if os.path.exists('nnef_tools.egg-info'):
+    shutil.rmtree('nnef_tools.egg-info')
 
 
 setup(name='nnef_tools',
