@@ -160,7 +160,7 @@ class Optimizer:
 
     @staticmethod
     def _is_channelwise_shape(shape):
-        return len(shape) <= 1 or len(shape) == 2 and shape[0] == 1
+        return len(shape) <= 1 or all(s == 1 or i == 1 for i, s in enumerate(shape))
 
     @staticmethod
     def _merge_linear_add(linear, add, type=None):
@@ -170,6 +170,9 @@ class Optimizer:
 
         if len(linear.inputs) > 2 and linear.inputs[2].data is None:
             return None
+
+        bias.data = Optimizer._squeeze_batch_and_spatial_dims(bias.data)
+        bias.shape = bias.data.shape
 
         if add.type == 'sub':
             bias.data = -bias.data
@@ -249,6 +252,8 @@ class Optimizer:
         if tensor.producer is None and len(tensor.shape) != 0:
             Operation(tensor.graph, type='variable', outputs=tensor,
                       attribs={'shape': list(tensor.shape), 'label': label})
+        elif tensor.producer is not None:
+            tensor.producer.attribs['shape'] = list(tensor.shape)
 
     @staticmethod
     def _merged_conv_batch_norm_params(weights, bias, mean, variance, offset, scale, epsilon):
@@ -324,10 +329,8 @@ class Optimizer:
 
         if len(variable.shape) == 0:
             scale = np.expand_dims(variable.data, axis=0)
-        elif len(variable.shape) == 2:
-            scale = np.squeeze(variable.data, axis=0)
-        else:
-            scale = variable.data
+        elif len(variable.shape) >= 2:
+            scale = Optimizer._squeeze_batch_and_spatial_dims(variable.data)
 
         weights = linear.inputs[1]
         if weights.data is None:
@@ -349,10 +352,8 @@ class Optimizer:
 
         if len(variable.shape) == 0:
             scale = np.expand_dims(variable.data, axis=0)
-        elif len(variable.shape) == 2:
-            scale = np.squeeze(variable.data, axis=0)
-        else:
-            scale = variable.data
+        elif len(variable.shape) >= 2:
+            scale = Optimizer._squeeze_batch_and_spatial_dims(variable.data)
 
         negate = mul.type == 'div'
 
@@ -400,3 +401,7 @@ class Optimizer:
         attribs['border'] = pad.attribs['border']
 
         sliding.copy_with(inputs=(pad.input, *sliding.inputs[1:]), attribs=attribs)
+
+    @staticmethod
+    def _squeeze_batch_and_spatial_dims(data):
+        return np.squeeze(data, axis=(0,) + tuple(i for i in range(2, len(data.shape))))

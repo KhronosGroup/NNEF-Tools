@@ -343,7 +343,7 @@ _Transforms = Converter.unpack_transforms({
             inputs=['!I[1:]'],
             outputs='!transpose_like(O[0], I[1])',
             attribs={
-                'axis': '!transpose_axis_like(as_const(I[0]), I[0], O[0].rank)',
+                'axis': '!transpose_axis_like(as_const(I[0]), I[1], O[0].rank)',
             }
         ),
     'ConcatV2':
