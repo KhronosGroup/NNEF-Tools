@@ -150,7 +150,10 @@ namespace nnef {
 
     fragment matmul( A: tensor<scalar>, B: tensor<scalar>, transposeA: logical = false, transposeB: logical = false ) -> ( C: tensor<scalar> );
 
+    
+    )STDLIB" /* break the raw literal because of max length limit */ R"STDLIB(
 
+    
     # sliding-window operations
 
     fragment conv(
@@ -341,7 +344,7 @@ namespace nnef {
     }
     
     
-    )STDLIB" /* break the raw literal in two because of max length limit */ R"STDLIB(
+    )STDLIB" /* break the raw literal because of max length limit */ R"STDLIB(
 
 
     # pooling operations
@@ -492,6 +495,9 @@ namespace nnef {
     {
         output = offset + scale * (input - mean) / sqrt(variance + epsilon);
     }
+    
+    
+    )STDLIB" /* break the raw literal because of max length limit */ R"STDLIB(
 
 
     # roi operations
