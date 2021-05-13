@@ -129,7 +129,7 @@ namespace nnef { namespace rt
     }
     
     template<typename T, typename F, typename... S>
-    Executor make_unary_executor_ext( const F func, const S& ...attrib )
+    Executor make_unary_executor_ext( const F func, const S ...attrib )
     {
         return [=]( const Operation& op, TensorDict& tensors )
         {
