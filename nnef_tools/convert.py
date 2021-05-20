@@ -108,19 +108,19 @@ def get_converter(input_format, output_format, io_transpose, custom_transforms, 
         return None
 
 
-def get_optimizer(format, keep_io_names, custom_optimizers=None):
+def get_optimizer(format, custom_optimizers=None):
     if format == 'nnef':
         from .optimization.nnef_optimizer import Optimizer
-        return Optimizer(keep_io_names=keep_io_names, custom_optimizers=custom_optimizers)
+        return Optimizer(custom_optimizers=custom_optimizers)
     elif format == 'tf':
         from .optimization.tf_optimizer import Optimizer
-        return Optimizer(keep_io_names=keep_io_names, custom_optimizers=custom_optimizers)
+        return Optimizer(custom_optimizers=custom_optimizers)
     elif format == 'tflite':
         from .optimization.tflite_optimizer import Optimizer
-        return Optimizer(keep_io_names=keep_io_names, custom_optimizers=custom_optimizers)
+        return Optimizer(custom_optimizers=custom_optimizers)
     elif format == 'onnx':
         from .optimization.onnx_optimizer import Optimizer
-        return Optimizer(keep_io_names=keep_io_names, custom_optimizers=custom_optimizers)
+        return Optimizer(custom_optimizers=custom_optimizers)
     else:
         return None
 
@@ -300,7 +300,7 @@ def main(args):
 
             utils.remove_unreachable(graph)
 
-        optimizer = get_optimizer(args.input_format, args.keep_io_names)
+        optimizer = get_optimizer(args.input_format)
         if optimizer:
             graph = optimizer(graph, only_required=True)
 
@@ -318,7 +318,7 @@ def main(args):
 
         if args.optimize:
             custom_optimizers = get_custom_optimizers(args.custom_optimizers) if args.custom_optimizers is not None else None
-            optimizer = get_optimizer(args.output_format, keep_io_names=args.keep_io_names, custom_optimizers=custom_optimizers)
+            optimizer = get_optimizer(args.output_format, custom_optimizers=custom_optimizers)
             if optimizer:
                 tensor_lookup = {tensor.name: tensor for tensor in graph.tensors if tensor.name is not None} \
                     if args.tensor_mapping is not None else None

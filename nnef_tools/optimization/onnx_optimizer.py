@@ -18,8 +18,7 @@ import six
 
 class Optimizer:
 
-    def __init__(self, keep_io_names=False, custom_optimizers=None):
-        self._keep_io_names = keep_io_names
+    def __init__(self, custom_optimizers=None):
         self._custom_optimizers = custom_optimizers or {}
 
     def __call__(self, graph, only_required=False):
