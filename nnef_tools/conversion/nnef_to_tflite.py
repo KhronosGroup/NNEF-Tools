@@ -162,8 +162,10 @@ class Converter(_TFConverter):
         Operation(input.graph, type='PAD', inputs=(input, paddings), outputs=output, attribs={})
 
     def is_same_padding(self, input_size, output_size, stride):
-        same = all(o == i // s for i, o, s in zip(input_size, output_size, stride))
-        return same
+        return all(o == i // s for i, o, s in zip(input_size, output_size, stride))
+
+    def is_valid_padding(self, padding):
+        return len(padding) != 0 and all(p == (0, 0) for p in padding)
 
     def pad_input(self, input, paddings):
         if all(item == (0, 0) for item in paddings):
@@ -181,10 +183,11 @@ _Transforms = Converter.unpack_transforms({
     'conv':
         Transform(
             type='!"CONV_2D" if not depthwise else "DEPTHWISE_CONV_2D"',
-            cond='!I[0].rank == 4',
+            cond='!I[0].rank == 4 and (valid_pad or same_pad)',
             using={
                 'depthwise': '!groups == 0',
                 'channels': '!I[0].shape[-1 if transposed(I[0]) else 1]',
+                'valid_pad': '!is_valid_padding(padding)',
                 'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
                             ' O[0].shape[2:], stride)',
             },
@@ -199,17 +202,18 @@ _Transforms = Converter.unpack_transforms({
                 'stride_w': '!stride[1]',
                 'dilation_h_factor': '!dilation[0]',
                 'dilation_w_factor': '!dilation[1]',
-                'padding': '!"SAME" if same_pad else "VALID"',
+                'padding': '!"VALID" if valid_pad else "SAME"',
                 'depth_multiplier': '!O[0].shape[1] // channels if depthwise else None',
             }
         ),
     'deconv':
         Transform(
             type='TRANSPOSE_CONV',
-            cond='!I[0].rank == 4 and groups == 1',
+            cond='!I[0].rank == 4 and groups == 1 and (valid_pad or same_pad)',
             using={
                 'depthwise': '!groups == 0',
                 'channels': '!O[0].shape[1]',
+                'valid_pad': '!is_valid_padding(padding)',
                 'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
                             ' O[0].shape[2:], stride)',
             },
@@ -222,15 +226,16 @@ _Transforms = Converter.unpack_transforms({
             attribs={
                 'stride_h': '!stride[0]',
                 'stride_w': '!stride[1]',
-                'padding': '!"SAME" if same_pad else "VALID"',
+                'padding': '!"VALID" if valid_pad else "SAME"',
                 'depth_multiplier': '!I[1].shape[0] // channels if depthwise else None',
             }
         ),
     ('max_pool', 'avg_pool'):
         Transform(
-            cond='!size[0] == 1 and size[1] == 1 and stride[0] == 1 and stride[1] == 1',
+            cond='!size[0] == 1 and size[1] == 1 and stride[0] == 1 and stride[1] == 1 and (valid_pad or same_pad)',
             type=('MAX_POOL_2D', 'AVERAGE_POOL_2D'),
             using={
+                'valid_pad': '!is_valid_padding(padding)',
                 'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
                             ' O[0].shape[2:], stride[2:])',
             },
@@ -245,7 +250,7 @@ _Transforms = Converter.unpack_transforms({
                 'filter_width': '!size[3]',
                 'stride_h': '!stride[2]',
                 'stride_w': '!stride[3]',
-                'padding': '!"SAME" if same_pad else "VALID"',
+                'padding': '!"VALID" if valid_pad else "SAME"',
             }
         ),
     'reshape':

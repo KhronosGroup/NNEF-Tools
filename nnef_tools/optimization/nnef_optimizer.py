@@ -12,14 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..model.utils import bypass_and_remove, generate_tensor_names_from_op_type, replace_chain
+from ..model.utils import bypass_and_remove, replace_chain
+from ..model.utils import generate_tensor_names_from_op_type, generate_missing_tensor_names_from_op_type
 from ..model.graph import *
 
 
 class Optimizer:
 
-    def __init__(self, keep_io_names=False, custom_optimizers=None):
-        self._keep_io_names = keep_io_names
+    def __init__(self, keep_tensor_names=True, custom_optimizers=None):
+        self._keep_tensor_names = keep_tensor_names
         self._custom_optimizers = custom_optimizers or {}
 
     def __call__(self, graph, only_required=False):
@@ -78,7 +79,10 @@ class Optimizer:
 
                 changed |= self._remove_unused_variables(graph)
 
-        generate_tensor_names_from_op_type(graph, keep_io_names=self._keep_io_names)
+        if self._keep_tensor_names:
+            generate_missing_tensor_names_from_op_type(graph)
+        else:
+            generate_tensor_names_from_op_type(graph)
         return graph
 
     @staticmethod

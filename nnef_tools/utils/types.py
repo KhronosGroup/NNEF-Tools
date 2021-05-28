@@ -38,7 +38,9 @@ PyTypeFromNumpyDtype = {
     np.uint32: int,
     np.uint64: int,
     np.bool: bool,
+    np.bool_: bool,
     np.str: str,
+    np.str_: str,
 }
 
 PyTypeToNumpyDtype = {

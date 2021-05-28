@@ -13,7 +13,24 @@
 # limitations under the License.
 
 
+def _split_counter_from_name(str):
+    if len(str) > 0 and not str[-1].isdigit():
+        return str, None
+
+    i = len(str)
+    while i > 0:
+        if not str[i-1].isdigit():
+            return str[:i], int(str[i:])
+        i -= 1
+    return None, int(str)
+
+
 def generate_tensor_names_from_op_type(graph, keep_io_names=False):
+    used_names = set()
+    if keep_io_names:
+        used_names.update(tensor.name for tensor in graph.inputs if tensor.name is not None)
+        used_names.update(tensor.name for tensor in graph.outputs if tensor.name is not None)
+
     op_counts = {}
 
     for op in graph.operations:
@@ -22,12 +39,31 @@ def generate_tensor_names_from_op_type(graph, keep_io_names=False):
                 continue
 
             idx = op_counts.get(op.type, 0) + 1
+            while op.type + str(idx) in used_names:
+                idx += 1
+
             op_counts[op.type] = idx
             tensor.name = op.type + str(idx)
 
     for tensor in graph.tensors:
         if tensor.producer is None:
             tensor.name = None
+
+
+def generate_missing_tensor_names_from_op_type(graph):
+    counters = {}
+    for tensor in graph.tensors:
+        if tensor.name is not None:
+            name, count = _split_counter_from_name(tensor.name)
+            if name is not None and count is not None:
+                counters[name] = max(counters.get(name, 0), count)
+
+    for tensor in graph.tensors:
+        if tensor.name is None and tensor.producer is not None:
+            op = tensor.producer
+            idx = counters.get(op.type, 0) + 1
+            counters[op.type] = idx
+            tensor.name = op.type + str(idx)
 
 
 def generate_op_names_from_op_type(graph):

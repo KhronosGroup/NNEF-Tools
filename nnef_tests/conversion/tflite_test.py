@@ -93,12 +93,19 @@ class TestEnv(unittest.TestCase):
 
         interpreter.invoke()
 
-        return [interpreter.get_tensor(output['index']) for output in interpreter.get_output_details()]
+        return [TestEnv._dequantize(interpreter.get_tensor(output['index']), *output['quantization'])
+                for output in interpreter.get_output_details()]
+
+    @staticmethod
+    def _dequantize(data, scale, zero_point):
+        return scale * (data - zero_point) if scale else data
 
     @staticmethod
     def _random_data(dtype, shape):
         if dtype == np.bool:
             return np.random.random(shape) > 0.5
+        elif np.issubdtype(dtype, np.integer):
+            return np.maximum(np.floor(np.random.random(shape) * 256).astype(dtype), 255)
         else:
             return np.random.random(shape).astype(dtype)
 
