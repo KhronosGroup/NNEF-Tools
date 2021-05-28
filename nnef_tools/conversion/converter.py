@@ -273,9 +273,9 @@ class Converter:
 
     def _check_value(self, value, kind, key, op_type, op_name, tensor=False):
         if isinstance(value, Exception):
-            raise ConversionError("Could not evaluate {kind} '{key}' while converting operator '{type}'; {cause}"
+            raise ConversionError("Could not evaluate {kind} '{key}' while converting operator '{type}'; {err}: {cause}"
                                   .format(kind=kind, key=key, type=op_type, name=op_name,
-                                          cause=str(value) or repr(value)))
+                                          err=type(value).__name__, cause=str(value) or repr(value)))
         if tensor and not isinstance(value, Tensor):
             raise ConversionError("While converting operator '{op_type}', {kind} '{key}' must result in a tensor, "
                                   "but found {value_type}"
