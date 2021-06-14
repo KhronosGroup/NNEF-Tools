@@ -13,9 +13,10 @@
 # limitations under the License.
 
 from __future__ import division, print_function, absolute_import
-from .converter import ConverterToNNEF as _Converter, Transform
+from .converter import ConverterToNNEF as _Converter, Transform, ConversionError
 from ..model.utils import generate_tensor_names_from_op_type
 from ..model import Tensor
+from ..utils import types
 from collections import OrderedDict
 import numpy as np
 import copy
@@ -93,6 +94,22 @@ class Converter(_Converter):
     def _prepare(self, graph):
         self._insert_externals_and_constants(graph)
 
+    def _is_constant(self, tensor):
+        if tensor.producer:
+            return tensor.producer.type == 'Constant'
+        else:
+            return tensor.data is not None
+
+    def _read_constant(self, tensor, type=None):
+        if tensor.producer and tensor.producer.type == 'Constant':
+            value = tensor.producer.attribs['value']
+        elif not tensor.producer:
+            value = tensor.data
+        else:
+            raise ConversionError('trying to evaluate non-constant tensor')
+
+        return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else types.cast(value, type=type)
+
     @staticmethod
     def _interleave(items):
         return [item[0] for item in items] + [item[1] for item in items]
@@ -129,7 +146,8 @@ class Converter(_Converter):
         return self._post_unsqueeze(tensor, axes=axes) if not keep_dims and len(axes) else tensor
 
     def unsqueeze_vector(self, tensor):
-        if self._is_constant(tensor) and len(self._tensor_map[tensor].consumers) == 1:
+        original = self._tensor_map[tensor]
+        if self._is_constant(original) and len(original.consumers) == 1:
             self._transform_constant(tensor, lambda data: np.expand_dims(data, 0))
             return tensor
         else:

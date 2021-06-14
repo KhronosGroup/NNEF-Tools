@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from __future__ import division, print_function, absolute_import
-from .converter import ConverterFromNNEF as _Converter, Transform, ConversionError
+from .converter import ConverterFromNNEF as _Converter, Transform
 from ..model import Tensor, Operation
 from ..utils import types
 import numpy as np
@@ -48,24 +48,8 @@ class Converter(_Converter):
                 constants += 1
                 tensor.name = '$' + str(constants)
 
-    def _is_constant(self, tensor):
-        if tensor.producer:
-            return tensor.producer.type == 'Constant'
-        else:
-            return tensor.data is not None
-
     def _make_constant(self, graph, dtype, value, inline):
         return Tensor(graph, dtype=dtype, shape=self._shape_of(value), data=types.to_numpy(value, dtype=dtype))
-
-    def _read_constant(self, tensor, type=None):
-        if tensor.producer and tensor.producer.type == 'Constant':
-            value = tensor.producer.attribs['value']
-        elif not tensor.producer:
-            value = tensor.data
-        else:
-            raise ConversionError('trying to evaluate non-constant tensor')
-
-        return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else types.cast(value, type=type)
 
     def _const_operation(self, output, value):
         Operation(output.graph, type='Constant', inputs=(), outputs=output,
@@ -115,7 +99,7 @@ class Converter(_Converter):
         return "SAME_UPPER" if padding == [] else "NOTSET"
 
     def is_const(self, tensor, value=None):
-        return self._is_constant(tensor) and value is None or self.as_const(tensor) == value
+        return self._is_constant(self._tensor_map[tensor]) and value is None or self.as_const(tensor) == value
 
     def broadcast(self, tensor, rank):
         return self.unsqueeze_input(tensor, axes=list(range(tensor.rank, rank)))

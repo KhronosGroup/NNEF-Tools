@@ -114,9 +114,6 @@ class Converter(_TFConverter):
     def _ensure_constant_producer(self, tensor):
         pass
 
-    def _is_constant(self, tensor):
-        return tensor.producer is None and tensor.data is not None
-
     def _transform_constant(self, tensor, func):
         data = func(tensor.data)
         tensor.shape = data.shape

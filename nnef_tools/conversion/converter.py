@@ -46,8 +46,9 @@ class Transform:
 
 class ConversionError(Exception):
 
-    def __init__(self, message):
+    def __init__(self, message, details=None):
         Exception.__init__(self, message)
+        self.details = details
 
 
 class Converter:
@@ -126,11 +127,22 @@ class Converter:
 
         self._prepare(self._graph)
 
-        if not self._mirror_unsupported:
-            unsupported = {"'{}'".format(op.type) for op in graph.operations if op.type not in self._transforms}
-            if len(unsupported) != 0:
-                raise ConversionError("Conversion for operation type(s) {} is not implemented".
-                                      format(", ".join(unsupported)))
+        errors = []
+        for op in graph.operations:
+            transform = self._transforms.get(op.type)
+            if isinstance(transform, Transform) and transform.type is None:
+                continue
+
+            if transform is None:
+                errors.append("Conversion for operation type '{}' is not implemented".format(op.type))
+
+            if not self._convertible(op, transform):
+                attribs = {key: value for key, value in six.iteritems(op.attribs) if not key.startswith('_')}
+                errors.append("Conversion for operation type '{}' with attributes {} is not possible"
+                              .format(op.type, attribs))
+
+        if len(errors):
+            raise ConversionError("Found {} operator(s) that cannot be converted".format(len(errors)), details=errors)
 
         for op in graph.operations:
             transform = self._transforms.get(op.type)
@@ -138,16 +150,9 @@ class Converter:
                 continue
 
             if transform is not None:
-                if self._convert(op, transform) is None:
-                    attribs = {key: value for key, value in six.iteritems(op.attribs) if not key.startswith('_')}
-                    raise ConversionError(
-                        "Conversion for operation type '{}' with attributes {} is not implemented".
-                            format(op.type, attribs))
-            else:
-                if self._mirror_unsupported:
-                    self._mirror(op)
-                else:
-                    raise ConversionError("Conversion for operation type '{}' is not implemented".format(op.type))
+                self._convert(op, transform)
+            elif self._mirror_unsupported:
+                self._mirror(op)
 
         for tensor, shape in self._transposed.items():
             tensor.shape = shape
@@ -170,7 +175,7 @@ class Converter:
     def _prepare(self, graph):
         pass
 
-    def _convert(self, op, transform):
+    def _convertible(self, op, transform):
         op_inputs = list(self._tensor_map[tensor] for tensor in op.inputs)
         op_outputs = list(self._tensor_map[tensor] for tensor in op.outputs)
         op_attribs = self._add_default_attribs(op.attribs, transform.defaults, op_inputs, op_outputs, op.type, op.name)
@@ -183,7 +188,20 @@ class Converter:
 
         if transform.cond is not None:
             if not self._evaluate(op_attribs, op_inputs, op_outputs, transform.cond, using):
-                return None
+                return False
+
+        return True
+
+    def _convert(self, op, transform):
+        op_inputs = list(self._tensor_map[tensor] for tensor in op.inputs)
+        op_outputs = list(self._tensor_map[tensor] for tensor in op.outputs)
+        op_attribs = self._add_default_attribs(op.attribs, transform.defaults, op_inputs, op_outputs, op.type, op.name)
+
+        using = {'_type_': op.type, '_name_': op.name, **self._global_attribs()}
+        for key, item in six.iteritems(transform.using):
+            value = self._evaluate(op_attribs, op_inputs, op_outputs, item, using)
+            self._check_value(value, 'using', key, op.type, op.name)
+            using[key] = value
 
         type = self._evaluate(op_attribs, op_inputs, op_outputs, transform.type, using)
         self._check_value(type, 'field', 'type', op.type, op.name)
@@ -446,20 +464,21 @@ class Converter:
         else:
             return axis + rank if axis < 0 else axis
 
-    def as_const(self, arg, type=None):
-        return self._read_constant(arg, type=type)
+    def as_const(self, tensor, type=None):
+        return self._read_constant(self._tensor_map[tensor], type=type)
 
-    def is_const(self, arg, type=None):
-        if arg.data is not None:
+    def is_const(self, tensor, type=None):
+        tensor = self._tensor_map[tensor]
+        if tensor.data is not None:
             return True
         try:
-            self._read_constant(arg, type=type)
+            self._read_constant(tensor, type=type)
             return True
         except ConversionError:
             return False
 
-    def is_zero(self, arg):
-        return self.is_const(arg) and len(arg.shape) == 0 and self.as_const(arg) == 0
+    def is_zero(self, tensor):
+        return self.is_const(tensor) and len(tensor.shape) == 0 and self.as_const(tensor) == 0
 
     def as_tensor(self, arg, dtype, inline=None):
         return self._make_constant(self._graph, dtype=dtype, value=arg, inline=inline)
@@ -532,14 +551,6 @@ class ConverterToNNEF(Converter):
             if tensor.name is not None:
                 tensor.name = self.ensure_valid_id(tensor.name)
 
-    def _read_constant(self, tensor, type):
-        if tensor.producer.type == 'constant':
-            value = tensor.producer.attribs['value']
-            return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else \
-                types.cast(value, type=type) if type is not None else value
-        else:
-            raise ConversionError('trying to evaluate non-constant tensor')
-
     def _make_constant(self, graph, dtype, value, inline):
         if isinstance(value, tuple):
             value = list(value)
@@ -552,12 +563,6 @@ class ConverterToNNEF(Converter):
         else:
             self._const_operation(tensor, value=value if isarray else [value])
         return tensor
-
-    def _is_constant(self, tensor):
-        if tensor.producer:
-            return tensor.producer.type == 'constant'
-        else:
-            return tensor.data is not None
 
     def _const_operation(self, output, value):
         Operation(output.graph, type='constant', inputs=(), outputs=output,
@@ -656,3 +661,20 @@ class ConverterFromNNEF(Converter):
         for op in graph.operations:
             if op.type == 'constant':
                 op.output.data = op.attribs['value']
+
+    def _is_constant(self, tensor):
+        if tensor.producer:
+            return tensor.producer.type == 'constant'
+        else:
+            return tensor.data is not None
+
+    def _read_constant(self, tensor, type):
+        if tensor.data is not None:
+            value = tensor.data
+        elif tensor.producer and tensor.producer.type == 'constant':
+            value = tensor.producer.attribs['value']
+        else:
+            raise ConversionError('trying to evaluate non-constant tensor')
+
+        return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else \
+            types.cast(value, type=type) if type is not None else value

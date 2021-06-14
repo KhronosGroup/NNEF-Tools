@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from __future__ import division, print_function, absolute_import
-from .converter import ConverterFromNNEF as _Converter, Transform, ConversionError
+from .converter import ConverterFromNNEF as _Converter, Transform
 from ..model import Tensor, Operation
 from ..model.utils import generate_op_names_from_op_type
 from ..utils import types
@@ -111,15 +111,6 @@ class Converter(_Converter):
         else:
             Operation(output.graph, type='Add', inputs=(input, bias), outputs=output, attribs={'T': output.dtype})
 
-    def _read_constant(self, tensor, type=None):
-        if tensor.producer is None:
-            return tensor.data
-        elif tensor.producer.type == 'Const':
-            value = tensor.producer.attribs['value']
-            return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else types.cast(value, type=type)
-        else:
-            raise ConversionError('trying to evaluate non-constant tensor')
-
     def _make_constant(self, graph, dtype, value, inline):
         tensor = Tensor(graph, dtype=dtype, shape=self._shape_of(value))
         self._const_operation(tensor, value)
@@ -140,12 +131,6 @@ class Converter(_Converter):
         if tensor.is_constant and tensor.producer is None:
             Operation(tensor.graph, type='Const', inputs=(), outputs=tensor,
                       attribs={'value': tensor.data, 'dtype': tensor.data.dtype.type})
-
-    def _is_constant(self, tensor):
-        if tensor.producer:
-            return tensor.producer.type == 'Const'
-        else:
-            return tensor.data is not None
 
     def _is_nxc(self, format):
         return format[0] == 'N' and format[-1] == 'C' and len(format) > 2
@@ -749,16 +734,13 @@ _Transforms = Converter.unpack_transforms({
     'local_response_normalization':
         Transform(
             type='LRN',
-            using={
-                'channel': '!1 if transposed(I[0]) else len(size) - 1',
-            },
-            cond='!all(s == 1 or i == channel for i, s in enumerate(size))',
+            cond='!all(s == 1 or i == 1 for i, s in enumerate(size))',
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
             attribs={
-                'depth_radius': '!size[channel] // 2 if not _lite_ else None',
-                'radius': '!size[channel] // 2 if _lite_ else None',
-                'alpha': '!alpha / size[channel]',
+                'depth_radius': '!size[1] // 2 if not _lite_ else None',
+                'radius': '!size[1] // 2 if _lite_ else None',
+                'alpha': '!alpha / size[1]',
                 'beta': '!beta',
                 'bias': '!bias',
             }

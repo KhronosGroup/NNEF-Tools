@@ -16,6 +16,7 @@ from __future__ import division, print_function, absolute_import
 from .converter import Converter as _Converter, Transform, ConversionError
 from .tf_to_nnef import Converter as _TFConverter, _Transforms as _TFTransforms, _RELU6_FRAGMENT
 from ..model import Tensor, Operation
+from ..utils import types
 from ..io.tf.lite import CustomOptionsKey
 import numpy as np
 import copy
@@ -84,6 +85,15 @@ class Converter(_TFConverter):
         self._fix_quantized_dtypes(graph)
         self._insert_externals_and_constants(graph)
         self._transpose_externals(graph)
+
+    def _is_constant(self, tensor):
+        return tensor.producer is None and tensor.data is not None
+
+    def _read_constant(self, tensor, type=None):
+        if tensor.producer is None:
+            return types.from_numpy(tensor.data, type=type)
+        else:
+            raise ConversionError('trying to evaluate non-constant tensor')
 
     def _transpose_externals(self, graph):
         for op in graph.operations:
