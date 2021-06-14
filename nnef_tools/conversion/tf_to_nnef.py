@@ -43,7 +43,6 @@ class Converter(_Converter):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
         self._io_transpose = io_transpose
-        self._transposed = set()
         self._keep_io_names = keep_io_names
 
     def __call__(self, graph):
@@ -110,14 +109,10 @@ class Converter(_Converter):
 
     def transpose_output(self, tensor, format='NXC'):
         if self.is_nxc(format):
-            tensor.shape = self.nxc_to_ncx(tensor.shape)
-            self._transposed.add(tensor)
+            self._transposed[tensor] = self.nxc_to_ncx(tensor.shape)
         return tensor
 
     def transpose_filter(self, tensor, format='XCN'):
-        if self.transposed(tensor):
-            return tensor
-
         if self.is_xcn(format):
             perm = self.xcn_to_ncx_perm(tensor.rank)
         elif self.is_nxc(format):
@@ -127,17 +122,9 @@ class Converter(_Converter):
         else:
             assert False
 
-        if self._is_constant(tensor) and self._is_conv_filter(tensor):
-            self._transform_constant(tensor, lambda data: np.transpose(data, perm))
-            self._transposed.add(tensor)
-            return tensor
-        else:
-            return self._pre_transpose(tensor, perm)
+        return self._pre_transpose(tensor, perm)
 
     def transpose_depthwise_filter(self, tensor, format='XCN'):
-        if self.transposed(tensor):
-            return tensor
-
         if self.is_xcn(format):
             perm = self.xcn_to_ncx_perm(tensor.rank)
         elif self.is_nxc(format):
@@ -148,12 +135,7 @@ class Converter(_Converter):
             assert False
 
         shape = tensor.shape[:-2] + (1, -1)
-        if self._is_constant(tensor) and self._is_depthwise_conv_filter(tensor):
-            self._transform_constant(tensor, lambda data: np.transpose(np.reshape(data, shape), perm))
-            self._transposed.add(tensor)
-            return tensor
-        else:
-            return self._pre_transpose(self._reshape(tensor, shape), perm)
+        return self._pre_transpose(self._reshape(tensor, shape), perm)
 
     def transpose_like(self, tensor, ref):
         if ref is not None and self.transposed(ref):
@@ -390,14 +372,11 @@ _Transforms = Converter.unpack_transforms({
     'Squeeze':
         Transform(
             type='squeeze',
-            using={
-                'shape': '!ncx_to_nxc(I[0].shape) if transposed(I[0]) else I[0].shape',
-            },
             inputs='!undo_transpose(I[0])',
             outputs='!O[0]',
             attribs={
                 'axes': '!ensure_list(ensure_positive(squeeze_dims, I[0].rank)) if len(squeeze_dims) != 0 else'
-                        ' [i for i, x in enumerate(shape) if x == 1]',
+                        ' [i for i, x in enumerate(I[0].shape) if x == 1]',
                 'dtype': '!T',
             }
         ),
@@ -633,7 +612,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='!"nearest_upsample" if upsample else "nearest_downsample"',
             using=OrderedDict([
-                ('old_size', '!I[0].shape[2:] if transposed(I[0]) else I[0].shape[1:-1]'),
+                ('old_size', '!I[0].shape[1:-1]'),
                 ('new_size', '!as_const(I[1])'),
                 ('upsample', '!is_integer_upsample(old_size, new_size)'),
                 ('downsample', '!is_integer_downsample(old_size, new_size)'),
@@ -648,9 +627,9 @@ _Transforms = Converter.unpack_transforms({
     'ResizeArea':
         Transform(
             type='area_downsample',
-            cond='!is_integer_downsample(I[0].shape, transpose_list_like(O[0].shape, I[0])) and not align_corners',
+            cond='!is_integer_downsample(I[0].shape[1:-1], O[0].shape[1:-1]) and not align_corners',
             using={
-                'size': '!I[0].shape[2:] if transposed(I[0]) else I[0].shape[1:-1]'
+                'size': '!I[0].shape[1:-1]'
             },
             inputs='!transpose_input(I[0])',
             outputs='!transpose_output(O[0])',
@@ -661,9 +640,9 @@ _Transforms = Converter.unpack_transforms({
     'ResizeBilinear':
         Transform(
             type='multilinear_upsample',
-            cond='!is_integer_upsample(I[0].shape, transpose_list_like(O[0].shape, I[0]))',
+            cond='!is_integer_upsample(I[0].shape[1:-1], O[0].shape[1:-1])',
             using={
-                'size': '!I[0].shape[2:] if transposed(I[0]) else I[0].shape[1:-1]'
+                'size': '!I[0].shape[1:-1]'
             },
             inputs='!transpose_input(I[0])',
             outputs='!transpose_output(O[0])',

@@ -122,6 +122,7 @@ class Converter:
         self._graph = Graph(name=graph.name)
         self._tensor_map = {tensor: self._copy_tensor_(tensor) for tensor in graph.tensors}
         self._tensor_map.update({val: key for key, val in six.iteritems(self._tensor_map)})
+        self._transposed = {}
 
         self._prepare(self._graph)
 
@@ -147,6 +148,9 @@ class Converter:
                     self._mirror(op)
                 else:
                     raise ConversionError("Conversion for operation type '{}' is not implemented".format(op.type))
+
+        for tensor, shape in self._transposed.items():
+            tensor.shape = shape
 
         self._graph.remove_tensors([tensor for tensor in self._graph.tensors
                                     if len(tensor.producers) == 0 and len(tensor.consumers) == 0])
@@ -323,38 +327,41 @@ class Converter:
             permuted[perm[i]] = items[i]
         return type(items)(permuted)
 
+    def _shape(self, tensor):
+        return self._transposed.get(tensor) or tensor.shape
+
     def _pre_transpose(self, input, perm):
-        shape = self._permute(input.shape, perm)
+        shape = self._permute(self._shape(input), perm)
         output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
         self._transpose_operation(input, output, perm)
         return output
 
     def _post_transpose(self, output, perm):
-        shape = self._inverse_permute(output.shape, perm)
+        shape = self._inverse_permute(self._shape(output), perm)
         input = Tensor(output.graph, dtype=output.dtype, shape=shape, quant=copy.deepcopy(output.quant))
         self._transpose_operation(input, output, perm)
         return input
 
     def _pre_squeeze(self, input, axes):
-        shape = self.squeeze_shape(input.shape, axes)
+        shape = self.squeeze_shape(self._shape(input), axes)
         output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
         self._squeeze_operation(input, output, axes)
         return output
 
     def _pre_unsqueeze(self, input, axes):
-        shape = self.unsqueeze_shape(input.shape, axes)
+        shape = self.unsqueeze_shape(self._shape(input), axes)
         output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
         self._unsqueeze_operation(input, output, axes)
         return output
 
     def _post_squeeze(self, output, axes):
-        shape = self.unsqueeze_shape(output.shape, axes)
+        shape = self.unsqueeze_shape(self._shape(output), axes)
         input = Tensor(output.graph, dtype=output.dtype, shape=shape, quant=copy.deepcopy(output.quant))
         self._squeeze_operation(input, output, axes)
         return input
 
     def _post_unsqueeze(self, output, axes):
-        shape = self.squeeze_shape(output.shape, axes)
+        shape = self.squeeze_shape(self._shape(output), axes)
         input = Tensor(output.graph, dtype=output.dtype, shape=shape, quant=copy.deepcopy(output.quant))
         self._unsqueeze_operation(input, output, axes)
         return input

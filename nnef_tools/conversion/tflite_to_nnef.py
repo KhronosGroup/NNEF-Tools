@@ -69,7 +69,6 @@ class Converter(_TFConverter):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
         self._io_transpose = io_transpose
-        self._transposed = set()
         self._keep_io_names = keep_io_names
 
     def __call__(self, graph):
@@ -90,9 +89,9 @@ class Converter(_TFConverter):
         for op in graph.operations:
             if op.type == 'external':
                 if self.needs_io_transpose(op.output):
-                    op.output.shape = self.nxc_to_ncx(op.output.shape)
-                    op.attribs['shape'] = list(op.output.shape)
-                    self._transposed.add(op.output)
+                    shape = self.nxc_to_ncx(op.output.shape)
+                    op.attribs['shape'] = list(shape)
+                    self._transposed[op.output] = shape
 
     def _fix_quantized_dtypes(self, graph):
         for tensor in graph.tensors:
@@ -142,7 +141,7 @@ class Converter(_TFConverter):
         if func not in self._ActivationOpTypes:
             raise ConversionError("Unsupported fused activation function '{}'".format(func))
 
-        input = Tensor(output.graph, dtype=output.dtype, shape=output.shape, quant=copy.deepcopy(output.quant))
+        input = Tensor(output.graph, dtype=output.dtype, shape=self._shape(output), quant=copy.deepcopy(output.quant))
         Operation(output.graph, type=self._ActivationOpTypes[func], inputs=input, outputs=output)
         return input
 

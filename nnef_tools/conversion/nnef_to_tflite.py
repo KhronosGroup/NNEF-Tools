@@ -44,7 +44,6 @@ class Converter(_TFConverter):
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
         self._data_format = 'NXC'
         self._io_transpose = io_transpose
-        self._transposed = set()
 
     def __call__(self, graph):
         graph = _TFConverter.__call__(self, graph)
@@ -64,8 +63,7 @@ class Converter(_TFConverter):
         for tensor in graph.tensors:
             mapped = self._tensor_map[tensor]
             if mapped.producer and mapped.producer.type == 'external' and self.needs_io_transpose(tensor):
-                tensor.shape = self.ncx_to_nxc(tensor.shape)
-                self._transposed.add(tensor)
+                self._transposed[tensor] = self.ncx_to_nxc(tensor.shape)
 
     def _generate_tensor_names(self, graph):
         generate_tensor_names_from_op_type(graph)
@@ -186,14 +184,13 @@ _Transforms = Converter.unpack_transforms({
             cond='!I[0].rank == 4 and (valid_pad or same_pad)',
             using={
                 'depthwise': '!groups == 0',
-                'channels': '!I[0].shape[-1 if transposed(I[0]) else 1]',
+                'channels': '!I[0].shape[1]',
                 'valid_pad': '!is_valid_padding(padding)',
-                'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
-                            ' O[0].shape[2:], stride)',
+                'same_pad': '!is_same_padding(I[0].shape[2:], O[0].shape[2:], stride)',
             },
             inputs=(
                 '!transpose_input(I[0]) if same_pad else pad_input(transpose_input(I[0]), [(0, 0), (0, 0)] + padding)',
-                '!transpose_filter(I[1], format="NXC" if not depthwise else "CXN", depthwise=depthwise)',
+                '!transpose_filter(I[1], format="NXC" if not depthwise else "CXN")',
                 '!squeeze_vector(I[2])',
             ),
             outputs='!transpose_output(O[0])',
@@ -214,12 +211,11 @@ _Transforms = Converter.unpack_transforms({
                 'depthwise': '!groups == 0',
                 'channels': '!O[0].shape[1]',
                 'valid_pad': '!is_valid_padding(padding)',
-                'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
-                            ' O[0].shape[2:], stride)',
+                'same_pad': '!is_same_padding(I[0].shape[2:], O[0].shape[2:], stride)',
             },
             inputs=(
                 '!as_tensor(ncx_to_nxc(output_shape), np.int32)',
-                '!transpose_filter(I[1], format="CXN" if not depthwise else "NXC", depthwise=depthwise)',
+                '!transpose_filter(I[1], format="CXN" if not depthwise else "NXC")',
                 '!transpose_input(I[0]) if same_pad else pad_input(transpose_input(I[0]), [(0, 0), (0, 0)] + padding)',
             ),
             outputs='!bias_add(transpose_output(O[0]), squeeze_vector(I[2]) if I[2].rank == 2 else I[2])',
@@ -236,8 +232,7 @@ _Transforms = Converter.unpack_transforms({
             type=('MAX_POOL_2D', 'AVERAGE_POOL_2D'),
             using={
                 'valid_pad': '!is_valid_padding(padding)',
-                'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
-                            ' O[0].shape[2:], stride[2:])',
+                'same_pad': '!is_same_padding(I[0].shape[2:], O[0].shape[2:], stride[2:])',
             },
             inputs=(
                 '!transpose_input(I[0]) if same_pad else pad_input(transpose_input(I[0]), padding)',
@@ -281,7 +276,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='RESHAPE',
             using={
-                'shape': '!I[0].shape'
+                'shape': '!transpose_list_like(I[0].shape, I[0])',
             },
             inputs=(
                 '!I[0]',
