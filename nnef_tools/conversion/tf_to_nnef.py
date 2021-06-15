@@ -112,20 +112,17 @@ class Converter(_Converter):
     def is_xcn(self, format):
         return format[-2] == 'C' and format[-1] == 'N' and len(format) > 2
 
-    def transposed(self, tensor):
-        return tensor in self._transposed
-
     def transpose_input(self, tensor, format='NXC'):
         if self.is_nxc(format):
             return self._pre_transpose(tensor, self.nxc_to_ncx_perm(tensor.rank)) \
-                if not self.transposed(tensor) and tensor.rank > 2 else tensor
+                if not self.transposing(tensor) and tensor.rank > 2 else tensor
         else:
-            assert not self.transposed(tensor)
+            assert not self.transposing(tensor)
             return tensor
 
     def transpose_output(self, tensor, format='NXC'):
         if self.is_nxc(format):
-            self._transposed[tensor] = self.nxc_to_ncx(tensor.shape)
+            self._transposes[tensor] = self.nxc_to_ncx(tensor.shape)
         return tensor
 
     def transpose_filter(self, tensor, format='XCN'):
@@ -154,7 +151,7 @@ class Converter(_Converter):
         return self._pre_transpose(self._reshape(tensor, shape), perm)
 
     def transpose_like(self, tensor, ref):
-        if ref is not None and self.transposed(ref):
+        if ref is not None and self.transposing(ref):
             self.transpose_output(tensor)
         return tensor
 
@@ -162,7 +159,7 @@ class Converter(_Converter):
         perm = self.ncx_to_nxc_perm(tensor.rank)
         if perm == list(range(tensor.rank)):
             return tensor
-        return self._pre_transpose(tensor, perm) if self.transposed(tensor) else tensor
+        return self._pre_transpose(tensor, perm) if self.transposing(tensor) else tensor
 
     def convert_size(self, value, format):
         return value[1:-1] if self.is_nxc(format) else value[2:]
@@ -181,10 +178,10 @@ class Converter(_Converter):
             assert False, "unknown padding type '{}'".format(padding)
 
     def transpose_list_like(self, items, ref):
-        return self.nxc_to_ncx(items) if ref is not None and self.transposed(ref) else items
+        return self.nxc_to_ncx(items) if ref is not None and self.transposing(ref) else items
 
     def transpose_axis_like(self, axis, ref, rank=None):
-        return self.axis_nxc_to_ncx(axis, rank or ref.rank) if ref is not None and self.transposed(ref) else \
+        return self.axis_nxc_to_ncx(axis, rank or ref.rank) if ref is not None and self.transposing(ref) else \
             self.ensure_positive(axis, rank or ref.rank)
 
     def squeeze_input(self, tensor, axes, keep_dims=False):
@@ -210,7 +207,7 @@ class Converter(_Converter):
     def convert_binarg(self, tensor, other):
         if tensor.rank == 0:
             return tensor
-        needs_transpose = self.transposed(other) and not self.transposed(tensor)
+        needs_transpose = self.transposing(other) and not self.transposing(tensor)
         if other.rank > tensor.rank:
             if tensor.rank == 1 and needs_transpose:
                 return self.unsqueeze_vector(tensor)
@@ -448,7 +445,7 @@ _Transforms = Converter.unpack_transforms({
                 '!convert_binarg(I[0], I[1])',
                 '!convert_binarg(I[1], I[0])',
             ),
-            outputs='!transpose_output(O[0]) if transposed(I[0]) or transposed(I[1]) else O[0]',
+            outputs='!transpose_output(O[0]) if transposing(I[0]) or transposing(I[1]) else O[0]',
         ),
     ('Identity', 'Relu', 'Relu6', 'Elu', 'Sigmoid', 'Tanh', 'Softplus', 'Exp', 'Log', 'Sin', 'Cos', 'Sign',
      'Abs', 'Neg', 'Reciprocal', 'Floor', 'Ceil', 'Round', 'Square', 'Sqrt', 'Rsqrt', 'LogicalNot'):

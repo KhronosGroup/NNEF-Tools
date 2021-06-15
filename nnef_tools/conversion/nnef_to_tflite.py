@@ -63,7 +63,7 @@ class Converter(_TFConverter):
         for tensor in graph.tensors:
             mapped = self._tensor_map[tensor]
             if mapped.producer and mapped.producer.type == 'external' and self.needs_io_transpose(tensor):
-                self._transposed[tensor] = self.ncx_to_nxc(tensor.shape)
+                self._transposes[tensor] = self.ncx_to_nxc(tensor.shape)
 
     def _generate_tensor_names(self, graph):
         generate_tensor_names_from_op_type(graph)
@@ -166,7 +166,7 @@ class Converter(_TFConverter):
         if all(item == (0, 0) for item in paddings):
             return input
 
-        shape = tuple(p + x + q for x, (p, q) in zip(self._shape(input), paddings))
+        shape = tuple(p + x + q for x, (p, q) in zip(self._working_shape(input), paddings))
         output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
         self._pad_operation(input, output, paddings)
         return output
@@ -356,7 +356,7 @@ _Transforms = Converter.unpack_transforms({
             using={'paddings': '![list(item) for item in padding]'},
             inputs=(
                 '!I[0]',
-                '!as_tensor(ncx_to_nxc(paddings, cond=transposed(I[0])), np.int32)',
+                '!as_tensor(ncx_to_nxc(paddings, cond=transposing(I[0])), np.int32)',
             ),
             outputs='!transpose_like(O[0], I[0])',
             attribs={

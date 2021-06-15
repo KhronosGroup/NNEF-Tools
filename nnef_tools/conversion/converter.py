@@ -123,7 +123,7 @@ class Converter:
         self._graph = Graph(name=graph.name)
         self._tensor_map = {tensor: self._copy_tensor_(tensor) for tensor in graph.tensors}
         self._tensor_map.update({val: key for key, val in six.iteritems(self._tensor_map)})
-        self._transposed = {}
+        self._transposes = {}
 
         self._prepare(self._graph)
 
@@ -158,7 +158,7 @@ class Converter:
             elif self._mirror_unsupported:
                 self._mirror(op)
 
-        for tensor, shape in self._transposed.items():
+        for tensor, shape in self._transposes.items():
             tensor.shape = shape
 
         self._graph.remove_tensors([tensor for tensor in self._graph.tensors
@@ -352,41 +352,41 @@ class Converter:
             permuted[perm[i]] = items[i]
         return type(items)(permuted)
 
-    def _shape(self, tensor):
-        return self._transposed.get(tensor) or tensor.shape
+    def _working_shape(self, tensor):
+        return self._transposes.get(tensor) or tensor.shape
 
     def _pre_transpose(self, input, perm):
-        shape = self._permute(self._shape(input), perm)
+        shape = self._permute(self._working_shape(input), perm)
         output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
         self._transpose_operation(input, output, perm)
         return output
 
     def _post_transpose(self, output, perm):
-        shape = self._inverse_permute(self._shape(output), perm)
+        shape = self._inverse_permute(self._working_shape(output), perm)
         input = Tensor(output.graph, dtype=output.dtype, shape=shape, quant=copy.deepcopy(output.quant))
         self._transpose_operation(input, output, perm)
         return input
 
     def _pre_squeeze(self, input, axes):
-        shape = self.squeeze_shape(self._shape(input), axes)
+        shape = self.squeeze_shape(self._working_shape(input), axes)
         output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
         self._squeeze_operation(input, output, axes)
         return output
 
     def _pre_unsqueeze(self, input, axes):
-        shape = self.unsqueeze_shape(self._shape(input), axes)
+        shape = self.unsqueeze_shape(self._working_shape(input), axes)
         output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
         self._unsqueeze_operation(input, output, axes)
         return output
 
     def _post_squeeze(self, output, axes):
-        shape = self.unsqueeze_shape(self._shape(output), axes)
+        shape = self.unsqueeze_shape(self._working_shape(output), axes)
         input = Tensor(output.graph, dtype=output.dtype, shape=shape, quant=copy.deepcopy(output.quant))
         self._squeeze_operation(input, output, axes)
         return input
 
     def _post_unsqueeze(self, output, axes):
-        shape = self.squeeze_shape(self._shape(output), axes)
+        shape = self.squeeze_shape(self._working_shape(output), axes)
         input = Tensor(output.graph, dtype=output.dtype, shape=shape, quant=copy.deepcopy(output.quant))
         self._unsqueeze_operation(input, output, axes)
         return input
@@ -412,6 +412,9 @@ class Converter:
         for axis in axes:
             shape = shape[:axis] + (1,) + shape[axis:]
         return shape
+
+    def transposing(self, tensor):
+        return tensor in self._transposes
 
     def nxc_to_ncx(self, items, cond=True):
         return items[0:1] + items[-1:] + items[1:-1] if cond else items

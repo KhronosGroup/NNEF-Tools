@@ -101,7 +101,7 @@ class Converter(_TFConverter):
                 if self.needs_io_transpose(op.output):
                     shape = self.nxc_to_ncx(op.output.shape)
                     op.attribs['shape'] = list(shape)
-                    self._transposed[op.output] = shape
+                    self._transposes[op.output] = shape
 
     def _fix_quantized_dtypes(self, graph):
         for tensor in graph.tensors:
@@ -151,7 +151,7 @@ class Converter(_TFConverter):
         if func not in self._ActivationOpTypes:
             raise ConversionError("Unsupported fused activation function '{}'".format(func))
 
-        input = Tensor(output.graph, dtype=output.dtype, shape=self._shape(output), quant=copy.deepcopy(output.quant))
+        input = Tensor(output.graph, dtype=output.dtype, shape=self._working_shape(output), quant=copy.deepcopy(output.quant))
         Operation(output.graph, type=self._ActivationOpTypes[func], inputs=input, outputs=output)
         return input
 
