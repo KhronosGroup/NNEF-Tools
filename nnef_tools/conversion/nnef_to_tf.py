@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from __future__ import division, print_function, absolute_import
-from .converter import ConverterFromNNEF as _Converter, Transform, ConversionError
+from .converter import ConverterFromNNEF as _Converter, Transform
 from ..model import Tensor, Operation
 from ..model.utils import generate_op_names_from_op_type
 from ..utils import types
@@ -39,7 +39,6 @@ class Converter(_Converter):
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
         self._data_format = data_format
         self._io_transpose = io_transpose
-        self._transposed = set()
 
     def __call__(self, graph):
         self.convert_variables_to_constants(graph)
@@ -112,15 +111,6 @@ class Converter(_Converter):
         else:
             Operation(output.graph, type='Add', inputs=(input, bias), outputs=output, attribs={'T': output.dtype})
 
-    def _read_constant(self, tensor, type=None):
-        if tensor.producer is None:
-            return tensor.data
-        elif tensor.producer.type == 'Const':
-            value = tensor.producer.attribs['value']
-            return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else types.cast(value, type=type)
-        else:
-            raise ConversionError('trying to evaluate non-constant tensor')
-
     def _make_constant(self, graph, dtype, value, inline):
         tensor = Tensor(graph, dtype=dtype, shape=self._shape_of(value))
         self._const_operation(tensor, value)
@@ -141,12 +131,6 @@ class Converter(_Converter):
         if tensor.is_constant and tensor.producer is None:
             Operation(tensor.graph, type='Const', inputs=(), outputs=tensor,
                       attribs={'value': tensor.data, 'dtype': tensor.data.dtype.type})
-
-    def _is_constant(self, tensor):
-        if tensor.producer:
-            return tensor.producer.type == 'Const'
-        else:
-            return tensor.data is not None
 
     def _is_nxc(self, format):
         return format[0] == 'N' and format[-1] == 'C' and len(format) > 2
@@ -201,14 +185,10 @@ class Converter(_Converter):
 
     def transpose_output(self, tensor):
         if self.is_nxc():
-            tensor.shape = self.ncx_to_nxc(tensor.shape)
-            self._transposed.add(tensor)
+            self._transposed[tensor] = self.ncx_to_nxc(tensor.shape)
         return tensor
 
-    def transpose_filter(self, tensor, format='XCN', depthwise=False):
-        if self.transposed(tensor):
-            return tensor
-
+    def transpose_filter(self, tensor, format='XCN'):
         if self._is_xcn(format):
             perm = self.ncx_to_xcn_perm(tensor.rank)
         elif self._is_nxc(format):
@@ -218,17 +198,9 @@ class Converter(_Converter):
         else:
             assert False
 
-        if self._is_constant(tensor) and self._is_conv_filter(tensor, groups=1 if not depthwise else 0):
-            self._transform_constant(tensor, lambda data: np.transpose(data, perm))
-            self._transposed.add(tensor)
-            return tensor
-        else:
-            return self._pre_transpose(tensor, perm)
+        return self._pre_transpose(tensor, perm)
 
     def transpose_depthwise_filter(self, tensor, channels, format='XCN'):
-        if self.transposed(tensor):
-            return tensor
-
         if self._is_xcn(format):
             perm = self.ncx_to_xcn_perm(tensor.rank)
         elif self._is_nxc(format):
@@ -239,12 +211,7 @@ class Converter(_Converter):
             assert False
 
         shape = tensor.shape[2:] + (channels, tensor.shape[0] // channels)
-        if self._is_constant(tensor) and self._is_conv_filter(tensor, groups=0):
-            self._transform_constant(tensor, lambda data: np.reshape(np.transpose(data, perm), shape))
-            self._transposed.add(tensor)
-            return tensor
-        else:
-            return self._reshape(self._pre_transpose(tensor, perm), shape)
+        return self._reshape(self._pre_transpose(tensor, perm), shape)
 
     def transpose_like(self, tensor, reference):
         if self.transposed(reference):
@@ -283,7 +250,7 @@ class Converter(_Converter):
             return self.squeeze_input(tensor, axes=[0])
 
     def scale_output(self, output, scalar):
-        input = Tensor(output.graph, dtype=output.dtype, shape=output.shape, quant=copy.deepcopy(output.quant))
+        input = Tensor(output.graph, dtype=output.dtype, shape=self._shape(output), quant=copy.deepcopy(output.quant))
         self._scale_operation(input, output, scalar)
         return input
 
@@ -291,7 +258,7 @@ class Converter(_Converter):
         if bias.rank == 0 and np.all(bias.data == 0):
             return output
 
-        input = Tensor(output.graph, dtype=output.dtype, shape=output.shape, quant=copy.deepcopy(output.quant))
+        input = Tensor(output.graph, dtype=output.dtype, shape=self._shape(output), quant=copy.deepcopy(output.quant))
         self._bias_operation(input, output, bias)
         return input
 
@@ -347,9 +314,11 @@ _Transforms = Converter.unpack_transforms({
     'conv':
         Transform(
             type='!"Conv{n}D".format(n=I[0].rank - 2) if groups != 0 else "DepthwiseConv2dNative"',
-            cond='!I[0].rank == 4 or I[0].rank == 5',
+            cond={
+                '!I[0].rank == 4 or I[0].rank == 5': 'rank must be 4 or 5',
+            },
             using={
-                'channels': '!I[0].shape[-1 if transposed(I[0]) else 1]',
+                'channels': '!I[0].shape[1]',
             },
             inputs=(
                 '!transpose_input(I[0])',
@@ -370,7 +339,9 @@ _Transforms = Converter.unpack_transforms({
     'deconv':
         Transform(
             type='!"Conv{n}DBackpropInput".format(n=I[0].rank - 2) if groups != 0 else "DepthwiseConv2dNativeBackpropInput"',
-            cond='!I[0].rank == 4 or I[0].rank == 5',
+            cond={
+                '!I[0].rank == 4 or I[0].rank == 5': 'rank must be 4 or 5',
+            },
             using={
                 'channels': '!O[0].shape[1]',
             },
@@ -537,7 +508,7 @@ _Transforms = Converter.unpack_transforms({
             },
             inputs=(
                 '!I[0]',
-                '!as_tensor(split_sizes(ratios, I[0].shape[dim]), np.int64)',
+                '!as_tensor(split_sizes(ratios, I[0].shape[axis]), np.int64)',
                 '!as_tensor(dim, np.int32)',
             ),
             outputs=['![transpose_like(O[i], I[0]) for i in range(len(O))]'],
@@ -613,7 +584,9 @@ _Transforms = Converter.unpack_transforms({
     'softmax':
         Transform(
             type='Softmax',
-            cond='!axes == [1])',
+            cond={
+                '!axes == [1])': 'axes must equal channel dimension (1)',
+            },
             inputs='!transpose_input(I[0])',
             outputs='!transpose_output(O[0])',
             attribs={
@@ -642,7 +615,10 @@ _Transforms = Converter.unpack_transforms({
     'pad':
         Transform(
             type='!"Pad" if border == "constant" else "MirrorPad"',
-            cond='!border in ["constant", "reflect", "reflect-even"]',
+            cond={
+                '!border in ["constant", "reflect", "reflect-even"]':
+                    'border must be one of "constant", "reflect", "reflect-even"',
+            },
             using={'paddings': '![list(item) for item in padding]'},
             inputs=(
                 '!I[0]',
@@ -686,10 +662,10 @@ _Transforms = Converter.unpack_transforms({
             attribs={
                 'T': '!I[0].dtype if not _lite_ else None',
                 'Index': '!np.int32',
-                'begin_mask': '!as_bits([1 if d not in axis or out_of_range(begs[axis.index(d)], I[0].shape[i]) else 0'
-                              ' for i, d in enumerate(dims)])',
-                'end_mask': '!as_bits([1 if d not in axis or (ends[axis.index(d)] == 0 and strs[axis.index(d)] == 1)'
-                            ' or out_of_range(ends[axis.index(d)], I[0].shape[i]) else 0 for i, d in enumerate(dims)])',
+                'begin_mask': '!as_bits([1 if i not in axis or out_of_range(begs[axis.index(i)], I[0].shape[i]) else 0'
+                              ' for i in dims])',
+                'end_mask': '!as_bits([1 if i not in axis or (ends[axis.index(i)] == 0 and strs[axis.index(i)] == 1)'
+                            ' or out_of_range(ends[axis.index(i)], I[0].shape[i]) else 0 for i in dims])',
                 'ellipsis_mask': 0,
                 'new_axis_mask': 0,
                 'shrink_axis_mask': 0,
@@ -698,13 +674,15 @@ _Transforms = Converter.unpack_transforms({
     ('argmin_reduce', 'argmax_reduce'):
         Transform(
             type=('ArgMin', 'ArgMax'),
-            cond='!len(axes) == 1',
+            cond={
+                '!len(axes) == 1': 'axes must be of length 1',
+            },
             using={'axis': '!transpose_axis_like(axes[0], ref=I[0])'},
             inputs=(
                 '!I[0]',
                 '!as_tensor(axis, np.int32)',
             ),
-            outputs='!unsqueeze_output(transpose_like(O[0], I[0]), [axis]) if not _lite_ else transpose_like(O[0], I[0])',
+            outputs='!transpose_like(unsqueeze_output(O[0], axes) if not _lite_ else O[0], I[0])',
             attribs={
                 'T': '!I[0].dtype if not _lite_ else None',
                 'output_type': '!O[0].dtype',
@@ -727,7 +705,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='ResizeNearestNeighbor',
             using={
-                'size': '!I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:]'
+                'size': '!I[0].shape[2:]'
             },
             inputs=(
                 '!transpose_input(I[0])',
@@ -744,7 +722,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='ResizeBilinear',
             using={
-                'size': '!I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:]'
+                'size': '!I[0].shape[2:]'
             },
             inputs=(
                 '!transpose_input(I[0])',
@@ -760,7 +738,7 @@ _Transforms = Converter.unpack_transforms({
     ('nearest_downsample', 'area_downsample'):
         Transform(
             type=('ResizeNearestNeighbor', 'ResizeArea'),
-            using={'size': '!I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:]'},
+            using={'size': '!I[0].shape[2:]'},
             inputs=(
                 '!transpose_input(I[0])',
                 '!as_tensor([s // f for s, f in zip(size, factor)], np.int32)',
@@ -775,16 +753,16 @@ _Transforms = Converter.unpack_transforms({
     'local_response_normalization':
         Transform(
             type='LRN',
-            using={
-                'channel': '!1 if transposed(I[0]) else len(size) - 1',
+            cond={
+                '!all(s == 1 or i == 1 for i, s in enumerate(size))':
+                    'size must be singular for all non-channel dimensions',
             },
-            cond='!all(s == 1 or i == channel for i, s in enumerate(size))',
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
             attribs={
-                'depth_radius': '!size[channel] // 2 if not _lite_ else None',
-                'radius': '!size[channel] // 2 if _lite_ else None',
-                'alpha': '!alpha / size[channel]',
+                'depth_radius': '!size[1] // 2 if not _lite_ else None',
+                'radius': '!size[1] // 2 if _lite_ else None',
+                'alpha': '!alpha / size[1]',
                 'beta': '!beta',
                 'bias': '!bias',
             }

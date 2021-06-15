@@ -44,7 +44,6 @@ class Converter(_TFConverter):
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
         self._data_format = 'NXC'
         self._io_transpose = io_transpose
-        self._transposed = set()
 
     def __call__(self, graph):
         graph = _TFConverter.__call__(self, graph)
@@ -64,8 +63,7 @@ class Converter(_TFConverter):
         for tensor in graph.tensors:
             mapped = self._tensor_map[tensor]
             if mapped.producer and mapped.producer.type == 'external' and self.needs_io_transpose(tensor):
-                tensor.shape = self.ncx_to_nxc(tensor.shape)
-                self._transposed.add(tensor)
+                self._transposed[tensor] = self.ncx_to_nxc(tensor.shape)
 
     def _generate_tensor_names(self, graph):
         generate_tensor_names_from_op_type(graph)
@@ -115,9 +113,6 @@ class Converter(_TFConverter):
 
     def _ensure_constant_producer(self, tensor):
         pass
-
-    def _is_constant(self, tensor):
-        return tensor.producer is None and tensor.data is not None
 
     def _transform_constant(self, tensor, func):
         data = func(tensor.data)
@@ -183,17 +178,19 @@ _Transforms = Converter.unpack_transforms({
     'conv':
         Transform(
             type='!"CONV_2D" if not depthwise else "DEPTHWISE_CONV_2D"',
-            cond='!I[0].rank == 4 and (valid_pad or same_pad)',
+            cond={
+                '!I[0].rank == 4': 'rank must be 4',
+                '!valid_pad or same_pad': 'padding must denote `valid` or `same`',
+            },
             using={
                 'depthwise': '!groups == 0',
-                'channels': '!I[0].shape[-1 if transposed(I[0]) else 1]',
+                'channels': '!I[0].shape[1]',
                 'valid_pad': '!is_valid_padding(padding)',
-                'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
-                            ' O[0].shape[2:], stride)',
+                'same_pad': '!is_same_padding(I[0].shape[2:], O[0].shape[2:], stride)',
             },
             inputs=(
                 '!transpose_input(I[0]) if same_pad else pad_input(transpose_input(I[0]), [(0, 0), (0, 0)] + padding)',
-                '!transpose_filter(I[1], format="NXC" if not depthwise else "CXN", depthwise=depthwise)',
+                '!transpose_filter(I[1], format="NXC" if not depthwise else "CXN")',
                 '!squeeze_vector(I[2])',
             ),
             outputs='!transpose_output(O[0])',
@@ -209,17 +206,20 @@ _Transforms = Converter.unpack_transforms({
     'deconv':
         Transform(
             type='TRANSPOSE_CONV',
-            cond='!I[0].rank == 4 and groups == 1 and (valid_pad or same_pad)',
+            cond={
+                '!I[0].rank == 4': 'rank must be 4',
+                '!groups == 1': 'groups must be 1',
+                '!valid_pad or same_pad': 'padding must denote `valid` or `same`',
+            },
             using={
                 'depthwise': '!groups == 0',
                 'channels': '!O[0].shape[1]',
                 'valid_pad': '!is_valid_padding(padding)',
-                'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
-                            ' O[0].shape[2:], stride)',
+                'same_pad': '!is_same_padding(I[0].shape[2:], O[0].shape[2:], stride)',
             },
             inputs=(
                 '!as_tensor(ncx_to_nxc(output_shape), np.int32)',
-                '!transpose_filter(I[1], format="CXN" if not depthwise else "NXC", depthwise=depthwise)',
+                '!transpose_filter(I[1], format="CXN" if not depthwise else "NXC")',
                 '!transpose_input(I[0]) if same_pad else pad_input(transpose_input(I[0]), [(0, 0), (0, 0)] + padding)',
             ),
             outputs='!bias_add(transpose_output(O[0]), squeeze_vector(I[2]) if I[2].rank == 2 else I[2])',
@@ -232,12 +232,15 @@ _Transforms = Converter.unpack_transforms({
         ),
     ('max_pool', 'avg_pool'):
         Transform(
-            cond='!size[0] == 1 and size[1] == 1 and stride[0] == 1 and stride[1] == 1 and (valid_pad or same_pad)',
+            cond={
+                '!size[0] == 1 and size[1] == 1 and ': 'size must be 1 in batch and channel dimensions',
+                '!stride[0] == 1 and stride[1] == 1': 'stride must be 1 in batch and channel dimensions',
+                '!valid_pad or same_pad': 'padding must denote `valid` or `same`',
+            },
             type=('MAX_POOL_2D', 'AVERAGE_POOL_2D'),
             using={
                 'valid_pad': '!is_valid_padding(padding)',
-                'same_pad': '!is_same_padding(I[0].shape[1:-1] if transposed(I[0]) else I[0].shape[2:],'
-                            ' O[0].shape[2:], stride[2:])',
+                'same_pad': '!is_same_padding(I[0].shape[2:], O[0].shape[2:], stride[2:])',
             },
             inputs=(
                 '!transpose_input(I[0]) if same_pad else pad_input(transpose_input(I[0]), padding)',
@@ -281,7 +284,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='RESHAPE',
             using={
-                'shape': '!I[0].shape'
+                'shape': '!transpose_list_like(I[0].shape, I[0])',
             },
             inputs=(
                 '!I[0]',
@@ -311,9 +314,12 @@ _Transforms = Converter.unpack_transforms({
     'batch_normalization':
         Transform(
             type='MUL',
-            cond='!I[1].data is not None and I[2].data is not None and '
-                 '(len(I) == 3 or I[3].data is not None) and (len(I) == 4 or I[4].data is not None) and '
-                 'not any(t.quant for t in I)',
+            cond={
+                '!I[1].data is not None and I[2].data is not None and'
+                ' (len(I) == 3 or I[3].data is not None) and (len(I) == 4 or I[4].data is not None)':
+                    'all parameters must be constants',
+                '!not any(t.quant for t in I)': 'quantized inputs or parameters are not supported',
+            },
             using={
                 'mean': '!np.squeeze(I[1].data, axis=0) if I[1].data is not None else None',
                 'std': '!np.squeeze(np.sqrt(I[2].data + epsilon), axis=0) if I[2].data is not None else None',
@@ -329,7 +335,9 @@ _Transforms = Converter.unpack_transforms({
     'l2_normalization':
         Transform(
             type='L2_NORMALIZATION',
-            cond='!axes == list(range(I[0].rank))',
+            cond={
+                '!axes == list(range(I[0].rank))': 'axes must denote all dimensions',
+            },
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
         ),
@@ -342,7 +350,10 @@ _Transforms = Converter.unpack_transforms({
     'pad':
         Transform(
             type='!"PAD" if border == "constant" else "MIRROR_PAD"',
-            cond='!border in ["constant", "reflect", "reflect-even"]',
+            cond={
+                '!border in ["constant", "reflect", "reflect-even"]':
+                    'border must be one of "constant", "reflect", "reflect-even"',
+            },
             using={'paddings': '![list(item) for item in padding]'},
             inputs=(
                 '!I[0]',

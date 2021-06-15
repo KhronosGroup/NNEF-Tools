@@ -13,9 +13,10 @@
 # limitations under the License.
 
 from __future__ import division, print_function, absolute_import
-from .converter import ConverterToNNEF as _Converter, Transform
+from .converter import ConverterToNNEF as _Converter, Transform, ConversionError
 from ..model.utils import generate_tensor_names_from_op_type
 from ..model import Tensor
+from ..utils import types
 from collections import OrderedDict
 import numpy as np
 import copy
@@ -95,6 +96,22 @@ class Converter(_Converter):
     def _prepare(self, graph):
         self._insert_externals_and_constants(graph)
 
+    def _is_constant(self, tensor):
+        if tensor.producer:
+            return tensor.producer.type == 'Constant'
+        else:
+            return tensor.data is not None
+
+    def _read_constant(self, tensor, type=None):
+        if tensor.producer and tensor.producer.type == 'Constant':
+            value = tensor.producer.attribs['value']
+        elif not tensor.producer:
+            value = tensor.data
+        else:
+            raise ConversionError('trying to evaluate non-constant tensor')
+
+        return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else types.cast(value, type=type)
+
     @staticmethod
     def _interleave(items):
         return [item[0] for item in items] + [item[1] for item in items]
@@ -131,7 +148,8 @@ class Converter(_Converter):
         return self._post_unsqueeze(tensor, axes=axes) if not keep_dims and len(axes) else tensor
 
     def unsqueeze_vector(self, tensor):
-        if self._is_constant(tensor) and len(self._tensor_map[tensor].consumers) == 1:
+        original = self._tensor_map[tensor]
+        if self._is_constant(original) and len(original.consumers) == 1:
             self._transform_constant(tensor, lambda data: np.expand_dims(data, 0))
             return tensor
         else:
@@ -209,7 +227,10 @@ _Transforms = Converter.unpack_transforms({
                 'storage_order': 0,
                 'count_include_pad': 0,
             },
-            cond='!ceil_mode == 0 and storage_order == 0',
+            cond={
+                '!ceil_mode == 0': 'ceil_mode must be 0',
+                '!storage_order == 0': 'storage_order must be 0',
+            },
             using={
                 '_pads': '!lower_pads(I[0].shape[2:], kernel_shape, O[0].shape[2:], strides, dilations)'
                          ' if auto_pad == "SAME_LOWER" else pads',
@@ -258,7 +279,9 @@ _Transforms = Converter.unpack_transforms({
                 'keepdims': 1,
                 'select_last_index': 0,
             },
-            cond='!not select_last_index',
+            cond={
+                '!select_last_index == 0': 'select_last_index must be 0',
+            },
             inputs='!I[0]',
             outputs='!squeeze_output(O[0], [axis], keepdims)',
             attribs={
@@ -399,7 +422,10 @@ _Transforms = Converter.unpack_transforms({
                 'transA': 0,
                 'transB': 0,
             },
-            cond='!alpha == 1.0 and (beta == 1.0 or len(I) == 2)',
+            cond={
+                '!alpha == 1.0': 'alpha must be 1',
+                '!beta == 1.0 or len(I) == 2': 'beta must be 1',
+            },
             using={
                 'is_linear': '!len(I) > 2 and I[2].rank == 1 and transB',
                 'bias': '!broadcast(I[2], O[0].rank) if len(I) > 2 and not is_linear else None',
@@ -562,7 +588,9 @@ _Transforms = Converter.unpack_transforms({
                 'axis': -1,
                 'p': 2,
             },
-            cond='!p == 1 or p == 2',
+            cond={
+                '!p == 1 or p == 2': 'p must be 1 or 2',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -610,7 +638,10 @@ _Transforms = Converter.unpack_transforms({
                 'mode': "nearest",
                 'scales': '!as_const(I[1])',
             },
-            cond='!scales[0] == 1 and scales[1] == 1 and all(int(s) == s for s in scales[2:])',
+            cond={
+                '!scales[0] == 1 and scales[1] == 1': 'scales must be 1 in batch and channel dimensions',
+                '!all(int(s) == s for s in scales[2:])': 'scales must be integers in all dimensions',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -633,12 +664,22 @@ _Transforms = Converter.unpack_transforms({
                 ('upsample', '!is_integer_upsample(I[0].shape, sizes)'),
                 ('downsample', '!is_integer_downsample(I[0].shape, sizes)'),
             ]),
-            cond='!((mode == "nearest" and (upsample or downsample)) or (mode == "linear" and upsample)) and'
-                 ' sizes[0] == I[0].shape[0] and sizes[1] == I[0].shape[1] and'
-                 ' (coordinate_transformation_mode == "half_pixel" or'
-                 ' coordinate_transformation_mode == "pytorch_half_pixel" or'
-                 ' coordinate_transformation_mode == "asymmetric" or'
-                 ' coordinate_transformation_mode == "align_corners")',
+            cond={
+                '!mode == "nearest" or mode == "linear"':
+                    'mode must be one of "nearest", "linear"',
+                '!upsample or downsample if mode == "nearest" else True':
+                    "nearest resize must be integer up-sample or down-sample",
+                '!upsample if mode == "linear" else True':
+                    'linear resize must be integer up-sample',
+                '!sizes[0] == I[0].shape[0] and sizes[1] == I[0].shape[1]':
+                    'batch and channel dimensions must be preserved',
+                '!coordinate_transformation_mode == "half_pixel" or'
+                ' coordinate_transformation_mode == "pytorch_half_pixel" or'
+                ' coordinate_transformation_mode == "asymmetric" or'
+                ' coordinate_transformation_mode == "align_corners"':
+                    'coordinate_transformation_mode must be one of'
+                    ' "half_pixel", "pytorch_half_pixel", "asymmetric", "align_corners"',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={

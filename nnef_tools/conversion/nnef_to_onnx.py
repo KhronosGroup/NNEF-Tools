@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from __future__ import division, print_function, absolute_import
-from .converter import ConverterFromNNEF as _Converter, Transform, ConversionError
+from .converter import ConverterFromNNEF as _Converter, Transform
 from ..model import Tensor, Operation
 from ..utils import types
 import numpy as np
@@ -48,24 +48,8 @@ class Converter(_Converter):
                 constants += 1
                 tensor.name = '$' + str(constants)
 
-    def _is_constant(self, tensor):
-        if tensor.producer:
-            return tensor.producer.type == 'Constant'
-        else:
-            return tensor.data is not None
-
     def _make_constant(self, graph, dtype, value, inline):
         return Tensor(graph, dtype=dtype, shape=self._shape_of(value), data=types.to_numpy(value, dtype=dtype))
-
-    def _read_constant(self, tensor, type=None):
-        if tensor.producer and tensor.producer.type == 'Constant':
-            value = tensor.producer.attribs['value']
-        elif not tensor.producer:
-            value = tensor.data
-        else:
-            raise ConversionError('trying to evaluate non-constant tensor')
-
-        return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else types.cast(value, type=type)
 
     def _const_operation(self, output, value):
         Operation(output.graph, type='Constant', inputs=(), outputs=output,
@@ -115,7 +99,7 @@ class Converter(_Converter):
         return "SAME_UPPER" if padding == [] else "NOTSET"
 
     def is_const(self, tensor, value=None):
-        return self._is_constant(tensor) and value is None or self.as_const(tensor) == value
+        return self._is_constant(self._tensor_map[tensor]) and value is None or self.as_const(tensor) == value
 
     def broadcast(self, tensor, rank):
         return self.unsqueeze_input(tensor, axes=list(range(tensor.rank, rank)))
@@ -133,7 +117,9 @@ _Transforms = Converter.unpack_transforms({
             using={
                 'transposed': '!_type_ == "deconv"',
             },
-            cond='!I[2].rank != 0 or (is_const(I[2]) and as_const(I[2]) == 0)',
+            cond={
+                '!I[2].rank != 0 or (is_const(I[2]) and as_const(I[2]) == 0)': 'bias must be constant 0 or of rank 1',
+            },
             inputs=(
                 '!I[0]',
                 '!I[1]',
@@ -153,7 +139,11 @@ _Transforms = Converter.unpack_transforms({
     ('max_pool', 'avg_pool', 'lp_pool'):
         Transform(
             type=('MaxPool', 'AveragePool', 'LpPool'),
-            cond='!size[:2] == [1,1] and stride[:2] == [1,1] and dilation[:2] == [1,1]',
+            cond={
+                '!size[:2] == [1,1]': 'size must be 1 in batch and channel dimensions',
+                '!stride[:2] == [1,1]': 'stride must be 1 in batch and channel dimensions',
+                '!dilation[:2] == [1,1]': 'dilation must be 1 in batch and channel dimensions',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -178,7 +168,9 @@ _Transforms = Converter.unpack_transforms({
     'lp_reduce':
         Transform(
             type='!"ReduceL1" if p == 1 else "ReduceL2"',
-            cond='!p == 1 or p == 2',
+            cond={
+                '!p == 1 or p == 2': 'p must be 1 or 2',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -189,7 +181,9 @@ _Transforms = Converter.unpack_transforms({
     ('argmin_reduce', 'argmax_reduce'):
         Transform(
             type=('ArgMin', 'ArgMax'),
-            cond='!len(axes) == 1',
+            cond={
+                '!len(axes) == 1': 'axes must be of length 1',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -323,7 +317,9 @@ _Transforms = Converter.unpack_transforms({
     'local_response_normalization':
         Transform(
             type='LRN',
-            cond='!size[0] == 1 and all(s == 1 for s in size[2:])',
+            cond={
+                '!size[0] == 1 and all(s == 1 for s in size[2:])': 'size must be 1 in all non-channel dimensions',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -358,7 +354,9 @@ _Transforms = Converter.unpack_transforms({
     'softmax':
         Transform(
             type='Softmax',
-            cond='!len(axes) == 1',
+            cond={
+                '!len(axes) == 1': 'axes must be of length 1',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -384,7 +382,10 @@ _Transforms = Converter.unpack_transforms({
     'clamp':
         Transform(
             type='Clip',
-            cond='!I[1].rank == 0 and I[2].rank == 0',
+            cond={
+                '!I[1].rank == 0': 'input a must be of rank 0',
+                '!I[2].rank == 0': 'input b must be of rank 0',
+            },
             inputs=(
                 '!I[0]',
                 '!I[1]',
@@ -429,7 +430,9 @@ _Transforms = Converter.unpack_transforms({
     ('l1_normalization', 'l2_normalization'):
         Transform(
             type='LpNormalization',
-            cond='!len(axes) == 1',
+            cond={
+                '!len(axes) == 1': 'axes must be of length 1',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -445,7 +448,12 @@ _Transforms = Converter.unpack_transforms({
                             ' and I[1].rank == 2 and I[1].shape[0] == 1'
                             ' and I[2].rank == 2 and I[2].shape[0] == 1',
             },
-            cond='!instance or (is_const(scale, 1.0) and is_const(offset, 0.0))',
+            cond={
+                '!is_const(scale, 1.0) if not instance else True':
+                    'scale must be 1 if operation does not denote instance normalization',
+                '!is_const(offset, 0.0) if not instance else True':
+                    'offset must be 0 if operation does not denote instance normalization',
+            },
             inputs=(
                 '!I[0]',
                 '!squeeze_vector(I[1]) if instance else None',

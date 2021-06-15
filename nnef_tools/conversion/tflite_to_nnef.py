@@ -16,6 +16,7 @@ from __future__ import division, print_function, absolute_import
 from .converter import Converter as _Converter, Transform, ConversionError
 from .tf_to_nnef import Converter as _TFConverter, _Transforms as _TFTransforms, _RELU6_FRAGMENT
 from ..model import Tensor, Operation
+from ..utils import types
 from ..io.tf.lite import CustomOptionsKey
 import numpy as np
 import copy
@@ -69,7 +70,6 @@ class Converter(_TFConverter):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
         self._io_transpose = io_transpose
-        self._transposed = set()
         self._keep_io_names = keep_io_names
 
     def __call__(self, graph):
@@ -86,13 +86,22 @@ class Converter(_TFConverter):
         self._insert_externals_and_constants(graph)
         self._transpose_externals(graph)
 
+    def _is_constant(self, tensor):
+        return tensor.producer is None and tensor.data is not None
+
+    def _read_constant(self, tensor, type=None):
+        if tensor.producer is None:
+            return types.from_numpy(tensor.data, type=type)
+        else:
+            raise ConversionError('trying to evaluate non-constant tensor')
+
     def _transpose_externals(self, graph):
         for op in graph.operations:
             if op.type == 'external':
                 if self.needs_io_transpose(op.output):
-                    op.output.shape = self.nxc_to_ncx(op.output.shape)
-                    op.attribs['shape'] = list(op.output.shape)
-                    self._transposed.add(op.output)
+                    shape = self.nxc_to_ncx(op.output.shape)
+                    op.attribs['shape'] = list(shape)
+                    self._transposed[op.output] = shape
 
     def _fix_quantized_dtypes(self, graph):
         for tensor in graph.tensors:
@@ -142,7 +151,7 @@ class Converter(_TFConverter):
         if func not in self._ActivationOpTypes:
             raise ConversionError("Unsupported fused activation function '{}'".format(func))
 
-        input = Tensor(output.graph, dtype=output.dtype, shape=output.shape, quant=copy.deepcopy(output.quant))
+        input = Tensor(output.graph, dtype=output.dtype, shape=self._shape(output), quant=copy.deepcopy(output.quant))
         Operation(output.graph, type=self._ActivationOpTypes[func], inputs=input, outputs=output)
         return input
 
@@ -234,7 +243,9 @@ _Transforms = Converter.unpack_transforms({
     'FULLY_CONNECTED':
         Transform(
             type='linear',
-            cond='!weights_format == "DEFAULT"',
+            cond={
+                '!weights_format == "DEFAULT"': 'wights_format must be "DEFAULT"',
+            },
             inputs=(
                 '!I[0] if keep_num_dims else flatten(I[0])',
                 '!I[1]',
@@ -260,7 +271,9 @@ _Transforms = Converter.unpack_transforms({
     ('PAD', 'MIRROR_PAD'):
         Transform(
             type='pad',
-            cond='!mode < 2',
+            cond={
+                '!mode < 2': 'mode must be 0 or 1',
+            },
             defaults={
                 'mode': None,
             },
