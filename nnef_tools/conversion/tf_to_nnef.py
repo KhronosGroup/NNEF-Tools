@@ -496,7 +496,9 @@ _Transforms = Converter.unpack_transforms({
     'Softmax':
         Transform(
             type='softmax',
-            cond='!beta == 1 if _lite_ else True',
+            cond={
+                '!beta == 1 if _lite_ else True': 'beta must be 1',
+            },
             inputs='!transpose_input(I[0])',
             outputs='!transpose_output(O[0])',
             attribs={
@@ -522,7 +524,10 @@ _Transforms = Converter.unpack_transforms({
     ('Pad', 'MirrorPad'):
         Transform(
             type='pad',
-            cond='!mode in ["CONSTANT", "REFLECT", "SYMMETRIC"]',
+            cond={
+                '!mode in ["CONSTANT", "REFLECT", "SYMMETRIC"]':
+                    'mode must be one of "CONSTANT", "REFLECT" or SYMMETRIC',
+            },
             defaults={
                 'mode': 'CONSTANT',
             },
@@ -554,7 +559,9 @@ _Transforms = Converter.unpack_transforms({
     'StridedSlice':
         Transform(
             type='slice',
-            cond='!all(item == 1 for item in stride)',
+            cond={
+                '!all(item == 1 for item in stride)': 'stride must be 1 in all dimensions',
+            },
             using=OrderedDict([
                 ('ref', '!I[0] if new_axis_mask == 0 else None'),
                 ('rank', '!I[0].rank + bit_count(new_axis_mask)'),
@@ -634,7 +641,10 @@ _Transforms = Converter.unpack_transforms({
                 ('upsample', '!is_integer_upsample(old_size, new_size)'),
                 ('downsample', '!is_integer_downsample(old_size, new_size)'),
             ]),
-            cond='!(upsample or downsample) and not align_corners',
+            cond={
+                '!upsample or downsample': 'nearest resize must be integer up-sample or down-sample',
+                '!not align_corners': 'align_corners is not supported',
+            },
             inputs='!transpose_input(I[0])',
             outputs='!transpose_output(O[0])',
             attribs={
@@ -644,7 +654,10 @@ _Transforms = Converter.unpack_transforms({
     'ResizeArea':
         Transform(
             type='area_downsample',
-            cond='!is_integer_downsample(I[0].shape[1:-1], O[0].shape[1:-1]) and not align_corners',
+            cond={
+                '!is_integer_downsample(I[0].shape[1:-1], O[0].shape[1:-1])': 'area resize must be integer down-sample',
+                '!not align_corners': 'align_corners is not supported',
+            },
             using={
                 'size': '!I[0].shape[1:-1]'
             },
@@ -657,7 +670,9 @@ _Transforms = Converter.unpack_transforms({
     'ResizeBilinear':
         Transform(
             type='multilinear_upsample',
-            cond='!is_integer_upsample(I[0].shape[1:-1], O[0].shape[1:-1])',
+            cond={
+                '!is_integer_upsample(I[0].shape[1:-1], O[0].shape[1:-1])': 'bilinear resize must be integer up-sample',
+            },
             using={
                 'size': '!I[0].shape[1:-1]'
             },
@@ -685,7 +700,10 @@ _Transforms = Converter.unpack_transforms({
         ),
     'Cast':
         Transform(
-            cond='!nnef_dtype(O[0].dtype) == nnef_dtype(I[0].dtype)',
+            cond={
+                '!nnef_dtype(O[0].dtype) == nnef_dtype(I[0].dtype)':
+                    'casting between different types is not supported',
+            },
             type='copy',
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',

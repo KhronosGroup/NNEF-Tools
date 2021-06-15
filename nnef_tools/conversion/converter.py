@@ -134,12 +134,16 @@ class Converter:
                 continue
 
             if transform is None:
-                errors.append("Conversion for operation type '{}' is not implemented".format(op.type))
+                errors.append("Conversion of operator '{}' is not implemented".format(op.type))
 
-            if not self._convertible(op, transform):
+            message = self._check_conditions(op, transform)
+            if message is not None:
                 attribs = {key: value for key, value in six.iteritems(op.attribs) if not key.startswith('_')}
-                errors.append("Conversion for operation type '{}' with attributes {} is not possible"
-                              .format(op.type, attribs))
+                input_shapes = ", ".join(str(tensor.shape) for tensor in op.inputs)
+                output_shapes = ", ".join(str(tensor.shape) for tensor in op.outputs)
+                errors.append("Conversion of operator '{}' is not possible: {}"
+                              "\n  attributes: {}\n  input-shapes: {}\n  output-shapes: {}"
+                              .format(op.type, message, attribs, input_shapes, output_shapes))
 
         if len(errors):
             raise ConversionError("Found {} operator(s) that cannot be converted".format(len(errors)), details=errors)
@@ -175,7 +179,7 @@ class Converter:
     def _prepare(self, graph):
         pass
 
-    def _convertible(self, op, transform):
+    def _check_conditions(self, op, transform):
         op_inputs = list(self._tensor_map[tensor] for tensor in op.inputs)
         op_outputs = list(self._tensor_map[tensor] for tensor in op.outputs)
         op_attribs = self._add_default_attribs(op.attribs, transform.defaults, op_inputs, op_outputs, op.type, op.name)
@@ -186,11 +190,13 @@ class Converter:
             self._check_value(value, 'using', key, op.type, op.name)
             using[key] = value
 
+        error = None
         if transform.cond is not None:
-            if not self._evaluate(op_attribs, op_inputs, op_outputs, transform.cond, using):
-                return False
+            for condition, message in transform.cond.items():
+                if not self._evaluate(op_attribs, op_inputs, op_outputs, condition, using):
+                    error = message if error is None else error + ', ' + message
 
-        return True
+        return error
 
     def _convert(self, op, transform):
         op_inputs = list(self._tensor_map[tensor] for tensor in op.inputs)
@@ -277,7 +283,8 @@ class Converter:
                                       'np': np, 'math': math})
             except Exception as e:
                 return e
-        return arg
+        else:
+            return arg
 
     def _evaluate_tensor_list(self, attribs, inputs, outputs, arg, using):
         values = []

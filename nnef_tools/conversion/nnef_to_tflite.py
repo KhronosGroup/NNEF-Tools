@@ -178,7 +178,10 @@ _Transforms = Converter.unpack_transforms({
     'conv':
         Transform(
             type='!"CONV_2D" if not depthwise else "DEPTHWISE_CONV_2D"',
-            cond='!I[0].rank == 4 and (valid_pad or same_pad)',
+            cond={
+                '!I[0].rank == 4': 'rank must be 4',
+                '!valid_pad or same_pad': 'padding must denote `valid` or `same`',
+            },
             using={
                 'depthwise': '!groups == 0',
                 'channels': '!I[0].shape[1]',
@@ -203,7 +206,11 @@ _Transforms = Converter.unpack_transforms({
     'deconv':
         Transform(
             type='TRANSPOSE_CONV',
-            cond='!I[0].rank == 4 and groups == 1 and (valid_pad or same_pad)',
+            cond={
+                '!I[0].rank == 4': 'rank must be 4',
+                '!groups == 1': 'groups must be 1',
+                '!valid_pad or same_pad': 'padding must denote `valid` or `same`',
+            },
             using={
                 'depthwise': '!groups == 0',
                 'channels': '!O[0].shape[1]',
@@ -225,7 +232,11 @@ _Transforms = Converter.unpack_transforms({
         ),
     ('max_pool', 'avg_pool'):
         Transform(
-            cond='!size[0] == 1 and size[1] == 1 and stride[0] == 1 and stride[1] == 1 and (valid_pad or same_pad)',
+            cond={
+                '!size[0] == 1 and size[1] == 1 and ': 'size must be 1 in batch and channel dimensions',
+                '!stride[0] == 1 and stride[1] == 1': 'stride must be 1 in batch and channel dimensions',
+                '!valid_pad or same_pad': 'padding must denote `valid` or `same`',
+            },
             type=('MAX_POOL_2D', 'AVERAGE_POOL_2D'),
             using={
                 'valid_pad': '!is_valid_padding(padding)',
@@ -303,9 +314,12 @@ _Transforms = Converter.unpack_transforms({
     'batch_normalization':
         Transform(
             type='MUL',
-            cond='!I[1].data is not None and I[2].data is not None and '
-                 '(len(I) == 3 or I[3].data is not None) and (len(I) == 4 or I[4].data is not None) and '
-                 'not any(t.quant for t in I)',
+            cond={
+                '!I[1].data is not None and I[2].data is not None and'
+                ' (len(I) == 3 or I[3].data is not None) and (len(I) == 4 or I[4].data is not None)':
+                    'all parameters must be constants',
+                '!not any(t.quant for t in I)': 'quantized inputs or parameters are not supported',
+            },
             using={
                 'mean': '!np.squeeze(I[1].data, axis=0) if I[1].data is not None else None',
                 'std': '!np.squeeze(np.sqrt(I[2].data + epsilon), axis=0) if I[2].data is not None else None',
@@ -321,7 +335,9 @@ _Transforms = Converter.unpack_transforms({
     'l2_normalization':
         Transform(
             type='L2_NORMALIZATION',
-            cond='!axes == list(range(I[0].rank))',
+            cond={
+                '!axes == list(range(I[0].rank))': 'axes must denote all dimensions',
+            },
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
         ),
@@ -334,7 +350,10 @@ _Transforms = Converter.unpack_transforms({
     'pad':
         Transform(
             type='!"PAD" if border == "constant" else "MIRROR_PAD"',
-            cond='!border in ["constant", "reflect", "reflect-even"]',
+            cond={
+                '!border in ["constant", "reflect", "reflect-even"]':
+                    'border must be one of "constant", "reflect", "reflect-even"',
+            },
             using={'paddings': '![list(item) for item in padding]'},
             inputs=(
                 '!I[0]',

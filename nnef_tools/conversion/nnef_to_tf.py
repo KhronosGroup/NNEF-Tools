@@ -311,7 +311,9 @@ _Transforms = Converter.unpack_transforms({
     'conv':
         Transform(
             type='!"Conv{n}D".format(n=I[0].rank - 2) if groups != 0 else "DepthwiseConv2dNative"',
-            cond='!I[0].rank == 4 or I[0].rank == 5',
+            cond={
+                '!I[0].rank == 4 or I[0].rank == 5': 'rank must be 4 or 5',
+            },
             using={
                 'channels': '!I[0].shape[1]',
             },
@@ -334,7 +336,9 @@ _Transforms = Converter.unpack_transforms({
     'deconv':
         Transform(
             type='!"Conv{n}DBackpropInput".format(n=I[0].rank - 2) if groups != 0 else "DepthwiseConv2dNativeBackpropInput"',
-            cond='!I[0].rank == 4 or I[0].rank == 5',
+            cond={
+                '!I[0].rank == 4 or I[0].rank == 5': 'rank must be 4 or 5',
+            },
             using={
                 'channels': '!O[0].shape[1]',
             },
@@ -575,7 +579,9 @@ _Transforms = Converter.unpack_transforms({
     'softmax':
         Transform(
             type='Softmax',
-            cond='!axes == [1])',
+            cond={
+                '!axes == [1])': 'axes must equal channel dimension (1)',
+            },
             inputs='!transpose_input(I[0])',
             outputs='!transpose_output(O[0])',
             attribs={
@@ -604,7 +610,10 @@ _Transforms = Converter.unpack_transforms({
     'pad':
         Transform(
             type='!"Pad" if border == "constant" else "MirrorPad"',
-            cond='!border in ["constant", "reflect", "reflect-even"]',
+            cond={
+                '!border in ["constant", "reflect", "reflect-even"]':
+                    'border must be one of "constant", "reflect", "reflect-even"',
+            },
             using={'paddings': '![list(item) for item in padding]'},
             inputs=(
                 '!I[0]',
@@ -657,7 +666,9 @@ _Transforms = Converter.unpack_transforms({
     ('argmin_reduce', 'argmax_reduce'):
         Transform(
             type=('ArgMin', 'ArgMax'),
-            cond='!len(axes) == 1',
+            cond={
+                '!len(axes) == 1': 'axes must be of length 1',
+            },
             using={'axis': '!transpose_axis_like(axes[0], ref=I[0])'},
             inputs=(
                 '!I[0]',
@@ -734,7 +745,10 @@ _Transforms = Converter.unpack_transforms({
     'local_response_normalization':
         Transform(
             type='LRN',
-            cond='!all(s == 1 or i == 1 for i, s in enumerate(size))',
+            cond={
+                '!all(s == 1 or i == 1 for i, s in enumerate(size))':
+                    'size must be singular for all non-channel dimensions',
+            },
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
             attribs={

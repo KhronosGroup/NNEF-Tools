@@ -222,7 +222,10 @@ _Transforms = Converter.unpack_transforms({
                 'storage_order': 0,
                 'count_include_pad': 0,
             },
-            cond='!ceil_mode == 0 and storage_order == 0',
+            cond={
+                '!ceil_mode == 0': 'ceil_mode must be 0',
+                '!storage_order == 0': 'storage_order must be 0',
+            },
             using={
                 '_pads': '!lower_pads(I[0].shape[2:], kernel_shape, O[0].shape[2:], strides, dilations)'
                          ' if auto_pad == "SAME_LOWER" else pads',
@@ -271,7 +274,9 @@ _Transforms = Converter.unpack_transforms({
                 'keepdims': 1,
                 'select_last_index': 0,
             },
-            cond='!not select_last_index',
+            cond={
+                '!select_last_index == 0': 'select_last_index must be 0',
+            },
             inputs='!I[0]',
             outputs='!squeeze_output(O[0], [axis], keepdims)',
             attribs={
@@ -410,7 +415,10 @@ _Transforms = Converter.unpack_transforms({
                 'transA': 0,
                 'transB': 0,
             },
-            cond='!alpha == 1.0 and (beta == 1.0 or len(I) == 2)',
+            cond={
+                '!alpha == 1.0': 'alpha must be 1',
+                '!beta == 1.0 or len(I) == 2': 'beta must be 1',
+            },
             using={
                 'is_linear': '!len(I) > 2 and I[2].rank == 1 and transB',
                 'bias': '!broadcast(I[2], O[0].rank) if len(I) > 2 and not is_linear else None',
@@ -557,7 +565,9 @@ _Transforms = Converter.unpack_transforms({
                 'ends': '!as_const(I[2])',
                 'steps': '!as_const(I[4]) if len(I) > 4 else None',
             },
-            cond='!steps is None or all(s == 1 for s in steps)',
+            cond={
+                '!steps is None or all(s == 1 for s in steps)': 'steps must be 1 in all dimensions',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -573,7 +583,9 @@ _Transforms = Converter.unpack_transforms({
                 'axis': -1,
                 'p': 2,
             },
-            cond='!p == 1 or p == 2',
+            cond={
+                '!p == 1 or p == 2': 'p must be 1 or 2',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -621,7 +633,10 @@ _Transforms = Converter.unpack_transforms({
                 'mode': "nearest",
                 'scales': '!as_const(I[1])',
             },
-            cond='!scales[0] == 1 and scales[1] == 1 and all(int(s) == s for s in scales[2:])',
+            cond={
+                '!scales[0] == 1 and scales[1] == 1': 'scales must be 1 in batch and channel dimensions',
+                '!all(int(s) == s for s in scales[2:])': 'scales must be integers in all dimensions',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -644,12 +659,22 @@ _Transforms = Converter.unpack_transforms({
                 ('upsample', '!is_integer_upsample(I[0].shape, sizes)'),
                 ('downsample', '!is_integer_downsample(I[0].shape, sizes)'),
             ]),
-            cond='!((mode == "nearest" and (upsample or downsample)) or (mode == "linear" and upsample)) and'
-                 ' sizes[0] == I[0].shape[0] and sizes[1] == I[0].shape[1] and'
-                 ' (coordinate_transformation_mode == "half_pixel" or'
-                 ' coordinate_transformation_mode == "pytorch_half_pixel" or'
-                 ' coordinate_transformation_mode == "asymmetric" or'
-                 ' coordinate_transformation_mode == "align_corners")',
+            cond={
+                '!mode == "nearest" or mode == "linear"':
+                    'mode must be one of "nearest", "linear"',
+                '!upsample or downsample if mode == "nearest" else True':
+                    "nearest resize must be integer up-sample or down-sample",
+                '!upsample if mode == "linear" else True':
+                    'linear resize must be integer up-sample',
+                '!sizes[0] == I[0].shape[0] and sizes[1] == I[0].shape[1]':
+                    'batch and channel dimensions must be preserved',
+                '!coordinate_transformation_mode == "half_pixel" or'
+                ' coordinate_transformation_mode == "pytorch_half_pixel" or'
+                ' coordinate_transformation_mode == "asymmetric" or'
+                ' coordinate_transformation_mode == "align_corners"':
+                    'coordinate_transformation_mode must be one of'
+                    ' "half_pixel", "pytorch_half_pixel", "asymmetric", "align_corners"',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -678,7 +703,10 @@ _Transforms = Converter.unpack_transforms({
                 'index': '!ensure_scalar(as_const(I[1]))',
                 'axes': '![ensure_positive(axis, I[0].rank)]',
             },
-            cond='!index is not None and len(I[1].shape) == 0',
+            cond={
+                '!index is not None': 'index must be constant',
+                '!len(I[1].shape) == 0': 'index must be of rank 0',
+            },
             type='slice',
             inputs='!I[0]',
             outputs='!squeeze_output(O[0], axes)',
@@ -690,7 +718,9 @@ _Transforms = Converter.unpack_transforms({
         ),
     'Cast':
         Transform(
-            cond='!O[0].dtype == I[0].dtype',
+            cond={
+                '!O[0].dtype == I[0].dtype': 'casting between different types is not supported',
+            },
             type='copy',
             inputs='!I[0]',
             outputs='!O[0]',

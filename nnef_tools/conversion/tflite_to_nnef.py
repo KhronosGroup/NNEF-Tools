@@ -243,7 +243,9 @@ _Transforms = Converter.unpack_transforms({
     'FULLY_CONNECTED':
         Transform(
             type='linear',
-            cond='!weights_format == "DEFAULT"',
+            cond={
+                '!weights_format == "DEFAULT"': 'wights_format must be "DEFAULT"',
+            },
             inputs=(
                 '!I[0] if keep_num_dims else flatten(I[0])',
                 '!I[1]',
@@ -269,7 +271,9 @@ _Transforms = Converter.unpack_transforms({
     ('PAD', 'MIRROR_PAD'):
         Transform(
             type='pad',
-            cond='!mode < 2',
+            cond={
+                '!mode < 2': 'mode must be 0 or 1',
+            },
             defaults={
                 'mode': None,
             },
