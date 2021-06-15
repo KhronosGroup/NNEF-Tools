@@ -25,6 +25,10 @@ NNEF Tests folder contains tests to verify installation and unit tests.
 
 ## Release Notes
 
+### Added new operators in spec version 1.0.4 (06.15.2021)
+
+Following the update of the NNEF specification to version 1.0.4, conversion for the corresponding operators has been added. Furthermore, error handling of non-convertible models has been greately enhanced with error messages detailing the exact cause of failure listed for all non-convertible operations before conversion is started.
+
 ### Reworked NNEF Tools (10.21.2020)
 
 The tools for converting models to NNEF and transforming NNEF models has been thoroughly reworked to make them more robust and unified and easier to maintain. The basic functionality of the main scripts has been kept, however their parameterization has been simplified and unified in some places; please refer to the readme and the help (`-h` option) of the respective scripts for more details. The scripts cover the following major areas of functionality: model conversion, optimization, execution and visualization. A GMAC calculator is also provide, and further utility scripts may be added in the future.  
