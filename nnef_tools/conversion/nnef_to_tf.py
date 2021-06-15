@@ -172,20 +172,17 @@ class Converter(_Converter):
         else:
             return [1] + value + [1] if self.is_nxc() else [1, 1] + value[2:]
 
-    def transposed(self, tensor):
-        return tensor in self._transposed
-
     def transpose_input(self, tensor):
         if self.is_nxc():
             return self._pre_transpose(tensor, self.ncx_to_nxc_perm(tensor.rank)) \
-                if not self.transposed(tensor) and tensor.rank > 2 else tensor
+                if not self.transposing(tensor) and tensor.rank > 2 else tensor
         else:
-            assert not self.transposed(tensor)
+            assert not self.transposing(tensor)
             return tensor
 
     def transpose_output(self, tensor):
         if self.is_nxc():
-            self._transposed[tensor] = self.ncx_to_nxc(tensor.shape)
+            self._transposes[tensor] = self.ncx_to_nxc(tensor.shape)
         return tensor
 
     def transpose_filter(self, tensor, format='XCN'):
@@ -214,21 +211,21 @@ class Converter(_Converter):
         return self._reshape(self._pre_transpose(tensor, perm), shape)
 
     def transpose_like(self, tensor, reference):
-        if self.transposed(reference):
+        if self.transposing(reference):
             self.transpose_output(tensor)
         return tensor
 
     def transpose_list_like(self, items, ref):
-        return self.ncx_to_nxc(items) if self.transposed(ref) else items
+        return self.ncx_to_nxc(items) if self.transposing(ref) else items
 
     def transpose_axis_like(self, axis, ref, rank=None):
-        return self.axis_ncx_to_nxc(axis, rank or ref.rank) if self.transposed(ref) else axis
+        return self.axis_ncx_to_nxc(axis, rank or ref.rank) if self.transposing(ref) else axis
 
     def undo_transpose(self, tensor):
         perm = self.nxc_to_ncx_perm(tensor.rank)
         if perm == list(range(tensor.rank)):
             return tensor
-        return self._pre_transpose(tensor, perm) if self.transposed(tensor) else tensor
+        return self._pre_transpose(tensor, perm) if self.transposing(tensor) else tensor
 
     def squeeze_input(self, tensor, axes):
         return self._pre_squeeze(tensor, axes=axes)
@@ -250,7 +247,7 @@ class Converter(_Converter):
             return self.squeeze_input(tensor, axes=[0])
 
     def scale_output(self, output, scalar):
-        input = Tensor(output.graph, dtype=output.dtype, shape=self._shape(output), quant=copy.deepcopy(output.quant))
+        input = Tensor(output.graph, dtype=output.dtype, shape=self._working_shape(output), quant=copy.deepcopy(output.quant))
         self._scale_operation(input, output, scalar)
         return input
 
@@ -258,7 +255,7 @@ class Converter(_Converter):
         if bias.rank == 0 and np.all(bias.data == 0):
             return output
 
-        input = Tensor(output.graph, dtype=output.dtype, shape=self._shape(output), quant=copy.deepcopy(output.quant))
+        input = Tensor(output.graph, dtype=output.dtype, shape=self._working_shape(output), quant=copy.deepcopy(output.quant))
         self._bias_operation(input, output, bias)
         return input
 
@@ -270,7 +267,7 @@ class Converter(_Converter):
         self._ensure_constant_producer(tensor)
         if tensor.rank == 0:
             return tensor
-        needs_transpose = self.transposed(other) and not self.transposed(tensor)
+        needs_transpose = self.transposing(other) and not self.transposing(tensor)
         if other.rank > tensor.rank:
             if tensor.rank == 2 and tensor.shape[0] == 1 and needs_transpose:
                 return self.squeeze_vector(tensor)
@@ -526,7 +523,7 @@ _Transforms = Converter.unpack_transforms({
                 '!convert_binarg(I[0], I[1])',
                 '!convert_binarg(I[1], I[0])',
             ),
-            outputs='!transpose_output(O[0]) if transposed(I[0]) or transposed(I[1]) else O[0]',
+            outputs='!transpose_output(O[0]) if transposing(I[0]) or transposing(I[1]) else O[0]',
             attribs={
                 'T': '!I[0].dtype if I[0].dtype != np.bool and not _lite_ else None',
             }
@@ -622,7 +619,7 @@ _Transforms = Converter.unpack_transforms({
             using={'paddings': '![list(item) for item in padding]'},
             inputs=(
                 '!I[0]',
-                '!as_tensor(ncx_to_nxc(paddings, cond=transposed(I[0])), np.int32)',
+                '!as_tensor(ncx_to_nxc(paddings, cond=transposing(I[0])), np.int32)',
             ),
             outputs='!transpose_like(O[0], I[0])',
             attribs={
@@ -646,11 +643,11 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='StridedSlice',
             using={
-                'dims': '!ncx_to_nxc(list(range(I[0].rank)), cond=transposed(I[0]))',
-                'axis': '!ncx_to_nxc(axes, cond=transposed(I[0]))',
-                'begs': '!ncx_to_nxc(begin, cond=transposed(I[0]))',
-                'ends': '!ncx_to_nxc(end, cond=transposed(I[0]))',
-                'strs': '!ncx_to_nxc(stride, cond=transposed(I[0]))',
+                'dims': '!ncx_to_nxc(list(range(I[0].rank)), cond=transposing(I[0]))',
+                'axis': '!ncx_to_nxc(axes, cond=transposing(I[0]))',
+                'begs': '!ncx_to_nxc(begin, cond=transposing(I[0]))',
+                'ends': '!ncx_to_nxc(end, cond=transposing(I[0]))',
+                'strs': '!ncx_to_nxc(stride, cond=transposing(I[0]))',
             },
             inputs=(
                 '!I[0]',
