@@ -41,6 +41,10 @@ class Optimizer:
                     op.attribs['axes'] == [])
                 changed |= self._remove_identity_ops(graph, 'unsqueeze', lambda op:
                     op.attribs['axes'] == [])
+                changed |= self._remove_identity_ops(graph, 'mul', lambda op:
+                    self._is_constant(op.inputs[0], 1.0) or self._is_constant(op.inputs[1], 1.0))
+                changed |= self._remove_identity_ops(graph, 'add', lambda op:
+                    self._is_constant(op.inputs[0], 0.0) or self._is_constant(op.inputs[1], 0.0))
 
                 changed |= self._remove_inverse_ops(graph, 'squeeze', 'unsqueeze', lambda op1, op2:
                     op1.attribs['axes'] == op2.attribs['axes'])
@@ -409,3 +413,12 @@ class Optimizer:
     @staticmethod
     def _squeeze_batch_and_spatial_dims(data):
         return np.squeeze(data, axis=(0,) + tuple(i for i in range(2, len(data.shape))))
+
+    @staticmethod
+    def _is_constant(tensor, value):
+        if tensor.producer is not None and tensor.producer.name == 'constant':
+            data = tensor.attribs['value']
+        else:
+            data = tensor.data
+
+        return (not isinstance(tensor.data, np.ndarray) or data.shape == ()) and data == value
