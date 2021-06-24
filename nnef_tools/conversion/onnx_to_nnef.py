@@ -173,7 +173,7 @@ class Converter(_Converter):
         return self._interleave(pads)
 
     def broadcast(self, tensor, rank):
-        return self.unsqueeze_input(tensor, axes=list(range(rank - tensor.rank)))
+        return self.unsqueeze_input(tensor, axes=list(range(rank - tensor.rank))) if tensor.rank > 0 else tensor
 
     def ensure_list(self, arg):
         return [arg] if not isinstance(arg, list) else arg
