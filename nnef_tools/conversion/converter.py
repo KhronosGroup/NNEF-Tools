@@ -621,7 +621,9 @@ class ConverterToNNEF(Converter):
         for op in graph.operations:
             if op.type == 'constant':
                 value = op.attribs['value']
-                if isinstance(value, np.ndarray) and len(value.shape) == 0:
+                if not isinstance(value, np.ndarray):
+                    value = np.array(value, op.output.dtype).reshape(op.output.shape)
+                if len(value.shape) == 0:
                     op.output.data = value
                     graph.remove_operation(op, unlink=True)
 
