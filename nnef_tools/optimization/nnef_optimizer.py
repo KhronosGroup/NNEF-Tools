@@ -53,13 +53,13 @@ class Optimizer:
                 changed |= self._remove_inverse_ops(graph, 'transpose', 'transpose', lambda op1, op2:
                     self._is_sorted(Optimizer._permute(op1.attribs['axes'], op2.attribs['axes'])))
 
-                changed |= self._merge_op_into_variables(graph, 'transpose', lambda data, attribs:
+                changed |= self._merge_op_into_variables_and_constants(graph, 'transpose', lambda data, attribs:
                     data.transpose(attribs['axes']))
-                changed |= self._merge_op_into_variables(graph, 'reshape', lambda data, attribs:
+                changed |= self._merge_op_into_variables_and_constants(graph, 'reshape', lambda data, attribs:
                     data.reshape(attribs['shape']))
-                changed |= self._merge_op_into_variables(graph, 'squeeze', lambda data, attribs:
+                changed |= self._merge_op_into_variables_and_constants(graph, 'squeeze', lambda data, attribs:
                     data.squeeze(attribs['axes']))
-                changed |= self._merge_op_into_variables(graph, 'unsqueeze', lambda data, attribs:
+                changed |= self._merge_op_into_variables_and_constants(graph, 'unsqueeze', lambda data, attribs:
                     data.reshape(self._unsqueeze_shape(data.shape, attribs['axes'])))
 
                 changed |= self._merge_reshape_sequence(graph)
@@ -122,15 +122,18 @@ class Optimizer:
 
         return changed
 
-    def _merge_op_into_variables(self, graph, type, func):
+    def _merge_op_into_variables_and_constants(self, graph, type, func):
         changed = False
         for op in graph.operations:
-            if op.type == 'variable' and len(op.output.consumers) > 0:
+            if (op.type == 'variable' or op.type == 'constant') and len(op.output.consumers) > 0:
                 if self._all_consumers_same(op.output, type):
+                    data = op.output.data if op.output.data is not None else np.zeros(op.output.shape)
                     attribs = op.output.consumers[0].attribs
-                    op.output.data = func(op.output.data, attribs)
-                    op.output.shape = op.output.data.shape
-                    op.attribs['shape'] = list(op.output.shape)
+                    data = func(data, attribs)
+                    if op.output.data is not None:
+                        op.output.data = data
+                    op.output.shape = data.shape
+                    op.attribs['shape'] = list(data.shape)
                     for consumer in list(op.output.consumers):  # copy the list before removals!
                         changed |= self._bypass_and_remove(graph, consumer)
 
