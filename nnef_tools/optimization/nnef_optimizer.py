@@ -77,6 +77,7 @@ class Optimizer:
                 changed |= replace_chain(graph, [{'conv', 'deconv'}, 'batch_normalization'],
                                          self._merge_conv_batch_norm)
                 changed |= replace_chain(graph, ['batch_normalization'], self._merge_batch_norm)
+                changed |= replace_chain(graph, ['transpose', 'squeeze'], self._merge_transpose_squeeze)
 
                 for chain, replacer in six.iteritems(self._custom_optimizers):
                     changed |= replace_chain(graph, chain, replacer)
@@ -425,3 +426,19 @@ class Optimizer:
             data = tensor.data
 
         return (not isinstance(tensor.data, np.ndarray) or data.shape == ()) and data == value
+
+    @staticmethod
+    def _merge_transpose_squeeze(transpose, squeeze):
+        transpose_axes = transpose.attribs['axes']
+        squeeze_axes = squeeze.attribs['axes']
+
+        squeezed = [x for i, x in enumerate(transpose_axes) if i not in squeeze_axes]
+        is_identity = squeezed == list(range(len(squeezed)))
+
+        if not is_identity:
+            return False
+
+        attribs = dict(squeeze.attribs)
+        attribs['axes'] = [transpose_axes[x] for x in squeeze_axes]
+
+        squeeze.copy_with(inputs=transpose.input, attribs=attribs)
