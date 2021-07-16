@@ -134,7 +134,9 @@ class Converter:
                 continue
 
             if transform is None:
-                errors.append("Conversion of operator '{}' is not implemented".format(op.type))
+                if not self._mirror_unsupported:
+                    errors.append("Conversion of operator '{}' is not implemented".format(op.type))
+                continue
 
             message = self._check_conditions(op, transform)
             if message is not None:
