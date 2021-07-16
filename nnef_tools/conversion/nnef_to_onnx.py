@@ -22,8 +22,7 @@ from nnef.shapes import pool_shape, reduce_shape
 
 class Converter(_Converter):
 
-    @staticmethod
-    def custom_shapes():
+    def custom_shapes(self):
         return {
             'lp_pool': pool_shape,
             'lp_reduce': reduce_shape,

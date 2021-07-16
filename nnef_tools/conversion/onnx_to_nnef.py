@@ -79,10 +79,13 @@ class Converter(_Converter):
             'mean_variance_normalization': _MEAN_VARIANCE_NORMALIZATION_FRAGMENT,
         }
 
-    def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False, keep_io_names=False):
+    def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False, keep_io_names=False,
+                 infer_shapes=False, custom_shapes=None):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
-                            functions=custom_functions, mirror_unsupported=mirror_unsupported)
+                            functions=custom_functions, mirror_unsupported=mirror_unsupported,
+                            infer_shapes=infer_shapes)
         self._keep_io_names = keep_io_names
+        self._custom_shapes = custom_shapes or {}
 
     def __call__(self, graph):
         graph = _Converter.__call__(self, graph)
@@ -92,6 +95,9 @@ class Converter(_Converter):
         self._ensure_valid_ids(graph)
         generate_tensor_names_from_op_type(graph, keep_io_names=self._keep_io_names)
         return graph
+
+    def custom_shapes(self):
+        return self._custom_shapes
 
     def _prepare(self, graph):
         self._insert_externals_and_constants(graph)

@@ -71,8 +71,7 @@ class Converter:
     def defined_operations():
         return {}       # return dictionary of NNEF operator (fragment) definitions in subclass if converting to NNEF
 
-    @staticmethod
-    def custom_shapes():
+    def custom_shapes(self):
         return {}       # return dictionary of custom shape functions for NNEF fragments defined by the converter
 
     @staticmethod
@@ -104,21 +103,23 @@ class Converter:
         transforms.update(custom_transforms)
         return transforms
 
-    def __init__(self, transforms, functions=None, mirror_unsupported=False):
+    def __init__(self, transforms, functions=None, mirror_unsupported=False, infer_shapes=False):
         self._graph = None
         self._transforms = transforms
         self._callables = self.find_public_methods(self)
         if functions:
             self._callables.update({name: functools.partial(func, self) for name, func in six.iteritems(functions)})
         self._mirror_unsupported = mirror_unsupported
+        self._infer_shapes = infer_shapes
 
     def __call__(self, graph):
-        unknown_tensors = [tensor for tensor in graph.tensors if tensor.shape is None and len(tensor.consumers)]
-        if len(unknown_tensors):
-            names = ["'{}'".format(tensor.name) for tensor in unknown_tensors if tensor.name]
-            raise ConversionError(("Input graph contains tensors with unknown shape: " +
-                                  ", ".join(names) if len(names) else "(no names)") +
-                                  "\nTry the --fold-constants option to eliminate unnecessary constant sub-graphs")
+        if not self._infer_shapes:
+            unknown_tensors = [tensor for tensor in graph.tensors if tensor.shape is None and len(tensor.consumers)]
+            if len(unknown_tensors):
+                names = ["'{}'".format(tensor.name) for tensor in unknown_tensors if tensor.name]
+                raise ConversionError(("Input graph contains tensors with unknown shape: " +
+                                      ", ".join(names) if len(names) else "(no names)") +
+                                      "\nTry the --fold-constants option to eliminate unnecessary constant sub-graphs")
 
         self._graph = Graph(name=graph.name)
         self._tensor_map = {tensor: self._copy_tensor_(tensor) for tensor in graph.tensors}
@@ -127,36 +128,55 @@ class Converter:
 
         self._prepare(self._graph)
 
-        errors = []
-        for op in graph.operations:
-            transform = self._transforms.get(op.type)
-            if isinstance(transform, Transform) and transform.type is None:
-                continue
+        if not self._infer_shapes:
+            errors = []
+            for op in graph.operations:
+                transform = self._transforms.get(op.type)
+                if transform is None and self._mirror_unsupported:
+                    continue
 
-            if transform is None:
-                errors.append("Conversion of operator '{}' is not implemented".format(op.type))
+                if isinstance(transform, Transform) and transform.type is None:
+                    continue
 
-            message = self._check_conditions(op, transform)
-            if message is not None:
-                attribs = {key: value for key, value in six.iteritems(op.attribs) if not key.startswith('_')}
-                input_shapes = ", ".join(str(tensor.shape) for tensor in op.inputs)
-                output_shapes = ", ".join(str(tensor.shape) for tensor in op.outputs)
-                errors.append("Conversion of operator '{}' is not possible: {}"
-                              "\n  attributes: {}\n  input-shapes: {}\n  output-shapes: {}"
-                              .format(op.type, message, attribs, input_shapes, output_shapes))
+                error = self._error_message(op, transform)
+                if error is not None:
+                    errors.append(error)
 
-        if len(errors):
-            raise ConversionError("Found {} operator(s) that cannot be converted".format(len(errors)), details=errors)
+            if len(errors):
+                raise ConversionError("Found {} operator(s) that cannot be converted".format(len(errors)), details=errors)
 
         for op in graph.operations:
             transform = self._transforms.get(op.type)
             if isinstance(transform, Transform) and transform.type is None:
                 continue
+
+            if self._infer_shapes:
+                error = self._error_message(op, transform)
+                if error is not None:
+                    raise ConversionError(error)
+
+            count = len(self._graph.operations)
 
             if transform is not None:
                 self._convert(op, transform)
             elif self._mirror_unsupported:
                 self._mirror(op)
+
+            if self._infer_shapes:
+                from nnef.shapes import _infer_op_shapes
+                for op in self._graph.operations[count:]:
+                    input_shapes = [list(tensor.shape) for tensor in op.inputs]
+                    if isinstance(op.inputs, list):
+                        input_shapes = (input_shapes,)
+
+                    output_counts = [len(op.outputs)] if isinstance(op.outputs, list) else [None] * len(op.outputs)
+                    output_shapes = _infer_op_shapes(op.type, op.attribs, input_shapes, output_counts,
+                                                     custom_shapes=self.custom_shapes())
+                    if isinstance(op.outputs, list):
+                        output_shapes = output_shapes[0]
+
+                    for output, shape in zip(op.outputs, output_shapes):
+                        output.shape = tuple(shape)
 
         for tensor, shape in self._transposes.items():
             tensor.shape = shape
@@ -197,6 +217,21 @@ class Converter:
                     error = message if error is None else error + ', ' + message
 
         return error
+
+    def _error_message(self, op, transform):
+        if transform is None:
+            return "Conversion of operator '{}' is not implemented".format(op.type)
+
+        message = self._check_conditions(op, transform)
+        if message is not None:
+            attribs = {key: value for key, value in six.iteritems(op.attribs) if not key.startswith('_')}
+            input_shapes = ", ".join(str(tensor.shape) for tensor in op.inputs)
+            output_shapes = ", ".join(str(tensor.shape) for tensor in op.outputs)
+            return "Conversion of operator '{}' is not possible: {}"\
+                   "\n  attributes: {}\n  input-shapes: {}\n  output-shapes: {}"\
+                .format(op.type, message, attribs, input_shapes, output_shapes)
+
+        return None
 
     def _convert(self, op, transform):
         op_inputs = list(self._tensor_map[tensor] for tensor in op.inputs)
@@ -539,8 +574,8 @@ class ConverterToNNEF(Converter):
         np.bool_: 'logical',
     }
 
-    def __init__(self, transforms, functions=None, mirror_unsupported=False):
-        Converter.__init__(self, transforms, functions, mirror_unsupported)
+    def __init__(self, transforms, functions=None, mirror_unsupported=False, infer_shapes=False):
+        Converter.__init__(self, transforms, functions, mirror_unsupported, infer_shapes)
 
     def _insert_externals_and_constants(self, graph):
         for tensor in graph.tensors:

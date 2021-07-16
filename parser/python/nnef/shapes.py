@@ -80,7 +80,7 @@ def ternary_shape(cond, left, right, **kwargs):
     return _broadcast_shape(cond, value)
 
 
-def pool_shape(input, size, border, padding, stride, dilation, output_shape=None, transposed=False, **kwargs):
+def pool_shape(input, size, border=None, padding=[], stride=[], dilation=[], output_shape=None, transposed=False, **kwargs):
     rank = len(input)
 
     assert len(size) == rank, "expected kernel shape of rank {}, found {}".format(rank, size)
@@ -128,7 +128,7 @@ def desample_shape(input, index, size, border, padding, stride, dilation, output
     return sample_shape(input, index, size, border, padding, stride, dilation, output_shape, transposed=True)
 
 
-def conv_shape(input, filter, bias, border, padding, stride, dilation, groups, output_shape=None, transposed=False):
+def conv_shape(input, filter, bias, border=None, padding=[], stride=[], dilation=[], groups=1, output_shape=None, transposed=False):
     rank = len(input)
 
     assert len(filter) == rank, "expected filter shape of rank {}, found {}".format(rank, filter)
@@ -559,6 +559,32 @@ def infer_shapes(graph, external_shapes={}, custom_shapes={}):
         except AssertionError as e:
             raise nnef.Error("while inferring shape of tensor(s) '{}' (operation '{}'): {}".
                              format(', '.join(op.outputs.values()), op.name, e))
+
+
+def _infer_op_shapes(op_name, attribs, input_shapes, output_counts, custom_shapes={}):
+    func = _StandardShapeFuncs.get(op_name)
+    if func is None:
+        func = custom_shapes.get(op_name)
+    if func is None:
+        raise nnef.Error("shape inference function is not defined for operation '{}'".format(op_name))
+
+    try:
+        output_shapes = func(*input_shapes, **attribs)
+        if not isinstance(output_shapes, tuple):
+            output_shapes = (output_shapes,)
+
+        assert len(output_counts) == len(output_shapes), \
+            "number of shapes ({}) does not match number of outputs ({})".format(len(output_counts), len(output_shapes))
+
+        for count, shape in zip(output_counts, output_shapes):
+            if isinstance(count, list):
+                assert isinstance(shape, list), "expected list of shapes"
+                assert count == len(shape), \
+                    "number of shapes ({}) does not match number of outputs ({})".format(count, len(shape))
+
+        return output_shapes
+    except AssertionError as e:
+        raise nnef.Error("while inferring output shape of operation '{}': {}".format(op_name, e))
 
 
 _StandardShapeFuncs = {

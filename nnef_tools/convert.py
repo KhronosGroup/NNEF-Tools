@@ -65,7 +65,7 @@ def get_writer(output_format, fragments, generate_fragments, annotate_shapes, co
         return None
 
 
-def get_converter(input_format, output_format, io_transpose, custom_transforms, custom_functions,
+def get_converter(input_format, output_format, io_transpose, custom_transforms, custom_functions, custom_shapes,
                   mirror_unsupported, keep_io_names):
     if input_format == 'tf' and output_format == 'nnef':
         from .conversion.tf_to_nnef import Converter
@@ -97,6 +97,8 @@ def get_converter(input_format, output_format, io_transpose, custom_transforms, 
         from .conversion.onnx_to_nnef import Converter
         return Converter(custom_transforms=custom_transforms,
                          custom_functions=custom_functions,
+                         custom_shapes=custom_shapes,
+                         infer_shapes=bool(custom_shapes),
                          mirror_unsupported=mirror_unsupported,
                          keep_io_names=keep_io_names)
     elif input_format == 'nnef' and (output_format == 'onnx' or output_format == 'caffe2'):
@@ -219,10 +221,12 @@ def main(args):
     custom_transforms, custom_functions = get_custom_converters(args.custom_converters) \
         if args.custom_converters is not None else (None, None)
 
+    custom_shapes = get_custom_shapes(args.custom_shapes) or {} if args.custom_shapes is not None else {}
+
     converter = None
     if needs_conversion(args.input_format, args.output_format):
         converter = get_converter(args.input_format, args.output_format, io_transpose,
-                                  custom_transforms, custom_functions,
+                                  custom_transforms, custom_functions, custom_shapes,
                                   args.mirror_unsupported, args.keep_io_names)
         if converter is None:
             print("Unsupported conversion: {} to {}".format(args.input_format, args.output_format))
@@ -230,13 +234,12 @@ def main(args):
 
     decomposed = converter.decomposed_operations() if converter else []
     fragments = converter.defined_operations() if converter else {}
-    custom_shapes = converter.custom_shapes() if converter else {}
 
     if args.decompose is not None:
         decomposed += args.decompose
 
-    if args.custom_shapes is not None:
-        custom_shapes.update(get_custom_shapes(args.custom_shapes))
+    if converter is not None:
+        custom_shapes.update(converter.custom_shapes())
 
     if args.custom_fragments is not None:
         fragments.update(get_custom_fragments(args.custom_fragments))
@@ -380,7 +383,7 @@ if __name__ == '__main__':
     parser.add_argument('--custom-converters', type=str, nargs='+',
                         help='Module(s) containing custom converter code')
     parser.add_argument('--custom-shapes', type=str, nargs='+',
-                        help='Module(s) containing custom shape inference code (when converting to NNEF)')
+                        help='Module(s) containing custom shape inference code (when converting to/from NNEF)')
     parser.add_argument('--custom-fragments', type=str, nargs='+',
                         help='Module(s) containing custom fragment code (when converting to NNEF)')
     parser.add_argument('--custom-optimizers', type=str, nargs='+',
