@@ -78,6 +78,7 @@ class Optimizer:
                                          self._merge_conv_batch_norm)
                 changed |= replace_chain(graph, ['batch_normalization'], self._merge_batch_norm)
                 changed |= replace_chain(graph, ['transpose', 'squeeze'], self._merge_transpose_squeeze)
+                changed |= replace_chain(graph, ['reshape'], self._substitute_squeeze)
 
                 for chain, replacer in six.iteritems(self._custom_optimizers):
                     changed |= replace_chain(graph, chain, replacer)
@@ -442,3 +443,29 @@ class Optimizer:
         attribs['axes'] = [transpose_axes[x] for x in squeeze_axes]
 
         squeeze.copy_with(inputs=transpose.input, attribs=attribs)
+
+    @staticmethod
+    def _substitute_squeeze(reshape):
+        input_shape = reshape.input.shape
+        output_shape = reshape.output.shape
+
+        if not len(output_shape) < len(input_shape):
+            return False
+
+        k = 0
+        axes = []
+        for i in range(len(input_shape)):
+            if k < len(output_shape) and input_shape[i] == output_shape[k]:
+                k += 1
+            elif input_shape[i] == 1:
+                axes.append(i)
+            else:
+                return False
+
+        attribs = {'axes': axes}
+        dtype = reshape.attribs.get('dtype')
+        if dtype is not None:
+            attribs['dtype'] = dtype
+
+        Operation(reshape.graph, type='squeeze', name=reshape.name, inputs=reshape.input, outputs=reshape.output,
+                  attribs=attribs)
