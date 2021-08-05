@@ -15,6 +15,7 @@
 from __future__ import division, print_function, absolute_import
 
 import torch
+import keyword
 
 from . import nnef_operators
 from ...io import nnef as nnef_io
@@ -94,6 +95,8 @@ class NNEFModule(torch.nn.Module):
 
                 training_attribs = self._training_attributes.get(op.type, {})
                 attribs = {**op.attribs, **training_attribs}
+                attribs = {self._escape_keyword(name): value for name, value in six.iteritems(attribs)}
+
                 if 'dtype' in attribs and op.type != 'constant' and op.type != 'cast':
                     del attribs['dtype']
 
@@ -152,6 +155,10 @@ class NNEFModule(torch.nn.Module):
                 return np.array(value, dtype=dtype).reshape(shape)
         else:
             return np.full(shape, value, dtype=dtype)
+
+    @staticmethod
+    def _escape_keyword(name):
+        return name if not keyword.iskeyword(name) else '_' + name + '_'
 
     @staticmethod
     def _name_inline_constants(graph):
