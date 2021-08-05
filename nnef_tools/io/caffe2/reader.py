@@ -31,7 +31,27 @@ except ImportError:
     from . import caffe
     sys.modules['caffe'] = caffe
 
-from caffe2.python.caffe_translator import TranslateModel, TranslatorRegistry, ConvertTensorProtosToInitNet, AddArgument
+from caffe2.python.caffe_translator import TranslateModel, TranslatorRegistry, ConvertTensorProtosToInitNet, \
+    AddArgument, BaseTranslate
+
+
+@TranslatorRegistry.Register("ArgMax")
+def TranslateArgmax(layer, pretrained_blobs, is_test, **kwargs):
+    param = layer.argmax_param
+    if param.top_k != 1:
+        raise ValueError("Unsupported attribute value 'top_k = {}' in ArgMax layer".format(param.top_k))
+    if param.out_max_val:
+        raise ValueError("Conversion of ArgMax layer with 'out_max_val = True' is not supported")
+
+    caffe_op = BaseTranslate(layer, "ArgMax")
+    AddArgument(caffe_op, "keepdims", True)
+    if param.HasField("axis"):
+        AddArgument(caffe_op, "axis", param.axis)
+        return caffe_op, []
+    else:
+        AddArgument(caffe_op, "axis", 1)
+        flatten_op = BaseTranslate(layer, "Flatten")
+        return [flatten_op, caffe_op], []
 
 
 def _HookedTranslateLayer(layer, pretrained_blobs, is_test, **kwargs):
