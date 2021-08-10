@@ -23,7 +23,8 @@ import copy
 
 class Converter(_Converter):
 
-    def custom_shapes(self):
+    @staticmethod
+    def defined_shapes():
         return {
             'relu6': lambda shape: shape,
         }

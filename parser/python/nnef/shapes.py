@@ -110,25 +110,25 @@ def pool_shape(input, size, border=None, padding=[], stride=[], dilation=[], out
         return _downsize_shape(input, size, padding, stride, dilation)
 
 
-def pool_with_index_shape(input, size, border, padding, stride, dilation):
+def pool_with_index_shape(input, size, border=None, padding=[], stride=[], dilation=[]):
     shape = pool_shape(input, size, border, padding, stride, dilation)
     return (shape, shape)
 
 
-def unpool_shape(input, size, border, padding, stride, dilation, output_shape, **kwargs):
+def unpool_shape(input, size, border=None, padding=[], stride=[], dilation=[], output_shape=None, **kwargs):
     return pool_shape(input, size, border, padding, stride, dilation, output_shape, transposed=True, **kwargs)
 
 
-def sample_shape(input, index, size, border, padding, stride, dilation, output_shape=None, transposed=False):
+def sample_shape(input, index, size, border=None, padding=[], stride=[], dilation=[], output_shape=None, transposed=False):
     assert index == input, "'index' shape {} does not match 'input' shape {}".format(input, index)
     return pool_shape(input, size, border, padding, stride, dilation, output_shape, transposed)
 
 
-def desample_shape(input, index, size, border, padding, stride, dilation, output_shape):
+def desample_shape(input, index, size, border=None, padding=[], stride=[], dilation=[], output_shape=None):
     return sample_shape(input, index, size, border, padding, stride, dilation, output_shape, transposed=True)
 
 
-def conv_shape(input, filter, bias, border=None, padding=[], stride=[], dilation=[], groups=1, output_shape=None, transposed=False):
+def conv_shape(input, filter, bias=[], border=None, padding=[], stride=[], dilation=[], groups=1, output_shape=None, transposed=False):
     rank = len(input)
 
     assert len(filter) == rank, "expected filter shape of rank {}, found {}".format(rank, filter)
@@ -180,7 +180,7 @@ def conv_shape(input, filter, bias, border=None, padding=[], stride=[], dilation
         return [input[0], filter[0]] + _downsize_shape(input[2:], filter[2:], padding, stride, dilation)
 
 
-def separable_conv_shape(input, plane_filter, point_filter, bias, border, padding, stride, dilation, groups,
+def separable_conv_shape(input, plane_filter, point_filter, bias=[], border=None, padding=[], stride=[], dilation=[], groups=1,
                          output_shape=None, transposed=False):
     assert all(x == 1 for x in point_filter[2:]), \
         "point-wise filter must be singular in spatial dimensions, found {}".format(point_filter)
@@ -194,12 +194,13 @@ def separable_conv_shape(input, plane_filter, point_filter, bias, border, paddin
     return conv_shape(input, filter, bias, border, padding, stride, dilation, groups, output_shape, transposed)
 
 
-def separable_deconv_shape(input, plane_filter, point_filter, bias, border, padding, stride, dilation, groups, output_shape):
+def separable_deconv_shape(input, plane_filter, point_filter, bias=[], border=None, padding=[], stride=[], dilation=[],
+                           groups=1, output_shape=None):
     return separable_conv_shape(input, plane_filter, point_filter, bias, border, padding, stride, dilation, groups,
                                 output_shape, transposed=True)
 
 
-def deconv_shape(input, filter, bias, border, padding, stride, dilation, groups, output_shape):
+def deconv_shape(input, filter, bias=[], border=None, padding=[], stride=[], dilation=[], groups=1, output_shape=None):
     return conv_shape(input, filter, bias, border, padding, stride, dilation, groups, output_shape, transposed=True)
 
 
@@ -243,7 +244,7 @@ def upsample_shape(input, factor, **kwargs):
     return input[:2] + [i * f for i, f in zip(input[2:], factor)]
 
 
-def reshape_shape(input, shape, axis_start, axis_count):
+def reshape_shape(input, shape, axis_start=0, axis_count=-1):
     rank = len(input)
     assert all(s >= -1 for s in shape), "items in 'shape' must be >= -1, found {}".format(shape)
     assert sum(1 for s in shape if s == -1) <= 1, "at most one item may be -1 in 'shape', found {}".format(shape)
@@ -346,7 +347,7 @@ def unstack_shape(value, axis):
     return [value[:axis] + value[axis+1:]] * value[axis]
 
 
-def slice_shape(input, axes, begin, end, stride):
+def slice_shape(input, axes, begin, end, stride=[]):
     rank = len(input)
 
     if len(stride) == 0:
@@ -392,14 +393,14 @@ def pad_shape(input, padding, **kwargs):
     return [p + i + q for i, (p, q) in zip(input, padding)]
 
 
-def gather_shape(input, indices, axis):
+def gather_shape(input, indices, axis=0):
     rank = len(input)
     assert 0 <= axis < rank, "'axis' must be in range [0,{}), found {}".format(rank, axis)
 
     return input[:axis] + indices + input[axis+1:]
 
 
-def matmul_shape(A, B, transposeA, transposeB):
+def matmul_shape(A, B, transposeA=False, transposeB=False):
     assert len(A) == len(B), "argument rank mismatch ({} vs {})".format(len(A), len(B))
     assert len(A) >= 2, "rank of arguments must be at least 2, found {}".format(len(A))
 
@@ -412,7 +413,7 @@ def matmul_shape(A, B, transposeA, transposeB):
     return _broadcast_shape(A[:-2], B[:-2]) + [m,n]
 
 
-def linear_shape(input, filter, bias):
+def linear_shape(input, filter, bias=[]):
     assert len(input) == 2, "rank of input must be 2, found {}".format(len(input))
     assert len(filter) == 2, "rank of filter must be 2, found {}".format(len(filter))
     assert len(bias) <= 2, "rank of bias must be at most 2, found {}".format(len(bias))
@@ -427,14 +428,14 @@ def linear_shape(input, filter, bias):
     return [input[0], filter[0]]
 
 
-def softmax_shape(input, axes):
+def softmax_shape(input, axes=[1]):
     rank = len(input)
     assert all(0 <= axis < rank for axis in axes), "axes must be in range [0,{}), found {}".format(rank, axes)
 
     return input
 
 
-def batchnorm_shape(input, mean, variance, offset, scale, epsilon):
+def batchnorm_shape(input, mean, variance, offset, scale, epsilon=0):
     assert epsilon >= 0, "'epsilon' must be non-negative, found {}".format(epsilon)
 
     assert _broadcastable(mean, input), \

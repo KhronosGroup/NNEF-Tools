@@ -28,7 +28,8 @@ def tflite_detection_postprocess_shape(input, scores, anchors, **kwargs):
 
 class Converter(_TFConverter):
 
-    def custom_shapes(self):
+    @staticmethod
+    def defined_shapes():
         return {
             'relu6': lambda shape: shape,
             'TFLite_Detection_PostProcess': tflite_detection_postprocess_shape,

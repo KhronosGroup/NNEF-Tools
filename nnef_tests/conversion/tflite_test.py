@@ -47,7 +47,7 @@ class TestEnv(unittest.TestCase):
                                                                   mirror_unsupported=self._mirror_unsupported)
         self._nnef_to_tflite_converter = nnef_to_tflite.Converter(io_transpose=self._io_transpose,
                                                                   mirror_unsupported=self._mirror_unsupported)
-        self._nnef_reader = nnef_io.Reader(custom_shapes=self._nnef_to_tflite_converter.custom_shapes(),
+        self._nnef_reader = nnef_io.Reader(custom_shapes=self._nnef_to_tflite_converter.defined_shapes(),
                                            decomposed=self._nnef_to_tflite_converter.decomposed_operations())
         self._nnef_writer = nnef_io.Writer(fragments=self._tflite_to_nnef_converter.defined_operations())
         self._nnef_optimizer = nnef_opt.Optimizer()

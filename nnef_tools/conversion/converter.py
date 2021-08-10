@@ -71,8 +71,9 @@ class Converter:
     def defined_operations():
         return {}       # return dictionary of NNEF operator (fragment) definitions in subclass if converting to NNEF
 
-    def custom_shapes(self):
-        return {}       # return dictionary of custom shape functions for NNEF fragments defined by the converter
+    @staticmethod
+    def defined_shapes():
+        return {}       # return dictionary of shape functions for NNEF fragments defined by the converter
 
     @staticmethod
     def unpack_transforms(transforms):
@@ -103,7 +104,7 @@ class Converter:
         transforms.update(custom_transforms)
         return transforms
 
-    def __init__(self, transforms, functions=None, mirror_unsupported=False, infer_shapes=False):
+    def __init__(self, transforms, functions=None, mirror_unsupported=False, infer_shapes=False, custom_shapes=None):
         self._graph = None
         self._transforms = transforms
         self._callables = self.find_public_methods(self)
@@ -111,6 +112,7 @@ class Converter:
             self._callables.update({name: functools.partial(func, self) for name, func in six.iteritems(functions)})
         self._mirror_unsupported = mirror_unsupported
         self._infer_shapes = infer_shapes
+        self._custom_shapes = custom_shapes or {}
 
     def __call__(self, graph):
         if not self._infer_shapes:
@@ -166,13 +168,13 @@ class Converter:
                 from nnef.shapes import _infer_op_shapes
                 for op in self._graph.operations[count:]:
                     input_shapes = [list(tensor.shape) for tensor in op.inputs]
-                    if isinstance(op.inputs, list):
+                    if not isinstance(op.inputs, tuple):
                         input_shapes = (input_shapes,)
 
-                    output_counts = [len(op.outputs)] if isinstance(op.outputs, list) else [None] * len(op.outputs)
+                    output_counts = [len(op.outputs)] if not isinstance(op.outputs, tuple) else [None] * len(op.outputs)
                     output_shapes = _infer_op_shapes(op.type, op.attribs, input_shapes, output_counts,
-                                                     custom_shapes=self.custom_shapes())
-                    if isinstance(op.outputs, list):
+                                                     custom_shapes=self._custom_shapes)
+                    if not isinstance(op.outputs, tuple):
                         output_shapes = output_shapes[0]
 
                     for output, shape in zip(op.outputs, output_shapes):
@@ -574,8 +576,8 @@ class ConverterToNNEF(Converter):
         np.bool_: 'logical',
     }
 
-    def __init__(self, transforms, functions=None, mirror_unsupported=False, infer_shapes=False):
-        Converter.__init__(self, transforms, functions, mirror_unsupported, infer_shapes)
+    def __init__(self, transforms, functions=None, mirror_unsupported=False, infer_shapes=False, custom_shapes=None):
+        Converter.__init__(self, transforms, functions, mirror_unsupported, infer_shapes, custom_shapes)
 
     def _insert_externals_and_constants(self, graph):
         for tensor in graph.tensors:

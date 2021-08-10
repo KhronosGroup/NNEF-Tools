@@ -47,7 +47,7 @@ class TestEnv(unittest.TestCase):
         self._nnef_optimizer = nnef_opt.Optimizer()
         self._tf_to_nnef_converter = tf_to_nnef.Converter(io_transpose=self._io_transpose)
         self._nnef_to_tf_converter = nnef_to_tf.Converter(io_transpose=self._io_transpose)
-        self._nnef_reader = nnef_io.Reader(custom_shapes=self._nnef_to_tf_converter.custom_shapes(),
+        self._nnef_reader = nnef_io.Reader(custom_shapes=self._nnef_to_tf_converter.defined_shapes(),
                                            decomposed=self._nnef_to_tf_converter.decomposed_operations())
         self._nnef_writer = nnef_io.Writer(fragments=self._tf_to_nnef_converter.defined_operations())
 

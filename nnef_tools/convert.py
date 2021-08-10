@@ -239,7 +239,7 @@ def main(args):
         decomposed += args.decompose
 
     if converter is not None:
-        custom_shapes.update(converter.custom_shapes())
+        custom_shapes.update(converter.defined_shapes())
 
     if args.custom_fragments is not None:
         fragments.update(get_custom_fragments(args.custom_fragments))
