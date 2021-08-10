@@ -1133,7 +1133,7 @@ Operators = {
     'softmax': nnef_softmax,
     'softplus': lambda x: torch.log(torch.exp(x) + 1.0),
     'elu': F.elu,
-    'selu': F.selu,
+    'selu': lambda x, alpha, _lambda_: F.selu(x),
     'gelu': F.gelu,
     'silu': lambda x: x * torch.sigmoid(x),
     'prelu': lambda x, alpha: F.prelu(x, alpha),
