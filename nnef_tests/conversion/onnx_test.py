@@ -48,7 +48,7 @@ class TestEnv(unittest.TestCase):
 
     _network_folder = os.path.join(UNITTEST_FOLDER, 'onnx/nets/') if UNITTEST_FOLDER else None
     _output_folder = os.path.join(UNITTEST_FOLDER, 'onnx/ops/') if UNITTEST_FOLDER else None
-    _infer_shapes = True
+    _infer_shapes = False
     _optimize = True
 
     def setUp(self) -> None:
