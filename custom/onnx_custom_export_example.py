@@ -4,11 +4,11 @@ from torch.onnx import register_custom_op_symbolic
 
 
 def aim_affine_grid(g, trans, shape, align_corners):
-    return g.op("com.aimotive::affine_grid", trans, shape, align_corners)
+    return g.op("com.example::affine_grid", trans, shape, align_corners)
 
 
 def aim_grid_sample(g, input, grid, mode, padding, align_corners):
-    return g.op("com.aimotive::grid_sample", input, grid, mode, padding, align_corners)
+    return g.op("com.example::grid_sample", input, grid, mode, padding, align_corners)
 
 
 register_custom_op_symbolic('::affine_grid_generator', aim_affine_grid, 1)
