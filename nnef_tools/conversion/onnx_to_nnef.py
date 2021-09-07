@@ -532,11 +532,11 @@ _Transforms = Converter.unpack_transforms({
         ),
     'Clip':
         Transform(
-            type='clamp',
+            type='!"max" if I[2].name == "" else "min" if I[1].name == "" else "clamp"',
             inputs=(
                 '!I[0]',
-                '!I[1]',
-                '!I[2]',
+                '!I[1] if I[1].name != "" else None',
+                '!I[2] if I[2].name != "" else None',
             ),
             outputs='!O[0]',
         ),
