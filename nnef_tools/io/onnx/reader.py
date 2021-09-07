@@ -126,6 +126,10 @@ def _get_node(node_proto):
     return inputs, outputs, name, domain, op_type, attributes
 
 
+def _has_null_input(node_proto):
+    return any(len(input) == 0 for input in node_proto.input)
+
+
 def _get_attribute(attribute_proto):
     assert not attribute_proto.HasField('ref_attr_name')
 
@@ -159,6 +163,9 @@ def _get_attribute(attribute_proto):
 
 def _get_graph(graph_proto):
     graph = Graph(name=as_str(_get_field(graph_proto, 'name')))
+
+    null = Tensor(graph, name='', shape=(), dtype=np.float32, data=np.zeros(shape=(), dtype=np.float32)) \
+        if any(_has_null_input(node) for node in graph_proto.node) else None
 
     tensors_by_name = {}
     for node in graph_proto.node:
@@ -218,8 +225,8 @@ def _get_graph(graph_proto):
             graph=graph,
             type=op_type,
             name=name,
-            inputs=tuple(tensors_by_name[name] for name in inputs),
-            outputs=tuple(tensors_by_name[name] for name in outputs),
+            inputs=tuple(tensors_by_name[input] if input else null for input in inputs),
+            outputs=tuple(tensors_by_name[output] if output else null for output in outputs),
             attribs=attributes)
     return graph
 
