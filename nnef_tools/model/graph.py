@@ -134,11 +134,13 @@ class Tensor:
         return self.data is not None
 
     def __repr__(self):
-        return 'T({})'.format(self.name if self.name is not None else _hex_id(self))
+        return self.name if self.name is not None else _hex_id(self)
 
     def __str__(self):
-        return 'Tensor({}, dtype={}, shape={}, quant={})'\
-            .format(self.name if self.name is not None else _hex_id(self), self.dtype, self.shape, self.quant)
+        return '{name}: {dtype}[{shape}]'.format(
+            name=self.name if self.name is not None else _hex_id(self),
+            dtype=self.dtype.__name__,
+            shape=', '.join(str(s) for s in self.shape))
 
 
 _TensorListOrTupleT = typing.Union[typing.List[Tensor], typing.Tuple[Tensor, ...]]
@@ -272,11 +274,14 @@ class Operation:
         self._name = name
 
     def __repr__(self):
-        return 'O({})'.format(self.type if self.type is not None else _hex_id(self))
+        return self.type if self.type is not None else _hex_id(self)
 
     def __str__(self):
-        return 'Operation({}, attribs={}, inputs={}, outputs={})'.format(self.type if self.type is not None else _hex_id(self),
-                                                                         self.attribs, self._inputs, self._outputs)
+        return '{outputs} = {op}{{{attribs}}}({inputs})'.format(
+            op=self.type if self.type is not None else _hex_id(self),
+            inputs=', '.join(repr(tensor) for tensor in self._inputs),
+            outputs=', '.join(str(tensor) for tensor in self._outputs),
+            attribs=', '.join('{}={}'.format(key, value) for key, value in self.attribs.items()))
 
 
 # noinspection PyProtectedMember
@@ -421,21 +426,40 @@ class Graph:
         self._operations[offset:] = reversed(self._operations[offset:])
 
     def __repr__(self):
-        return 'G({})'.format(self.name if self.name is not None else _hex_id(self))
+        return self.name if self.name is not None else _hex_id(self)
 
     def __str__(self):
-        return 'Graph({}, inputs={}, outputs={})'.format(self.name if self.name is not None else _hex_id(self),
-                                                         self._inputs, self._outputs)
+        return "graph {name}({inputs}) -> ({outputs})".format(
+            name=repr(self),
+            inputs=', '.join(repr(input) for input in self.inputs),
+            outputs=', '.join(repr(input) for input in self.outputs),
+        )
 
-    def dump(self, file=None):
-        # type: (typing.TextIO)->None
-        print(str(self), file=file)
-        print('--Tensors--')
-        for tensor in self._tensors:
-            print(str(tensor), file=file)
-        print('--Operations--')
+    def print(self, file=None):
+        print(f'graph {repr(self)} {{', file=file)
+
+        print(f'\tinputs {{', file=file)
+        for tensor in self.inputs:
+            print('\t\t' + str(tensor) + ',', file=file)
+        print(f'\t}}', file=file)
+
+        print(f'\toutputs {{', file=file)
+        for tensor in self.outputs:
+            print('\t\t' + str(tensor) + ',', file=file)
+        print(f'\t}}', file=file)
+
+        print(f'\tparams {{', file=file)
+        for tensor in self.tensors:
+            if tensor.producer is None and tensor.data is not None:
+                print('\t\t' + str(tensor) + ',', file=file)
+        print(f'\t}}', file=file)
+
+        print(f'\toperators {{', file=file)
         for operation in self._operations:
-            print(str(operation), file=file)
+            print('\t\t' + str(operation) + ',', file=file)
+        print(f'\t}}', file=file)
+
+        print(f'}}')
 
     def assert_consistent(self):
         assert len(self.tensors) == len(set(self.tensors))
