@@ -45,6 +45,14 @@ class Optimizer:
                     self._is_constant(op.inputs[0], 1.0) or self._is_constant(op.inputs[1], 1.0))
                 changed |= self._remove_identity_ops(graph, 'add', lambda op:
                     self._is_constant(op.inputs[0], 0.0) or self._is_constant(op.inputs[1], 0.0))
+                changed |= self._remove_identity_ops(graph, ('box', 'debox', 'avg_pool', 'max_pool'), lambda op:
+                    self._is_uniform(op.attribs['size'], 1) and
+                    self._is_uniform(op.attribs['stride'], 1) and
+                    self._is_uniform(op.attribs['dilation'], 1) and
+                    self._is_uniform(op.attribs['padding'], 0))
+                changed |= self._remove_identity_ops(graph,
+                    ('nearest_downsample', 'area_downsample', 'nearest_upsample', 'multilinear_upsample'), lambda op:
+                    self._is_uniform(op.attribs['factor'], 1))
 
                 changed |= self._remove_inverse_ops(graph, 'squeeze', 'unsqueeze', lambda op1, op2:
                     op1.attribs['axes'] == op2.attribs['axes'])
@@ -116,10 +124,14 @@ class Optimizer:
         Operation(tensor.graph, type='copy', inputs=tensor, outputs=copy)
         return copy
 
+    @staticmethod
+    def _match_op_type(type, types):
+        return type in types if isinstance(types, tuple) else type == types
+
     def _remove_identity_ops(self, graph, type, cond):
         changed = False
         for op in graph.operations:
-            if op.type == type and cond(op) and op.input.quant == op.output.quant:
+            if self._match_op_type(op.type, type) and cond(op) and op.input.quant == op.output.quant:
                 changed |= self._bypass_and_remove(graph, op)
 
         return changed
@@ -427,6 +439,10 @@ class Optimizer:
             data = tensor.data
 
         return (not isinstance(tensor.data, np.ndarray) or data.shape == ()) and data == value
+
+    @staticmethod
+    def _is_uniform(array, value):
+        return all(item == value for item in array)
 
     @staticmethod
     def _merge_transpose_squeeze(transpose, squeeze):
