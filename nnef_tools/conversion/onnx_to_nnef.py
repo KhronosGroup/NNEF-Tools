@@ -89,13 +89,14 @@ class Converter(_Converter):
         }
 
     def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False, keep_io_names=False,
-                 infer_shapes=False, custom_shapes=None):
+                 infer_shapes=False, custom_shapes=None, io_transpose=False):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
                             functions=custom_functions,
                             mirror_unsupported=mirror_unsupported,
                             infer_shapes=infer_shapes,
                             custom_shapes=dict(**self.defined_shapes(), **custom_shapes or {}))
         self._keep_io_names = keep_io_names
+        self._io_transpose = io_transpose
 
     def __call__(self, graph):
         graph = _Converter.__call__(self, graph)
@@ -103,6 +104,10 @@ class Converter(_Converter):
         self.inline_scalar_constants(graph)
         self.convert_constants_to_variables(graph)
         self._ensure_valid_ids(graph)
+        if self._io_transpose is not False:
+            self._transpose_inputs(graph)
+            self._transpose_outputs(graph)
+            graph.sort()
         generate_tensor_names_from_op_type(graph, keep_io_names=self._keep_io_names)
         return graph
 
@@ -124,6 +129,45 @@ class Converter(_Converter):
             raise ConversionError('trying to evaluate non-constant tensor')
 
         return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else types.cast(value, type=type)
+
+    def _needs_io_transpose(self, tensor):
+        if tensor.rank <= 2:
+            return False
+        if isinstance(self._io_transpose, bool):
+            return self._io_transpose
+        else:
+            return tensor.name in self._io_transpose
+
+    def _transpose_inputs(self, graph):
+        inputs = [self._transpose_input(tensor) if self._needs_io_transpose(tensor) else tensor
+                  for tensor in graph.inputs]
+
+        if self._keep_io_names:
+            for i in range(len(inputs)):
+                if inputs[i] is not graph.inputs[i]:
+                    inputs[i].name = graph.inputs[i].name
+
+        graph.inputs = inputs
+
+    def _transpose_outputs(self, graph):
+        outputs = [self._transpose_output(tensor) if self._needs_io_transpose(tensor) else tensor
+                   for tensor in graph.outputs]
+
+        if self._keep_io_names:
+            for i in range(len(outputs)):
+                if outputs[i] is not graph.outputs[i]:
+                    outputs[i].name = graph.outputs[i].name
+
+        graph.outputs = outputs
+
+    def _transpose_input(self, tensor):
+        external = tensor.producer
+        external.outputs = self._post_transpose(tensor, self.ncx_to_nxc_perm(tensor.rank))
+        external.attribs['shape'] = self.nxc_to_ncx(tensor.shape)
+        return external.output
+
+    def _transpose_output(self, tensor):
+        return self._pre_transpose(tensor, self.nxc_to_ncx_perm(tensor.rank))
 
     @staticmethod
     def _interleave(items):

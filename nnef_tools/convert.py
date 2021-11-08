@@ -100,7 +100,8 @@ def get_converter(input_format, output_format, io_transpose, custom_transforms, 
                          custom_shapes=custom_shapes,
                          infer_shapes=bool(custom_shapes),
                          mirror_unsupported=mirror_unsupported,
-                         keep_io_names=keep_io_names)
+                         keep_io_names=keep_io_names,
+                         io_transpose=io_transpose)
     elif input_format == 'nnef' and (output_format == 'onnx' or output_format == 'caffe2'):
         from .conversion.nnef_to_onnx import Converter
         return Converter(custom_transforms=custom_transforms,
