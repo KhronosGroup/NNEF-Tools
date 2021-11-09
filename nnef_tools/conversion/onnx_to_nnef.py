@@ -163,7 +163,7 @@ class Converter(_Converter):
     def _transpose_input(self, tensor):
         external = tensor.producer
         external.outputs = self._post_transpose(tensor, self.ncx_to_nxc_perm(tensor.rank))
-        external.attribs['shape'] = self.nxc_to_ncx(tensor.shape)
+        external.attribs['shape'] = list(self.nxc_to_ncx(tensor.shape))
         return external.output
 
     def _transpose_output(self, tensor):
