@@ -96,8 +96,14 @@ def main(args):
         macs += _count_macs(op, args.include_pooling, args.include_upsampling,
                             args.include_normalization, args.include_reduction)
 
+    volume = 0
+    for tensor in graph.tensors:
+        volume += _volume(tensor.shape)
+
     gmacs = macs / 1000 / 1000 / 1000
+    mbytes = volume * 4 / 1000 / 1000
     print('GMACs = {}'.format(gmacs))
+    print('Total memory in Mbytes (supposing float32) = {}'.format(mbytes))
     return 0
 
 
