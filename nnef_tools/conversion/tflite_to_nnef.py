@@ -103,29 +103,35 @@ class Converter(_TFConverter):
                     op.attribs['shape'] = list(shape)
                     self._transposes[op.output] = shape
 
+    @staticmethod
+    def _is_zero(value):
+        return np.all(value == 0) if isinstance(value, np.ndarray) else value == 0
+
     def _fix_quantized_dtypes(self, graph):
         for tensor in graph.tensors:
             if tensor.quant:
                 scale = tensor.quant.get('scale')
-                if scale:
+                if scale is not None and not self._is_zero(scale):
                     tensor.dtype = np.float32
                 else:
                     tensor.quant = None
 
     def _fix_quantization_attribs(self, graph):
         for tensor in graph.tensors:
-            if tensor.quant and tensor.quant.get('scale'):
-                if 'min' in tensor.quant:
-                    del tensor.quant['min']
-                if 'max' in tensor.quant:
-                    del tensor.quant['max']
-                tensor.quant['op-name'] = 'zero_point_linear_quantize'
-                tensor.quant['bits'] = 32 if self._is_conv_bias(tensor) else 8
-                assert tensor.dtype == np.uint8 or tensor.dtype == np.int8 or \
-                       tensor.dtype == np.uint32 or tensor.dtype == np.int32, \
-                    "unknown quantized dtype '{}'".format(tensor.dtype)
-                tensor.quant['signed'] = tensor.dtype == np.int8 or tensor.dtype == np.int32
-                tensor.quant['symmetric'] = self._is_conv_filter(tensor)
+            if tensor.quant:
+                scale = tensor.quant.get('scale')
+                if scale is not None and not self._is_zero(scale):
+                    if 'min' in tensor.quant:
+                        del tensor.quant['min']
+                    if 'max' in tensor.quant:
+                        del tensor.quant['max']
+                    tensor.quant['op-name'] = 'zero_point_linear_quantize'
+                    tensor.quant['bits'] = 32 if self._is_conv_bias(tensor) else 8
+                    assert tensor.dtype == np.uint8 or tensor.dtype == np.int8 or \
+                           tensor.dtype == np.uint32 or tensor.dtype == np.int32, \
+                        "unknown quantized dtype '{}'".format(tensor.dtype)
+                    tensor.quant['signed'] = tensor.dtype == np.int8 or tensor.dtype == np.int32
+                    tensor.quant['symmetric'] = self._is_conv_filter(tensor)
 
     def _fix_custom_options(self, graph):
         for op in graph.operations:
