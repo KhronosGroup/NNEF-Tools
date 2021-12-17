@@ -140,7 +140,7 @@ class Tensor:
         return '{name}: {dtype}[{shape}]'.format(
             name=self.name if self.name is not None else _hex_id(self),
             dtype=self.dtype.__name__,
-            shape=', '.join(str(s) for s in self.shape))
+            shape=', '.join(str(s) for s in self.shape) if self.shape else '...')
 
 
 _TensorListOrTupleT = typing.Union[typing.List[Tensor], typing.Tuple[Tensor, ...]]
