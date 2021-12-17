@@ -26,6 +26,7 @@ class Optimizer:
         replace_chain(graph, ['DEQUANTIZE'], self._eliminate_variable_dequantize)
         replace_chain(graph, ['SPACE_TO_BATCH_ND', {'CONV_2D', 'DEPTHWISE_CONV_2D'}, 'BATCH_TO_SPACE_ND'], self._replace_dilated_conv)
         replace_chain(graph, ['RESHAPE', 'RESHAPE', 'PACK', 'PACK', 'RESHAPE'], self._replace_resize_nearest)
+        replace_chain(graph, ['SHAPE'], self._replace_const_shape)
         for chain, replacer in six.iteritems(self._custom_optimizers):
             replace_chain(graph, chain, replacer)
         return graph
@@ -115,3 +116,8 @@ class Optimizer:
         variable.data = variable.data.astype(np.float32)
         variable.dtype = np.float32
         variable.quant = None
+
+    @staticmethod
+    def _replace_const_shape(shape):
+        if shape.input.shape is not None:
+            shape.output.data = np.array(shape.input.shape)
