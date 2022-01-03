@@ -23,6 +23,7 @@
 #include <iostream>
 #include <functional>
 #include <algorithm>
+#include <limits>
 #include "value.h"
 #include "error.h"
 
