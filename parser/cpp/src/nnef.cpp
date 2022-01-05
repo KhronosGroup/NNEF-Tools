@@ -699,7 +699,7 @@ namespace nnef
             {
                 func(op, graph);
             }
-            catch ( std::exception e )
+            catch ( const std::exception& e )
             {
                 auto& output = op.outputs.front().second;
                 auto& id = output.kind() == Value::Identifier ? output.identifier() : output[0].identifier();
