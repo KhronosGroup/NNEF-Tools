@@ -66,7 +66,7 @@ class Optimizer:
                 changed |= self._merge_op_into_variables_and_constants(graph, 'reshape', lambda data, attribs:
                     data.reshape(attribs['shape']))
                 changed |= self._merge_op_into_variables_and_constants(graph, 'squeeze', lambda data, attribs:
-                    data.squeeze(attribs['axes']))
+                    data.squeeze(tuple(attribs['axes'])))
                 changed |= self._merge_op_into_variables_and_constants(graph, 'unsqueeze', lambda data, attribs:
                     data.reshape(self._unsqueeze_shape(data.shape, attribs['axes'])))
 
