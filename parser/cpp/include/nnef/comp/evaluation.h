@@ -58,7 +58,7 @@ namespace nnef
                     auto& identifier = static_cast<const IdentifierExpr&>(expr);
                     
                     auto it = values.find(identifier.name());
-                    return it != values.end() ? it->second : (fallbackToIds ? Value::identifier(identifier.name()) : Value::none());
+                    return it != values.end() ? it->second : (fallbackToIds ? Value::identifier(identifier.name()) : Value::identifier(""));
                 }
                 case Expr::Array:
                 {
@@ -567,17 +567,21 @@ namespace nnef
             
             if ( !invocation.type()->isAttribute() )
             {
-                checkStructure(context ? context : Value::identifier(""), invocation.type(), invocation.position());
+                if ( context )
+                {
+                    checkStructure(context, invocation.type(), invocation.position());
+                }
                 
                 if ( proto.resultCount() == 1 )
                 {
-                    ids[proto.result(0).name()] = context ? context : makeResultValue(proto.name());
+                    ids[proto.result(0).name()] = getResultValue(context, proto.name());
                 }
                 else
                 {
+                    assert(context.kind() == Value::Tuple);
                     for ( size_t i = 0; i < proto.resultCount(); ++i )
                     {
-                        ids[proto.result(i).name()] = context ? context[i] : makeResultValue(proto.name());
+                        ids[proto.result(i).name()] = getResultValue(context[i], proto.name());
                     }
                 }
             }
@@ -1032,24 +1036,45 @@ namespace nnef
             return id;
         }
 
-        Value makeResultValue( const std::string& op )
+        Value makeResultValue( const std::string& op, size_t idx )
         {
-            return Value::identifier(makeTensorId(op));
-        }
-
-        Value makeResultValue( const std::string& op, const size_t size )
-        {
-            return makeResultValue(op, size, makeTensorId(op));
+            auto id = makeTensorId(op);
+            return Value::identifier(idx ? indexedId(id, idx) : id);
         }
         
-        Value makeResultValue( const std::string& op, const size_t size, const std::string& id )
+        Value getResultValue( const Value& context, const std::string op, size_t idx = 0 )
         {
-            Value::items_t items(size);
-            for ( size_t i = 0; i < size; ++i )
+            if ( !context )
             {
-                items[i] = Value::identifier(indexedId(id,i+1));
+                return makeResultValue(op, idx);
             }
-            return Value::array(items);
+            else if ( context.kind() == Value::Identifier )
+            {
+                return context.identifier() != "" ? context : makeResultValue(op, idx);
+            }
+            else if ( context.kind() == Value::Array )
+            {
+                std::vector<Value> results(context.size());
+                for ( size_t i = 0; i < context.size(); ++i )
+                {
+                    results[i] = getResultValue(context[i], op, i + 1);
+                }
+                return Value::array(results);
+            }
+            else if ( context.kind() == Value::Tuple )
+            {
+                std::vector<Value> results(context.size());
+                for ( size_t i = 0; i < context.size(); ++i )
+                {
+                    results[i] = getResultValue(context[i], op);
+                }
+                return Value::array(results);
+            }
+            else
+            {
+                assert(false);
+                return Value();
+            }
         }
 
         void addReservedIdentifiers( const Expr& expr )
