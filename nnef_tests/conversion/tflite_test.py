@@ -186,15 +186,19 @@ class TestCases(TestEnv):
 
     def test_squeeze(self):
         input = tf.placeholder(shape=(4, 32, 32, 1), dtype=tf.float32)
-        squeezed = tf.squeeze(input, axis=[3])
-        output = tf.expand_dims(squeezed, axis=[3])
+        output = tf.squeeze(input, axis=[3])
 
         self._test_conversion('squeeze', [input], [output])
 
+    def test_unsqueeze(self):
+        input = tf.placeholder(shape=(4, 32, 32), dtype=tf.float32)
+        output = tf.expand_dims(input, axis=[3])
+
+        self._test_conversion('unsqueeze', [input], [output])
+
     def test_transpose(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
-        trans = tf.transpose(input, perm=(0, 3, 1, 2))
-        output = tf.transpose(trans, perm=(0, 2, 3, 1))
+        output = tf.transpose(input, perm=(0, 3, 1, 2))
 
         self._test_conversion('transpose', [input], [output])
 
@@ -265,12 +269,6 @@ class TestCases(TestEnv):
         output = tf.gather(input, indices, axis=3)
 
         self._test_conversion('gather', [input], [output])
-
-    def test_identity(self):
-        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
-        output = tf.identity(input)
-
-        self._test_conversion('identity', [input], [output])
 
     def test_relu(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
