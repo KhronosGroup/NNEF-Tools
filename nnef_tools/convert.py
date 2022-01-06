@@ -44,7 +44,7 @@ def get_reader(input_format, decomposed, fold_constants, custom_shapes):
         return None
 
 
-def get_writer(output_format, fragments, generate_fragments, annotate_shapes, compression):
+def get_writer(output_format, fragments, fragment_dependencies, generate_fragments, annotate_shapes, compression):
     if output_format == 'tf':
         from .io.tf.graphdef import Writer
         return Writer()
@@ -53,7 +53,8 @@ def get_writer(output_format, fragments, generate_fragments, annotate_shapes, co
         return Writer()
     elif output_format == 'nnef':
         from .io.nnef import Writer
-        return Writer(fragments=fragments, generate_custom_fragments=generate_fragments,
+        return Writer(fragments=fragments, fragment_dependencies=fragment_dependencies,
+                      generate_custom_fragments=generate_fragments,
                       annotate_shapes=annotate_shapes, compression=compression)
     elif output_format == 'onnx':
         from .io.onnx import Writer
@@ -251,7 +252,9 @@ def main(args):
         print("Unsupported input-format: {}".format(args.input_format))
         return -1
 
-    writer = get_writer(args.output_format, fragments=fragments, generate_fragments=args.generate_custom_fragments,
+    writer = get_writer(args.output_format,
+                        fragments=fragments, fragment_dependencies=converter.defined_operation_dependencies(),
+                        generate_fragments=args.generate_custom_fragments,
                         annotate_shapes=args.annotate_shapes, compression=args.compress)
     if writer is None:
         print("Unsupported output-format: {}".format(args.output_format))

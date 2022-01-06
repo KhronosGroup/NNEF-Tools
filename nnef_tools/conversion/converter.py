@@ -72,6 +72,10 @@ class Converter:
         return {}       # return dictionary of NNEF operator (fragment) definitions in subclass if converting to NNEF
 
     @staticmethod
+    def defined_operation_dependencies():
+        return {}  # return dictionary of NNEF operator (fragment) dependencies in subclass if converting to NNEF
+
+    @staticmethod
     def defined_shapes():
         return {}       # return dictionary of shape functions for NNEF fragments defined by the converter
 
@@ -582,7 +586,7 @@ class ConverterToNNEF(Converter):
     def _insert_externals_and_constants(self, graph):
         for tensor in graph.tensors:
             mapped = self._tensor_map[tensor]
-            if mapped.producer is None:
+            if mapped.producer is None and len(mapped.consumers) > 0:
                 if mapped.data is None:
                     Operation(graph, type='external', inputs=(), outputs=tensor,
                               attribs={'shape': list(tensor.shape), 'dtype': tensor.dtype})

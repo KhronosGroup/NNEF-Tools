@@ -212,11 +212,12 @@ def _types_str(names, items, tensor):
 
 class Writer(object):
 
-    def __init__(self, compression=None, extensions=None, fragments=None,
+    def __init__(self, compression=None, extensions=None, fragments=None, fragment_dependencies=None,
                  generate_custom_fragments=False, version_custom_fragments=True, annotate_shapes=False):
         self._compression = compression
         self._extensions = extensions or []
         self._fragments = fragments or {}
+        self._fragment_dependencies = fragment_dependencies or {}
         self._generate_custom_fragments = generate_custom_fragments
         self._version_custom_fragments = version_custom_fragments
         self._annotate_shapes = annotate_shapes
@@ -231,8 +232,8 @@ class Writer(object):
                 if not os.path.exists(folder):
                     os.makedirs(folder)
 
-            fragments = "".join(text for name, text in six.iteritems(self._fragments)
-                                if self._is_operator_used(graph, name))
+            used_operators = self._used_operators(graph, self._fragment_dependencies)
+            fragments = "".join(text for name, text in six.iteritems(self._fragments) if name in used_operators)
             if self._generate_custom_fragments:
                 customs = _generate_custom_fragments(graph, fragments=self._fragments,
                                                      version=self._version_custom_fragments)
@@ -269,3 +270,18 @@ class Writer(object):
     @staticmethod
     def _is_operator_used(graph, type):
         return any(op.type == type for op in graph.operations)
+
+    @staticmethod
+    def _used_operators(graph, dependencies):
+        used = {op.type for op in graph.operations}
+        count = len(used)
+        changed = True
+        while changed:
+            for key, deps in six.iteritems(dependencies):
+                if key in used:
+                    used.update(deps)
+
+            changed = len(used) > count
+            count = len(used)
+
+        return used
