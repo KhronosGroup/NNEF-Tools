@@ -32,7 +32,7 @@ int main( int argc, const char * argv[] )
     nnef::Graph graph;
     std::string error;
     
-    if ( !nnef::load_graph(path, graph, error, "", { "lstm_step", "lstm_loop", "lstm_array" }) )
+    if ( !nnef::load_graph(path, graph, error, "") )
     {
         std::cerr << error << std::endl;
         return -1;
