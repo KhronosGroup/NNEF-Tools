@@ -67,6 +67,44 @@ fragment mean_variance_normalization(
 }
 """
 
+_LSTM_STEP_FRAGMENT = """
+fragment lstm_step(
+    x: tensor<scalar>,
+    h: tensor<scalar>,
+    c: tensor<scalar>,
+    W: tensor<scalar>,
+    R: tensor<scalar>,
+    B: tensor<scalar> )
+-> ( h_out: tensor<scalar>,
+    c_out: tensor<scalar> )
+{
+    [Wb, Rb] = split(B, axis = 1, ratios = [1, 1]);
+    z = linear(x, W, Wb) + linear(h, R, Rb);
+    [i, f, g, o] = split(z, axis = 1, ratios=[1, 1, 1, 1]);
+    c_out = sigmoid(f) * c + sigmoid(i) * tanh(g);
+    h_out = sigmoid(o) * tanh(c_out);
+}
+"""
+
+_LSTM_LOOP_FRAGMENT = """
+fragment lstm_loop(
+    X: tensor<scalar>,
+    W: tensor<scalar>,
+    R: tensor<scalar>,
+    B: tensor<scalar>,
+    h0: tensor<scalar>,
+    c0: tensor<scalar>,
+    steps: integer,
+    index: integer = 0,
+    axis: integer = 0 )
+-> ( hn: tensor<scalar>, cn: tensor<scalar> )
+{
+    x0 = squeeze(slice(X, axes = [axis], begin = [index], end = [index + 1]), axes = [axis]);
+    h1, c1 = lstm_step(x0, h0, c0, W, R, B);
+    hn, cn = lstm_loop(X, W, R, B, h1, c1, index = index + 1, steps=steps) if index + 1 < steps else (h1, c1);
+}
+"""
+
 _INT_MAX = 2 ** 31 - 1
 
 
@@ -78,6 +116,14 @@ class Converter(_Converter):
             'lp_pool': _LP_POOL_FRAGMENT,
             'lp_reduce': _LP_REDUCE_FRAGMENT,
             'mean_variance_normalization': _MEAN_VARIANCE_NORMALIZATION_FRAGMENT,
+            'lstm_step': _LSTM_STEP_FRAGMENT,
+            'lstm_loop': _LSTM_LOOP_FRAGMENT,
+        }
+
+    @staticmethod
+    def defined_operation_dependencies():
+        return {
+            'lstm_loop': ['lstm_step'],
         }
 
     @staticmethod
@@ -86,6 +132,8 @@ class Converter(_Converter):
             'lp_pool': pool_shape,
             'lp_reduce': reduce_shape,
             'mean_variance_normalization': lambda input, scale, offset, **kwargs: input,
+            'lstm_step': lambda x, h, c, W, R, B: (h, c),
+            'lstm_loop': lambda X, W, R, B, h, c, **kwargs: (h, c),
         }
 
     def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False, keep_io_names=False,
@@ -240,6 +288,12 @@ class Converter(_Converter):
 
     def limit_range(self, x):
         return _INT_MAX if x > _INT_MAX else -_INT_MAX if x < -_INT_MAX else x
+
+    def is_unused(self, tensor):
+        if len(tensor.name) == 0:
+            return True
+        original = self._tensor_map[tensor]
+        return len(original.consumers) == 0
 
 
 _Transforms = Converter.unpack_transforms({
@@ -778,6 +832,38 @@ _Transforms = Converter.unpack_transforms({
             outputs='!O[0]',
             attribs={
                 'dtype': '!O[0].dtype if not same_type else None',
+            },
+        ),
+    'LSTM':
+        Transform(
+            cond={
+                '!direction == "forward"': 'direction must be "forward"',
+                '!is_unused(O[0])': 'first output must not have consumer operations',
+                '!len(I[4].name) == 0': 'sequence_lens must not be defined',
+            },
+            defaults={
+                'layout': 0,
+            },
+            using={
+                'seq_axis': '!0 if layout == 0 else 1',
+                'dir_axis': '!0 if layout == 0 else 2',
+            },
+            type='lstm_loop',
+            inputs=(
+                '!I[0]',                                    # X
+                '!squeeze_input(I[1], axes=[0])',           # W
+                '!squeeze_input(I[2], axes=[0])',           # R
+                '!I[3]',                                    # B
+                '!squeeze_input(I[5], axes=[dir_axis])',    # h_0
+                '!squeeze_input(I[6], axes=[dir_axis])',    # c_0
+            ),
+            outputs=(
+                '!unsqueeze_output(O[1], axes=[dir_axis])',    # h_n
+                '!unsqueeze_output(O[2], axes=[dir_axis])',    # c_n
+            ),
+            attribs={
+                'steps': '!I[0].shape[seq_axis]',
+                'axis': '!seq_axis',
             },
         ),
 })

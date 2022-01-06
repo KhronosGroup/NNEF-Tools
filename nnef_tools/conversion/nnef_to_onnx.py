@@ -30,6 +30,10 @@ class Converter(_Converter):
             'mean_variance_normalization': lambda input, scale, offset, **kwargs: input,
         }
 
+    @staticmethod
+    def decomposed_operations():
+        return ['lstm_step', 'lstm_loop']
+
     def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)

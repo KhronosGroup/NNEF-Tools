@@ -268,10 +268,6 @@ class Writer(object):
                 shutil.rmtree(folder)
 
     @staticmethod
-    def _is_operator_used(graph, type):
-        return any(op.type == type for op in graph.operations)
-
-    @staticmethod
     def _used_operators(graph, dependencies):
         used = {op.type for op in graph.operations}
         count = len(used)

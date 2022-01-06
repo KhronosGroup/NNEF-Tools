@@ -60,7 +60,8 @@ class TestEnv(unittest.TestCase):
         self._nnef_to_onnx_converter = nnef_to_onnx.Converter()
         self._nnef_reader = nnef_io.Reader(custom_shapes=self._nnef_to_onnx_converter.defined_shapes(),
                                            decomposed=self._nnef_to_onnx_converter.decomposed_operations())
-        self._nnef_writer = nnef_io.Writer(fragments=self._onnx_to_nnef_converter.defined_operations())
+        self._nnef_writer = nnef_io.Writer(fragments=self._onnx_to_nnef_converter.defined_operations(),
+                                           fragment_dependencies=self._onnx_to_nnef_converter.defined_operation_dependencies())
 
     def tearDown(self) -> None:
         pass
@@ -923,6 +924,25 @@ class TestCases(TestEnv):
         )
 
         self._test_conversion('gather', [node], [input, indices], [output])
+
+    def test_lstm(self):
+        X = helper.make_tensor_value_info('X', TensorProto.FLOAT, [5, 4, 32])
+        W = helper.make_tensor_value_info('W', TensorProto.FLOAT, [1, 256, 32])
+        R = helper.make_tensor_value_info('R', TensorProto.FLOAT, [1, 256, 64])
+        B = helper.make_tensor_value_info('B', TensorProto.FLOAT, [1, 512])
+        h0 = helper.make_tensor_value_info('h0', TensorProto.FLOAT, [1, 4, 64])
+        c0 = helper.make_tensor_value_info('c0', TensorProto.FLOAT, [1, 4, 64])
+        hn = helper.make_tensor_value_info('hn', TensorProto.FLOAT, [1, 4, 64])
+        cn = helper.make_tensor_value_info('cn', TensorProto.FLOAT, [1, 4, 64])
+        node = helper.make_node(
+            op_type='LSTM',
+            inputs=['X', 'W', 'R', 'B', '', 'h0', 'c0'],
+            outputs=['', 'hn', 'cn'],
+            hidden_size=64,
+            direction="forward",
+        )
+
+        self._test_conversion('lstm', [node], [X, h0, c0], [hn, cn], constants=[W, R, B])
 
     def test_min_recude(self):
         self._test_reduce('ReduceMin', keepdims=False)
