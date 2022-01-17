@@ -54,8 +54,7 @@ target_include_directories(${PROJECT_NAME}
         PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         PUBLIC $<INSTALL_INTERFACE:include>)
 
-target_compile_options(${PROJECT_NAME} PUBLIC -std=c++11)
-
+set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX _d)
 
 target_link_libraries(${PROJECT_NAME})
