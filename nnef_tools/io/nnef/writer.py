@@ -126,15 +126,20 @@ def _write_quantization(graph, file):
     for tensor in graph.tensors:
         if tensor.quant:
             op_name = tensor.quant['op-name']
-            attribs = ', '.join("{} = {}".format(k, v if type(v) != bool else _logical_as_str(v))
+            attribs = ', '.join("{} = {}".format(k, _printable_value(v))
                                 for k, v in six.iteritems(tensor.quant)
                                 if k != 'op-name' and v is not None)
             if attribs:
                 print('"{}": {}({});'.format(tensor.name, op_name, attribs), file=file)
 
 
-def _logical_as_str(v):
-    return 'true' if v else 'false'
+def _printable_value(v):
+    if type(v) == bool:
+        return 'true' if v else 'false'
+    elif type(v) == np.ndarray:
+        return [x for x in v]
+    else:
+        return v
 
 
 def _next_version(name, versions):
