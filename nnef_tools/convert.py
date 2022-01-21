@@ -236,6 +236,7 @@ def main(args):
 
     decomposed = converter.decomposed_operations() if converter else []
     fragments = converter.defined_operations() if converter else {}
+    dependencies = converter.defined_operation_dependencies() if converter else {}
 
     if args.decompose is not None:
         decomposed += args.decompose
@@ -253,7 +254,7 @@ def main(args):
         return -1
 
     writer = get_writer(args.output_format,
-                        fragments=fragments, fragment_dependencies=converter.defined_operation_dependencies(),
+                        fragments=fragments, fragment_dependencies=dependencies,
                         generate_fragments=args.generate_custom_fragments,
                         annotate_shapes=args.annotate_shapes, compression=args.compress)
     if writer is None:
