@@ -43,15 +43,36 @@ def TranslateArgmax(layer, pretrained_blobs, is_test, **kwargs):
     if param.out_max_val:
         raise ValueError("Conversion of ArgMax layer with 'out_max_val = True' is not supported")
 
-    caffe_op = BaseTranslate(layer, "ArgMax")
-    AddArgument(caffe_op, "keepdims", True)
     if param.HasField("axis"):
+        caffe_op = BaseTranslate(layer, "ArgMax")
+        AddArgument(caffe_op, "keepdims", True)
         AddArgument(caffe_op, "axis", param.axis)
         return caffe_op, []
     else:
-        AddArgument(caffe_op, "axis", 1)
-        flatten_op = BaseTranslate(layer, "Flatten")
-        return [flatten_op, caffe_op], []
+        flatten_op = caffe2_pb2.OperatorDef()
+        flatten_op.type = "Flatten"
+        flatten_op.input.extend(layer.bottom)
+        flatten_op.output.append(layer.bottom[0] + "_flattened")
+
+        argmax_op = caffe2_pb2.OperatorDef()
+        argmax_op.type = "ArgMax"
+        argmax_op.input.append(layer.bottom[0] + "_flattened")
+        argmax_op.output.extend(layer.top)
+        AddArgument(argmax_op, "keepdims", True)
+        AddArgument(argmax_op, "axis", 1)
+
+        return [flatten_op, argmax_op], []
+
+
+@TranslatorRegistry.Register("ReLU")
+def TranslateRelu(layer, pretrained_blobs, is_test, **kwargs):
+    param = layer.relu_param
+    if param.HasField("negative_slope") and param.negative_slope:
+        relu_op = BaseTranslate(layer, "LeakyRelu")
+        AddArgument(relu_op, "alpha", param.negative_slope)
+        return relu_op, []
+    else:
+        return BaseTranslate(layer, "Relu"), []
 
 
 def _HookedTranslateLayer(layer, pretrained_blobs, is_test, **kwargs):
