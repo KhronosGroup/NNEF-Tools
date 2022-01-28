@@ -67,7 +67,7 @@ def get_writer(output_format, fragments, fragment_dependencies, generate_fragmen
 
 
 def get_converter(input_format, output_format, io_transpose, custom_transforms, custom_functions, custom_shapes,
-                  mirror_unsupported, keep_io_names):
+                  mirror_unsupported, keep_io_names, dequantize):
     if input_format == 'tf' and output_format == 'nnef':
         from .conversion.tf_to_nnef import Converter
         return Converter(io_transpose=io_transpose,
@@ -87,7 +87,8 @@ def get_converter(input_format, output_format, io_transpose, custom_transforms, 
                          custom_transforms=custom_transforms,
                          custom_functions=custom_functions,
                          mirror_unsupported=mirror_unsupported,
-                         keep_io_names=keep_io_names)
+                         keep_io_names=keep_io_names,
+                         dequantize=dequantize)
     elif input_format == 'nnef' and output_format == 'tflite':
         from .conversion.nnef_to_tflite import Converter
         return Converter(io_transpose=io_transpose,
@@ -229,7 +230,7 @@ def main(args):
     if needs_conversion(args.input_format, args.output_format):
         converter = get_converter(args.input_format, args.output_format, io_transpose,
                                   custom_transforms, custom_functions, custom_shapes,
-                                  args.mirror_unsupported, args.keep_io_names)
+                                  args.mirror_unsupported, args.keep_io_names, args.dequantize)
         if converter is None:
             print("Unsupported conversion: {} to {}".format(args.input_format, args.output_format))
             return -1
@@ -385,6 +386,8 @@ if __name__ == '__main__':
                         help='Enable folding of constant ops')
     parser.add_argument('--optimize', action='store_true',
                         help='Turn on optimization of resulting NNEF model')
+    parser.add_argument('--dequantize', action='store_true',
+                        help='Dequantize the weights of a quantized network and omit quantization parameters')
     parser.add_argument('--custom-converters', type=str, nargs='+',
                         help='Module(s) containing custom converter code')
     parser.add_argument('--custom-shapes', type=str, nargs='+',
