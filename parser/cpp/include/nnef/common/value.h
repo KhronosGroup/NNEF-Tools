@@ -593,6 +593,28 @@ namespace nnef
         return os;
     }
     
+    inline std::vector<int> nestedArrayShape( const Value& value )
+    {
+        if ( value.kind() != Value::Array )
+        {
+            return {};
+        }
+        
+        size_t rank = 1;
+        for ( const Value* v = &value; v->size() > 0 && v->items().data()->kind() == Value::Array; v = v->items().data() )
+        {
+            rank += 1;
+        }
+        
+        std::vector<int> shape(rank);
+        const Value* v = &value;
+        for ( size_t i = 0; i < rank; ++i, v = v->items().data() )
+        {
+            shape[i] = (int)v->size();
+        }
+        return shape;
+    }
+    
 }   // namespace nnef
 
 

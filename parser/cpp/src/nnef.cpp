@@ -435,10 +435,9 @@ namespace nnef
         };
         
         
-        const Shape& shape_of( const Graph& graph, const Value& value )
+        const Shape shape_of( const Graph& graph, const Value& value )
         {
-            static const Shape singleton;
-            return value.kind() == Value::Identifier ? graph.tensors.at(value.identifier()).shape : singleton;
+            return value.kind() == Value::Identifier ? graph.tensors.at(value.identifier()).shape : nestedArrayShape(value);
         }
         
         Shape& shape_ref( Graph& graph, const Value& value )

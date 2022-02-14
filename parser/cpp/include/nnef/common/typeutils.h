@@ -26,7 +26,7 @@
 namespace nnef
 {
 
-    inline bool isCastable( const Type* type1, const Type* type2, bool allowPrimitiveToTensor = true )
+    inline bool isCastable( const Type* type1, const Type* type2, bool allowPrimitiveToTensor = true, bool allowArrayToTensor = false )
     {
         if ( type1 == type2 )
         {
@@ -49,7 +49,7 @@ namespace nnef
                     auto tensorType2 = static_cast<const TensorType*>(type2);
                     if ( tensorType1->dataType() && tensorType2->dataType() )
                     {
-                        return isCastable(tensorType1->dataType(), tensorType2->dataType(), allowPrimitiveToTensor);
+                        return isCastable(tensorType1->dataType(), tensorType2->dataType(), allowPrimitiveToTensor, allowArrayToTensor);
                     }
                     else
                     {
@@ -62,7 +62,7 @@ namespace nnef
                     auto arrayType2 = static_cast<const ArrayType*>(type2);
                     if ( arrayType1->itemType() && arrayType2->itemType() )
                     {
-                        return isCastable(arrayType1->itemType(), arrayType2->itemType(), allowPrimitiveToTensor);
+                        return isCastable(arrayType1->itemType(), arrayType2->itemType(), allowPrimitiveToTensor, allowArrayToTensor);
                     }
                     else
                     {
@@ -79,7 +79,7 @@ namespace nnef
                     }
                     for ( size_t i = 0; i < tupleType1->size(); ++i )
                     {
-                        if ( !isCastable(tupleType1->itemType(i), tupleType2->itemType(i), allowPrimitiveToTensor) )
+                        if ( !isCastable(tupleType1->itemType(i), tupleType2->itemType(i), allowPrimitiveToTensor, allowArrayToTensor) )
                         {
                             return false;
                         }
@@ -93,17 +93,32 @@ namespace nnef
             auto tensorType = static_cast<const TensorType*>(type2);
             return !tensorType->dataType() || isCastable(type1, tensorType->dataType());
         }
+        else if ( type1->kind() == Type::Array && type2->kind() == Type::Tensor && allowArrayToTensor )
+        {
+            auto arrayType = static_cast<const ArrayType*>(type1);
+            auto itemType = arrayType->itemType();
+            while ( itemType->kind() != Type::Primitive )
+            {
+                if ( itemType->kind() != Type::Array )
+                {
+                    return false;
+                }
+                itemType = static_cast<const ArrayType*>(itemType)->itemType();
+            }
+            auto tensorType = static_cast<const TensorType*>(type2);
+            return !tensorType->dataType() || isCastable(itemType, tensorType->dataType());
+        }
 
         return false;
     }
 
-    inline const Type* commonType( const Type* type1, const Type* type2, bool allowPrimitiveToTensor )
+    inline const Type* commonType( const Type* type1, const Type* type2 )
     {
-        if ( isCastable(type1, type2, allowPrimitiveToTensor) )
+        if ( isCastable(type1, type2) )
         {
             return type2;
         }
-        else if ( isCastable(type2, type1, allowPrimitiveToTensor) )
+        else if ( isCastable(type2, type1) )
         {
             return type1;
         }

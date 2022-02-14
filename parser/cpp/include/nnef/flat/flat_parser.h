@@ -222,7 +222,7 @@ namespace nnef
 
             lexer.readToken('(');
 
-            Dictionary<Value> args = parseArguments(proto, lexer, &dtypes, dataType, true, false);
+            Dictionary<Value> args = parseArguments(proto, lexer, &dtypes, dataType, true, false, false);
 
             lexer.readToken(')');
             lexer.readToken(';');
@@ -258,8 +258,9 @@ namespace nnef
 
     protected:
 
-        static Dictionary<Value> parseArguments( const Prototype& proto, Lexer& lexer, const Dictionary<Typename>* decls, const PrimitiveType* dataType,
-                                                const bool allowIdentifier, bool expectNamed, const Param* exclusion = nullptr )
+        static Dictionary<Value> parseArguments( const Prototype& proto, Lexer& lexer, const Dictionary<Typename>* decls,
+                                                const PrimitiveType* dataType, const bool allowIdentifier, const bool allowArrayToTensor,
+                                                bool expectNamed, const Param* exclusion = nullptr )
         {
             Dictionary<Value> args;
 
@@ -314,7 +315,7 @@ namespace nnef
 
                 auto paramType = dataType ? bindDataType(param->type(), dataType) : param->type();
                 auto argType = typeOf(arg, *decls);
-                if ( !isCastable(argType, paramType) )
+                if ( !isCastable(argType, paramType, true, allowArrayToTensor) )
                 {
                     throw Error(position, "argument of type '%s' cannot be cast to type '%s' for parameter '%s'",
                                 argType->toString().c_str(), paramType->toString().c_str(), param->name().c_str());
@@ -336,6 +337,11 @@ namespace nnef
                     throw Error(lexer.position(), "argument '%s' of operation '%s' must not be provided in this context",
                                 param->name().c_str(), proto.name().c_str());
                 }
+                if ( param->type()->kind() == Type::Tensor && isJaggedArray(arg) )
+                {
+                    throw Error(lexer.position(), "tensor literal argument for argument '%s' must not be jagged nested array",
+                                param->name().c_str());
+                }
 
                 args.emplace(param->name(), std::move(arg));
             }
@@ -353,7 +359,7 @@ namespace nnef
                         {
                             auto valueType = typeOf(param.defaultValue(), *decls);
                             auto paramType = dataType ? bindDataType(param.type(), dataType) : param.type();
-                            if ( !isCastable(valueType, paramType) )
+                            if ( !isCastable(valueType, paramType, true, allowArrayToTensor) )
                             {
                                 throw Error(lexer.position(), "default value type '%s' cannot be cast to type '%s' for parameter '%s'",
                                             valueType->toString().c_str(), paramType->toString().c_str(), param.name().c_str());
@@ -370,6 +376,34 @@ namespace nnef
             }
 
             return args;
+        }
+        
+    private:
+        
+        static bool checkNestedArrayShape( const Value& value, const int* shape, const size_t rank )
+        {
+            if ( rank == 0 )
+            {
+                return value.kind() != Value::Array;
+            }
+            else if ( value.kind() != Value::Array || value.size() != (size_t)*shape )
+            {
+                return false;
+            }
+            for ( size_t i = 0; i < value.size(); ++i )
+            {
+                if ( !checkNestedArrayShape(value[i], shape + 1, rank - 1) )
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        static bool isJaggedArray( const Value& value )
+        {
+            auto shape = nestedArrayShape(value);
+            return !checkNestedArrayShape(value, shape.data(), shape.size());
         }
 
     private:

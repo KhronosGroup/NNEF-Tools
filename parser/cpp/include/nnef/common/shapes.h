@@ -1039,9 +1039,16 @@ namespace nnef
 		return quantize_shape(input, Shape(), max, bits);
 	}
     
-	inline Shape zero_point_linear_quantize_shape( const Shape& input, const Value& zero_point, const Value& scale, const Value& bits )
+	inline Shape zero_point_linear_quantize_shape( const Shape& input, const Shape& zero_point, const Shape& scale, const Value& bits )
 	{
-		return quantize_shape(input, Shape(), Shape(), bits);
+        check(broadcastable(zero_point, input), "cannot broadcast 'zero_point' shape (%s) to 'input' shape (%s)",
+              to_string(zero_point).c_str(), to_string(input).c_str());
+        check(broadcastable(scale, input), "cannot broadcast 'scale' shape (%s) to 'input' shape (%s)",
+              to_string(scale).c_str(), to_string(input).c_str());
+        
+        check_range("bits", bits, 0);
+        
+        return input;
 	}
 
 }   // namespace nnef

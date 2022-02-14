@@ -750,8 +750,8 @@ namespace nnef
             
             Prototype("zero_point_linear_quantize", {
                 Param("x", ScalarTensor),
-                Param("zero_point", Integer),
-                Param("scale", Scalar),
+                Param("zero_point", IntegerTensor),
+                Param("scale", ScalarTensor),
                 Param("bits", Integer),
                 Param("signed", Logical),
                 Param("symmetric", Logical),

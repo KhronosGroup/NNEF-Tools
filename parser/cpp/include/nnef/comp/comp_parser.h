@@ -841,7 +841,7 @@ namespace nnef
 
                     if ( decls )
                     {
-                        type = commonType(type, item->type(), true);
+                        type = commonType(type, item->type());
                         if ( !type )
                         {
                             throw Error(position, "incompatible item types (%s vs %s) in array",
@@ -1272,7 +1272,7 @@ namespace nnef
 
             auto falseValue = parseExpression(lexer, prototypes, decls, true, true, true);
 
-            const Type* type = commonType(trueValue->type(), falseValue->type(), true);
+            const Type* type = commonType(trueValue->type(), falseValue->type());
             if ( !type )
             {
                 throw Error(trueValue->position(), "incompatible types in if-else expression (%s vs %s)",
@@ -1555,7 +1555,7 @@ namespace nnef
                 }
             }
             
-            const Type* argType = commonType(lhsType, rhsType, true);
+            const Type* argType = commonType(lhsType, rhsType);
             
             switch ( op )
             {

@@ -86,7 +86,7 @@ namespace nnef
 
             lexer.readToken('(');
 
-            Dictionary<Value> args = parseArguments(proto, lexer, nullptr, nullptr, false, false, &proto.param(0));
+            Dictionary<Value> args = parseArguments(proto, lexer, nullptr, nullptr, false, true, true, &proto.param(0));
 
             lexer.readToken(')');
             lexer.readToken(';');
