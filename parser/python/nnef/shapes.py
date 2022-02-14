@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import nnef
+import numpy as np
 
 
 def _clamp(x, a, b):
@@ -505,6 +506,8 @@ def add_n_shape(values):
 def _get_shape(graph, value):
     if isinstance(value, nnef.Identifier):
         return graph.tensors[value].shape
+    elif isinstance(value, np.ndarray):
+        return list(value.shape)
     elif isinstance(value, list):
         return [_get_shape(graph, v) for v in value]
     else:
@@ -560,6 +563,12 @@ def infer_shapes(graph, external_shapes={}, custom_shapes={}):
         except AssertionError as e:
             raise nnef.Error("while inferring shape of tensor(s) '{}' (operation '{}'): {}".
                              format(', '.join(op.outputs.values()), op.name, e))
+
+    for tensor in graph.tensors.values():
+        if tensor.quantization:
+            for key, value in tensor.quantization.items():
+                if isinstance(value, np.ndarray):
+                    assert _broadcastable(value.shape, tensor.shape)
 
 
 def _infer_op_shapes(op_name, attribs, input_shapes, output_counts, custom_shapes={}):
@@ -700,6 +709,8 @@ _StandardShapeFuncs = {
     'softmax': softmax_shape,
     'linear_quantize': quantize_shape,
     'logarithmic_quantize': quantize_shape,
+    'min_max_linear_quantize': quantize_shape,
+    'zero_point_linear_quantize': quantize_shape,
     'avg_roi_pool': roi_shape,
     'max_roi_pool': roi_shape,
     'avg_roi_align': roi_shape,

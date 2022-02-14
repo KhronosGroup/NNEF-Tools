@@ -125,10 +125,6 @@ def _write_tensor(array, filename):
 def _write_quantization(graph, file):
     for tensor in graph.tensors:
         if tensor.quant:
-            for k, v in six.iteritems(tensor.quant):
-                assert not isinstance(v, np.ndarray) or len(v.shape) == 0, \
-                    "per channel quantization attributes are not allowed"
-
             op_name = tensor.quant['op-name']
             attribs = ', '.join("{} = {}".format(k, _printable_value(v))
                                 for k, v in six.iteritems(tensor.quant)
@@ -141,7 +137,7 @@ def _printable_value(v):
     if type(v) == bool:
         return 'true' if v else 'false'
     elif type(v) == np.ndarray:
-        return [x for x in v]
+        return v.tolist()
     else:
         return v
 

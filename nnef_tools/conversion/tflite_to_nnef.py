@@ -124,6 +124,7 @@ class Converter(_TFConverter):
         for tensor in graph.tensors:
             if tensor.quant:
                 scale = tensor.quant.get('scale')
+                zero_point = tensor.quant.get('zero_point')
                 if scale is not None and not self._is_zero(scale):
                     if 'min' in tensor.quant:
                         del tensor.quant['min']
@@ -136,6 +137,13 @@ class Converter(_TFConverter):
                         "unknown quantized dtype '{}'".format(tensor.dtype)
                     tensor.quant['signed'] = tensor.dtype == np.int8 or tensor.dtype == np.int32
                     tensor.quant['symmetric'] = self._is_conv_filter(tensor)
+
+                    if tensor.data is None:
+                        if isinstance(zero_point, np.ndarray) and len(zero_point.shape) == 1:
+                            tensor.quant['zero_point'] = np.expand_dims(zero_point, axis=0)
+                        if isinstance(scale, np.ndarray) and len(scale.shape) == 1:
+                            tensor.quant['scale'] = np.expand_dims(scale, axis=0)
+
 
     def _fix_custom_options(self, graph):
         for op in graph.operations:

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from setuptools import setup, Extension
+import numpy
 import shutil
 import os
 
@@ -27,9 +28,10 @@ if os.path.exists('nnef.egg-info'):
 
 module = Extension('_nnef',
                    sources=['nnef.cpp'],
-                   include_dirs=['../cpp/include'],
+                   include_dirs=['../cpp/include', numpy.get_include()],
                    language='c++',
-                   extra_compile_args=['-std=c++11'])
+                   extra_compile_args=['-std=c++11'],
+                   define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')])
 
 setup(name='nnef',
       version='0.3',

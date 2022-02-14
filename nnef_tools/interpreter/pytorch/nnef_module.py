@@ -181,10 +181,15 @@ class NNEFModule(torch.nn.Module):
     @staticmethod
     def _dequantize(data, quant):
         op_name = quant['op-name']
+        rank = len(data.shape)
         if op_name == 'zero_point_linear_quantize':
-            return NNEFModule._dequantize_zero_point(data, quant['zero_point'], quant['scale'])
+            return NNEFModule._dequantize_zero_point(data,
+                                                     NNEFModule._ensure_rank(quant['zero_point'], rank),
+                                                     NNEFModule._ensure_rank(quant['scale'], rank))
         elif op_name == 'min_max_linear_quantize' or op_name == 'linear_quantize':
-            return NNEFModule._dequantize_min_max(data, quant['min'], quant['max'],
+            return NNEFModule._dequantize_min_max(data,
+                                                  NNEFModule._ensure_rank(quant['min'], rank),
+                                                  NNEFModule._ensure_rank(quant['max'], rank),
                                                   quant['signed'], quant['symmetric'], quant['bits'])
         else:
             raise ValueError("Quantization operation '{}' not implemented".format(op_name))
@@ -202,11 +207,18 @@ class NNEFModule(torch.nn.Module):
 
     def _fake_quantize(self, tensor, quant):
         op_type = quant['op-name']
-        attribs = {key: value for key, value in six.iteritems(quant) if key != 'op-name'}
+        rank = len(tensor.shape)
+        attribs = {key: NNEFModule._ensure_rank(value, rank) if isinstance(value, np.ndarray) else value
+                   for key, value in six.iteritems(quant) if key != 'op-name'}
 
         assert op_type in self._operators, "Unsupported quantization operation: {}".format(op_type)
         func = self._operators[op_type]
         return func(tensor, **attribs)
+
+    @staticmethod
+    def _ensure_rank(value, rank):
+        array = np.array(value)
+        return np.reshape(array, newshape=array.shape + (1,) * (rank - len(array.shape)))
 
     _dtypeRemap = {
         np.float16: np.float32,

@@ -15,6 +15,7 @@
  */
 
 #include "Python.h"
+#include "numpy/arrayobject.h"
 #include "nnef/flat/flat_parser.h"
 #include "nnef/comp/comp_parser.h"
 #include "nnef/flat/quant_parser.h"
@@ -24,6 +25,8 @@
 #include <sstream>
 #include <string>
 #include <locale>
+
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
 
 static PyObject* NNEF_Error;
@@ -205,7 +208,8 @@ struct GraphCallback : public nnef::Parser::Callback
     virtual void beginGraph( const nnef::Prototype& proto, const nnef::Dictionary<nnef::Prototype>& fragments )
     {
         PyObject* name = PY_STRING_FROM_CSTR(proto.name().c_str());
-        
+
+        this->protos = &fragments;
         this->tensors = PyDict_New();
         this->operations = PyList_New(0);
         
@@ -240,9 +244,18 @@ struct GraphCallback : public nnef::Parser::Callback
             PyObject* quantization = PyDict_New();
             if ( quant.count(it.first) )
             {
-                for ( auto& qit : quant.at(it.first) )
+                auto& attribs = quant.at(it.first);
+                auto& op_name = attribs.at("op-name").string();
+                auto& op_proto = protos->at(op_name);
+                for ( auto& qit : attribs )
                 {
-                    PyDict_SetItemString(quantization, qit.first.c_str(), buildPyObjectFromValue(qit.second));
+                    auto obj = buildPyObjectFromValue(qit.second);
+                    auto param = op_proto.param(qit.first.c_str());
+                    if ( param && param->type()->kind() == nnef::Type::Tensor )
+                    {
+                        obj = PyArray_FromAny(obj, NULL, 0, 0, 0, NULL);
+                    }
+                    PyDict_SetItemString(quantization, qit.first.c_str(), obj);
                 }
             }
             
@@ -290,6 +303,7 @@ struct GraphCallback : public nnef::Parser::Callback
     std::istream& qis;
     const char* qfn;
     nnef::Dictionary<nnef::Dictionary<nnef::Value>> quant;
+    const nnef::Dictionary<nnef::Prototype>* protos;
 
     PyObject* tensors;
     PyObject* operations;
@@ -471,6 +485,8 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
     Graph = makeNamedTuple("Graph", { "name", "tensors", "operations", "inputs", "outputs" });
     Py_INCREF(Graph);
     PyModule_AddObject(module, "Graph", Graph);
+
+    import_array();
     
 #if PY_MAJOR_VERSION >= 3
 	return module;

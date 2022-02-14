@@ -993,7 +993,7 @@ def nnef_copy_n(x, times):
 
 
 def nnef_zero_point_linear_quantize(x, zero_point, scale, bits, signed, symmetric):
-    # type: (torch.Tensor, int, float, int, bool, bool)->torch.Tensor
+    # type: (torch.Tensor, torch.Tensor, torch.Tensor, int, bool, bool)->torch.Tensor
 
     z = torch.round(x / scale) + zero_point
     r = 2 ** (bits - 1) - 1 if signed else 2 ** bits - 1
@@ -1003,7 +1003,7 @@ def nnef_zero_point_linear_quantize(x, zero_point, scale, bits, signed, symmetri
 
 
 def nnef_min_max_linear_quantize(x, min, max, bits, signed, symmetric):
-    # type: (torch.Tensor, float, float, int, bool, bool)->torch.Tensor
+    # type: (torch.Tensor, torch.Tensor, torch.Tensor, int, bool, bool)->torch.Tensor
 
     r = float(2 ** bits - 1 - int(signed and symmetric))
     z = torch.clamp(x, min, max)
@@ -1012,7 +1012,7 @@ def nnef_min_max_linear_quantize(x, min, max, bits, signed, symmetric):
 
 
 def nnef_logarithmic_quantize(x, max, bits):
-    # type: (torch.Tensor, float, int)->torch.Tensor
+    # type: (torch.Tensor, torch.Tensor, int)->torch.Tensor
 
     r = float(2 ** bits - 1)
     m = math.ceil(math.log2(max))
