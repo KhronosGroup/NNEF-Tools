@@ -254,6 +254,12 @@ struct GraphCallback : public nnef::Parser::Callback
                     if ( param && param->type()->kind() == nnef::Type::Tensor )
                     {
                         obj = PyArray_FromAny(obj, NULL, 0, 0, 0, NULL);
+                        auto arr = (PyArrayObject*)obj;
+                        if ( PyArray_TYPE(arr) == NPY_FLOAT64 )
+                        {
+                            obj = PyArray_FromArray(arr, PyArray_DescrFromType(NPY_FLOAT32), 0);
+                            Py_DECREF(arr);
+                        }
                     }
                     PyDict_SetItemString(quantization, qit.first.c_str(), obj);
                 }
