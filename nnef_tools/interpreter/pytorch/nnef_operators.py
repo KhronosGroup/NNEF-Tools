@@ -210,7 +210,7 @@ def nnef_deconv(input,  # type: torch.Tensor
                 ):
     # type: (...)->torch.Tensor
 
-    assert border == 'constant', "nnef.deconv: '{}' border unsupported.".format(border)
+    assert border == 'constant' or border == 'replicate', "nnef.deconv: '{}' border unsupported.".format(border)
 
     if output_shape and output_shape[0] != input.shape[0]:
         output_shape = list(output_shape)
@@ -248,6 +248,10 @@ def nnef_deconv(input,  # type: torch.Tensor
                                 filter=filter.shape[2:],
                                 stride=stride,
                                 dilation=dilation)
+
+    if border == 'replicate':
+        input = F.pad(input=input, pad=(1,) * 2 * spatial_dims, mode='replicate')
+        padding = [(p + s, q + s) for (p, q), s in zip(padding, stride)]
 
     uncropped_output_shape = nnef.shapes.deconv_shape(input=list(input.shape),
                                                       filter=filter.shape,
