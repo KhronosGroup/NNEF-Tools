@@ -980,6 +980,9 @@ class TestCases(TestEnv):
     def test_elu(self):
         self._test_unary('Elu')
 
+    def test_erf(self):
+        self._test_unary('Erf')
+
     def test_abs(self):
         self._test_unary('Abs')
 
