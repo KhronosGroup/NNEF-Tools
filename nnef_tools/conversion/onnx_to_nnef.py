@@ -105,6 +105,15 @@ fragment lstm_loop(
 }
 """
 
+_ERF_FRAGMENT = """
+fragment erf( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+{
+    t = 1.0 / (1.0 + 0.3275911 * abs(x));
+    z = 1.0 - (((((1.061405429 * t + -1.453152027) * t) + 1.421413741) * t + -0.284496736) * t + 0.254829592) * t * exp(-x * x);
+    y = sign(x) * z;
+}
+"""
+
 _INT_MAX = 2 ** 31 - 1
 
 
@@ -118,6 +127,7 @@ class Converter(_Converter):
             'mean_variance_normalization': _MEAN_VARIANCE_NORMALIZATION_FRAGMENT,
             'lstm_step': _LSTM_STEP_FRAGMENT,
             'lstm_loop': _LSTM_LOOP_FRAGMENT,
+            'erf': _ERF_FRAGMENT,
         }
 
     @staticmethod
@@ -134,6 +144,7 @@ class Converter(_Converter):
             'mean_variance_normalization': lambda input, scale, offset, **kwargs: input,
             'lstm_step': lambda x, h, c, W, R, B: (h, c),
             'lstm_loop': lambda X, W, R, B, h, c, **kwargs: (h, c),
+            'erf': lambda x: x,
         }
 
     def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False, keep_io_names=False,
@@ -418,11 +429,11 @@ _Transforms = Converter.unpack_transforms({
                 'epsilon': '!epsilon',
             }
         ),
-    ('Relu', 'Sigmoid', 'Tanh', 'Softplus', 'Selu', 'Not', 'Identity', 'Elu', 'Abs', 'Sign',
+    ('Relu', 'Sigmoid', 'Tanh', 'Softplus', 'Selu', 'Not', 'Identity', 'Elu', 'Erf', 'Abs', 'Sign',
      'Sin', 'Cos', 'Tan', 'Asin', 'Acos', 'Atan', 'Sinh', 'Cosh', 'Tanh', 'Asinh', 'Acosh', 'Atanh',
      'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round'):
         Transform(
-            type=('relu', 'sigmoid', 'tanh', 'softplus', 'selu', 'not', 'copy', 'elu', 'abs', 'sign',
+            type=('relu', 'sigmoid', 'tanh', 'softplus', 'selu', 'not', 'copy', 'elu', 'erf', 'abs', 'sign',
                   'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
                   'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round'),
             inputs='!I[0]',
@@ -818,6 +829,9 @@ _Transforms = Converter.unpack_transforms({
             type='gather',
             inputs=('!I[0]', '!I[1]'),
             outputs='!O[0]',
+            defaults={
+                'axis': 0,
+            },
             attribs={
                 'axis': '!ensure_positive(axis, I[0].rank)',
             },
