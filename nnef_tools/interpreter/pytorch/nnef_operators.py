@@ -210,7 +210,7 @@ def nnef_deconv(input,  # type: torch.Tensor
                 ):
     # type: (...)->torch.Tensor
 
-    assert border == 'constant', "nnef.deconv: '{}' border unsupported.".format(border)
+    assert border == 'constant' or border == 'replicate', "nnef.deconv: '{}' border unsupported.".format(border)
 
     if output_shape and output_shape[0] != input.shape[0]:
         output_shape = list(output_shape)
@@ -248,6 +248,10 @@ def nnef_deconv(input,  # type: torch.Tensor
                                 filter=filter.shape[2:],
                                 stride=stride,
                                 dilation=dilation)
+
+    if border == 'replicate':
+        input = F.pad(input=input, pad=(1,) * 2 * spatial_dims, mode='replicate')
+        padding = [(p + s, q + s) for (p, q), s in zip(padding, stride)]
 
     uncropped_output_shape = nnef.shapes.deconv_shape(input=list(input.shape),
                                                       filter=filter.shape,
@@ -713,13 +717,14 @@ def nnef_multilinear_upsample(input, factor, method='symmetric', border='replica
     output_shape = [n, c] + [f * s for f, s in zip(factor, input.shape[2:])]
 
     if symmetric:
-        return nnef_deconv(input, filter, bias, stride=factor, padding=[(f // 2, f - f // 2) for f in factor],
+        return nnef_deconv(input, filter, bias, stride=factor, padding=[(f - 1, f - 1) for f in factor],
                            border='constant', groups=c, output_shape=output_shape)
     else:
         if replicate:
             input = nnef_pad(input, padding=[(0, 0), (0, 0)] + [(1, 0)] * rank, border=border)
 
-        return nnef_deconv(input, filter, bias, stride=factor, padding=[(f if replicate else 0, f - 1) for f in factor],
+        padding = factor if replicate else [f // 2 for f in factor]
+        return nnef_deconv(input, filter, bias, stride=factor, padding=[(p, p) for p in padding],
                            border='constant', groups=c, output_shape=output_shape)
 
 
