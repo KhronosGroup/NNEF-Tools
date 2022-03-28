@@ -572,16 +572,17 @@ namespace nnef
                     checkStructure(context, invocation.type(), invocation.position());
                 }
                 
+                auto& resultType = static_cast<const TupleType&>(*invocation.type());
                 if ( proto.resultCount() == 1 )
                 {
-                    ids[proto.result(0).name()] = getResultValue(context, proto.name());
+                    ids[proto.result(0).name()] = getResultValue(context, resultType, proto.name());
                 }
                 else
                 {
                     assert(context.kind() == Value::Tuple);
                     for ( size_t i = 0; i < proto.resultCount(); ++i )
                     {
-                        ids[proto.result(i).name()] = getResultValue(context[i], proto.name());
+                        ids[proto.result(i).name()] = getResultValue(context[i], *resultType.itemType(i), proto.name());
                     }
                 }
             }
@@ -618,6 +619,11 @@ namespace nnef
                     items[i] = ids[proto.result(i).name()];
                 }
                 value = Value::tuple(items);
+            }
+            
+            if ( hasNone(value) )
+            {
+                throw Error(invocation.position(), "could not evaluate invocation (possibly unknown result array length)");
             }
             
             if ( !lower )
@@ -977,6 +983,10 @@ namespace nnef
                 }
                 case Type::Array:
                 {
+                    if ( value.kind() == Value::Identifier || value.kind() == Value::None )
+                    {
+                        break;
+                    }
                     if ( value.kind() != Value::Array )
                     {
                         throw Error(position, "invocation context mismatch: expected array on left hand side to match type '%s'",
@@ -1042,31 +1052,41 @@ namespace nnef
             return Value::identifier(idx ? indexedId(id, idx) : id);
         }
         
-        Value getResultValue( const Value& context, const std::string op, size_t idx = 0 )
+        Value getResultValue( const Value& context, const Type& type, const std::string op, size_t idx = 0 )
         {
             if ( !context )
             {
+                if ( type.kind() == Type::Array )
+                {
+                    return Value::none();
+                }
                 return makeResultValue(op, idx);
             }
             else if ( context.kind() == Value::Identifier )
             {
+                if ( type.kind() == Type::Array )
+                {
+                    return Value::none();
+                }
                 return context.identifier() != "" ? context : makeResultValue(op, idx);
             }
             else if ( context.kind() == Value::Array )
             {
                 std::vector<Value> results(context.size());
+                auto& arrayType = static_cast<const ArrayType&>(type);
                 for ( size_t i = 0; i < context.size(); ++i )
                 {
-                    results[i] = getResultValue(context[i], op, i + 1);
+                    results[i] = getResultValue(context[i], *arrayType.itemType(), op, i + 1);
                 }
                 return Value::array(results);
             }
             else if ( context.kind() == Value::Tuple )
             {
                 std::vector<Value> results(context.size());
+                auto& tupleType = static_cast<const TupleType&>(type);
                 for ( size_t i = 0; i < context.size(); ++i )
                 {
-                    results[i] = getResultValue(context[i], op);
+                    results[i] = getResultValue(context[i], *tupleType.itemType(i), op);
                 }
                 return Value::array(results);
             }
@@ -1074,6 +1094,33 @@ namespace nnef
             {
                 assert(false);
                 return Value();
+            }
+        }
+        
+        bool hasNone( const Value& value )
+        {
+            switch ( value.kind() )
+            {
+                case Value::None:
+                {
+                    return true;
+                }
+                case Value::Tuple:
+                case Value::Array:
+                {
+                    for ( size_t i = 0; i < value.size(); ++i )
+                    {
+                        if ( hasNone(value[i]) )
+                        {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                default:
+                {
+                    return false;
+                }
             }
         }
 
