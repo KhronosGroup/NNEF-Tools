@@ -599,7 +599,7 @@ namespace nnef
                     {
                         evaluateAssign(assignment.lhs(), assignment.rhs(), ids, dtypes, callback, dataType, ctx);
                     }
-                    catch ( Error e )
+                    catch ( const Error& e )
                     {
                         throw Error(chain(e.position(), invocation.position()), e.what());
                     }

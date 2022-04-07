@@ -130,7 +130,7 @@ namespace nnef
             parser.parse(graph_is, graph_fn.c_str(), callback);
             return true;
         }
-        catch ( nnef::Error e )
+        catch ( const nnef::Error& e )
         {
             error = "Parse error in file " + format_error_position(e.position()) + " " + e.what();
             
@@ -204,7 +204,7 @@ namespace nnef
             validate_tensor_header(header);
             tensor.shape.assign(header.extents, header.extents + header.rank);
         }
-        catch ( nnef::Error e )
+        catch ( const nnef::Error& e )
         {
             error = "Invalid tensor header: " + std::string(e.what());
             return false;
@@ -738,7 +738,7 @@ namespace nnef
             }
             return true;
         }
-        catch ( std::runtime_error e )
+        catch ( const std::runtime_error& e )
         {
             error = "Runtime error: " + std::string(e.what());
             return false;
