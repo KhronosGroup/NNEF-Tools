@@ -397,12 +397,12 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
         parser.parse(gis, isFile ? input : "input", callback);
         return callback.graph;
     }
-    catch ( nnef::Error e )
+    catch ( const nnef::Error& e )
     {
         PyErr_SetString(NNEF_Error, buildErrorString(e).c_str());
 		return NULL;
     }
-    catch ( std::invalid_argument e )
+    catch ( const std::invalid_argument& e )
     {
         PyErr_SetString(PyExc_ValueError, e.what());
         return NULL;
