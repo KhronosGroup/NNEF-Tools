@@ -156,6 +156,9 @@ class Executor:
     def output_info(self):
         raise NotImplementedError()
 
+    def tensor_info(self):
+        raise NotImplementedError()
+
     def __call__(self, inputs, output_names=None, collect_statistics=False):
         raise NotImplementedError()
 
@@ -193,6 +196,11 @@ class TFExecutor(Executor):
     def output_info(self):
         return [TensorInfo(tensor.name, tuple(tensor.shape.as_list()), tensor.dtype.as_numpy_dtype)
                 for tensor in self.outputs]
+
+    def tensor_info(self):
+        tensors = [tensor for op in self.graph.get_operations() for tensor in op.outputs]
+        return [TensorInfo(tensor.name, tuple(tensor.shape.as_list()), tensor.dtype.as_numpy_dtype)
+                for tensor in tensors]
 
     def __call__(self, inputs, output_names=None, collect_statistics=False):
         ops = self.graph.get_operations()
@@ -244,6 +252,10 @@ class TFLiteExecutor(Executor):
     def output_info(self):
         return [TensorInfo(tensor['name'], tensor['shape'], tensor['dtype'])
                 for tensor in self.interpreter.get_output_details()]
+
+    def tensor_info(self):
+        return [TensorInfo(tensor['name'], tensor['shape'], tensor['dtype'])
+                for tensor in self.interpreter.get_tensor_details()]
 
     def __call__(self, inputs, output_names=None, collect_statistics=False):
         for tensor in self.interpreter.get_input_details():
@@ -305,6 +317,9 @@ class ONNXExecutor(Executor):
     def output_info(self):
         return self.outputs
 
+    def tensor_info(self):
+        return None
+
     def __call__(self, inputs, output_names=None, collect_statistics=False):
         if output_names is not None:
             inputs_as_outputs = {name: inputs[name] for name in output_names if name in inputs}
@@ -346,6 +361,10 @@ class NNEFExecutor(Executor):
     def output_info(self):
         return [TensorInfo(tensor.name, tensor.shape, _nnef_dtype_to_numpy[tensor.dtype])
                 for tensor in self.interpreter.output_details()]
+
+    def tensor_info(self):
+        return [TensorInfo(tensor.name, tensor.shape, _nnef_dtype_to_numpy[tensor.dtype])
+                for tensor in self.interpreter.tensor_details()]
 
     def __call__(self, inputs, output_names=None, collect_statistics=False):
         inputs = [inputs[tensor.name] for tensor in self.interpreter.input_details()]
@@ -438,17 +457,24 @@ def main(args):
         stdio.set_stdin_to_binary()
         source = StreamInputSource(sys.stdin, args.io_transpose)
 
-    output_names = eval(args.output_names) if args.output_names is not None else None
+    output_names = eval(args.output_names) if args.output_names is not None and args.output_names != "*" else args.output_names
     custom_operators = get_custom_operators(args.custom_operators) if args.custom_operators is not None else None
 
     if args.random is not None and args.seed is not None:
         np.random.seed(args.seed)
 
-    fetch_names = output_names.keys() if isinstance(output_names, dict) else output_names
     collect_statistics = args.statistics is not None
 
     try:
         executor = get_executor(args.format, args.model, collect_statistics, custom_operators, args.decompose)
+
+        if isinstance(output_names, dict):
+            fetch_names = output_names.keys()
+        elif output_names == "*":
+            tensors = executor.tensor_info()
+            fetch_names = [info.name for info in tensors] if tensors is not None else None
+        else:
+            fetch_names = output_names
 
         input_info = executor.input_info()
         if args.batch_size is not None:
@@ -542,7 +568,8 @@ if __name__ == '__main__':
     parser.add_argument('--output-path', type=str, default=None,
                         help='Folder to save outputs into')
     parser.add_argument('--output-names', type=str, default=None,
-                        help='The set (dict) of tensor names (to file names) considered as outputs to be saved')
+                        help='The set (dict) of tensor names (to file names) considered as outputs to be saved. '
+                             'Use * to save all tensors')
     parser.add_argument('--io-transpose', type=str, nargs='*', default=None,
                         help='The inputs/outputs to transpose from channels last to channels first dimension order')
     parser.add_argument('--decompose', type=str, nargs='*', default=None,

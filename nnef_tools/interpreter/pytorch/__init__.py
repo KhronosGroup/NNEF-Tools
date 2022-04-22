@@ -73,6 +73,9 @@ class Interpreter:
     def output_details(self):
         return [self._nnef_graph.tensors[name] for name in self._nnef_graph.outputs]
 
+    def tensor_details(self):
+        return self._nnef_graph.tensors.values()
+
     @staticmethod
     def _compute_statistics(torch_tensor):
         num = torch_tensor.numel()
