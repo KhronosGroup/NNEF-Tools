@@ -688,7 +688,7 @@ _Transforms = Converter.unpack_transforms({
     'Slice':
         Transform(
             type='slice',
-            defaults={
+            using={
                 'axes': '!as_const(I[3]) if len(I) > 3 else list(range(I[0].rank))',
                 'starts': '![limit_range(x) for x in as_const(I[1])]',
                 'ends': '![limit_range(x) for x in as_const(I[2])]',
