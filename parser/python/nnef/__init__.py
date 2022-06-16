@@ -81,7 +81,7 @@ def save_graph(graph, path, annotate_shapes=False):
     for operation in graph.operations:
         if operation.name == 'variable':
             variable_filename = os.path.join(path, operation.attribs['label'] + '.dat')
-            os.makedirs(os.path.split(variable_filename)[0])
+            os.makedirs(os.path.split(variable_filename)[0], exist_ok=True)
 
             tensor_name = operation.outputs['output']
             tensor = graph.tensors[tensor_name]
