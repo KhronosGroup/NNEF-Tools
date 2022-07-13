@@ -281,10 +281,10 @@ class Optimizer:
             tensor.producer.attribs['shape'] = list(tensor.shape)
 
     @staticmethod
-    def _merged_conv_batch_norm_params(weights, bias, mean, variance, offset, scale, epsilon):
+    def _merged_conv_batch_norm_params(weights, bias, mean, variance, offset, scale, epsilon, axis):
         std = np.sqrt(variance + epsilon)
         factor = scale / std
-        new_weights = weights * np.reshape(factor, newshape=factor.shape + (1,) * (len(weights.shape) - 1))
+        new_weights = weights * np.reshape(factor, newshape=(1,) * axis + factor.shape + (1,) * (len(weights.shape) - axis - 1))
         new_bias = (bias - mean) * factor + offset
         return new_weights, new_bias
 
@@ -302,7 +302,8 @@ class Optimizer:
                                     np.squeeze(bn.inputs[2].data, axis=0),
                                     np.squeeze(bn.inputs[3].data if len(bn.inputs) > 3 else 0, axis=0),
                                     np.squeeze(bn.inputs[4].data if len(bn.inputs) > 4 else 1, axis=0),
-                                    bn.attribs['epsilon'])
+                                    bn.attribs['epsilon'],
+                                    axis=1 if conv.type == 'deconv' else 0)
 
         bias = np.expand_dims(bias, axis=0)
 
