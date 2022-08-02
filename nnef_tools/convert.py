@@ -316,6 +316,10 @@ def main(args):
             if not check_nan_or_inf(graph, 'Optimized input'):
                 return -1
 
+        if args.static_only:
+            utils.remove_dynamic(graph)
+            utils.remove_unreachable(graph)
+
         if converter:
             graph.sort()
             graph = converter(graph)
@@ -408,6 +412,8 @@ if __name__ == '__main__':
                         help='Names of input tensor where the graph is cut before conversion')
     parser.add_argument('--output-names', type=str, nargs='+',
                         help='Names of output tensor where the graph is cut before conversion')
+    parser.add_argument('--static-only', action='store_true',
+                        help='Only convert static part of the graph, for which tensor shapes are known')
     parser.add_argument('--tensor-mapping', type=str, nargs='?', default=None, const='tensor_mapping.json',
                         help='Export mapping of tensor names from input to output model')
     parser.add_argument('--annotate-shapes', action='store_true',

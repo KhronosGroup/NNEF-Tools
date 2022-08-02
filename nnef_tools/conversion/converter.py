@@ -120,12 +120,14 @@ class Converter:
 
     def __call__(self, graph):
         if not self._infer_shapes:
-            unknown_tensors = [tensor for tensor in graph.tensors if tensor.shape is None and len(tensor.consumers)]
+            unknown_tensors = [tensor for tensor in graph.tensors if (tensor.shape is None or any(s is None for s in tensor.shape))
+                               and len(tensor.consumers)]
             if len(unknown_tensors):
                 names = ["'{}'".format(tensor.name) for tensor in unknown_tensors if tensor.name]
-                raise ConversionError(("Input graph contains tensors with unknown shape: " +
+                raise ConversionError(("Input graph contains tensors with dynamic shape: " +
                                       ", ".join(names) if len(names) else "(no names)") +
-                                      "\nTry the --fold-constants option to eliminate unnecessary constant sub-graphs")
+                                      "\nTry the --fold-constants option to evaluate constant sub-graphs "
+                                      "or the --static-only option to convert only the static part of the graph")
 
         self._graph = Graph(name=graph.name)
         self._tensor_map = {tensor: self._copy_tensor_(tensor) for tensor in graph.tensors}
