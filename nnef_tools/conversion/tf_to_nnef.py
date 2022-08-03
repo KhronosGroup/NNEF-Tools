@@ -378,7 +378,7 @@ _Transforms = Converter.unpack_transforms({
             outputs='!O[0]',
             attribs={
                 'shape': '!flexible_batch(as_const(I[1]), I[0].shape[0])',
-                'dtype': '!T',
+                'dtype': '!I[0].dtype',
             }
         ),
     'Transpose':
@@ -399,7 +399,7 @@ _Transforms = Converter.unpack_transforms({
             attribs={
                 'axes': '!ensure_list(ensure_positive(squeeze_dims, I[0].rank)) if len(squeeze_dims) != 0 else'
                         ' [i for i, x in enumerate(I[0].shape) if x == 1]',
-                'dtype': '!T',
+                'dtype': '!I[0].dtype',
             }
         ),
     'ExpandDims':
@@ -409,7 +409,7 @@ _Transforms = Converter.unpack_transforms({
             outputs='!O[0]',
             attribs={
                 'axes': '!ensure_list(ensure_positive(as_const(I[1]), O[0].rank))',
-                'dtype': '!T',
+                'dtype': '!I[0].dtype',
             }
         ),
     'Pack':
