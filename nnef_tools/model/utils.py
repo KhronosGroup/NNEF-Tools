@@ -195,7 +195,7 @@ def remove_unreachable(graph):
 
 def remove_dynamic(graph):
     dynamic_tensors = {tensor for tensor in graph.tensors if tensor.shape is None or any(s is None for s in tensor.shape)}
-    dynamic_ops = {op for tensor in dynamic_tensors for op in tensor.consumers}
+    dynamic_ops = {tensor.producer for tensor in dynamic_tensors}
 
     queue = list(dynamic_ops)
 
@@ -205,17 +205,17 @@ def remove_dynamic(graph):
         k += 1
 
         for tensor in op.outputs:
+            dynamic_tensors.add(tensor)
             for op in tensor.consumers:
                 if op not in dynamic_ops:
                     dynamic_ops.add(op)
                     queue.append(op)
 
-    removed_tensors = {tensor for tensor in graph.tensors if tensor.producer in dynamic_ops}
-    kept_outputs = [tensor for tensor in graph.outputs if tensor not in removed_tensors]
+    kept_outputs = [tensor for tensor in graph.outputs if tensor not in dynamic_tensors]
+    new_outputs = kept_outputs + [tensor for tensor in graph.tensors
+                                  if all(op in dynamic_ops for op in tensor.consumers) and tensor not in dynamic_tensors]
 
     graph.outputs = kept_outputs
     graph.remove_operations(dynamic_ops, unlink=True)
-    graph.remove_tensors(removed_tensors)
-    graph.outputs = kept_outputs + [tensor for tensor in graph.tensors
-                                    if tensor.shape is None or any(s is None for s in tensor.shape)]
-
+    graph.remove_tensors(dynamic_tensors)
+    graph.outputs = new_outputs
