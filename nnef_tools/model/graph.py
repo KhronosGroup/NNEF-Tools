@@ -14,7 +14,7 @@
 
 from __future__ import division, print_function, absolute_import
 
-from collections import Sequence
+from collections.abc import Sequence
 from functools import reduce
 
 import six
