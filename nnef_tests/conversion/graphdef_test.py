@@ -68,7 +68,7 @@ class TestEnv(unittest.TestCase):
 
     @staticmethod
     def _numpy_dtype(tensor):
-        return np.bool if tensor.dtype.is_bool else tensor.dtype.as_numpy_dtype()
+        return bool if tensor.dtype.is_bool else tensor.dtype.as_numpy_dtype()
 
     @staticmethod
     def _exec_graph_def(graph_def, only_first_output=False):
@@ -92,7 +92,7 @@ class TestEnv(unittest.TestCase):
 
     @staticmethod
     def _random_data(dtype, shape):
-        if dtype == np.bool:
+        if dtype == bool:
             return np.random.random(shape) > 0.5
         else:
             return np.random.random(shape).astype(dtype)
@@ -133,7 +133,7 @@ class TestEnv(unittest.TestCase):
 
         self.assertEqual(len(original_outputs), len(converted_outputs))
         for original, converted in zip(original_outputs, converted_outputs):
-            if original.dtype == np.bool:
+            if original.dtype == bool:
                 self.assertTrue(np.all(original == converted))
             else:
                 diff = np.max(np.abs(original - converted))
