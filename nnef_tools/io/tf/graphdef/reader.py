@@ -39,7 +39,7 @@ _DtypeToNumpy = {
     'DT_UINT16': np.uint16,
     'DT_UINT32': np.uint32,
     'DT_UINT64': np.uint64,
-    'DT_BOOL': np.bool,
+    'DT_BOOL': bool,
     'DT_STRING': np.str,
     'DT_COMPLEX64': np.complex64,
     'DT_COMPLEX128': np.complex128,

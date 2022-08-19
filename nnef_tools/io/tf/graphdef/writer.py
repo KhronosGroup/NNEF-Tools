@@ -32,7 +32,7 @@ _DtypeFromNumpy = {
     np.uint16: 'DT_UINT16',
     np.uint32: 'DT_UINT32',
     np.uint64: 'DT_UINT64',
-    np.bool: 'DT_BOOL',
+    bool: 'DT_BOOL',
     np.bool_: 'DT_BOOL',
     np.str: 'DT_STRING',
     np.str_: 'DT_STRING',

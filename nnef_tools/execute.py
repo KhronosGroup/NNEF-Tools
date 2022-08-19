@@ -36,13 +36,13 @@ _onnx_dtype_to_numpy = {
     "tensor(uint16)": np.uint16,
     "tensor(uint32)": np.uint32,
     "tensor(uint64)": np.uint64,
-    "tensor(bool)": np.bool,
+    "tensor(bool)": bool,
 }
 
 _nnef_dtype_to_numpy = {
     'scalar': np.float32,
     'integer': np.int32,
-    'logical': np.bool,
+    'logical': bool,
 }
 
 _numpy_dtype_remap = {
@@ -52,7 +52,7 @@ _numpy_dtype_remap = {
     np.ushort: np.uint64,
     np.uint: np.uint64,
     np.ulonglong: np.uint64,
-    np.float: np.float32,
+    float: np.float32,
     np.double: np.float64,
     np.longdouble: np.float64,
 }

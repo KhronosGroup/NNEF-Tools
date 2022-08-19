@@ -28,7 +28,7 @@ _DtypeFromNumpy = {
     np.int32: 'INT32',
     np.int64: 'INT64',
     np.str: 'STRING',
-    np.bool: 'BOOL',
+    bool: 'BOOL',
     np.bool_: 'BOOL',
     np.float16: 'FLOAT16',
     np.float64: 'DOUBLE',

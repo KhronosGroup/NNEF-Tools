@@ -35,7 +35,7 @@ _DtypeToNumpy = {
     'INT32': np.int32,
     'INT64': np.int64,
     'STRING': np.str,
-    'BOOL': np.bool,
+    'BOOL': bool,
     'FLOAT16': np.float16,
     'DOUBLE': np.float64,
     'UINT32': np.uint32,
@@ -97,7 +97,7 @@ def _get_tensor(tensor_proto):
         elif dtype == np.complex128:
             data = np.array(tensor_proto.double_data, np.float64)
             data = data[0::2] + data[1::2] * 1j
-        elif dtype in [np.int8, np.uint8, np.int16, np.uint16, np.int32, np.bool]:
+        elif dtype in [np.int8, np.uint8, np.int16, np.uint16, np.int32, bool]:
             data = np.array(tensor_proto.int32_data, dtype)
         elif dtype in [np.uint32, np.uint64]:
             data = np.array(tensor_proto.uint64_data, dtype)

@@ -578,7 +578,7 @@ class ConverterToNNEF(Converter):
         np.uint32: 'integer',
         np.int64: 'integer',
         np.uint64: 'integer',
-        np.bool: 'logical',
+        bool: 'logical',
         np.bool_: 'logical',
     }
 
