@@ -268,8 +268,8 @@ DtypeToNumpy = {
     fb.TensorType.INT32: np.int32,
     fb.TensorType.INT64: np.int64,
     fb.TensorType.UINT8: np.uint8,
-    fb.TensorType.STRING: np.str,
-    fb.TensorType.BOOL: bool,
+    fb.TensorType.STRING: np.str_,
+    fb.TensorType.BOOL: np.bool_,
     fb.TensorType.COMPLEX64: np.complex64,
 }
 
@@ -281,8 +281,8 @@ DtypeFromNumpy = {
     np.int32: fb.TensorType.INT32,
     np.int64: fb.TensorType.INT64,
     np.uint8: fb.TensorType.UINT8,
-    np.str: fb.TensorType.STRING,
-    bool: fb.TensorType.BOOL,
+    np.str_: fb.TensorType.STRING,
+    np.bool_: fb.TensorType.BOOL,
     np.complex64: fb.TensorType.COMPLEX64,
 }
 

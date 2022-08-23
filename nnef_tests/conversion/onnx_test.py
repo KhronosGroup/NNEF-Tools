@@ -44,7 +44,7 @@ class TestEnv(unittest.TestCase):
         "tensor(uint16)": np.uint16,
         "tensor(uint32)": np.uint32,
         "tensor(uint64)": np.uint64,
-        "tensor(bool)": bool,
+        "tensor(bool)": np.bool_,
     }
 
     _network_folder = os.path.join(UNITTEST_FOLDER, 'onnx/nets/') if UNITTEST_FOLDER else None

@@ -40,7 +40,6 @@ def _numpy_dtype_split(dtype):
         np.uint32: (ItemType.UINT, 32),
         np.int64: (ItemType.INT, 64),
         np.uint64: (ItemType.UINT, 64),
-        bool: (ItemType.BOOL, 1),
         np.bool_: (ItemType.BOOL, 1),
     }
     split = splits.get(dtype.type)
@@ -68,7 +67,7 @@ def _numpy_dtype_make(item_type, bits):
         (ItemType.QUINT, 16): np.uint16,
         (ItemType.QUINT, 32): np.uint32,
         (ItemType.QUINT, 64): np.uint64,
-        (ItemType.BOOL, 1): bool,
+        (ItemType.BOOL, 1): np.bool_,
     }
     dtype = dtypes.get((item_type, bits))
     if dtype is None:
