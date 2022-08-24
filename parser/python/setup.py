@@ -34,7 +34,7 @@ module = Extension('_nnef',
                    define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')])
 
 setup(name='nnef',
-      version='0.3',
+      version='1.0',
       description='A package for parsing NNEF files',
       url='https://github.com/KhronosGroup/NNEF-Tools',
       author='Viktor Gyenes',
