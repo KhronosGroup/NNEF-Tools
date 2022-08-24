@@ -40,7 +40,6 @@ def _numpy_dtype_split(dtype):
         np.uint32: (ItemType.UINT, 32),
         np.int64: (ItemType.INT, 64),
         np.uint64: (ItemType.UINT, 64),
-        np.bool: (ItemType.BOOL, 1),
         np.bool_: (ItemType.BOOL, 1),
     }
     split = splits.get(dtype.type)
@@ -68,7 +67,7 @@ def _numpy_dtype_make(item_type, bits):
         (ItemType.QUINT, 16): np.uint16,
         (ItemType.QUINT, 32): np.uint32,
         (ItemType.QUINT, 64): np.uint64,
-        (ItemType.BOOL, 1): np.bool,
+        (ItemType.BOOL, 1): np.bool_,
     }
     dtype = dtypes.get((item_type, bits))
     if dtype is None:
@@ -178,7 +177,7 @@ def read_tensor(file, return_quantization=False):
         data = _fromfile(file, dtype=np.uint8, count=byte_count)
         if len(data) != byte_count:
             raise ValueError('could not read tensor data')
-        data = np.unpackbits(data).astype(np.bool)[:count]
+        data = np.unpackbits(data).astype(bool)[:count]
     else:
         data = _fromfile(file, dtype=_numpy_dtype_make(item_type, bits), count=count)
         if len(data) != count:
@@ -199,7 +198,7 @@ def _write_tensor_provisional(file, tensor, version=(1, 0)):
     _tofile(np.asarray(tensor.shape, dtype=np.uint32), file)
 
     dtype, bits = _numpy_dtype_split(tensor.dtype)
-    code = 0 if dtype == np.float else 3
+    code = 0 if dtype == float else 3
     _tofile(np.asarray([code, bits], dtype=np.uint8), file)
 
     _tofile(np.asarray([0], dtype=np.uint16), file)

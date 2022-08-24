@@ -481,7 +481,7 @@ _Transforms = Converter.unpack_transforms({
             outputs='!transpose_like(O[0], I[0])',
             attribs={
                 'keep_dims': True,
-                'T': '!I[0].dtype if I[0].dtype != np.bool and not _lite_ else None',
+                'T': '!I[0].dtype if I[0].dtype != bool and not _lite_ else None',
             }
         ),
     'concat':
@@ -525,7 +525,7 @@ _Transforms = Converter.unpack_transforms({
             ),
             outputs='!transpose_output(O[0]) if transposing(I[0]) or transposing(I[1]) else O[0]',
             attribs={
-                'T': '!I[0].dtype if I[0].dtype != np.bool and not _lite_ else None',
+                'T': '!I[0].dtype if I[0].dtype != bool and not _lite_ else None',
             }
         ),
     ('copy', 'relu', 'relu6', 'elu', 'selu', 'gelu', 'silu', 'sigmoid', 'softplus', 'exp', 'log',
@@ -538,7 +538,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!transpose_like(O[0], I[0])',
             attribs={
-                'T': '!I[0].dtype if I[0].dtype != np.bool and not _lite_ else None',
+                'T': '!I[0].dtype if I[0].dtype != bool and not _lite_ else None',
             }
         ),
     'leaky_relu':

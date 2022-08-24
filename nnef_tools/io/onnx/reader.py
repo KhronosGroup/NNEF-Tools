@@ -34,8 +34,8 @@ _DtypeToNumpy = {
     'INT16': np.int16,
     'INT32': np.int32,
     'INT64': np.int64,
-    'STRING': np.str,
-    'BOOL': np.bool,
+    'STRING': np.str_,
+    'BOOL': np.bool_,
     'FLOAT16': np.float16,
     'DOUBLE': np.float64,
     'UINT32': np.uint32,
@@ -75,7 +75,7 @@ def _get_tensor(tensor_proto):
     assert dtype is not None
 
     if tensor_proto.HasField('raw_data'):
-        assert dtype != np.str
+        assert dtype != np.str_
 
         data = np.frombuffer(tensor_proto.raw_data, dtype)
         if not _is_little_endian_system:
@@ -87,7 +87,7 @@ def _get_tensor(tensor_proto):
             data = np.array(tensor_proto.double_data, dtype)
         elif dtype == np.int64:
             data = np.array(tensor_proto.int64_data, dtype)
-        elif dtype == np.str:
+        elif dtype == np.str_:
             data = np.array(as_str(tensor_proto.string_data))
         elif dtype == np.float16:
             data = np.array(tensor_proto.int32_data, np.uint16).view(np.float16)
@@ -97,7 +97,7 @@ def _get_tensor(tensor_proto):
         elif dtype == np.complex128:
             data = np.array(tensor_proto.double_data, np.float64)
             data = data[0::2] + data[1::2] * 1j
-        elif dtype in [np.int8, np.uint8, np.int16, np.uint16, np.int32, np.bool]:
+        elif dtype in [np.int8, np.uint8, np.int16, np.uint16, np.int32, np.bool_]:
             data = np.array(tensor_proto.int32_data, dtype)
         elif dtype in [np.uint32, np.uint64]:
             data = np.array(tensor_proto.uint64_data, dtype)

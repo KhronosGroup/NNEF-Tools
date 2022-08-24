@@ -27,8 +27,7 @@ _DtypeFromNumpy = {
     np.int16: 'INT16',
     np.int32: 'INT32',
     np.int64: 'INT64',
-    np.str: 'STRING',
-    np.bool: 'BOOL',
+    np.str_: 'STRING',
     np.bool_: 'BOOL',
     np.float16: 'FLOAT16',
     np.float64: 'DOUBLE',
@@ -110,7 +109,7 @@ def build_tensor_data(data, tensor_proto):
 
     tensor_proto.data_type = build_dtype(data.dtype)
 
-    if data.dtype == np.str:
+    if data.dtype == np.str_:
         tensor_proto.string_data = str(data)
     else:
         data = data.flatten().astype(data.dtype)

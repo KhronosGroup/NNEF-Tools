@@ -31,7 +31,7 @@ from .helpers import tgz_extract
 _DtypeToNumpy = {
     'scalar': np.float32,
     'integer': np.int64,
-    'logical': np.bool,
+    'logical': np.bool_,
 }
 
 

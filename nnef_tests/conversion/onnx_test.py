@@ -44,7 +44,7 @@ class TestEnv(unittest.TestCase):
         "tensor(uint16)": np.uint16,
         "tensor(uint32)": np.uint32,
         "tensor(uint64)": np.uint64,
-        "tensor(bool)": np.bool,
+        "tensor(bool)": np.bool_,
     }
 
     _network_folder = os.path.join(UNITTEST_FOLDER, 'onnx/nets/') if UNITTEST_FOLDER else None
@@ -83,7 +83,7 @@ class TestEnv(unittest.TestCase):
 
     @staticmethod
     def _random_data(dtype, shape):
-        if dtype == np.bool:
+        if dtype == bool:
             return np.random.random(shape) > 0.5
         else:
             return np.random.random(shape).astype(dtype)
@@ -145,7 +145,7 @@ class TestEnv(unittest.TestCase):
 
         self.assertEqual(len(original_outputs), len(converted_outputs))
         for original, converted in zip(original_outputs, converted_outputs):
-            if original.dtype == np.bool:
+            if original.dtype == bool:
                 self.assertTrue(np.all(original == converted))
             else:
                 diff = np.max(np.abs(original - converted))
