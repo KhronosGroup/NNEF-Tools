@@ -198,8 +198,7 @@ def _write_tensor_provisional(file, tensor, version=(1, 0)):
     _tofile(np.asarray(tensor.shape, dtype=np.uint32), file)
 
     dtype, bits = _numpy_dtype_split(tensor.dtype)
-    code = 0 if dtype == float else 3
-    _tofile(np.asarray([code, bits], dtype=np.uint8), file)
+    _tofile(np.asarray([dtype, bits], dtype=np.uint8), file)
 
     _tofile(np.asarray([0], dtype=np.uint16), file)
 

@@ -37,7 +37,6 @@ _DtypeFromNumpy = {
     np.uint32: 'integer',
     np.int64: 'integer',
     np.uint64: 'integer',
-    bool: 'logical',
     np.bool_: 'logical',
 }
 

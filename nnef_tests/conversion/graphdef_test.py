@@ -92,7 +92,7 @@ class TestEnv(unittest.TestCase):
 
     @staticmethod
     def _random_data(dtype, shape):
-        if dtype == np.bool_:
+        if dtype == bool:
             return np.random.random(shape) > 0.5
         else:
             return np.random.random(shape).astype(dtype)
@@ -133,7 +133,7 @@ class TestEnv(unittest.TestCase):
 
         self.assertEqual(len(original_outputs), len(converted_outputs))
         for original, converted in zip(original_outputs, converted_outputs):
-            if original.dtype == np.bool_:
+            if original.dtype == bool:
                 self.assertTrue(np.all(original == converted))
             else:
                 diff = np.max(np.abs(original - converted))
