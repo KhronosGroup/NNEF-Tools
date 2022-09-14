@@ -112,13 +112,13 @@ def _print(graph, file, extensions, fragments, version_custom_ops, annotate_shap
     print("}", file=file)
 
 
-def _write_tensor(array, filename):
+def _write_tensor(array, filename, quantized):
     directory = os.path.dirname(filename)
     if directory and not os.path.exists(directory):
         os.makedirs(directory)
 
     with open(filename, "wb") as file:
-        nnef.write_tensor(file=file, tensor=array)
+        nnef.write_tensor(file=file, tensor=array, quantized=quantized)
 
 
 def _write_quantization(graph, file):
@@ -260,7 +260,8 @@ class Writer(object):
             for op in graph.operations:
                 if op.type == 'variable':
                     filename = op.attribs['label'] + ".dat"
-                    _write_tensor(np.asarray(op.output.data, order='C'), os.path.join(folder, filename))
+                    _write_tensor(np.asarray(op.output.data, order='C'), os.path.join(folder, filename),
+                                  quantized=True if op.output.quant else False)
 
             if any(tensor.quant for tensor in graph.tensors):
                 quant_filename = os.path.join(folder, 'graph.quant')
