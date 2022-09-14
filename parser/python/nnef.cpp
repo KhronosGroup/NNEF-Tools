@@ -171,6 +171,21 @@ static PyObject* buildPyObjectFromValue( const nnef::Value& value )
     return nullptr;
 }
 
+static PyArray_Descr* numpy_dtype( const nnef::Typename& dtype )
+{
+    switch ( dtype )
+    {
+        case nnef::Typename::Scalar:
+            return PyArray_DescrFromType(NPY_FLOAT32);
+        case nnef::Typename::Integer:
+            return PyArray_DescrFromType(NPY_INT64);
+        case nnef::Typename::Logical:
+            return PyArray_DescrFromType(NPY_BOOL);
+        default:
+            return NULL;
+    }
+}
+
 static std::string buildErrorString( nnef::Error e )
 {
     std::string str = "Parse error in '" + std::string(e.position().filename) + "' [" + std::to_string(e.position().line) + ":" + std::to_string(e.position().column) + "] " + e.what();
@@ -253,13 +268,10 @@ struct GraphCallback : public nnef::Parser::Callback
                     auto param = op_proto.param(qit.first.c_str());
                     if ( param && param->type()->kind() == nnef::Type::Tensor )
                     {
-                        obj = PyArray_FromAny(obj, NULL, 0, 0, 0, NULL);
-                        auto arr = (PyArrayObject*)obj;
-                        if ( PyArray_TYPE(arr) == NPY_FLOAT64 )
-                        {
-                            obj = PyArray_FromArray(arr, PyArray_DescrFromType(NPY_FLOAT32), 0);
-                            Py_DECREF(arr);
-                        }
+                        auto tensor_type = (const nnef::TensorType*)param->type();
+                        auto data_type = (const nnef::PrimitiveType*)tensor_type->dataType();
+                        PyArray_Descr* array_dtype = numpy_dtype(data_type->name());
+                        obj = PyArray_FromAny(obj, array_dtype, 0, 0, 0, NULL);
                     }
                     PyDict_SetItemString(quantization, qit.first.c_str(), obj);
                 }
@@ -405,6 +417,11 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
     catch ( const std::invalid_argument& e )
     {
         PyErr_SetString(PyExc_ValueError, e.what());
+        return NULL;
+    }
+    catch ( const std::exception& e )
+    {
+        PyErr_SetString(PyExc_Exception, e.what());
         return NULL;
     }
 }
