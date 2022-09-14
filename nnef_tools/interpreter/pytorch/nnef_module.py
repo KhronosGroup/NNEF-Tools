@@ -47,7 +47,7 @@ class NNEFModule(torch.nn.Module):
         for nnef_tensor in self._nnef_graph.tensors:
             if self._is_variable(nnef_tensor):
                 name = self._registered_name(nnef_tensor.name)
-                data = self._dequantize(nnef_tensor.data, nnef_tensor.quant) \
+                data = self._dequantize(nnef_tensor.data, nnef_tensor.quant, channel_axis=0) \
                     if nnef_tensor.quant else nnef_tensor.data
                 self.register_parameter(name, torch.nn.Parameter(torch.tensor(self.normalize_dtype(data))))
             elif self._is_constant(nnef_tensor):
@@ -108,7 +108,7 @@ class NNEFModule(torch.nn.Module):
 
                 for nnef_tensor, output in zip(op.outputs, outputs):
                     if nnef_tensor.quant and not self._is_variable(nnef_tensor):
-                        output = self._fake_quantize(output, nnef_tensor.quant)
+                        output = self._fake_quantize(output, nnef_tensor.quant, channel_axis=0)
 
                     activations[nnef_tensor.name] = output
                     if self._activation_callback:
@@ -179,17 +179,17 @@ class NNEFModule(torch.nn.Module):
         return data.astype(dtype) if dtype is not None else data
 
     @staticmethod
-    def _dequantize(data, quant):
+    def _dequantize(data, quant, channel_axis):
         op_name = quant['op-name']
         rank = len(data.shape)
         if op_name == 'zero_point_linear_quantize':
             return NNEFModule._dequantize_zero_point(data,
-                                                     NNEFModule._ensure_rank(quant['zero_point'], rank),
-                                                     NNEFModule._ensure_rank(quant['scale'], rank))
+                                                     NNEFModule._ensure_rank(quant['zero_point'], rank, channel_axis),
+                                                     NNEFModule._ensure_rank(quant['scale'], rank, channel_axis))
         elif op_name == 'min_max_linear_quantize' or op_name == 'linear_quantize':
             return NNEFModule._dequantize_min_max(data,
-                                                  NNEFModule._ensure_rank(quant['min'], rank),
-                                                  NNEFModule._ensure_rank(quant['max'], rank),
+                                                  NNEFModule._ensure_rank(quant['min'], rank, channel_axis),
+                                                  NNEFModule._ensure_rank(quant['max'], rank, channel_axis),
                                                   quant['signed'], quant['symmetric'], quant['bits'])
         else:
             raise ValueError("Quantization operation '{}' not implemented".format(op_name))
@@ -205,10 +205,10 @@ class NNEFModule(torch.nn.Module):
         r = 2 ** bits - 1 - int(signed and symmetric)
         return data * ((max - min) / r) + min
 
-    def _fake_quantize(self, tensor, quant):
+    def _fake_quantize(self, tensor, quant, channel_axis):
         op_type = quant['op-name']
         rank = len(tensor.shape)
-        attribs = {key: NNEFModule._ensure_rank(value, rank) if isinstance(value, np.ndarray) else value
+        attribs = {key: NNEFModule._ensure_rank(value, rank, channel_axis) if isinstance(value, np.ndarray) else value
                    for key, value in six.iteritems(quant) if key != 'op-name'}
 
         assert op_type in self._operators, "Unsupported quantization operation: {}".format(op_type)
@@ -216,9 +216,9 @@ class NNEFModule(torch.nn.Module):
         return func(tensor, **attribs)
 
     @staticmethod
-    def _ensure_rank(value, rank):
+    def _ensure_rank(value, rank, offset=0):
         array = np.array(value)
-        return np.reshape(array, newshape=array.shape + (1,) * (rank - len(array.shape)))
+        return np.reshape(array, newshape=(1,) * offset + array.shape + (1,) * (rank - offset - len(array.shape)))
 
     _dtypeRemap = {
         np.float16: np.float32,
