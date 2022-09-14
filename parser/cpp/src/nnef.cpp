@@ -154,7 +154,7 @@ namespace nnef
             return false;
         }
         
-        std::ifstream quant_is(quant_fn);
+        std::ifstream quant_is;
         if ( !quant_fn.empty() )
         {
             quant_is.open(quant_fn);
@@ -355,7 +355,8 @@ namespace nnef
                 
                 if ( tensor.dtype != op.dtype )
                 {
-                    error = "item-type " + tensor.dtype + " in variable file '" + filename + "' does not match data-type " + op.dtype + " defined in network structure";
+                    error = "item-type '" + tensor.dtype + "' in variable file '" + filename + "' does not match data-type '" + op.dtype +
+                            "' defined in network structure";
                     return false;
                 }
                 
