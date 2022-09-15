@@ -66,19 +66,15 @@ class Converter(_TFConverter):
         }
 
     def __init__(self, io_transpose=False, custom_transforms=None, custom_functions=None,
-                 mirror_unsupported=False, keep_io_names=False, dequantize=False):
+                 mirror_unsupported=False, keep_io_names=False):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
         self._io_transpose = io_transpose
         self._keep_io_names = keep_io_names
-        self._dequantize = dequantize
 
     def __call__(self, graph):
         graph = _TFConverter.__call__(self, graph)
         self._fix_custom_options(graph)
-        if self._dequantize:
-            self._dequantize_variables(graph)
-            self._remove_quantization_attribs(graph)
         return graph
 
     def _global_attribs(self):
@@ -144,32 +140,12 @@ class Converter(_TFConverter):
                         if isinstance(scale, np.ndarray) and len(scale.shape) == 1:
                             tensor.quant['scale'] = np.expand_dims(scale, axis=0)
 
-
     def _fix_custom_options(self, graph):
         for op in graph.operations:
             if op.custom:
                 options = op.attribs.get(CustomOptionsKey)
                 if options is not None:
                     op.attribs[CustomOptionsKey] = options.hex()
-
-    def _dequantize_variables(self, graph):
-        for tensor in graph.tensors:
-            if tensor.quant and tensor.data is not None:
-                rank = len(tensor.data.shape)
-                scale = self._ensure_quant_param_rank(tensor.quant.get('scale'), rank)
-                zero_point = self._ensure_quant_param_rank(tensor.quant.get('zero_point'), rank)
-                if scale is not None and not self._is_zero(scale):
-                    dequantized = (tensor.data - zero_point) * scale
-                    tensor.data = dequantized.astype(np.float32)
-                    tensor.quant = None
-
-    def _remove_quantization_attribs(self, graph):
-        for tensor in graph.tensors:
-            tensor.quant = None
-
-    def _ensure_quant_param_rank(self, param, rank):
-        return np.reshape(param, newshape=param.shape + (1,) * (rank - 1)) \
-            if isinstance(param, np.ndarray) and len(param.shape) == 1 else param
 
     def _is_conv_filter(self, tensor):
         tensor = self._tensor_map.get(tensor)

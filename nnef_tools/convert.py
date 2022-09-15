@@ -67,7 +67,7 @@ def get_writer(output_format, fragments, fragment_dependencies, generate_fragmen
 
 
 def get_converter(input_format, output_format, io_transpose, custom_transforms, custom_functions, custom_shapes,
-                  mirror_unsupported, keep_io_names, dequantize):
+                  mirror_unsupported, keep_io_names):
     if input_format == 'tf' and output_format == 'nnef':
         from .conversion.tf_to_nnef import Converter
         return Converter(io_transpose=io_transpose,
@@ -87,8 +87,7 @@ def get_converter(input_format, output_format, io_transpose, custom_transforms, 
                          custom_transforms=custom_transforms,
                          custom_functions=custom_functions,
                          mirror_unsupported=mirror_unsupported,
-                         keep_io_names=keep_io_names,
-                         dequantize=dequantize)
+                         keep_io_names=keep_io_names)
     elif input_format == 'nnef' and output_format == 'tflite':
         from .conversion.nnef_to_tflite import Converter
         return Converter(io_transpose=io_transpose,
@@ -113,10 +112,10 @@ def get_converter(input_format, output_format, io_transpose, custom_transforms, 
         return None
 
 
-def get_optimizer(format, custom_optimizers=None):
+def get_optimizer(format, custom_optimizers=None, dequantize=False):
     if format == 'nnef':
         from .optimization.nnef_optimizer import Optimizer
-        return Optimizer(custom_optimizers=custom_optimizers)
+        return Optimizer(custom_optimizers=custom_optimizers, dequantize=dequantize)
     elif format == 'tf':
         from .optimization.tf_optimizer import Optimizer
         return Optimizer(custom_optimizers=custom_optimizers)
@@ -230,7 +229,7 @@ def main(args):
     if needs_conversion(args.input_format, args.output_format):
         converter = get_converter(args.input_format, args.output_format, io_transpose,
                                   custom_transforms, custom_functions, custom_shapes,
-                                  args.mirror_unsupported, args.keep_io_names, args.dequantize)
+                                  args.mirror_unsupported, args.keep_io_names)
         if converter is None:
             print("Unsupported conversion: {} to {}".format(args.input_format, args.output_format))
             return -1

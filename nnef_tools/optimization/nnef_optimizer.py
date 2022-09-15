@@ -19,9 +19,10 @@ from ..model.graph import *
 
 class Optimizer:
 
-    def __init__(self, keep_tensor_names=True, custom_optimizers=None):
+    def __init__(self, keep_tensor_names=True, custom_optimizers=None, dequantize=False):
         self._keep_tensor_names = keep_tensor_names
         self._custom_optimizers = custom_optimizers or {}
+        self._dequantize = dequantize
 
     def __call__(self, graph, only_required=False):
         self._fix_inputs_as_output(graph)
@@ -97,6 +98,11 @@ class Optimizer:
             generate_missing_tensor_names_from_op_type(graph)
         else:
             generate_tensor_names_from_op_type(graph)
+
+        if self._dequantize:
+            Optimizer._dequantize_variables(graph)
+            Optimizer._remove_quantization_attribs(graph)
+
         return graph
 
     @staticmethod
@@ -486,3 +492,41 @@ class Optimizer:
 
         Operation(reshape.graph, type='squeeze', name=reshape.name, inputs=reshape.input, outputs=reshape.output,
                   attribs=attribs)
+
+    @staticmethod
+    def _dequantize_variables(graph):
+        for tensor in graph.tensors:
+            if tensor.quant and tensor.data is not None:
+                rank = len(tensor.data.shape)
+                scale = Optimizer._ensure_quant_param_rank(tensor.quant.get('scale'), rank)
+                zero_point = Optimizer._ensure_quant_param_rank(tensor.quant.get('zero_point'), rank)
+                if isinstance(zero_point, np.ndarray):
+                    assert Optimizer._broadcastable(zero_point.shape, tensor.shape), \
+                        f"zero-point shape {zero_point.shape} cannot be broadcast to tensor shape {tensor.shape} " \
+                        f"for tensor '{tensor.name}'"
+                if isinstance(scale, np.ndarray):
+                    assert Optimizer._broadcastable(scale.shape, tensor.shape), \
+                        f"scale shape {scale.shape} cannot be broadcast to tensor shape {tensor.shape} " \
+                        f"for tensor '{tensor.name}'"
+                if scale is not None and not Optimizer._is_zero(scale):
+                    dequantized = (tensor.data - zero_point) * scale
+                    tensor.data = dequantized.astype(np.float32)
+                    tensor.quant = None
+
+    @staticmethod
+    def _remove_quantization_attribs(graph):
+        for tensor in graph.tensors:
+            tensor.quant = None
+
+    @staticmethod
+    def _ensure_quant_param_rank(param, rank, offset=0):
+        return np.reshape(param, newshape=(1,) * offset + param.shape + (1,) * (rank - 1 - offset)) \
+            if isinstance(param, np.ndarray) and len(param.shape) == 1 else param
+
+    @staticmethod
+    def _broadcastable(x, y):
+        return all(xi == yi or xi == 1 for xi, yi in zip(x, y))
+
+    @staticmethod
+    def _is_zero(value):
+        return np.all(value == 0) if isinstance(value, np.ndarray) else value == 0
