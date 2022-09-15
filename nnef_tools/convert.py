@@ -330,7 +330,7 @@ def main(args):
 
         if args.optimize:
             custom_optimizers = get_custom_optimizers(args.custom_optimizers) if args.custom_optimizers is not None else None
-            optimizer = get_optimizer(args.output_format, custom_optimizers=custom_optimizers)
+            optimizer = get_optimizer(args.output_format, custom_optimizers=custom_optimizers, dequantize=args.dequantize)
             if optimizer:
                 tensor_lookup = {tensor.name: tensor for tensor in graph.tensors if tensor.name is not None} \
                     if args.tensor_mapping is not None else None
