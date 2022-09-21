@@ -113,7 +113,40 @@ def _get_tensor_data(tensor_proto):
     return data
 
 
-def _get_node(node_proto):
+def _get_tensors(graph_proto, graph, tensors_by_name):
+    for value_info in graph_proto.input:
+        name, shape, dtype = _get_value_info(value_info)
+        tensors_by_name[name] = Tensor(graph=graph, name=name, shape=shape, dtype=dtype)
+    for value_info in graph_proto.output:
+        name, shape, dtype = _get_value_info(value_info)
+        tensors_by_name[name] = Tensor(graph=graph, name=name, shape=shape, dtype=dtype)
+    for value_info in graph_proto.value_info:
+        name, shape, dtype = _get_value_info(value_info)
+        tensors_by_name[name] = Tensor(graph=graph, name=name, shape=shape, dtype=dtype)
+    for tensor_proto in graph_proto.initializer:
+        name, shape, dtype, data = _get_tensor(tensor_proto)
+        tensors_by_name[name] = Tensor(graph=graph, name=name, shape=shape, dtype=dtype, data=data)
+
+    for node in graph_proto.node:
+        for tensor_name in node.output:
+            tensor_name = as_str(tensor_name)
+            if tensor_name not in tensors_by_name:
+                if len(tensor_name) == 0:
+                    tensors_by_name[tensor_name] = Tensor(graph, name='', shape=(), dtype=np.float32,
+                                                          data=np.zeros(shape=(), dtype=np.float32))
+                else:
+                    tensors_by_name[tensor_name] = Tensor(graph, name=tensor_name)
+
+    for node in graph_proto.node:
+        for attribute in node.attribute:
+            if attribute.HasField('g'):
+                _get_tensors(attribute.g, graph, tensors_by_name)
+            if attribute.graphs:
+                for g in attribute.graphs:
+                    _get_tensors(g, graph, tensors_by_name)
+
+
+def _get_node(node_proto, graph, tensors_by_name):
     inputs = [as_str(input) for input in node_proto.input]
     outputs = [as_str(output) for output in node_proto.output]
     name = as_str(_get_field(node_proto, 'name'))
@@ -121,16 +154,12 @@ def _get_node(node_proto):
     op_type = as_str(node_proto.op_type)
     attributes = {}
     for attribute in node_proto.attribute:
-        key, value = _get_attribute(attribute)
+        key, value = _get_attribute(attribute, graph, tensors_by_name)
         attributes[key] = value
     return inputs, outputs, name, domain, op_type, attributes
 
 
-def _has_null_input(node_proto):
-    return any(len(input) == 0 for input in node_proto.input)
-
-
-def _get_attribute(attribute_proto):
+def _get_attribute(attribute_proto, graph, tensors_by_name):
     assert not attribute_proto.HasField('ref_attr_name')
 
     name = as_str(attribute_proto.name)
@@ -144,7 +173,7 @@ def _get_attribute(attribute_proto):
     elif attribute_proto.HasField('t'):
         value = _get_tensor_data(attribute_proto.t)
     elif attribute_proto.HasField('g'):
-        value = _get_graph(attribute_proto.g)
+        value = _get_block(attribute_proto.g, graph, tensors_by_name)
     elif attribute_proto.floats:
         value = [float(f) for f in attribute_proto.floats]
     elif attribute_proto.ints:
@@ -154,42 +183,14 @@ def _get_attribute(attribute_proto):
     elif attribute_proto.tensors:
         value = [_get_tensor_data(t) for t in attribute_proto.tensors]
     elif attribute_proto.graphs:
-        value = [_get_graph(g) for g in attribute_proto.graphs]
+        value = [_get_block(g, graph, tensors_by_name) for g in attribute_proto.graphs]
     else:
         value = []
 
     return name, value
 
 
-def _get_graph(graph_proto):
-    graph = Graph(name=as_str(_get_field(graph_proto, 'name')))
-
-    null = Tensor(graph, name='', shape=(), dtype=np.float32, data=np.zeros(shape=(), dtype=np.float32)) \
-        if any(_has_null_input(node) for node in graph_proto.node) else None
-
-    tensors_by_name = {}
-    for node in graph_proto.node:
-        for tensor_name in node.output:
-            tensor_name = as_str(tensor_name)
-            if tensor_name not in tensors_by_name:
-                tensors_by_name[tensor_name] = Tensor(graph=graph, name=tensor_name)
-    for value_info in graph_proto.input:
-        tensor_name = as_str(value_info.name)
-        if tensor_name not in tensors_by_name:
-            tensors_by_name[tensor_name] = Tensor(graph=graph, name=tensor_name)
-    for value_info in graph_proto.output:
-        tensor_name = as_str(value_info.name)
-        if tensor_name not in tensors_by_name:
-            tensors_by_name[tensor_name] = Tensor(graph=graph, name=tensor_name)
-    for value_info in graph_proto.value_info:
-        tensor_name = as_str(value_info.name)
-        if tensor_name not in tensors_by_name:
-            tensors_by_name[tensor_name] = Tensor(graph=graph, name=tensor_name)
-    for tensor_proto in graph_proto.initializer:
-        tensor_name = as_str(tensor_proto.name)
-        if tensor_name not in tensors_by_name:
-            tensors_by_name[tensor_name] = Tensor(graph=graph, name=tensor_name)
-
+def _get_block(graph_proto, graph, tensors_by_name):
     initializer_names = {as_str(value_info.name) for value_info in graph_proto.initializer}
     input_names = [as_str(value_info.name) for value_info in graph_proto.input
                    if as_str(value_info.name) not in initializer_names]
@@ -219,14 +220,14 @@ def _get_graph(graph_proto):
         tensor.quant = {item.key: tensors_by_name[item.value].data for item in annotation.quant_parameter_tensor_names}
 
     for node in graph_proto.node:
-        inputs, outputs, name, domain, op_type, attributes = _get_node(node)
+        inputs, outputs, name, domain, op_type, attributes = _get_node(node, graph, tensors_by_name)
 
         Operation(
             graph=graph,
             type=op_type,
             name=name,
-            inputs=tuple(tensors_by_name[input] if input else null for input in inputs),
-            outputs=tuple(tensors_by_name[output] if output else null for output in outputs),
+            inputs=tuple(tensors_by_name[input] for input in inputs),
+            outputs=tuple(tensors_by_name[output] for output in outputs),
             attribs=attributes)
     return graph
 
@@ -299,7 +300,14 @@ def _add_value_info_for_constants(model: onnx.ModelProto):
 
 
 def onnx_model_to_graph(onnx_model):
-    return _get_graph(onnx_model.graph)
+    graph = Graph(name=as_str(_get_field(onnx_model.graph, 'name')))
+
+    tensors_by_name = {'': Tensor(graph, name='', shape=(), dtype=np.float32, data=np.zeros(shape=(), dtype=np.float32))}
+
+    _get_tensors(onnx_model.graph, graph, tensors_by_name)
+    _get_block(onnx_model.graph, graph, tensors_by_name)
+
+    return graph
 
 
 def read_tensor(filename):
