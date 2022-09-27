@@ -222,7 +222,6 @@ class Operation:
         self._inputs = _ListView(tensors) if isinstance(tensors, list) else tensors
         for tensor in tensors:
             assert isinstance(tensor, Tensor), "got {}".format(type(tensor))
-            assert tensor.graph is self.graph
             if self not in tensor._consumers:
                 tensor._consumers.append(self)
 
@@ -251,7 +250,6 @@ class Operation:
         self._outputs = _ListView(tensors) if isinstance(tensors, list) else tensors
         for tensor in tensors:
             assert isinstance(tensor, Tensor), "got {}".format(type(tensor))
-            assert tensor.graph is self.graph
             assert self not in tensor._producers
             tensor._producers.append(self)
 
@@ -328,7 +326,6 @@ class Graph:
 
         for tensor in self._inputs:
             assert isinstance(tensor, Tensor)
-            assert tensor.graph is self
 
     @property
     def outputs(self):
@@ -344,7 +341,6 @@ class Graph:
 
         for tensor in self._outputs:
             assert isinstance(tensor, Tensor)
-            assert tensor.graph is self
 
     def remove_tensor(self, tensor):
         # type: (Tensor)->None

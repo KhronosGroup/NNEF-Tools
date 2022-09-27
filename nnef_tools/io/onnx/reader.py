@@ -46,7 +46,6 @@ _DtypeToNumpy = {
 
 
 def _get_shape(tensor_shape_proto):
-    # TODO dim_param
     return ([int(dim.dim_value) if dim.HasField('dim_value') else None for dim in tensor_shape_proto.dim]
             if tensor_shape_proto is not None else None)
 
@@ -173,7 +172,8 @@ def _get_attribute(attribute_proto, graph, tensors_by_name):
     elif attribute_proto.HasField('t'):
         value = _get_tensor_data(attribute_proto.t)
     elif attribute_proto.HasField('g'):
-        value = _get_block(attribute_proto.g, graph, tensors_by_name)
+        g = attribute_proto.g
+        value = _get_block(g, Graph(name=as_str(_get_field(g, 'name'))), tensors_by_name)
     elif attribute_proto.floats:
         value = [float(f) for f in attribute_proto.floats]
     elif attribute_proto.ints:
@@ -183,7 +183,8 @@ def _get_attribute(attribute_proto, graph, tensors_by_name):
     elif attribute_proto.tensors:
         value = [_get_tensor_data(t) for t in attribute_proto.tensors]
     elif attribute_proto.graphs:
-        value = [_get_block(g, graph, tensors_by_name) for g in attribute_proto.graphs]
+        value = [_get_block(g, Graph(name=as_str(_get_field(g, 'name'))), tensors_by_name)
+                 for g in attribute_proto.graphs]
     else:
         value = []
 

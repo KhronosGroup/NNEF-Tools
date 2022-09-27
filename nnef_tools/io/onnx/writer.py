@@ -192,6 +192,9 @@ def build_attribute(key, value, attribute_proto):
     elif isinstance(value, (type, np.dtype)):
         attribute_proto.type = build_attribute_type('INT')
         attribute_proto.i = build_dtype(value)
+    elif isinstance(value, Graph):
+        attribute_proto.type = build_attribute_type('GRAPH')
+        build_graph(value, attribute_proto.g)
     elif isinstance(value, (list, tuple)):
         if len(value) == 0:
             attribute_proto.type = build_attribute_type('INTS')  # TODO better
@@ -208,6 +211,11 @@ def build_attribute(key, value, attribute_proto):
                 attribute_proto.type = build_attribute_type('STRINGS')
                 for v in value:
                     attribute_proto.strings.append(v.encode('utf-8'))
+            elif isinstance(value[0], Graph):
+                attribute_proto.type = build_attribute_type('GRAPHS')
+                for v in value:
+                    g = attribute_proto.graphs.add()
+                    build_graph(v, g)
             else:
                 assert False, \
                     "Unsupported attribute: {}: {} of type: List[{}]".format(key, value, type(value[0]).__name__)
