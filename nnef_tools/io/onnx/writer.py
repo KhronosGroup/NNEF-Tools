@@ -61,7 +61,7 @@ def build_graph(graph, graph_proto):
     if graph.name is not None:
         graph_proto.name = graph.name
 
-    for input in list(graph.inputs) + list(t for t in graph.tensors if t.is_constant):
+    for input in list(graph.inputs) + list(t for t in graph.tensors if t.is_constant and t.name != ''):
         value_info_proto = graph_proto.input.add()
         build_value_info(input, value_info_proto)
 
@@ -70,7 +70,7 @@ def build_graph(graph, graph_proto):
         build_value_info(output, value_info_proto)
 
     for tensor in graph.tensors:
-        if tensor.is_constant:
+        if tensor.is_constant and tensor.name != '':
             tensor_proto = graph_proto.initializer.add()
             build_tensor_proto(tensor, tensor_proto)
 
