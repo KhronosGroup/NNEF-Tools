@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from setuptools import setup, Extension
-import numpy
 import shutil
 import os
 
@@ -26,9 +25,17 @@ if os.path.exists('nnef.egg-info'):
     shutil.rmtree('nnef.egg-info')
 
 
+class get_numpy_include(object):
+    """Defer numpy.get_include() until after numpy is installed."""
+
+    def __str__(self):
+        import numpy
+
+        return numpy.get_include()
+
 module = Extension('_nnef',
                    sources=['nnef.cpp'],
-                   include_dirs=['../cpp/include', numpy.get_include()],
+                   include_dirs=['../cpp/include', get_numpy_include()],
                    language='c++',
                    extra_compile_args=['-std=c++11'],
                    define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')])
@@ -50,5 +57,9 @@ setup(name='nnef',
       ],
       keywords='nnef',
       packages=['nnef'],
+      install_requires=['numpy>=1.18'],
+      setup_requires=[
+          'numpy<=1.18'
+      ],  # Use old numpy version (from end of 2019) to maximize backward compatibility
       ext_modules=[module]
       )
