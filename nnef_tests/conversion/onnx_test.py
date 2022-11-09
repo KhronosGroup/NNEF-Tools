@@ -815,7 +815,7 @@ class TestCases(TestEnv):
             op_type='MeanVarianceNormalization',
             inputs=['input'],
             outputs=['output'],
-            axes=[2, 3],
+            axes=[0, 2, 3],
         )
 
         self._test_conversion('mean_variance_normalization', [node], [input], [output])

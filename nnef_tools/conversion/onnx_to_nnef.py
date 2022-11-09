@@ -114,6 +114,13 @@ fragment erf( x: tensor<scalar> ) -> ( y: tensor<scalar> )
 }
 """
 
+_MISH_FRAGMENT = """
+fragment mish( x: tensor<scalar> ) -> ( y: tensor<scalar> )
+{
+    y = x * tanh(ln(1 + exp(x)));
+}
+"""
+
 _INT_MAX = 2 ** 31 - 1
 
 
@@ -128,6 +135,7 @@ class Converter(_Converter):
             'lstm_step': _LSTM_STEP_FRAGMENT,
             'lstm_loop': _LSTM_LOOP_FRAGMENT,
             'erf': _ERF_FRAGMENT,
+            'mish': _MISH_FRAGMENT,
         }
 
     @staticmethod
@@ -145,6 +153,7 @@ class Converter(_Converter):
             'lstm_step': lambda x, h, c, W, R, B: (h, c),
             'lstm_loop': lambda X, W, R, B, h, c, **kwargs: (h, c),
             'erf': lambda x: x,
+            'mish': lambda x: x,
         }
 
     def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False, keep_io_names=False,
@@ -429,11 +438,11 @@ _Transforms = Converter.unpack_transforms({
                 'epsilon': '!epsilon',
             }
         ),
-    ('Relu', 'Sigmoid', 'Tanh', 'Softplus', 'Selu', 'Not', 'Identity', 'Elu', 'Erf', 'Abs', 'Sign',
+    ('Relu', 'Sigmoid', 'Tanh', 'Softplus', 'Selu', 'Not', 'Identity', 'Elu', 'Erf', 'Mish', 'Abs', 'Sign',
      'Sin', 'Cos', 'Tan', 'Asin', 'Acos', 'Atan', 'Sinh', 'Cosh', 'Tanh', 'Asinh', 'Acosh', 'Atanh',
      'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round'):
         Transform(
-            type=('relu', 'sigmoid', 'tanh', 'softplus', 'selu', 'not', 'copy', 'elu', 'erf', 'abs', 'sign',
+            type=('relu', 'sigmoid', 'tanh', 'softplus', 'selu', 'not', 'copy', 'elu', 'erf', 'mish', 'abs', 'sign',
                   'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
                   'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round'),
             inputs='!I[0]',
