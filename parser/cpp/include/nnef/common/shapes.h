@@ -152,6 +152,11 @@ namespace nnef
     {
         return (T(0) < val) - (val < T(0));
     }
+
+    inline int ceil_div( int x, int y )
+    {
+        return y > 0 ? (x + y - 1) / y : (x + y + 1) / y;
+    }
     
     template<typename T>
     inline T downsize( const T input, const T size, const T padding, const T stride, const T dilation )
@@ -825,7 +830,7 @@ namespace nnef
                       (int)first, (int)last, (int)str, (int)axis);
             }
             
-            output[axis] = (last - first) / str;
+            output[axis] = ceil_div(last - first, str);
         }
         return output;
     }

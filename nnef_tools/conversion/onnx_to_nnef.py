@@ -598,7 +598,7 @@ _Transforms = Converter.unpack_transforms({
             inputs=['!I[:]'],
             outputs='!O[0]',
             attribs={
-                'axis': '!axis',
+                'axis': '!ensure_positive(axis, O[0].rank)',
             }
         ),
     'Split':
@@ -610,7 +610,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs=['!O[:]'],
             attribs={
-                'axis': '!axis',
+                'axis': '!ensure_positive(axis, I[0].rank)',
                 'ratios': '!split',
             }
         ),

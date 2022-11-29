@@ -16,6 +16,10 @@ import nnef
 import numpy as np
 
 
+def _ceil_div(x, y):
+    return (x + y - 1) // y if y > 0 else (x + y + 1) // y
+
+
 def _clamp(x, a, b):
     return max(a, min(b, x))
 
@@ -376,7 +380,7 @@ def slice_shape(input, axes, begin, end, stride=[]):
 
     output = list(input)
     for axis, first, last, str in zip(axes, begin, end, stride):
-        output[axis] = (last - first) // str
+        output[axis] = _ceil_div(last - first, str)
     return output
 
 
