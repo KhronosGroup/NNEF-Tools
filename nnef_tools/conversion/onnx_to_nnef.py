@@ -410,13 +410,16 @@ _Transforms = Converter.unpack_transforms({
                 'keepdims': 1,
                 'select_last_index': 0,
             },
+            using={
+                'axes': '![ensure_positive(axis, I[0].rank)]',
+            },
             cond={
                 '!select_last_index == 0': 'select_last_index must be 0',
             },
             inputs='!I[0]',
-            outputs='!squeeze_output(O[0], [axis], keepdims)',
+            outputs='!squeeze_output(O[0], axes, keepdims)',
             attribs={
-                'axes': '![axis]',
+                'axes': '!axes',
             }
         ),
     'BatchNormalization':
@@ -488,7 +491,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
-                'axes': '!perm',
+                'axes': '!ensure_positive(perm, I[0].rank)',
             }
         ),
     'Reshape':
@@ -521,7 +524,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
-                'axes': '!axes',
+                'axes': '!ensure_positive(axes, I[0].rank)',
             }
         ),
     'Unsqueeze':
@@ -530,7 +533,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
-                'axes': '!axes',
+                'axes': '!ensure_positive(axes, O[0].rank)',
             }
         ),
     'MatMul':
@@ -629,7 +632,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
-                'axes': '![axis]',
+                'axes': '![ensure_positive(axis, I[0].rank)]',
             }
         ),
     'Sum':
