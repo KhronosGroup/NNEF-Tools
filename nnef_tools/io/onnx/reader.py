@@ -318,8 +318,9 @@ def read_tensor(filename):
 
 class Reader(object):
 
-    def __init__(self, simplify=False):
+    def __init__(self, simplify=False, optimize=None):
         self._simplify = simplify
+        self._optimize = optimize or simplify
 
     def __call__(self, filename, input_shapes=None):
         model_proto = onnx.load_model(filename)
@@ -327,7 +328,7 @@ class Reader(object):
 
         if self._simplify:
             from onnxsim import simplify
-            model_proto, _ = simplify(model_proto, input_shapes=input_shapes, perform_optimization=False)
+            model_proto, _ = simplify(model_proto, input_shapes=input_shapes, perform_optimization=self._optimize)
         if input_shapes:
             _set_input_shapes(model_proto.graph, input_shapes)
 
