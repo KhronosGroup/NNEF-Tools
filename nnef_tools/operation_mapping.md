@@ -315,16 +315,16 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | ONNX | NNEF | Notes
 | --- | --- | ---
 | Abs | abs
-| Acos | -
-| Acosh | -
+| Acos | acos
+| Acosh | acosh
 | Add | add
 | And | and
 | ArgMax | argmax_reduce
 | ArgMin | argmin_reduce
-| Asin | -
-| Asinh | -
-| Atan | -
-| Atanh | -
+| Asin | asin
+| Asinh | asinh
+| Atan | atan
+| Atanh | atanh
 | AveragePool | avg_pool
 | BatchNormalization | batch_normalization
 | Cast | select | logical to scalar or integer
@@ -339,20 +339,20 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | Conv | conv
 | ConvTranspose | deconv
 | Cos | cos
-| Cosh | -
+| Cosh | cosh
 | DepthToSpace | reshape(transpose(reshape))
 | Div | div
 | Dropout | copy
 | Elu | elu | + arithmetic when alpha != 1.0
 | Equal | eq
-| Erf | -
+| Erf | erf
 | Exp | exp
 | Expand | tile
 | EyeLike | -
 | Flatten | reshape
 | Floor | floor
 | GRU | -
-| Gather | -
+| Gather | gather
 | Gemm | matmul
 | GlobalAveragePool | mean_reduce
 | GlobalLpPool | sum_reduce(abs) | if p == 1
@@ -412,25 +412,25 @@ The following table lists the correspondence between operations in ONNX and NNEF
 | Reshape | reshape
 | Scan | -
 | Scatter | -
-| Selu | -
+| Selu | selu
 | Shape | constant | if can be evaluated
 | Shrink | -
 | Sigmoid | sigmoid
 | Sign | sign
 | Sin | sin
-| Sinh | -
+| Sinh | sinh
 | Size | constant | if can be evaluated
 | Slice | slice
 | Softmax | softmax
 | Softplus | softplus
-| Softsign | -
+| Softsign | div(x,1+abs(x))
 | SpaceToDepth | -
 | Split | split
 | Sqrt | sqrt
 | Squeeze | squeeze
 | Sub | sub
 | Sum | add
-| Tan | -
+| Tan | tan
 | Tanh | tanh
 | Tile | tile
 | TopK | -
