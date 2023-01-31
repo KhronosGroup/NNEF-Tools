@@ -1,3 +1,5 @@
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)<p align="center"><img src="https://www.khronos.org/assets/uploads/ceimg/made/assets/uploads/apis/NNEF_500px_Apr17_165_75.png" /></p>
+
 The `master` branch has been renamed to `main` on 01.31.2023. Use th following commands to rename your local repository branch:
 
 ```
@@ -6,8 +8,6 @@ git fetch origin
 git branch -u origin/main main
 git remote set-head origin -a
 ```
-
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)<p align="center"><img src="https://www.khronos.org/assets/uploads/ceimg/made/assets/uploads/apis/NNEF_500px_Apr17_165_75.png" /></p>
 
 # NNEF-Tools
 
