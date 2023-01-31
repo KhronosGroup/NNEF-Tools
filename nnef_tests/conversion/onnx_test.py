@@ -597,6 +597,21 @@ class TestCases(TestEnv):
 
         self._test_conversion('split', [node], [input], [output1, output2])
 
+    def test_split_dynamic(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 6, 32, 32])
+        split = helper.make_tensor_value_info('split', TensorProto.INT64, [2])
+        output1 = helper.make_tensor_value_info('output1', TensorProto.FLOAT, [1, 3, 32, 32])
+        output2 = helper.make_tensor_value_info('output2', TensorProto.FLOAT, [1, 3, 32, 32])
+        node = helper.make_node(
+            op_type='Split',
+            inputs=['input', 'split'],
+            outputs=['output1', 'output2'],
+            axis=1,
+        )
+
+        self._test_conversion('split', [node], [input, split], [output1, output2],
+                              constants=[split], values={'split': [3, 3]}, opset_version=13)
+
     def test_sum(self):
         input1 = helper.make_tensor_value_info('input1', TensorProto.FLOAT, [1, 3, 32, 32])
         input2 = helper.make_tensor_value_info('input2', TensorProto.FLOAT, [1, 3, 32, 32])

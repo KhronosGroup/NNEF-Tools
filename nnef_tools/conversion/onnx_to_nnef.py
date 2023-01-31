@@ -609,6 +609,7 @@ _Transforms = Converter.unpack_transforms({
             type='split',
             defaults={
                 'axis': 0,
+                'split': '!as_const(I[1])',
             },
             inputs='!I[0]',
             outputs=['!O[:]'],
