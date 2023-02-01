@@ -20,7 +20,7 @@ from ..utils import types
 from collections import OrderedDict
 import numpy as np
 import copy
-from nnef.shapes import pool_shape, reduce_shape, deconv_shape
+from nnef.shapes import pool_shape, reduce_shape
 
 
 _LP_POOL_FRAGMENT = """
@@ -246,12 +246,20 @@ class Converter(_Converter):
         count = len(items) // 2
         return list(zip(items[:count], items[count:]))
 
-    def convert_padding(self, pads, auto_pad, rank):
+    def convert_padding(self, pads, auto_pad, output_padding, rank):
         if auto_pad == "NOTSET" or auto_pad == "SAME_LOWER":
             padding = self._uninterleave(pads)
+            if output_padding is not None:
+                for i in range(len(padding)):
+                    padding[i] = (padding[i][0], padding[i][1] - output_padding[i])
             return [(0, 0)] * (rank - len(padding)) + padding
         elif auto_pad == "VALID":
-            return [(0, 0,)] * rank
+            padding = [(0, 0,)] * rank
+            if output_padding is not None:
+                offs = rank - len(output_padding)
+                for i in range(len(output_padding)):
+                    padding[i + offs] = (padding[i + offs][0], padding[i + offs][1] - output_padding[i])
+            return padding
         elif auto_pad == "SAME_UPPER":
             return []
         else:
@@ -315,10 +323,6 @@ class Converter(_Converter):
         original = self._tensor_map[tensor]
         return len(original.consumers) == 0
 
-    def deconv_shape(self, input, filter, pads, stride, dilation, groups):
-        padding = self._uninterleave(pads)
-        return deconv_shape(input, filter, padding=padding, stride=stride, dilation=dilation, groups=groups)
-
 
 _Transforms = Converter.unpack_transforms({
     ('Conv', 'ConvTranspose'):
@@ -336,8 +340,6 @@ _Transforms = Converter.unpack_transforms({
             using={
                 '_pads': '!lower_pads(I[0].shape[2:], I[1].shape[2:], O[0].shape[2:], strides, dilations)'
                          ' if auto_pad == "SAME_LOWER" else pads',
-                '_output_shape': '!deconv_shape(I[0].shape, I[1].shape, pads=_pads, stride=strides, dilation=dilations, groups=group) '
-                                 'if output_padding is not None else None',
             },
             inputs=(
                 '!I[0]',
@@ -348,11 +350,9 @@ _Transforms = Converter.unpack_transforms({
             attribs={
                 'stride': '!strides',
                 'dilation': '!dilations',
-                'padding': '!convert_padding(_pads, auto_pad, I[0].rank - 2)',
+                'padding': '!convert_padding(_pads, auto_pad, output_padding, I[0].rank - 2)',
                 'groups': '!group',
-                'output_shape': '!output_shape if output_shape is not None else '
-                                '_output_shape[:2] + [s + p for s, p in zip(_output_shape[2:], output_padding)] '
-                                'if output_padding is not None else None',
+                'output_shape': '!output_shape',
             }
         ),
     ('MaxPool', 'AveragePool', 'LpPool'):
@@ -381,7 +381,7 @@ _Transforms = Converter.unpack_transforms({
                 'size': '![1, 1] + kernel_shape',
                 'stride': '![1, 1] + strides',
                 'dilation': '![1, 1] + dilations',
-                'padding': '!convert_padding(_pads, auto_pad, I[0].rank)',
+                'padding': '!convert_padding(_pads, auto_pad, None, I[0].rank)',
                 'border': '!"constant" if count_include_pad else "ignore"',
             }
         ),
