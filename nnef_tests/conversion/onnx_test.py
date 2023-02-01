@@ -303,6 +303,21 @@ class TestCases(TestEnv):
 
         self._test_conversion('conv2d_transpose-output_shape', [node], [input], [output], constants=[filter, bias])
 
+    def test_conv2d_transpose_output_padding_strided(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 16, 32, 32])
+        filter = helper.make_tensor_value_info('filter', TensorProto.FLOAT, [16, 3, 3, 3])
+        bias = helper.make_tensor_value_info('bias', TensorProto.FLOAT, [3])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 64, 64])
+        node = helper.make_node(
+            op_type='ConvTranspose',
+            inputs=['input', 'filter', 'bias'],
+            outputs=['output'],
+            pads=(1, 1, 1, 1),
+            output_padding=(1, 1),
+            strides=(2, 2),
+        )
+
+        self._test_conversion('conv2d_transpose-output_padding-strided', [node], [input], [output], constants=[filter, bias])
 
     def test_conv3d(self):
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32, 32])

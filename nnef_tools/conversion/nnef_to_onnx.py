@@ -17,7 +17,7 @@ from .converter import ConverterFromNNEF as _Converter, Transform
 from ..model import Tensor, Operation
 from ..utils import types
 import numpy as np
-from nnef.shapes import pool_shape, reduce_shape
+from nnef.shapes import pool_shape, reduce_shape, deconv_shape
 
 
 class Converter(_Converter):
@@ -103,6 +103,11 @@ class Converter(_Converter):
     def convert_auto_pad(self, padding):
         return "SAME_UPPER" if padding == [] else "NOTSET"
 
+    def convert_output_padding(self, input_shape, filter_shape, output_shape, padding, stride, dilation, groups):
+        calculated_shape = deconv_shape(input_shape, filter_shape, padding=padding, stride=stride, dilation=dilation, groups=groups)
+        output_padding = [o - c for c, o in zip(calculated_shape[2:], output_shape[2:])]
+        return output_padding
+
     def is_const(self, tensor, value=None):
         return self._is_constant(self._tensor_map[tensor]) and value is None or self.as_const(tensor) == value
 
@@ -121,6 +126,7 @@ _Transforms = Converter.unpack_transforms({
             },
             using={
                 'transposed': '!_type_ == "deconv"',
+                'group': '!groups if groups != 0 else O[0].shape[1] if transposed else I[0].shape[1]',
             },
             cond={
                 '!I[2].rank != 0 or (is_const(I[2]) and as_const(I[2]) == 0)': 'bias must be constant 0 or of rank 1',
@@ -136,8 +142,11 @@ _Transforms = Converter.unpack_transforms({
                 'pads': '!convert_pads(padding)',
                 'strides': '!stride',
                 'dilations': '!dilation',
-                'group': '!groups if groups != 0 else O[0].shape[1] if transposed else I[0].shape[1]',
-                'output_shape': '!output_shape if output_shape != [] else None',
+                'group': '!group',
+                'output_shape': '!output_shape if _type_ == "deconv" and output_shape != [] and padding == [] else None',
+                'output_padding': '!convert_output_padding(I[0].shape, I[1].shape, output_shape, padding=padding, '
+                                  'stride=stride, dilation=dilation, groups=group) '
+                                  'if _type_ == "deconv" and output_shape != [] and padding != [] else None',
                 'kernel_shape': '!I[1].shape[2:]',
             }
         ),
