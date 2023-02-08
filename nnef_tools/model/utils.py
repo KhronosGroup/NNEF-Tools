@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections.abc import Iterable
+
 
 def _split_counter_from_name(str):
     if len(str) > 0 and not str[-1].isdigit():
@@ -118,7 +120,8 @@ def bypass_and_remove(graph, op, remove_input_not_output=False):
 
 def replace_chain(graph, types, func, allow_forks=False):
     def _match_type(type, template):
-        return type in template if isinstance(template, set) else type == template
+        return type == template if isinstance(template, str) else\
+            type in template if isinstance(template, Iterable) else False
 
     def _match_link(op, template, is_last):
         return _match_type(op.type, template) and (len(op.outputs) == 1 or is_last)
