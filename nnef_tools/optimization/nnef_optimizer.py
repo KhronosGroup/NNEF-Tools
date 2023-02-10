@@ -92,7 +92,7 @@ class Optimizer:
                 for chain, replacer in six.iteritems(self._custom_optimizers):
                     changed |= replace_chain(graph, chain, replacer)
 
-                changed |= self._remove_unused_variables(graph)
+                changed |= self._remove_unused_variables_and_constants(graph)
 
         if self._keep_tensor_names:
             generate_missing_tensor_names_from_op_type(graph)
@@ -412,8 +412,9 @@ class Optimizer:
         linear.copy_with(inputs=(linear.inputs[0], weights, *linear.inputs[2:]), outputs=mul.output)
 
     @staticmethod
-    def _remove_unused_variables(graph):
-        ops = {op for op in graph.operations if op.type == 'variable' and len(op.output.consumers) == 0}
+    def _remove_unused_variables_and_constants(graph):
+        ops = {op for op in graph.operations
+               if (op.type == 'variable' or op.type == 'constant') and len(op.output.consumers) == 0}
         tensors = {op.output for op in ops}
         graph.remove_operations(ops, unlink=True)
         graph.remove_tensors(tensors)
