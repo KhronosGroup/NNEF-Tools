@@ -328,7 +328,7 @@ class Reader(object):
 
         if self._simplify:
             from onnxsim import simplify
-            model_proto, _ = simplify(model_proto, input_shapes=input_shapes, perform_optimization=self._optimize)
+            model_proto, _ = simplify(model_proto, overwrite_input_shapes=input_shapes, perform_optimization=self._optimize)
         if input_shapes:
             _set_input_shapes(model_proto.graph, input_shapes)
 
