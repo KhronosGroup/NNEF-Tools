@@ -136,7 +136,7 @@ def read_flatbuffers(filename):
         inputs = [tensors[operator.Inputs(i)] for i in range(operator.InputsLength()) if operator.Inputs(i) != -1]
         outputs = [tensors[operator.Outputs(i)] for i in range(operator.OutputsLength()) if operator.Outputs(i) != -1]
 
-        if optionsClass is not None:
+        if options is not None and optionsClass is not None:
             optionsObject = optionsClass()
             optionsObject.Init(options.Bytes, options.Pos)
             attribs = _enumerate_attributes(optionsClass, optionsObject)

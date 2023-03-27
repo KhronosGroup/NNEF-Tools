@@ -117,6 +117,17 @@ class Converter(_TFConverter):
                     tensor.quant = None
 
     def _fix_quantization_attribs(self, graph):
+        dtype_bits = {
+            np.int8: 8,
+            np.uint8: 8,
+            np.int16: 16,
+            np.uint16: 16,
+            np.int32: 32,
+            np.uint32: 32,
+            np.int64: 64,
+            np.uint64: 64,
+        }
+
         for tensor in graph.tensors:
             if tensor.quant:
                 scale = tensor.quant.get('scale')
@@ -126,12 +137,13 @@ class Converter(_TFConverter):
                         del tensor.quant['min']
                     if 'max' in tensor.quant:
                         del tensor.quant['max']
-                    tensor.quant['op-name'] = 'zero_point_linear_quantize'
-                    tensor.quant['bits'] = 32 if self._is_conv_bias(tensor) else 8
                     assert tensor.dtype == np.uint8 or tensor.dtype == np.int8 or \
+                           tensor.dtype == np.uint16 or tensor.dtype == np.int16 or \
                            tensor.dtype == np.uint32 or tensor.dtype == np.int32, \
                         "unknown quantized dtype '{}'".format(tensor.dtype)
-                    tensor.quant['signed'] = tensor.dtype == np.int8 or tensor.dtype == np.int32
+                    tensor.quant['op-name'] = 'zero_point_linear_quantize'
+                    tensor.quant['bits'] = 32 if self._is_conv_bias(tensor) else dtype_bits[tensor.dtype]
+                    tensor.quant['signed'] = tensor.dtype == np.int8 or tensor.dtype == np.int16 or tensor.dtype == np.int32
                     tensor.quant['symmetric'] = self._is_conv_filter(tensor)
 
                     if tensor.data is None:
