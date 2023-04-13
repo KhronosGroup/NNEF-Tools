@@ -530,6 +530,9 @@ _Transforms = Converter.unpack_transforms({
     'Squeeze':
         Transform(
             type='squeeze',
+            defaults={
+                'axes': '!as_const(I[1])',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
@@ -539,6 +542,9 @@ _Transforms = Converter.unpack_transforms({
     'Unsqueeze':
         Transform(
             type='unsqueeze',
+            defaults={
+                'axes': '!as_const(I[1])',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
