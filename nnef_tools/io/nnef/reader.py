@@ -106,11 +106,12 @@ def _substitute_empty_array(op, key, attribs, inputs):
 
 class Reader(object):
 
-    def __init__(self, stdlib=None, decomposed=None, custom_shapes=None, infer_shapes=True):
+    def __init__(self, stdlib=None, decomposed=None, custom_shapes=None, infer_shapes=True, load_variables=True):
         self._stdlib = stdlib
         self._decomposed = decomposed
         self._custom_shapes = custom_shapes
         self._infer_shapes = infer_shapes
+        self._load_variables = load_variables
 
     def __call__(self, path, input_shapes=None):
         compressed = os.path.splitext(path) in ['tgz', 'gz'] and not os.path.isdir(path)
@@ -125,7 +126,7 @@ class Reader(object):
             if not os.path.isdir(path):
                 raise IOError("NNEF model must be a (compressed) folder, but an uncompressed file was provided")
 
-            nnef_graph = nnef.load_graph(path, stdlib=self._stdlib, lowered=self._decomposed)
+            nnef_graph = nnef.load_graph(path, stdlib=self._stdlib, lowered=self._decomposed, load_variables=self._load_variables)
             if self._infer_shapes:
                 nnef.infer_shapes(nnef_graph, external_shapes=input_shapes or {}, custom_shapes=self._custom_shapes or {})
 
