@@ -13,10 +13,18 @@
 # limitations under the License.
 
 from setuptools import setup, Extension
-import numpy
+from setuptools.command.build_ext import build_ext as _build_ext
 import shutil
 import os
 
+# This is to add numpy includes after installing numpy in the setup process.
+# Based on https://stackoverflow.com/a/21621689
+# Since numpy 1.13, the check for __NUMPY_SETUP__ is no longer necessary.
+class build_ext(_build_ext):
+    def finalize_options(self):
+        _build_ext.finalize_options(self)
+        import numpy
+        self.include_dirs.append(numpy.get_include())
 
 if os.path.exists('build'):
     shutil.rmtree('build')
@@ -28,7 +36,7 @@ if os.path.exists('nnef.egg-info'):
 
 module = Extension('_nnef',
                    sources=['nnef.cpp'],
-                   include_dirs=['../cpp/include', numpy.get_include()],
+                   include_dirs=['../cpp/include'],
                    language='c++',
                    extra_compile_args=['-std=c++11'],
                    define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')])
@@ -50,5 +58,8 @@ setup(name='nnef',
       ],
       keywords='nnef',
       packages=['nnef'],
+      cmdclass={'build_ext':build_ext},
+      install_requires=['numpy>=1.13,<2.0'],
+      setup_requires=['numpy>=1.13,<2.0'],
       ext_modules=[module]
       )
