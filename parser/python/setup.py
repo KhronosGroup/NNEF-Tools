@@ -17,6 +17,7 @@ from setuptools.command.build_ext import build_ext as _build_ext
 import shutil
 import os
 
+
 # This is to add numpy includes after installing numpy in the setup process.
 # Based on https://stackoverflow.com/a/21621689
 # Since numpy 1.13, the check for __NUMPY_SETUP__ is no longer necessary.
@@ -25,6 +26,7 @@ class build_ext(_build_ext):
         _build_ext.finalize_options(self)
         import numpy
         self.include_dirs.append(numpy.get_include())
+
 
 if os.path.exists('build'):
     shutil.rmtree('build')
