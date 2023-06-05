@@ -88,8 +88,8 @@ namespace nnef
             throw Error("tensor rank %d exceeds maximum allowed rank (%d)", (int)header.rank, (int)TensorHeader::MaxRank);
         }
 
-        const uint32_t item_count = std::accumulate(header.extents, header.extents + header.rank, (uint32_t)1, std::multiplies<uint32_t>());
-        if ( header.data_length != (item_count * header.bits_per_item + 7) / 8 )
+        const size_t item_count = std::accumulate(header.extents, header.extents + header.rank, (size_t)1, std::multiplies<size_t>());
+        if ( (size_t)header.data_length != (item_count * header.bits_per_item + 7) / 8 )
         {
             throw Error("data length is not compatible with extents and bits per item");
         }
