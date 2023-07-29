@@ -264,16 +264,17 @@ namespace nnef
         }
         
         const bool quantized = !tensor.quantization.empty();
-        const bool is_signed = (bool)tensor.quantization.get("signed", Value::logical(true));
+        const bool is_signed = tensor.quantization.get("signed", Value::logical(true)).logical();
         const TensorHeader::ItemType item_type = quantized ? (is_signed ? TensorHeader::Qint : TensorHeader::Quint) :
                                                  tensor.dtype == "scalar" ? TensorHeader::Float :
                                                  tensor.dtype == "integer" ? TensorHeader::Int : TensorHeader::Bool;
         
         TensorHeader header;
         const size_t version[] = { 1, 0 };
-        fill_tensor_header(header, version, tensor.shape.size(), tensor.shape.data(), item_bits(tensor.dtype), item_type);
-        
         const size_t count = volume_of(tensor.shape);
+        const size_t bits_per_item = quantized ? tensor.data.size() * 8 / count : item_bits(tensor.dtype);
+        fill_tensor_header(header, version, tensor.shape.size(), tensor.shape.data(), bits_per_item, item_type);
+        
         std::vector<char> bytes(header.data_length);
         
         if ( tensor.dtype == "scalar" )
