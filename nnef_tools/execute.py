@@ -292,7 +292,8 @@ class ONNXExecutor(Executor):
         options.intra_op_num_threads = 1
         options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
 
-        self.session = onnxruntime.InferenceSession(model_path, sess_options=options)
+        self.session = onnxruntime.InferenceSession(model_path, sess_options=options,
+                                                    providers=['CPUExecutionProvider'])
         self.inputs = [TensorInfo(tensor.name, tensor.shape, _onnx_dtype_to_numpy[tensor.type])
                        for tensor in self.session.get_inputs()]
         self.outputs = [TensorInfo(tensor.name, tensor.shape, _onnx_dtype_to_numpy[tensor.type])

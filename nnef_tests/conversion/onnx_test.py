@@ -98,7 +98,8 @@ class TestEnv(unittest.TestCase):
         options.intra_op_num_threads = 1
         options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
 
-        session = onnxruntime.InferenceSession(filename, sess_options=options)
+        session = onnxruntime.InferenceSession(filename, sess_options=options,
+                                               providers=['CPUExecutionProvider'])
 
         inputs = {input.name: TestEnv._random_data(TestEnv._type_to_numpy[input.type], input.shape)
                   for input in session.get_inputs()}
