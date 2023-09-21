@@ -53,7 +53,7 @@ class TestEnv(unittest.TestCase):
     _optimize = True
 
     def setUp(self) -> None:
-        self._onnx_reader = onnx_io.Reader(simplify=True)
+        self._onnx_reader = onnx_io.Reader(simplify=False)
         self._onnx_writer = onnx_io.Writer()
         self._nnef_optimizer = nnef_opt.Optimizer()
         self._onnx_optimizer = onnx_opt.Optimizer()
