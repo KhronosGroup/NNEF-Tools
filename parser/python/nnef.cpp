@@ -89,17 +89,40 @@ static PyObject* Operation;
 static PyObject* Graph;
 
 
+// make tuple by STEALING references to args
+template<typename... Args>
+static PyObject* makePyTuple( Args&& ...args )
+{
+    PyObject* tuple = PyTuple_Pack(sizeof...(args), args...);
+    for ( auto& arg : { args... } )
+    {
+        Py_DECREF(arg);
+    }
+    return tuple;
+}
+
+// make object by STEALING references to args
+template<typename... Args>
+static PyObject* makePyObject( PyObject* type, Args&& ...args )
+{
+    PyObject* argsTuple = makePyTuple(std::forward<Args>(args)...);
+    PyObject* obj = PyObject_CallObject(type, argsTuple);
+    Py_DECREF(argsTuple);
+    return obj;
+}
+
 static PyObject* makeNamedTuple( const char* name, std::initializer_list<const char*> fields )
 {
     PyObject* pyName = PY_STRING_FROM_CSTR(name);
 
-    PyObject* pyFields = PyList_New(0);
+    PyObject* pyFields = PyList_New(fields.size());
+    size_t i = 0;
     for ( auto& field : fields )
     {
-        PyList_Append(pyFields, PY_STRING_FROM_CSTR(field));
+        PyList_SetItem(pyFields, i++, PY_STRING_FROM_CSTR(field));
     }
 
-    return PyObject_CallObject(NamedTuple, PyTuple_Pack(2, pyName, pyFields));
+    return makePyObject(NamedTuple, pyName, pyFields);
 }
 
 
@@ -147,7 +170,7 @@ static PyObject* buildPyObjectFromValue( const nnef::Value& value )
         case nnef::Value::Identifier:
         {
             PyObject* arg = PY_STRING_FROM_CSTR(value.identifier().c_str());
-            return PyObject_CallObject((PyObject*)&NNEF_Identifier_Type, PyTuple_Pack(1, arg));
+            return makePyObject((PyObject*)&NNEF_Identifier_Type, arg);
         }
         case nnef::Value::Array:
         {
@@ -208,15 +231,26 @@ struct GraphCallback : public nnef::Parser::Callback
     {
     }
 
+    ~GraphCallback()
+    {
+        Py_DECREF(tensors);
+        Py_DECREF(operations);
+        Py_DECREF(graph);
+        Py_DECREF(version);
+        Py_DECREF(extensions);
+    }
+
     virtual void beginDocument( const std::string& filename, const nnef::Parser::version_t& version )
     {
-        this->version = PyTuple_Pack(2, Py_BuildValue("i", version.first), Py_BuildValue("i", version.second));
+        this->version = makePyTuple(Py_BuildValue("i", version.first), Py_BuildValue("i", version.second));
         this->extensions = PyList_New(0);
     }
 
     virtual bool handleExtension( const std::string& ext )
     {
-        PyList_Append(this->extensions, PY_STRING_FROM_CSTR(ext.c_str()));
+        PyObject* pyStr = PY_STRING_FROM_CSTR(ext.c_str());
+        PyList_Append(this->extensions, pyStr);
+        Py_DECREF(pyStr);
         return false;
     }
 
@@ -239,8 +273,10 @@ struct GraphCallback : public nnef::Parser::Callback
         {
             PyList_SetItem(outputs, i, PY_STRING_FROM_CSTR(proto.result(i).name().c_str()));
         }
-        
-        this->graph = PyObject_CallObject(Graph, PyTuple_Pack(5, name, tensors, operations, inputs, outputs));
+
+        Py_INCREF(this->tensors);
+        Py_INCREF(this->operations);
+        this->graph = makePyObject(Graph, name, tensors, operations, inputs, outputs);
         
         if ( qis )
         {
@@ -271,14 +307,18 @@ struct GraphCallback : public nnef::Parser::Callback
                         auto tensor_type = (const nnef::TensorType*)param->type();
                         auto data_type = (const nnef::PrimitiveType*)tensor_type->dataType();
                         PyArray_Descr* array_dtype = numpy_dtype(data_type->name());
-                        obj = PyArray_FromAny(obj, array_dtype, 0, 0, 0, NULL);
+                        PyObject* array = PyArray_FromAny(obj, array_dtype, 0, 0, 0, NULL); // steals reference to dtype
+                        Py_DECREF(obj);
+                        obj = array;
                     }
                     PyDict_SetItemString(quantization, qit.first.c_str(), obj);
+                    Py_DECREF(obj);
                 }
             }
             
-            PyObject* tensor = PyObject_CallObject(Tensor, PyTuple_Pack(5, name, dtype, shape, data, quantization));
+            PyObject* tensor = makePyObject(Tensor, name, dtype, shape, data, quantization);
             PyDict_SetItemString(tensors, it.first.c_str(), tensor);
+            Py_DECREF(tensor);
         }
     }
 
@@ -294,28 +334,27 @@ struct GraphCallback : public nnef::Parser::Callback
         {
             auto& param = proto.param(i);
             auto& value = args.at(param.name());
-            if ( param.type()->isAttribute() )
-            {
-                PyList_Append(attribs, PyTuple_Pack(2, PY_STRING_FROM_CSTR(param.name().c_str()), buildPyObjectFromValue(value)));
-            }
-            else
-            {
-                PyList_Append(inputs, PyTuple_Pack(2, PY_STRING_FROM_CSTR(param.name().c_str()), buildPyObjectFromValue(value)));
-            }
+            PyObject* item = makePyTuple(PY_STRING_FROM_CSTR(param.name().c_str()), buildPyObjectFromValue(value));
+            PyList_Append(param.type()->isAttribute() ? attribs : inputs, item);
+            Py_DECREF(item);
         }
         for ( size_t i = 0; i < proto.resultCount(); ++i )
         {
             auto& result = proto.result(i);
             auto& value = args.at(result.name());
-            PyList_Append(outputs, PyTuple_Pack(2, PY_STRING_FROM_CSTR(result.name().c_str()), buildPyObjectFromValue(value)));
+            PyObject* item = makePyTuple(PY_STRING_FROM_CSTR(result.name().c_str()), buildPyObjectFromValue(value));
+            PyList_Append(outputs, item);
+            Py_DECREF(item);
         }
-        
-        attribs = PyObject_CallObject(OrderedDict, PyTuple_Pack(1, attribs));
-        inputs = PyObject_CallObject(OrderedDict, PyTuple_Pack(1, inputs));
-        outputs = PyObject_CallObject(OrderedDict, PyTuple_Pack(1, outputs));
 
-        PyObject* operation = PyObject_CallObject(Operation, PyTuple_Pack(5, PY_STRING_FROM_CSTR(proto.name().c_str()), attribs, inputs, outputs, dtype));
+        PyObject* name = PY_STRING_FROM_CSTR(proto.name().c_str());
+        attribs = makePyObject(OrderedDict, attribs);
+        inputs = makePyObject(OrderedDict, inputs);
+        outputs = makePyObject(OrderedDict, outputs);
+
+        PyObject* operation = makePyObject(Operation, name, attribs, inputs, outputs, dtype);
         PyList_Append(operations, operation);
+        Py_DECREF(operation);
     }
 
     std::istream& qis;
@@ -388,16 +427,19 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
     }
     
     std::set<std::string> lowered;
-    for ( Py_ssize_t i = 0; i < PyList_Size(lower); ++i )
+    if ( lower )
     {
-        PyObject* item = PyList_GetItem(lower, i);
-        if ( !PY_STRING_CHECK(item) )
+        for ( Py_ssize_t i = 0; i < PyList_Size(lower); ++i )
         {
-            const std::string message = "Paremeter 'lowered' must be a list of strings";
-            PyErr_SetString(NNEF_Error, message.c_str());
-            return NULL;
+            PyObject* item = PyList_GetItem(lower, i);
+            if ( !PY_STRING_CHECK(item) )
+            {
+                const std::string message = "Paremeter 'lowered' must be a list of strings";
+                PyErr_SetString(NNEF_Error, message.c_str());
+                return NULL;
+            }
+            lowered.insert(PY_STRING_AS_CSTR(item));
         }
-        lowered.insert(PY_STRING_AS_CSTR(item));
     }
     
     nnef::CompParser parser(stdlib_source, lowered);
@@ -407,6 +449,7 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
 	try
     {
         parser.parse(gis, isFile ? input : "input", callback);
+        Py_INCREF(callback.graph);
         return callback.graph;
     }
     catch ( const nnef::Error& e )
@@ -486,27 +529,23 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
 	}
 
 	NNEF_Error = PyErr_NewException((char*)"_nnef.Error", NULL, NULL);
-	Py_INCREF(NNEF_Error);
 	PyModule_AddObject(module, "Error", NNEF_Error);
 
-    Py_INCREF(&NNEF_Identifier_Type);
     PyModule_AddObject(module, "Identifier", (PyObject*)&NNEF_Identifier_Type);
 
-    auto collections = PyImport_ImportModule("collections");
-    auto dict = PyModule_GetDict(collections);
+    PyObject* collections = PyImport_ImportModule("collections");
+    PyObject* dict = PyModule_GetDict(collections);
     OrderedDict = PyDict_GetItemString(dict, "OrderedDict");
     NamedTuple = PyDict_GetItemString(dict, "namedtuple");
+    Py_DECREF(collections);
 
     Tensor = makeNamedTuple("Tensor", { "name", "dtype", "shape", "data", "quantization" });
-    Py_INCREF(Tensor);
     PyModule_AddObject(module, "Tensor", Tensor);
 
     Operation = makeNamedTuple("Operation", { "name", "attribs", "inputs", "outputs", "dtype" });
-    Py_INCREF(Operation);
     PyModule_AddObject(module, "Operation", Operation);
     
     Graph = makeNamedTuple("Graph", { "name", "tensors", "operations", "inputs", "outputs" });
-    Py_INCREF(Graph);
     PyModule_AddObject(module, "Graph", Graph);
 
     import_array();
