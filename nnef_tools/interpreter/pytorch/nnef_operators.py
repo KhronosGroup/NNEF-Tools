@@ -54,7 +54,7 @@ def _clamp(x, a, b):
 def _expand_to_rank(input, rank):
     # type: (torch.Tensor, int)->torch.Tensor
     rank_diff = rank - len(input.shape)
-    return input.reshape(*(tuple(input.shape) + rank_diff * (1,)))
+    return input.reshape(tuple(input.shape) + rank_diff * (1,))
 
 
 def _expand_binary(input1, input2):
