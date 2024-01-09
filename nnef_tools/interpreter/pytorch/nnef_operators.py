@@ -815,9 +815,8 @@ def nnef_slice(input, axes, begin, end, stride=None):
     if stride is None:
         stride = [1] * len(axes)
 
-    assert all(s == 1 or s == -1 for s in stride)
-
     shape = list(input.shape)
+    slices = [slice(None)] * len(shape)
 
     for axis, b, e, s in zip(axes, begin, end, stride):
         if b < 0:
@@ -830,12 +829,15 @@ def nnef_slice(input, axes, begin, end, stride=None):
         b = _clamp(b, -1, shape[axis])
         e = _clamp(e, -1, shape[axis])
 
-        if s == 1:
-            input = input.narrow(dim=axis, start=b, length=(e - b))
+        if s > 0:
+            slices[axis] = slice(b, e, s)
         else:
-            input = input.narrow(dim=axis, start=e + 1, length=(b - e))
+            offs = (b - e - 1) % (-s) + 1 if b != e else 1
+            slices[axis] = slice(e+offs, b+1, -s)
 
-    flip_axes = [axis for axis, str in zip(axes, stride) if str == -1]
+    input = input[slices]
+
+    flip_axes = [axis for axis, s in zip(axes, stride) if s < 0]
     if len(flip_axes) != 0:
         input = torch.flip(input, dims=flip_axes)
 
