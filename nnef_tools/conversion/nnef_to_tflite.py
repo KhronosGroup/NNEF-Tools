@@ -310,6 +310,20 @@ _Transforms = Converter.unpack_transforms({
                 'asymmetric_quantize_inputs': False,
             }
         ),
+    'matmul':
+        Transform(
+            type='BATCH_MATMUL',
+            inputs=(
+                '!I[0]',
+                '!I[1]',
+            ),
+            outputs='!O[0]',
+            attribs={
+                'adj_x': '!transposeA',
+                'adj_y': '!transposeB',
+                'asymmetric_quantize_inputs': False,
+            }
+        ),
     'batch_normalization':
         Transform(
             type='MUL',

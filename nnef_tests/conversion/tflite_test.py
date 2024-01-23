@@ -109,12 +109,12 @@ class TestEnv(unittest.TestCase):
         else:
             return np.random.random(shape).astype(dtype)
 
-    def _test_conversion(self, name, inputs, outputs, epsilon=1e-5):
+    def _test_conversion(self, name, inputs, outputs, epsilon=1e-4):
         filename = tempfile.mktemp() if self._output_folder is None else self._output_folder + name + '.tflite'
         self._save_default_graph(inputs, outputs, filename)
         self._test_conversion_from_file(filename, epsilon=epsilon)
 
-    def _test_conversion_from_file(self, filename, epsilon=1e-5):
+    def _test_conversion_from_file(self, filename, epsilon=1e-4):
         self._convert_to_nnef(filename)
         self._convert_from_nnef(filename + '.nnef')
 

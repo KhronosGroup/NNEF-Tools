@@ -278,6 +278,19 @@ _Transforms = Converter.unpack_transforms({
             ),
             outputs='!activation(O[0], fused_activation_function)',
         ),
+    'BATCH_MATMUL':
+        Transform(
+            type='matmul',
+            cond={
+                '!asymmetric_quantize_inputs == False': 'asymmetric_quantize_inputs must be False',
+            },
+            inputs=('!I[0]', '!I[1]'),
+            outputs='!O[0]',
+            attribs={
+                'transposeA': '!adj_x',
+                'transposeB': '!adj_y',
+            },
+        ),
     'L2_NORMALIZATION':
         Transform(
             type='l2_normalization',

@@ -151,7 +151,7 @@ class Converter:
                     errors.append(error)
 
             if len(errors):
-                raise ConversionError("Found {} operator(s) that cannot be converted".format(len(errors)), details=errors)
+                raise ConversionError("Found {} operator(s) that cannot be converted\n{}".format(len(errors), "\n".join(errors)))
 
         for op in graph.operations:
             transform = self._transforms.get(op.type)
