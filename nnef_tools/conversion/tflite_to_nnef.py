@@ -322,6 +322,7 @@ _Transforms = Converter.unpack_transforms({
             },
         ),
     'IDENTITY': _TFTransforms['Identity'],
+    'QUANTIZE': _TFTransforms['Identity'],
     'TRANSPOSE': _TFTransforms['Transpose'],
     'SPLIT': _TFTransforms['Split'],
     'SPLIT_V': _TFTransforms['SplitV'],
