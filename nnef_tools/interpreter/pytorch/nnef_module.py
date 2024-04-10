@@ -14,11 +14,13 @@
 
 from __future__ import division, print_function, absolute_import
 
+import nnef
 import torch
 import keyword
 
 from . import nnef_operators
 from ...io import nnef as nnef_io
+from ...io.nnef.reader import _build_graph
 from ...model.graph import *
 
 
@@ -29,9 +31,9 @@ class NNEFModule(torch.nn.Module):
     """
 
     def __init__(self,
-                 path,                      # type: str
-                 decomposed=None,           # type: typing.Optional[typing.List[str]]
-                 custom_operators=None,     # type: typing.Optional[typing.Dict[str, typing.Callable]]
+                 model,  # type: str
+                 decomposed=None,  # type: typing.Optional[typing.List[str]]
+                 custom_operators=None,  # type: typing.Optional[typing.Dict[str, typing.Callable]]
                  activation_callback=None,  # type: typing.Optional[typing.Callable[[str, torch.Tensor], None]]
                  training_attributes=None,  # type: typing.Optional[typing.Dict[str, typing.Dict[str, typing.Any]]]
                  ):
@@ -40,8 +42,12 @@ class NNEFModule(torch.nn.Module):
             nnef_graph might be modified by this class if training and write_nnef is used
         """
         super(NNEFModule, self).__init__()
-        reader = nnef_io.Reader(decomposed=decomposed, infer_shapes=False)
-        self._nnef_graph = reader(path)
+        if isinstance(model, nnef.Graph):
+            self._nnef_graph = _build_graph(model)
+        else:
+            reader = nnef_io.Reader(decomposed=decomposed, infer_shapes=False)
+            self._nnef_graph = reader(model)
+
         self._name_inline_constants(self._nnef_graph)
 
         for nnef_tensor in self._nnef_graph.tensors:

@@ -24,11 +24,14 @@ from .. import Statistics
 
 class Interpreter:
 
-    def __init__(self, path, device=None, decomposed=None, custom_operators=None):
-        self._nnef_graph = nnef.parse_file(os.path.join(path, 'graph.nnef'), lowered=decomposed)
+    def __init__(self, model, device=None, decomposed=None, custom_operators=None):
+        if isinstance(model, nnef.Graph):
+            self._nnef_graph = model
+        else:
+            self._nnef_graph = nnef.parse_file(os.path.join(model, 'graph.nnef'), lowered=decomposed)
         self._init_input_shapes(self._nnef_graph)
 
-        self._nnef_module = NNEFModule(path=path, custom_operators=custom_operators, decomposed=decomposed)
+        self._nnef_module = NNEFModule(model=model, custom_operators=custom_operators, decomposed=decomposed)
 
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'
