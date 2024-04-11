@@ -42,7 +42,7 @@ if __name__ == '__main__':
     try:
         graph = nnef.load_graph(args.path, stdlib=stdlib, lowered=args.lower.split(','))
     except nnef.Error as err:
-        print('Parse error: ' + str(err))
+        print(err)
         exit(-1)
 
     if args.input_shape:

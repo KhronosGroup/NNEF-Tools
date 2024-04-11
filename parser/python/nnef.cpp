@@ -227,17 +227,22 @@ static std::string buildErrorString( nnef::Error e )
 struct GraphCallback : public nnef::Parser::Callback
 {
     GraphCallback( std::istream& qis, const char* qfn )
-    : qis(qis), qfn(qfn)
+    : qis(qis), qfn(qfn), tensors(NULL), operations(NULL), graph(NULL), version(NULL), extensions(NULL)
     {
     }
 
     ~GraphCallback()
     {
-        Py_DECREF(tensors);
-        Py_DECREF(operations);
-        Py_DECREF(graph);
-        Py_DECREF(version);
-        Py_DECREF(extensions);
+        if ( tensors )
+            Py_DECREF(tensors);
+        if ( operations )
+            Py_DECREF(operations);
+        if ( graph )
+            Py_DECREF(graph);
+        if ( version )
+            Py_DECREF(version);
+        if ( extensions )
+            Py_DECREF(extensions);
     }
 
     virtual void beginDocument( const std::string& filename, const nnef::Parser::version_t& version )
