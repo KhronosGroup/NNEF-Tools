@@ -175,7 +175,11 @@ class Optimizer:
         for op in graph.operations:
             if op.type == 'reshape' and len(op.output.consumers) == 1:
                 consumer = op.output.consumer
-                if consumer.type == 'reshape' and all(s != 0 for s in consumer.attribs['shape']):
+                if consumer.type == 'reshape':
+                    new_shape = consumer.attribs['shape']
+                    if any(s == 0 for s in new_shape):
+                        old_shape = op.attribs['shape']
+                        consumer.attribs['shape'] = tuple(old_shape[i] if s == 0 else s for i, s in enumerate(new_shape))
                     changed |= self._bypass_and_remove(graph, op)
 
         return changed
