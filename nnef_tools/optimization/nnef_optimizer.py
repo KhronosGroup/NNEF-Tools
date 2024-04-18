@@ -179,7 +179,7 @@ class Optimizer:
                     new_shape = consumer.attribs['shape']
                     if any(s == 0 for s in new_shape):
                         old_shape = op.attribs['shape']
-                        consumer.attribs['shape'] = tuple(old_shape[i] if s == 0 else s for i, s in enumerate(new_shape))
+                        consumer.attribs['shape'] = [old_shape[i] if s == 0 else s for i, s in enumerate(new_shape)]
                     changed |= self._bypass_and_remove(graph, op)
 
         return changed
