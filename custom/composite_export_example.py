@@ -1,5 +1,5 @@
 import numpy as np
-import nnef_tools.io.tf.graphdef as graphdef
+import src.nnef_tools.io.tf.graphdef as graphdef
 try:
     import tensorflow.compat.v1 as tf
     tf.disable_v2_behavior()

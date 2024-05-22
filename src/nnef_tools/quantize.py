@@ -1,5 +1,5 @@
-from nnef_tools.io.nnef.reader import Reader
-from nnef_tools.io.nnef.writer import Writer
+from src.nnef_tools.io.nnef.reader import Reader
+from src.nnef_tools.io.nnef.writer import Writer
 import numpy as np
 import argparse
 import json

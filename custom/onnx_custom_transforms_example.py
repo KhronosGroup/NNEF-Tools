@@ -1,4 +1,4 @@
-from nnef_tools.conversion import Transform
+from src.nnef_tools import Transform
 
 
 def affine_grid_shape(theta, shape):

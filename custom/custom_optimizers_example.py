@@ -1,6 +1,3 @@
-from nnef_tools.model import *
-
-
 # Define how a sequence of ops is replaced by a new sequence.
 # First test if the sequence of ops matched should be really replaced; return False if not.
 # If yes, create new Tensors and Operations in the graph with the Tensor() and  Operation() constructors.

@@ -21,7 +21,6 @@ import keyword
 from . import nnef_operators
 from ...io import nnef as nnef_io
 from ...io.nnef.reader import _build_graph
-from ...model.graph import *
 
 
 class NNEFModule(torch.nn.Module):

@@ -17,7 +17,7 @@ This repository contains tools to generate and consume NNEF documents, such as a
 
 * [NNEF Model Zoo](models#nnef-model-zoo)
 * [NNEF Tests](#nnef-tests)
-* [NNEF Tools](nnef_tools#nnef-tools)
+* [NNEF Tools](src/nnef_tools#nnef-tools)
 * [NNEF Parser](parser#nnef-parser-project)
 
 ## NNEF Model Zoo
@@ -27,7 +27,7 @@ A **Model Zoo** is now available; the 'models' folder contains a variety of [NNE
 NNEF Tests folder contains tests to verify installation and unit tests.
 
 ## NNEF Tools
-[NNEF Tools](nnef_tools#nnef-tools) folder contains tools to convert pre-trained models in `tensorFlow`/`caffe`/`caffe2`/`ONNX` to NNEF format.
+[NNEF Tools](src/nnef_tools#nnef-tools) folder contains tools to convert pre-trained models in `tensorFlow`/`caffe`/`caffe2`/`ONNX` to NNEF format.
 
 ## NNEF Parser
 [NNEF Parser](parser#nnef-parser-project) folder contains `C++` and `Python` source code for a sample NNEF graph parser.
