@@ -53,7 +53,7 @@ class TestEnv(unittest.TestCase):
     _optimize = True
 
     def setUp(self) -> None:
-        self._onnx_reader = onnx_io.Reader(simplify=False)
+        self._onnx_reader = onnx_io.Reader(simplify=True)
         self._onnx_writer = onnx_io.Writer()
         self._nnef_optimizer = nnef_opt.Optimizer()
         self._onnx_optimizer = onnx_opt.Optimizer()
@@ -1138,23 +1138,26 @@ class NetworkTestCases(TestEnv):
     def test_inception_v2(self):
         self._test_conversion_from_file(self._network_folder + 'inception_v2.onnx')
 
+    def test_mobilenet_v1(self):
+        self._test_conversion_from_file(self._network_folder + 'mobilenet_v1.onnx', epsilon=1e-4)
+
     def test_mobilenet_v2(self):
         self._test_conversion_from_file(self._network_folder + 'mobilenet_v2.onnx', epsilon=1e-4)
 
-    def test_resnet18_v1(self):
-        self._test_conversion_from_file(self._network_folder + 'resnet18_v1.onnx')
+    def test_resnet50_v1(self):
+        self._test_conversion_from_file(self._network_folder + 'resnet50_v1.onnx')
 
-    def test_resnet18_v2(self):
-        self._test_conversion_from_file(self._network_folder + 'resnet18_v2.onnx')
+    def test_resnet50_v2(self):
+        self._test_conversion_from_file(self._network_folder + 'resnet50_v2.onnx')
 
     def test_squeezenet_v1(self):
         self._test_conversion_from_file(self._network_folder + 'squeezenet_v1.onnx')
 
-    def test_squeezenet_v2(self):
-        self._test_conversion_from_file(self._network_folder + 'squeezenet_v2.onnx')
+    def test_shufflenet_v1(self):
+        self._test_conversion_from_file(self._network_folder + 'shufflenet_v1.onnx')
 
-    def test_shufflenet(self):
-        self._test_conversion_from_file(self._network_folder + 'shufflenet.onnx')
+    def test_shufflenet_v2(self):
+        self._test_conversion_from_file(self._network_folder + 'shufflenet_v2.onnx', epsilon=1e-4)
 
 
 if __name__ == '__main__':
