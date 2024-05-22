@@ -13,12 +13,12 @@
 # limitations under the License.
 
 import numpy as np
-from src import nnef_tools as nnef_io
-import src.nnef_tools.io.tf.lite as lite_io
-import src.nnef_tools.conversion.tflite_to_nnef as tflite_to_nnef
-import src.nnef_tools.conversion.nnef_to_tflite as nnef_to_tflite
-import src.nnef_tools.optimization.nnef_optimizer as nnef_opt
-import src.nnef_tools.optimization.tflite_optimizer as tflite_opt
+import nnef_tools.io.nnef as nnef_io
+import nnef_tools.io.tf.lite as lite_io
+import nnef_tools.conversion.tflite_to_nnef as tflite_to_nnef
+import nnef_tools.conversion.nnef_to_tflite as nnef_to_tflite
+import nnef_tools.optimization.nnef_optimizer as nnef_opt
+import nnef_tools.optimization.tflite_optimizer as tflite_opt
 import unittest
 import tempfile
 import os

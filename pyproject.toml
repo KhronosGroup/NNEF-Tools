@@ -38,4 +38,4 @@ full = ["nnef_tools[tensorflow-lite,onnx,caffe,visualization]"]
 "Repository" = "https://github.com/KhronosGroup/NNEF-Tools"
 
 [tool.setuptools.dynamic]
-readme = { file = ["src/README.md"] }
+readme = { file = ["src/README.md"], content-type = "text/markdown" }

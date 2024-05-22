@@ -32,7 +32,7 @@ build-backend = "setuptools.build_meta"
 "Repository" = "https://github.com/KhronosGroup/NNEF-Tools"
 
 [tool.setuptools.dynamic]
-readme = { file = ["README.md"] }
+readme = { file = ["README.md"], content-type = "text/markdown"  }
 
 [tool.setuptools.package-data]
 "nnef.cpp" = ["**/*"]

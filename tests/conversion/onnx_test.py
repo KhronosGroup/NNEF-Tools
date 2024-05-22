@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from src import nnef_tools as nnef_io, nnef_tools as onnx_io, nnef_tools as onnx_opt
-import src.nnef_tools.conversion.onnx_to_nnef as onnx_to_nnef
-import src.nnef_tools.conversion.nnef_to_onnx as nnef_to_onnx
-import src.nnef_tools.optimization.nnef_optimizer as nnef_opt
+import nnef_tools.io.nnef as nnef_io
+import nnef_tools.io.onnx as onnx_io
+import nnef_tools.conversion.onnx_to_nnef as onnx_to_nnef
+import nnef_tools.conversion.nnef_to_onnx as nnef_to_onnx
+import nnef_tools.optimization.nnef_optimizer as nnef_opt
+import nnef_tools.optimization.onnx_optimizer as onnx_opt
 import numpy as np
 import unittest
 import tempfile
@@ -107,7 +109,7 @@ class TestEnv(unittest.TestCase):
 
     @staticmethod
     def _create_tensor(value_info, data):
-        name, shape, dtype = src.nnef_tools.io.onnx.reader._get_value_info(value_info)
+        name, shape, dtype = onnx_io.reader._get_value_info(value_info)
         if data is None:
             data = TestEnv._random_data(dtype, shape)
         elif not isinstance(data, np.ndarray):

@@ -13,13 +13,13 @@
 # limitations under the License.
 
 import numpy as np
-from src.nnef_tools.io.tf.graphdef.protobuf import GraphDef
-from src import nnef_tools as nnef_io
-import src.nnef_tools.io.tf.graphdef as graphdef
-import src.nnef_tools.conversion.tf_to_nnef as tf_to_nnef
-import src.nnef_tools.conversion.nnef_to_tf as nnef_to_tf
-import src.nnef_tools.optimization.nnef_optimizer as nnef_opt
-import src.nnef_tools.optimization.tf_optimizer as tf_opt
+from nnef_tools.io.tf.graphdef.protobuf import GraphDef
+import nnef_tools.io.nnef as nnef_io
+import nnef_tools.io.tf.graphdef as graphdef
+import nnef_tools.conversion.tf_to_nnef as tf_to_nnef
+import nnef_tools.conversion.nnef_to_tf as nnef_to_tf
+import nnef_tools.optimization.nnef_optimizer as nnef_opt
+import nnef_tools.optimization.tf_optimizer as tf_opt
 import unittest
 import tempfile
 import os
