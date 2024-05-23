@@ -3,17 +3,12 @@ name: Build, test and publish nnef_tools
 on:
   push:
     tags:
-      - 'nnef_tools-v[0-9]+.[0-9]+'
+      - 'nnef_tools-v[0-9]+.[0-9]+.[0-9]+'
 
-#on:
-#  workflow_run:
-#    workflows: ["Build, test and publish nnef"]
-#    types:
-#      - completed
 
 jobs:
   build_nnef_tools:
-    name: Build nnef_tools
+    name: Build and publish nnef_tools
     runs-on: "ubuntu-latest"
 #    permissions:
 #      # IMPORTANT: this permission is mandatory for trusted publishing
@@ -31,7 +26,7 @@ jobs:
           pip install build pytest pytest-xdist
 
       - name: Build package
-        run: python -m build --outdir ./dist/
+        run: python -m build ./nnef_tools-pyproject/ --outdir ./dist/
 
       - name: Publish artifacts
         uses: actions/upload-artifact@v4

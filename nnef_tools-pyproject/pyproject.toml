@@ -1,6 +1,6 @@
 [project]
 name = "nnef_tools"
-version = "1.0"
+version = "1.0.2"
 description = "A package for managing NNEF files"
 requires-python = ">=3.7"
 

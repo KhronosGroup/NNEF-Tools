@@ -2,26 +2,7 @@
 
 This package contains a set of tools for converting and transforming machine learning models.
 
-## Setup
-
-### Installing from Git
-
-To install the `nnef_tools` package into a Python environment, clone the NNEF-Tools repo and run
-
-    python setup.py install
-
-Afterwards, the scripts in the `nnef_tools` folder can be run using the `-m` option to `python`, as in the examples below. From the main folder of the repo, the scripts can also be run with the same `-m` option without installation.
-
 ## Dependencies
-
-Python3 version >= 3.5.2 is supported.
-
-For all tools an installed `nnef` package is required:
-
-
-    cd parser/python
-    python setup.py install
-    cd ../..
 
 You need to install dependencies only for the functionalities that you are using:
 
@@ -46,7 +27,7 @@ pip install future typing six numpy protobuf flatbuffers onnx onnx-simplifier on
 For basic usage, you have to supply an input format, an output format and an input model. The output model name defaults to the input model name suffixed with the output format, but it can also be supplied explicitly.
 
 ```
-python -m nnef_tools.convert --input-format tf --output-format nnef --input-model my_model.pb --output-model my_model.nnef 
+python -m nnef_tools.convert --input-format tf --output-format nnef --input-model my_model.pb --output-model my_model.nnef
 ```
 
 ### Setting input shapes
@@ -99,9 +80,7 @@ When starting from Python code, the first step is to export the graph into a gra
 
 ```
 import nnef_tools.io.tf.graphdef as graphdef
-
 # define your TF model here
-
 with tf.Session() as sess:
     ...     # initialize variables and train graph
     graphdef.save_default_graph('path/to/save.pb', session=sess, outputs=...)
@@ -110,8 +89,8 @@ with tf.Session() as sess:
 If your model contains dynamic shapes, you can save the graph with concrete shapes by providing the input shapes to the save function. Furthermore, constant operations can also be folded while saving the model:
 
 ```
-graphdef.save_default_graph('path/to/save.pb', session=..., outputs=..., 
-                            input_shapes={'input': (1, 224, 224, 3)}, 
+graphdef.save_default_graph('path/to/save.pb', session=..., outputs=...,
+                            input_shapes={'input': (1, 224, 224, 3)},
                             fold_constants=True)
 ```
 
@@ -211,7 +190,7 @@ Similarly to the above mechanism, custom shape inference functions and custom op
 def my_custom_shape_function(intput1_shape, ..., attrib1, ...)
     ...     # assert validity of input shapes / attribs
     ...     # return calculated output shape(s)
-    
+
 CUSTOM_SHAPES = {
     'my_custom_op': my_custom_shape_function,
 }
@@ -220,7 +199,7 @@ CUSTOM_SHAPES = {
 or
 
 ```
-op_fragment = 
+op_fragment =
 """
 # NNEF fragment declaration/definition goes here
 """
@@ -236,10 +215,10 @@ Additionally, with a similar mechanism, custom optimization passes can also be i
 
 ```
 def replace_my_chain(a, b, c):   # a, b, c will contain the matched chain of ops in order when this is called
-    ...     # check attributes of the chain a, b, c to see if it should really be replaced; 
+    ...     # check attributes of the chain a, b, c to see if it should really be replaced;
             # if not, return False (do not modify the graph before all checks)
     ...     # create new tensors and operations in the graph that will replace the chain
-    ...     # either return nothing (None), or any non-False value 
+    ...     # either return nothing (None), or any non-False value
 
 CUSTOM_OPTIMIZERS = {
     ('a', 'b', 'c'): replace_my_chain,      # use a tuple as key, since list is not hashable

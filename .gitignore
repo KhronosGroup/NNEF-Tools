@@ -3,3 +3,6 @@ __pycache__
 .idea
 /_models
 /out
+/*/build
+/*/dist
+*.egg-info
