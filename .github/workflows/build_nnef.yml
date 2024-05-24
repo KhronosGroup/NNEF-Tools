@@ -69,9 +69,9 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: publish to testPypi
+      - name: publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
-          password: ${{ secrets.NNEF_SECRET_TESTPYPI }}
-          repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.PYPI_TOKEN }}
+#          repository-url: https://test.pypi.org/legacy/

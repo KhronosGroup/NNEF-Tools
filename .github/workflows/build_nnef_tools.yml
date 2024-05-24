@@ -40,9 +40,9 @@ jobs:
       - name: Test
         run: python -m pytest ./nnef_tools-pyproject/tests/ -n auto
 
-      - name: Publish to testPypi
+      - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
-          password: ${{ secrets.NNEF_SECRET_TESTPYPI }}
-          repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.PYPI_TOKEN }}
+#          repository-url: https://test.pypi.org/legacy/
