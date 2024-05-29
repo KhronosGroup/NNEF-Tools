@@ -14,11 +14,11 @@ The Python code wraps the C++ parser and adds some further utilities to load and
 C++ Library
 -----------
 
-Documentation to the library: [cpp_api.md](cpp_api.md)
+Documentation of the library: [cpp_api.md](cpp_api.md)
 
 
 Python Package
 --------------
 
-Documentation to the Python package: [package_info.md](package_info.md)
+Documentation of the Python package: [package_info.md](package_info.md)
 

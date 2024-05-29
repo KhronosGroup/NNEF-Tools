@@ -25,4 +25,5 @@ and
 
 can be used to parse a graph and optional quantization info from files or strings.
 
-After invocation, `graph` is a data structure (named tuple) containing the name, tensors, operations, inputs and outputs of the graph. See `nnef.py` and `parser/examples/samples/sample.py` for more details. If shape information is also required, it can be obtained by calling `nnef.infer_shapes(graph)`, which updates the shape information on the graph structure in place.
+After invocation, `graph` is a data structure (named tuple) containing the name, tensors, operations, inputs and outputs of the graph.
+If shape information is also required, it can be obtained by calling `nnef.infer_shapes(graph)`, which updates the shape information on the graph structure in place.
