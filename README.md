@@ -16,16 +16,12 @@ NNEF reduces machine learning deployment fragmentation by enabling a rich mix of
 This repository contains tools to generate and consume NNEF documents, such as a parser (C++ and Python) that can be included in consumer applications and converters for deep learning frameworks.
 
 * [NNEF Model Zoo](models#nnef-model-zoo)
-* [NNEF Tests](#nnef-tests)
 * [NNEF Tools](nnef_tools-pyproject#nnef-tools)
 * [NNEF Parser](nnef-pyproject#nnef-parser---repository)
 
 
 ## NNEF Model Zoo
 A **Model Zoo** is now available; the 'models' folder contains a variety of [NNEF models](models#nnef-model-zoo) converted from various sources.
-
-## NNEF Tests
-NNEF Tests folder contains tests to verify installation and unit tests.
 
 ## NNEF Tools
 [NNEF Tools](nnef_tools-pyproject#nnef-tools) folder contains tools to convert pre-trained models in `tensorFlow`/`caffe`/`caffe2`/`ONNX` to NNEF format.
