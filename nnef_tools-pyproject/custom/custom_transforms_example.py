@@ -1,4 +1,4 @@
-from nnef_tools.conversion import Transform
+from src.nnef_tools import Transform
 
 
 # define mapping from custom op names to converter transforms that maps them in this case to NNEF ops

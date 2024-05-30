@@ -1,0 +1,44 @@
+[project]
+name = "nnef_tools"
+version = "1.0.5"
+description = "A package for managing NNEF files"
+requires-python = ">=3.7"
+
+classifiers = [
+    'Intended Audience :: Developers',
+    'License :: OSI Approved :: Apache Software License',
+    'Programming Language :: Python :: 3',
+]
+dynamic = ["readme"]
+license = { file = "LICENSE" }
+keywords = ["nnef"]
+
+authors = [
+    { name = "Viktor Gyenes", email = "viktor.gyenes@aimotive.com" },
+    { name = "Tamas Danyluk", email = "9149812+tdanyluk@users.noreply.github.com" },
+]
+maintainers = [{ name = "Viktor Gyenes", email = "viktor.gyenes@aimotive.com" }]
+
+dependencies = ["future", "numpy", "six", "typing", "nnef"]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+caffe = ["protobuf", "torch"]
+onnx = ["protobuf", "onnx", "onnx-simplifier", "onnxruntime"]
+tensorflow-lite = ["nnef_tools[tensorflow-protobuf]", "flatbuffers"]
+tensorflow-protobuf = ["tensorflow"]
+visualization = ["graphviz"]
+full = ["nnef_tools[tensorflow-lite,onnx,caffe,visualization]"]
+
+[project.urls]
+"Homepage" = "https://www.khronos.org/nnef"
+"Repository" = "https://github.com/KhronosGroup/NNEF-Tools"
+
+[tool.setuptools.dynamic]
+readme = { file = ["package_info.md"], content-type = "text/markdown" }
+
+[tool.setuptools]
+package-dir = {"nnef_tools" = "nnef_tools"}

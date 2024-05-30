@@ -1,0 +1,44 @@
+[project]
+name = "nnef"
+version = "1.0.5"
+description = "A package for parsing NNEF files"
+requires-python = ">=3.7"
+
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'Intended Audience :: Developers',
+    'License :: OSI Approved :: Apache Software License',
+    'Programming Language :: Python :: 2',
+    'Programming Language :: Python :: 3',
+]
+dynamic = ["readme"]
+keywords = ["nnef"]
+
+authors = [
+    { name = "Viktor Gyenes", email = "viktor.gyenes@aimotive.com" },
+    { name = "Tamas Danyluk", email = "9149812+tdanyluk@users.noreply.github.com" },
+]
+maintainers = [{ name = "Viktor Gyenes", email = "viktor.gyenes@aimotive.com" }]
+
+dependencies = ["numpy"]
+
+[build-system]
+requires = ["setuptools", "wheel", "numpy", "Cython"]
+build-backend = "setuptools.build_meta"
+
+
+[project.urls]
+"Homepage" = "https://www.khronos.org/nnef"
+"Repository" = "https://github.com/KhronosGroup/NNEF-Tools"
+
+[tool.setuptools.dynamic]
+readme = { file = ["package_info.md"], content-type = "text/markdown"  }
+
+[tool.setuptools.package-data]
+"nnef.cpp" = ["**/*"]
+
+[tool.cibuildwheel]
+# Skip PyPy wheels
+skip = "pp*"
+
+test-command = "python {package}/tests/test.py"

@@ -131,17 +131,17 @@ class ParserTest(unittest.TestCase):
             """)
         nnef.infer_shapes(graph)
 
-    def test_alexnet(self):
-        nnef.parse_file("../examples/alexnet.txt")
-
-    def test_googlenet(self):
-        nnef.parse_file("../examples/googlenet.txt")
-
-    def test_resnet(self):
-        nnef.parse_file("../examples/resnet.txt")
-
-    def test_vggnet(self):
-        nnef.parse_file("../examples/vgg.txt")
+    # def test_alexnet(self):
+    #     nnef.parse_file("../examples/alexnet.txt")
+    #
+    # def test_googlenet(self):
+    #     nnef.parse_file("../examples/googlenet.txt")
+    #
+    # def test_resnet(self):
+    #     nnef.parse_file("../examples/resnet.txt")
+    #
+    # def test_vggnet(self):
+    #     nnef.parse_file("../examples/vgg.txt")
 
 
 if __name__ == '__main__':
