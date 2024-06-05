@@ -50,7 +50,10 @@ def load_graph(path, stdlib=None, lowered=None, load_variables=True):
     if load_variables:
         for operation in graph.operations:
             if operation.name == 'variable':
-                variable_filename = os.path.join(path, operation.attribs['label'] + '.dat')
+                variable_filename = operation.attribs['label'] + '.dat'
+                if variable_filename.startswith(os.path.sep):
+                    variable_filename = variable_filename[1:]
+                variable_filename = os.path.join(path, variable_filename)
                 tensor_name = operation.outputs['output']
                 with open(variable_filename) as variable_file:
                     data = read_tensor(variable_file)
@@ -81,7 +84,10 @@ def save_graph(graph, path, annotate_shapes=False):
 
     for operation in graph.operations:
         if operation.name == 'variable':
-            variable_filename = os.path.join(path, operation.attribs['label'] + '.dat')
+            variable_filename = operation.attribs['label'] + '.dat'
+            if variable_filename.startswith(os.path.sep):
+                variable_filename = variable_filename[1:]
+            variable_filename = os.path.join(path, variable_filename)
             os.makedirs(os.path.split(variable_filename)[0], exist_ok=True)
 
             tensor_name = operation.outputs['output']
