@@ -1,6 +1,6 @@
 [project]
 name = "nnef"
-version = "1.0.6"
+version = "1.0.7"
 description = "A package for parsing NNEF files"
 requires-python = ">=3.7"
 
@@ -15,8 +15,7 @@ dynamic = ["readme"]
 keywords = ["nnef"]
 
 authors = [
-    { name = "Viktor Gyenes", email = "viktor.gyenes@aimotive.com" },
-    { name = "Tamas Danyluk", email = "9149812+tdanyluk@users.noreply.github.com" },
+    { name = "Khronos Group", email = "nnef@lists.khronos.org" },
 ]
 maintainers = [{ name = "Viktor Gyenes", email = "viktor.gyenes@aimotive.com" }]
 
