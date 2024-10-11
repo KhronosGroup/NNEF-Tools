@@ -117,7 +117,7 @@ fragment erf( x: tensor<scalar> ) -> ( y: tensor<scalar> )
 _MISH_FRAGMENT = """
 fragment mish( x: tensor<scalar> ) -> ( y: tensor<scalar> )
 {
-    y = x * tanh(ln(1 + exp(x)));
+    y = x * tanh(log(1.0 + exp(x)));
 }
 """
 
