@@ -33,17 +33,15 @@ _numpy_dtype_to_torch = {
     np.int32: torch.int32,
     np.int64: torch.int64,
     np.uint8: torch.uint8,
-    np.float_: torch.float,
     np.double: torch.double,
     np.float16: torch.float16,
     np.float32: torch.float32,
     np.float64: torch.float64,
-    np.int_: torch.int,
     np.short: torch.short,
     np.longlong: torch.long,
-    np.bool_: torch.bool,
     int: torch.int,
     bool: torch.bool,
+    float: torch.float,
 }
 
 

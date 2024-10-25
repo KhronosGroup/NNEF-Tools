@@ -47,12 +47,10 @@ _nnef_dtype_to_numpy = {
 
 _numpy_dtype_remap = {
     np.short: np.int64,
-    np.int_: np.int64,
     np.longlong: np.int64,
     np.ushort: np.uint64,
     np.uint: np.uint64,
     np.ulonglong: np.uint64,
-    np.float_: np.float32,
     np.double: np.float64,
     np.longdouble: np.float64,
 }
