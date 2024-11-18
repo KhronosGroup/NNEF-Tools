@@ -65,7 +65,7 @@ class Optimizer:
                 changed |= self._merge_op_into_variables_and_constants(graph, 'transpose', lambda data, attribs:
                     data.transpose(attribs['axes']))
                 changed |= self._merge_op_into_variables_and_constants(graph, 'reshape', lambda data, attribs:
-                    data.reshape(attribs['shape']))
+                    data.reshape(self._get_reshape_shape(data, attribs)))
                 changed |= self._merge_op_into_variables_and_constants(graph, 'squeeze', lambda data, attribs:
                     data.squeeze(tuple(attribs['axes'])))
                 changed |= self._merge_op_into_variables_and_constants(graph, 'unsqueeze', lambda data, attribs:
@@ -176,13 +176,24 @@ class Optimizer:
             if op.type == 'reshape' and len(op.output.consumers) == 1:
                 consumer = op.output.consumer
                 if consumer.type == 'reshape':
-                    new_shape = consumer.attribs['shape']
+                    new_shape = self._get_reshape_shape(consumer.input, consumer.attribs)
                     if any(s == 0 for s in new_shape):
-                        old_shape = op.attribs['shape']
-                        consumer.attribs['shape'] = [old_shape[i] if s == 0 else s for i, s in enumerate(new_shape)]
+                        old_shape = self._get_reshape_shape(op.input, op.attribs)
+                        new_shape = [old_shape[i] if s == 0 else s for i, s in enumerate(new_shape)]
+
+                    consumer.attribs['shape'] = new_shape
+                    del consumer.attribs['axis_start']
+                    del consumer.attribs['axis_count']
+
                     changed |= self._bypass_and_remove(graph, op)
 
         return changed
+
+    def _get_reshape_shape(self, input, attribs):
+        start = attribs.get('axis_start', 0)
+        count = attribs.get('axis_count', len(input.shape) - start)
+        shape = attribs['shape']
+        return input.shape[:start] + tuple(shape) + input.shape[start + count:]
 
     def _bypass_and_remove(self, graph, op):
         if op.output in graph.outputs and (op.input in graph.inputs or op.input in graph.outputs):
