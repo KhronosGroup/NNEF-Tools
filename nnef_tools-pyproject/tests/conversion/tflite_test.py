@@ -102,7 +102,7 @@ class TestEnv(unittest.TestCase):
 
     @staticmethod
     def _random_data(dtype, shape):
-        if dtype == bool:
+        if dtype == bool or dtype == np.bool_:
             return np.random.random(shape) > 0.5
         elif np.issubdtype(dtype, np.integer):
             return np.maximum(np.floor(np.random.random(shape) * 256).astype(dtype), 255)
