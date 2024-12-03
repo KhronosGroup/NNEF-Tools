@@ -217,7 +217,11 @@ class Optimizer:
         if len(linear.inputs) > 2 and linear.inputs[2].data is None:
             return None
 
-        bias.data = Optimizer._squeeze_batch_and_spatial_dims(bias.data)
+        if len(bias.shape) == 0:
+            bias.data = np.expand_dims(bias.data, axis=0)
+        elif len(bias.shape) >= 2:
+            bias.data = Optimizer._squeeze_batch_and_spatial_dims(bias.data)
+
         bias.shape = bias.data.shape
 
         if add.type == 'sub':
