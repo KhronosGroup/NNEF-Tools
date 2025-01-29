@@ -55,15 +55,16 @@ class NNEFModule(torch.nn.Module):
                 name = self._registered_name(nnef_tensor.name)
                 data = self._dequantize(nnef_tensor.data, nnef_tensor.quant, channel_axis=0) \
                     if nnef_tensor.quant else nnef_tensor.data
-                self.register_parameter(name, torch.nn.Parameter(torch.tensor(self.normalize_dtype(data))))
+                data = self.normalize_dtype(data)
+                self.register_parameter(name, torch.nn.Parameter(torch.tensor(data), requires_grad=data.dtype == np.float32))
             elif self._is_constant(nnef_tensor):
                 name = self._registered_name(nnef_tensor.name)
                 data = nnef_tensor.data if not nnef_tensor.producer else \
                     self._as_numpy(nnef_tensor.producer.attribs['value'],
                                    nnef_tensor.producer.attribs['shape'],
-                                   nnef_tensor.producer.attribs['dtype']) \
-
-                self.register_buffer(name, torch.tensor(self.normalize_dtype(data)))
+                                   nnef_tensor.producer.attribs['dtype'])
+                data = self.normalize_dtype(data)
+                self.register_buffer(name, torch.tensor(data))
 
         self._operators = {}
         self._operators.update(nnef_operators.Operators)
