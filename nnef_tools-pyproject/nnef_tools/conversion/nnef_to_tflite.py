@@ -235,6 +235,7 @@ _Transforms = Converter.unpack_transforms({
             cond={
                 '!size[0] == 1 and size[1] == 1 and ': 'size must be 1 in batch and channel dimensions',
                 '!stride[0] == 1 and stride[1] == 1': 'stride must be 1 in batch and channel dimensions',
+                '!border == "ignore"': 'border must be "ignore"',
             },
             type=('MAX_POOL_2D', 'AVERAGE_POOL_2D'),
             using={

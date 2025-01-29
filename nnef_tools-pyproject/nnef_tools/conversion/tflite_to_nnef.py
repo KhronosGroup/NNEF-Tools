@@ -244,6 +244,7 @@ _Transforms = Converter.unpack_transforms({
                 'size': '![1, 1, filter_height, filter_width]',
                 'stride': '![1, 1, stride_h, stride_w]',
                 'padding': '!convert_padding(padding, I[0].rank)',
+                'border': '!"ignore"',
             }
         ),
     'RESHAPE':

@@ -362,6 +362,9 @@ _Transforms = Converter.unpack_transforms({
     ('max_pool', 'avg_pool', 'max_pool_with_index'):
         Transform(
             type=('MaxPool', 'AvgPool', 'MaxPoolWithArgmax'),
+            cond={
+                '!border == "ignore"': 'border must be "ignore"',
+            },
             inputs=(
                 '!transpose_input(I[0])',
             ),

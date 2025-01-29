@@ -331,6 +331,7 @@ _Transforms = Converter.unpack_transforms({
                 'size': '!nxc_to_ncx(ksize) if is_nxc(data_format) else ksize',
                 'stride': '!nxc_to_ncx(strides) if is_nxc(data_format) else strides',
                 'padding': '!convert_padding(padding, I[0].rank, explicit_paddings, data_format)',
+                'border': '!"ignore"',
             }
         ),
     'Concat':
