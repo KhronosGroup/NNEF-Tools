@@ -384,7 +384,7 @@ _Transforms = Converter.unpack_transforms({
                 'size': '![1, 1] + kernel_shape',
                 'stride': '![1, 1] + strides',
                 'dilation': '![1, 1] + dilations',
-                'padding': '!convert_padding(_pads, auto_pad, None, I[0].rank, strides if ceil_mode == 1 else None)',
+                'padding': '!convert_padding(_pads, auto_pad, None, I[0].rank, [1, 1] + strides if ceil_mode == 1 else None)',
                 'border': '!"constant" if count_include_pad else "ignore"',
             }
         ),
