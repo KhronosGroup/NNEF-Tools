@@ -246,20 +246,21 @@ class Converter(_Converter):
         count = len(items) // 2
         return list(zip(items[:count], items[count:]))
 
-    def convert_padding(self, pads, auto_pad, output_padding, rank):
+    def convert_padding(self, pads, auto_pad, output_padding, rank, ceil_stride=None):
         if auto_pad == "NOTSET" or auto_pad == "SAME_LOWER":
             padding = self._uninterleave(pads)
             if output_padding is not None:
                 for i in range(len(padding)):
                     padding[i] = (padding[i][0], padding[i][1] - output_padding[i])
-            return [(0, 0)] * (rank - len(padding)) + padding
+            padding = [(0, 0)] * (rank - len(padding)) + padding
+            return self.ceil_pads(padding, ceil_stride) if ceil_stride else padding
         elif auto_pad == "VALID":
             padding = [(0, 0,)] * rank
             if output_padding is not None:
                 offs = rank - len(output_padding)
                 for i in range(len(output_padding)):
                     padding[i + offs] = (padding[i + offs][0], padding[i + offs][1] - output_padding[i])
-            return padding
+            return self.ceil_pads(padding, ceil_stride) if ceil_stride else padding
         elif auto_pad == "SAME_UPPER":
             return []
         else:
@@ -304,6 +305,9 @@ class Converter(_Converter):
             total[i] = max((input_size[i] // stride[i] - 1) * stride[i] + dilated_size - output_size[i], 0)
         pads = [(t // 2, t - t // 2) for t in total]
         return self._interleave(pads)
+
+    def ceil_pads(self, pads, stride):
+        return [(p, q + s - 1) for (p, q), s in zip(pads, stride)]
 
     def broadcast(self, tensor, rank):
         return self.unsqueeze_input(tensor, axes=list(range(rank - tensor.rank))) if tensor.rank > 0 else tensor
@@ -368,7 +372,6 @@ _Transforms = Converter.unpack_transforms({
                 'count_include_pad': 0,
             },
             cond={
-                '!ceil_mode == 0': 'ceil_mode must be 0',
                 '!storage_order == 0': 'storage_order must be 0',
             },
             using={
@@ -381,7 +384,7 @@ _Transforms = Converter.unpack_transforms({
                 'size': '![1, 1] + kernel_shape',
                 'stride': '![1, 1] + strides',
                 'dilation': '![1, 1] + dilations',
-                'padding': '!convert_padding(_pads, auto_pad, None, I[0].rank)',
+                'padding': '!convert_padding(_pads, auto_pad, None, I[0].rank, strides if ceil_mode == 1 else None)',
                 'border': '!"constant" if count_include_pad else "ignore"',
             }
         ),
