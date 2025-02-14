@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..model.utils import replace_chain
+from ..model.utils import replace_chain, bypass_and_remove
 from ..model.graph import *
 from ..utils.types import from_numpy
 
@@ -23,7 +23,7 @@ class Optimizer:
         self._custom_optimizers = custom_optimizers or {}
 
     def __call__(self, graph, only_required=False):
-        replace_chain(graph, ['DEQUANTIZE'], self._eliminate_variable_dequantize)
+        Optimizer._eliminate_variable_dequantize_ops(graph)
         replace_chain(graph, ['SPACE_TO_BATCH_ND', {'CONV_2D', 'DEPTHWISE_CONV_2D'}, 'BATCH_TO_SPACE_ND'], self._replace_dilated_conv)
         replace_chain(graph, ['RESHAPE', 'RESHAPE', 'PACK', 'PACK', 'RESHAPE'], self._replace_resize_nearest)
         replace_chain(graph, ['SHAPE'], self._replace_const_shape)
@@ -101,21 +101,21 @@ class Optimizer:
                    for i in (range(1, rank - 1) if is_nxc else range(2, rank)))
 
     @staticmethod
-    def _eliminate_variable_dequantize(dequantize):
-        if not Optimizer._is_constant(dequantize.input):
-            return False
+    def _eliminate_variable_dequantize_ops(graph):
+        for op in list(graph.operations):
+            if op.type == 'DEQUANTIZE' and Optimizer._is_constant(op.input):
+                variable = op.input
 
-        variable = dequantize.input
-        if variable.data is None:
-            return False
+                if 'zero_point' in variable.quant and 'scale' in variable.quant:
+                    zero_point = variable.quant['zero_point']
+                    scale = variable.quant['scale']
+                    variable.data = (variable.data - zero_point) * scale
 
-        zero_point = variable.quant['zero_point']
-        scale = variable.quant['scale']
+                variable.data = variable.data.astype(np.float32)
+                variable.dtype = np.float32
+                variable.quant = None
 
-        variable.data = (variable.data - zero_point) * scale
-        variable.data = variable.data.astype(np.float32)
-        variable.dtype = np.float32
-        variable.quant = None
+                bypass_and_remove(graph, op)
 
     @staticmethod
     def _replace_const_shape(shape):
