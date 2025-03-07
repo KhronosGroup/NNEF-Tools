@@ -540,6 +540,7 @@ def infer_shapes(graph, external_shapes={}, custom_shapes={}):
             id = op.outputs['output']
             override = external_shapes.get(id)
             if override is not None:
+                override = list(override)
                 original = op.attribs['shape']
                 assert len(override) == len(original), \
                     "overridden external shape rank ({}) does not match original rank ({})".format(len(override), len(original))
