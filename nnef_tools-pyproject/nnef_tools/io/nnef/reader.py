@@ -114,7 +114,8 @@ class Reader(object):
         self._load_variables = load_variables
 
     def __call__(self, path, input_shapes=None):
-        compressed = os.path.splitext(path) in ['tgz', 'gz'] and not os.path.isdir(path)
+        filename, extension = os.path.splitext(path)
+        compressed = extension in ['.tgz', '.gz'] and not os.path.isdir(path)
 
         folder = None
         try:
