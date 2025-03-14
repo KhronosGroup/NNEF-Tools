@@ -1,17 +1,3 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 
 import nnef
@@ -20,8 +6,9 @@ import keyword
 
 from . import nnef_operators
 from ...io import nnef as nnef_io
-from ...io.nnef.reader import _build_graph
-from ...model.graph import *
+from ...io.nnef.reader import _build_model
+from ...model import *
+from ...model.utils import recursive_itemize
 
 
 class NNEFModule(torch.nn.Module):
@@ -43,14 +30,15 @@ class NNEFModule(torch.nn.Module):
         """
         super(NNEFModule, self).__init__()
         if isinstance(model, nnef.Graph):
-            self._nnef_graph = _build_graph(model)
+            self._nnef_model = _build_model(model)
         else:
             reader = nnef_io.Reader(decomposed=decomposed, infer_shapes=False)
-            self._nnef_graph = reader(model)
+            self._nnef_model = reader(model)
 
-        self._name_inline_constants(self._nnef_graph)
+        self._name_inline_constants(self._nnef_model)
 
-        for nnef_tensor in self._nnef_graph.tensors:
+        graph = self._nnef_model.main
+        for nnef_tensor in graph.tensors:
             if self._is_variable(nnef_tensor):
                 name = self._registered_name(nnef_tensor.name)
                 data = self._dequantize(nnef_tensor.data, nnef_tensor.quant, channel_axis=0) \
@@ -74,9 +62,10 @@ class NNEFModule(torch.nn.Module):
         self._training_attributes = training_attributes or {}
 
     def forward(self, *inputs):
-        assert len(inputs) == len(self._nnef_graph.inputs)
+        graph = self._nnef_model.main
+        assert len(inputs) == len(graph.inputs)
         activations = {nnef_tensor.name: torch_tensor for torch_tensor, nnef_tensor
-                       in zip(inputs, self._nnef_graph.inputs)}
+                       in zip(inputs, graph.inputs)}
 
         def get_tensor(name):
             if hasattr(self, self._registered_name(name)):
@@ -84,10 +73,16 @@ class NNEFModule(torch.nn.Module):
             else:
                 return activations[name]
 
+        def get_tensors(query):
+            return [get_tensor(item.name) for item in query] if isinstance(query, list) else get_tensor(query.name)
+
         def has_tensor(name):
             return hasattr(self, self._registered_name(name)) or name in activations
 
-        for op in self._nnef_graph.operations:
+        def has_tensors(query):
+            return all(has_tensor(item.name) for item in query) if isinstance(query, list) else has_tensor(query.name)
+
+        for op in graph.operations:
             if op.type == 'external' or op.type == 'variable' or op.type == 'constant':
                 output = get_tensor(op.output.name)
                 if self._activation_callback:
@@ -96,9 +91,10 @@ class NNEFModule(torch.nn.Module):
                 assert op.type in self._operators, "Unsupported operation: {}".format(op.type)
                 func = self._operators[op.type]
 
-                assert all(has_tensor(tensor.name) for tensor in op.inputs),\
+                assert all(has_tensors(input) for input in op.inputs),\
                     "could not fetch input tensor(s) {} for operation {}"\
-                        .format({tensor.name for tensor in op.inputs}, op.type)
+                        .format({[item.name for item in input] if isinstance(input, list) else input.name
+                                 for input in op.inputs}, op.type)
 
                 training_attribs = self._training_attributes.get(op.type, {})
                 attribs = {**op.attribs, **training_attribs}
@@ -107,13 +103,13 @@ class NNEFModule(torch.nn.Module):
                 if 'dtype' in attribs and op.type != 'constant' and op.type != 'cast':
                     del attribs['dtype']
 
-                inputs = [get_tensor(tensor.name) if tensor.name else torch.tensor(tensor.data) for tensor in op.inputs]
-                outputs = func(*inputs, **attribs) if isinstance(op.inputs, tuple) else func(inputs, **attribs)
+                inputs = [get_tensors(input) for input in op.inputs]
+                outputs = func(*inputs, **attribs)
 
-                if not isinstance(outputs, (list, tuple)):
+                if not isinstance(outputs, tuple):
                     outputs = (outputs,)
 
-                for nnef_tensor, output in zip(op.outputs, outputs):
+                for nnef_tensor, output in zip(recursive_itemize(op.outputs), recursive_itemize(outputs)):
                     if nnef_tensor.quant and not self._is_variable(nnef_tensor):
                         output = self._fake_quantize(output, nnef_tensor.quant, channel_axis=0)
 
@@ -121,21 +117,22 @@ class NNEFModule(torch.nn.Module):
                     if self._activation_callback:
                         self._activation_callback(nnef_tensor.name, output)
 
-                for nnef_tensor in op.inputs:
+                for nnef_tensor in recursive_itemize(op.inputs):
                     if nnef_tensor.name in activations and op is nnef_tensor.consumers[-1] and \
-                            nnef_tensor not in self._nnef_graph.outputs:
+                            nnef_tensor not in graph.outputs:
                         del activations[nnef_tensor.name]
 
-        return tuple(get_tensor(nnef_tensor.name) for nnef_tensor in self._nnef_graph.outputs)
+        return tuple(get_tensors(output) for output in graph.outputs)
 
     def save_nnef(self, path):
-        for nnef_tensor in self._nnef_graph.tensors:
+        graph = self._nnef_model.main
+        for nnef_tensor in graph.tensors:
             if self._is_variable(nnef_tensor.name):
                 torch_tensor = getattr(self, self._registered_name(nnef_tensor.name))
                 nnef_tensor.data = torch_tensor.detach().cpu().numpy().astype(nnef_tensor.dtype)
 
         writer = nnef_io.Writer()
-        writer(self._nnef_graph, path)
+        writer(self._nnef_model, path)
 
     @property
     def activation_callback(self):
@@ -168,8 +165,9 @@ class NNEFModule(torch.nn.Module):
         return name if not keyword.iskeyword(name) else '_' + name + '_'
 
     @staticmethod
-    def _name_inline_constants(graph):
+    def _name_inline_constants(model):
         constants = 0
+        graph = model.main
         for tensor in graph.tensors:
             if not tensor.name:
                 assert not tensor.producer

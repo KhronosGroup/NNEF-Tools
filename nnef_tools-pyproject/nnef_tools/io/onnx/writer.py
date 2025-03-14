@@ -1,17 +1,3 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from ...model import *
 import numpy as np
 import six
@@ -38,11 +24,24 @@ _DtypeFromNumpy = {
 }
 
 
-def build_model(graph, ir_version, opset_version):
-    # type: (Graph)->onnx.ModelProto
+def build_model(model, ir_version, opset_version):
+    # type: (Model)->onnx.ModelProto
 
     model_proto = onnx.ModelProto()
-    build_graph(graph, model_proto.graph)
+
+    for graph in model.graphs:
+        for tensor in graph.tensors:
+            if not tensor.is_activation and tensor.name != '':
+                tensor_proto = model_proto.graph.initializer.add()
+                build_tensor_proto(tensor, tensor_proto)
+
+                # value_info_proto = model_proto.graph.input.add()
+                # build_value_info(tensor, value_info_proto)
+
+            if tensor.quant:
+                build_quantization(tensor, model_proto.graph)
+
+    build_graph(model.main, model_proto.graph)
 
     model_proto.ir_version = ir_version
     model_proto.opset_import.add()
@@ -53,29 +52,19 @@ def build_model(graph, ir_version, opset_version):
 
 def build_graph(graph, graph_proto):
     # type: (Graph, onnx.GraphProto)->None
+    graph_proto.name = graph.name
 
     for idx, op in enumerate(graph.operations):
         node_proto = graph_proto.node.add()
         build_node(op, node_proto, idx)
 
-    if graph.name is not None:
-        graph_proto.name = graph.name
-
-    for input in list(graph.inputs) + list(t for t in graph.tensors if t.is_constant and t.name != ''):
+    for input in graph.inputs:
         value_info_proto = graph_proto.input.add()
         build_value_info(input, value_info_proto)
 
     for output in graph.outputs:
         value_info_proto = graph_proto.output.add()
         build_value_info(output, value_info_proto)
-
-    for tensor in graph.tensors:
-        if tensor.is_constant and tensor.name != '':
-            tensor_proto = graph_proto.initializer.add()
-            build_tensor_proto(tensor, tensor_proto)
-
-        if tensor.quant:
-            build_quantization(tensor, graph_proto)
 
 
 def build_value_info(tensor, value_info_proto):
@@ -159,17 +148,22 @@ def build_node(op, node_proto, idx):
     inputs = op.inputs
     attribs = op.attribs
 
+    implicit_inputs = op.attribs.get('_implicit_input_count_')
+    if implicit_inputs:
+        inputs = op.inputs[:-implicit_inputs]
+
     for input in inputs:
-        node_proto.input.append(input.name)
+        node_proto.input.append(input.name if input.name else None)
     for output in op.outputs:
-        node_proto.output.append(output.name)
+        node_proto.output.append(output.name if output.name else None)
 
     node_proto.op_type = op.type
     node_proto.name = op.name or (op.type + str(idx))
 
     for k, v in six.iteritems(attribs):
-        attribute_proto = node_proto.attribute.add()
-        build_attribute(k, v, attribute_proto)
+        if not (k.startswith('_') and k.endswith('_')):
+            attribute_proto = node_proto.attribute.add()
+            build_attribute(k, v, attribute_proto)
 
 
 def build_attribute(key, value, attribute_proto):
@@ -229,8 +223,8 @@ class Writer(object):
         self._ir_version = ir_version
         self._opset_version = opset_version
 
-    def __call__(self, graph, filename):
-        model_proto = build_model(graph, self._ir_version, self._opset_version)
+    def __call__(self, model, filename):
+        model_proto = build_model(model, self._ir_version, self._opset_version)
         onnx.checker.check_model(model_proto)
         with open(filename, 'wb') as file:
             file.write(model_proto.SerializeToString())

@@ -1,17 +1,3 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 
 from .helpers import *
@@ -101,15 +87,17 @@ def read_flatbuffers(filename):
     with open(filename, 'rb') as file:
         bytes = bytearray(file.read())
 
-    model = fb.Model.GetRootAsModel(bytes, 0)
+    fbmodel = fb.Model.GetRootAsModel(bytes, 0)
 
-    if model.SubgraphsLength() != 1:
+    if fbmodel.SubgraphsLength() != 1:
         raise NotImplementedError('graphs with multiple sub-graphs are not supported')
 
-    subgraph = model.Subgraphs(0)
+    subgraph = fbmodel.Subgraphs(0)
     name = subgraph.Name()
+    name = name.decode() if name is not None else None
 
-    graph = Graph(name.decode() if name is not None else None)
+    model = Model(name)
+    graph = Graph(model, name)
 
     tensors = []
     for i in range(subgraph.TensorsLength()):
@@ -117,14 +105,14 @@ def read_flatbuffers(filename):
         name = tensor.Name().decode()
         shape = tuple(tensor.Shape(i) for i in range(tensor.ShapeLength()))
         dtype = DtypeToNumpy[tensor.Type()]
-        buffer = model.Buffers(tensor.Buffer())
+        buffer = fbmodel.Buffers(tensor.Buffer())
         data = _get_data_as_ndarray(buffer, dtype, shape)
         quant = _get_quantization(tensor)
         tensors.append(Tensor(graph, name, shape, dtype, data, quant))
 
     for i in range(subgraph.OperatorsLength()):
         operator = subgraph.Operators(i)
-        operatorCode = model.OperatorCodes(operator.OpcodeIndex())
+        operatorCode = fbmodel.OperatorCodes(operator.OpcodeIndex())
         builtinCode = operatorCode.BuiltinCode()
         opType = BuiltinOperatorTypeByValue[builtinCode] if builtinCode != fb.BuiltinOperator.CUSTOM else \
             operatorCode.CustomCode().decode('ascii')
@@ -133,8 +121,8 @@ def read_flatbuffers(filename):
         options = operator.BuiltinOptions()
         optionsClass = BuiltinOptionsClasses[operator.BuiltinOptionsType()]
 
-        inputs = [tensors[operator.Inputs(i)] for i in range(operator.InputsLength()) if operator.Inputs(i) != -1]
-        outputs = [tensors[operator.Outputs(i)] for i in range(operator.OutputsLength()) if operator.Outputs(i) != -1]
+        inputs = tuple(tensors[operator.Inputs(i)] for i in range(operator.InputsLength()) if operator.Inputs(i) != -1)
+        outputs = tuple(tensors[operator.Outputs(i)] for i in range(operator.OutputsLength()) if operator.Outputs(i) != -1)
 
         if options is not None and optionsClass is not None:
             optionsObject = optionsClass()
@@ -146,22 +134,12 @@ def read_flatbuffers(filename):
         else:
             attribs = {}
 
-        Operation(graph, type=opType, custom=custom, attribs=attribs, inputs=tuple(inputs), outputs=tuple(outputs))
+        Operation(graph, type=opType, custom=custom, attribs=attribs, inputs=inputs, outputs=outputs)
 
-    inputs = []
-    for i in range(subgraph.InputsLength()):
-        tensor_index = subgraph.Inputs(i)
-        inputs.append(tensors[tensor_index])
+    graph.inputs = tuple(tensors[subgraph.Inputs(i)] for i in range(subgraph.InputsLength()))
+    graph.outputs = tuple(tensors[subgraph.Outputs(i)] for i in range(subgraph.OutputsLength()))
 
-    outputs = []
-    for i in range(subgraph.OutputsLength()):
-        tensor_index = subgraph.Outputs(i)
-        outputs.append(tensors[tensor_index])
-
-    graph.inputs = inputs
-    graph.outputs = outputs
-
-    return graph
+    return model
 
 
 class Reader(object):

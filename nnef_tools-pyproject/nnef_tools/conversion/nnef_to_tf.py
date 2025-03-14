@@ -1,17 +1,3 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 from .converter import ConverterFromNNEF as _Converter, Transform
 from ..model import Tensor, Operation
@@ -40,36 +26,39 @@ class Converter(_Converter):
         self._data_format = data_format
         self._io_transpose = io_transpose
 
-    def __call__(self, graph):
-        self.convert_variables_to_constants(graph)
-        graph = _Converter.__call__(self, graph)
-        self._fix_output_transposes(graph)
-        self._remove_unused_constants(graph)
-        generate_op_names_from_op_type(graph)
-        return graph
+    def __call__(self, model):
+        self.convert_variables_to_constants(model)
+        model = _Converter.__call__(self, model)
+        self._fix_output_transposes(model)
+        self._remove_unused_constants(model)
+        generate_op_names_from_op_type(model)
+        return model
 
     def _global_attribs(self):
         return {'_lite_': False}
 
-    def _prepare(self, graph):
-        self._fix_inline_constants(graph)
+    def _prepare(self, model):
+        self._fix_inline_constants(model)
 
-    def _fix_inline_constants(self, graph):
+    def _fix_inline_constants(self, model):
+        graph = model.main
         for tensor in graph.tensors:
             mapped = self._tensor_map[tensor]
             if not mapped.producer and mapped.data is not None:
                 self._const_operation(tensor, tensor.data)
 
-    def _remove_unused_constants(self, graph):
+    def _remove_unused_constants(self, model):
+        graph = model.main
         ops = [op for op in graph.operations if op.type == 'Const' and not op.output.has_consumer]
         tensors = [op.output for op in ops]
-        graph.outputs = [tensor for tensor in graph.outputs if tensor not in tensors]
+        graph.outputs = tuple(tensor for tensor in graph.outputs if tensor not in tensors)
         graph.remove_operations(ops, unlink=True)
         graph.remove_tensors(tensors)
 
-    def _fix_output_transposes(self, graph):
-        graph.outputs = [self.transpose_input(tensor) if self.needs_io_transpose(tensor) else
-                         self.undo_transpose(tensor) for tensor in graph.outputs]
+    def _fix_output_transposes(self, model):
+        graph = model.main
+        graph.outputs = tuple(self.transpose_input(tensor) if self.needs_io_transpose(tensor) else
+                              self.undo_transpose(tensor) for tensor in graph.outputs)
 
     def _const_operation(self, output, value):
         Operation(output.graph, type='Const', inputs=(), outputs=output,
@@ -453,23 +442,29 @@ _Transforms = Converter.unpack_transforms({
     'stack':
         Transform(
             type='Pack',
-            inputs=['![undo_transpose(t) for t in I]'],
+            using={
+                'items': '!I[0]',
+            },
+            inputs='!tuple(undo_transpose(t) for t in items)',
             outputs='!O[0]',
             attribs={
                 'axis': '!axis',
-                'N': '!len(I) if not _lite_ else None',
-                'values_count': '!len(I) if _lite_ else None',
+                'N': '!len(items) if not _lite_ else None',
+                'values_count': '!len(items) if _lite_ else None',
                 'T': '!dtype if not _lite_ else None',
             }
         ),
     'unstack':
         Transform(
             type='Unpack',
+            using={
+                'items': '!O[0]',
+            },
             inputs='!undo_transpose(I[0])',
-            outputs=['!O[:]'],
+            outputs='!tuple(items)',
             attribs={
                 'axis': '!axis',
-                'num': '!len(O)',
+                'num': '!len(items)',
                 'T': '!dtype if not _lite_ else None',
             }
         ),
@@ -491,12 +486,13 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='Concat',
             using={
-                'dim': '!transpose_axis_like(axis, I[0])'
+                'items': '!I[0]',
+                'dim': '!transpose_axis_like(axis, items[0])'
             },
-            inputs=['!as_tensor(dim, np.int32)', '!I[:]'],
-            outputs='!transpose_like(O[0], I[0])',
+            inputs='!(as_tensor(dim, np.int32), *items)',
+            outputs='!transpose_like(O[0], items[0])',
             attribs={
-                'N': '!len(I)',
+                'N': '!len(items)',
                 'T': '!O[0].dtype if not _lite_ else None',
             }
         ),
@@ -504,6 +500,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='SplitV',
             using={
+                'items': '!O[0]',
                 'dim': '!transpose_axis_like(axis, I[0])'
             },
             inputs=(
@@ -511,7 +508,7 @@ _Transforms = Converter.unpack_transforms({
                 '!as_tensor(split_sizes(ratios, I[0].shape[axis]), np.int64)',
                 '!as_tensor(dim, np.int32)',
             ),
-            outputs=['![transpose_like(O[i], I[0]) for i in range(len(O))]'],
+            outputs='!tuple(transpose_like(items[i], I[0]) for i in range(len(items)))',
             attribs={
                 'num_split': '!len(ratios) if not _lite_ else None',
                 'num_splits': '!len(ratios) if _lite_ else None',
@@ -770,11 +767,14 @@ _Transforms = Converter.unpack_transforms({
     'add_n':
         Transform(
             type='AddN',
-            inputs=['!I[:]'],
-            outputs='!transpose_like(O[0], I[0])',
+            using={
+                'items': '!I[0]',
+            },
+            inputs='!tuple(items)',
+            outputs='!transpose_like(O[0], items[0])',
             attribs={
                 'T': '!O[0].dtype',
-                'N': '!len(I)',
+                'N': '!len(items)',
             },
         ),
     'cast':

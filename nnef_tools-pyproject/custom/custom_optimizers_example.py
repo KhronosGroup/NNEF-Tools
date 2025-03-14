@@ -3,6 +3,9 @@
 # If yes, create new Tensors and Operations in the graph with the Tensor() and  Operation() constructors.
 # DO NOT perform modifications to the graph before all checks passed!
 
+from nnef_tools.model import Operation
+
+
 def replace_shuffle(reshape1, transpose, reshape2):
     if reshape2.output.shape != reshape1.input.shape:
         return False

@@ -1,25 +1,10 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import numpy as np
 from nnef_tools.io.tf.graphdef.protobuf import GraphDef
-import nnef_tools.io.nnef as nnef_io
-import nnef_tools.io.tf.graphdef as graphdef
-import nnef_tools.conversion.tf_to_nnef as tf_to_nnef
-import nnef_tools.conversion.nnef_to_tf as nnef_to_tf
-import nnef_tools.optimization.nnef_optimizer as nnef_opt
-import nnef_tools.optimization.tf_optimizer as tf_opt
+from nnef_tools.io import nnef as nnef_io
+from nnef_tools.io.tf import graphdef
+from nnef_tools.conversion import tf_to_nnef, nnef_to_tf
+from nnef_tools.optimization import nnef_optimizer as nnef_opt
+from nnef_tools.optimization import tf_optimizer as tf_opt
 import unittest
 import tempfile
 import os
@@ -30,13 +15,13 @@ except ImportError:
     import tensorflow as tf
 
 
-UNITTEST_FOLDER = os.environ.get('UNITTEST_FOLDER')
+UNITTEST_FOLDER = os.path.normpath(os.path.join(os.path.dirname(__file__), '../../../unittest/'))
 
 
 class TestEnv(unittest.TestCase):
 
-    _network_folder = os.path.join(UNITTEST_FOLDER, 'tf/nets/') if UNITTEST_FOLDER else None
-    _output_folder = os.path.join(UNITTEST_FOLDER, 'tf/ops/') if UNITTEST_FOLDER else None
+    _network_folder = os.path.join(UNITTEST_FOLDER, 'nnef/tf/nets/') if UNITTEST_FOLDER else None
+    _output_folder = os.path.join(UNITTEST_FOLDER, 'nnef/tf/ops/') if UNITTEST_FOLDER else None
     _io_transpose = True
     _optimize = True
 
@@ -99,10 +84,10 @@ class TestEnv(unittest.TestCase):
 
     def _convert_to_nnef(self, filename, input_shapes=None):
         tf_graph = self._tf_reader(filename, input_shapes=input_shapes)
-        tf_graph = self._tf_optimizer(tf_graph)
+        self._tf_optimizer(tf_graph)
         nnef_graph = self._tf_to_nnef_converter(tf_graph)
         if self._optimize:
-            nnef_graph = self._nnef_optimizer(nnef_graph)
+            self._nnef_optimizer(nnef_graph)
         self._nnef_writer(nnef_graph, filename + '.nnef')
 
     def _convert_from_nnef(self, filename):

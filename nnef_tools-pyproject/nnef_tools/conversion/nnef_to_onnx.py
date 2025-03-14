@@ -1,17 +1,3 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 from .converter import ConverterFromNNEF as _Converter, Transform
 from ..model import Tensor, Operation
@@ -36,21 +22,22 @@ class Converter(_Converter):
 
     @staticmethod
     def decomposed_operations():
-        return ['lstm_step', 'lstm_loop']
+        return _Converter.decomposed_operations() + ['lstm_step', 'lstm_loop']
 
     def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
 
-    def __call__(self, graph):
-        self.fill_data_in_constants(graph)
-        self.convert_variables_to_constants(graph)
-        graph = _Converter.__call__(self, graph)
-        self._fix_inline_constants(graph)
-        return graph
+    def __call__(self, model):
+        self.fill_data_in_constants(model)
+        self.convert_variables_to_constants(model)
+        model = _Converter.__call__(self, model)
+        self._fix_inline_constants(model)
+        return model
 
-    def _fix_inline_constants(self, graph):
+    def _fix_inline_constants(self, model):
         constants = 0
+        graph = model.main
         for tensor in graph.tensors:
             if tensor.name is None:
                 constants += 1
@@ -349,7 +336,7 @@ _Transforms = Converter.unpack_transforms({
     'concat':
         Transform(
             type='Concat',
-            inputs=['!I[:]'],
+            inputs='!tuple(I[0])',
             outputs='!O[0]',
             attribs={
                 'axis': '!axis',
@@ -362,7 +349,7 @@ _Transforms = Converter.unpack_transforms({
                 'factor': '!I[0].shape[axis] // sum(ratios)',
             },
             inputs='!I[0]',
-            outputs=['!O[:]'],
+            outputs='!tuple(O[0])',
             attribs={
                 'axis': '!axis',
                 'split': '![r * factor for r in ratios]',
@@ -383,7 +370,7 @@ _Transforms = Converter.unpack_transforms({
     'add_n':
         Transform(
             type='Sum',
-            inputs=['!I[:]'],
+            inputs='!tuple(I[0])',
             outputs='!O[0]',
         ),
     'select':

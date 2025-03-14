@@ -1,17 +1,3 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 from .converter import ConverterFromNNEF as _Converter, Transform, ConversionError
 from .nnef_to_tf import Converter as _TFConverter, _Transforms as _TFTransforms
@@ -45,31 +31,33 @@ class Converter(_TFConverter):
         self._data_format = 'NXC'
         self._io_transpose = io_transpose
 
-    def __call__(self, graph):
-        graph = _TFConverter.__call__(self, graph)
-        self._generate_tensor_names(graph)
-        self._fix_custom_options(graph)
-        return graph
+    def __call__(self, model):
+        model = _TFConverter.__call__(self, model)
+        self._generate_tensor_names(model)
+        self._fix_custom_options(model)
+        return model
 
     def _global_attribs(self):
         return {'_lite_': True}
 
-    def _prepare(self, graph):
-        self._fix_quantized_dtypes(graph)
-        self._fix_quantization_attribs(graph)
-        self._transpose_externals(graph)
+    def _prepare(self, model):
+        self._fix_quantized_dtypes(model)
+        self._fix_quantization_attribs(model)
+        self._transpose_externals(model)
 
-    def _transpose_externals(self, graph):
+    def _transpose_externals(self, model):
+        graph = model.main
         for tensor in graph.tensors:
             mapped = self._tensor_map[tensor]
             if mapped.producer and mapped.producer.type == 'external' and self.needs_io_transpose(tensor):
                 self._transposes[tensor] = self.ncx_to_nxc(tensor.shape)
 
-    def _generate_tensor_names(self, graph):
-        generate_tensor_names_from_op_type(graph)
+    def _generate_tensor_names(self, model):
+        generate_tensor_names_from_op_type(model)
 
         placeholders = 0
         constants = 0
+        graph = model.main
         for tensor in graph.tensors:
             if tensor.name is None:
                 if tensor.data is None:
@@ -79,7 +67,8 @@ class Converter(_TFConverter):
                     constants += 1
                     tensor.name = 'CONSTANT' + str(constants)
 
-    def _fix_quantized_dtypes(self, graph):
+    def _fix_quantized_dtypes(self, model):
+        graph = model.main
         for tensor in graph.tensors:
             if tensor.quant and tensor.dtype == np.float32:
                 bits = tensor.quant['bits']
@@ -87,7 +76,8 @@ class Converter(_TFConverter):
                 assert bits == 8 or bits == 32
                 tensor.dtype = (np.int8 if signed else np.uint8) if bits == 8 else (np.int32 if signed else np.uint32)
 
-    def _fix_quantization_attribs(self, graph):
+    def _fix_quantization_attribs(self, model):
+        graph = model.main
         for tensor in graph.tensors:
             if tensor.quant:
                 opname = tensor.quant['op-name']
@@ -101,7 +91,8 @@ class Converter(_TFConverter):
                 if 'symmetric' in tensor.quant:
                     del tensor.quant['symmetric']
 
-    def _fix_custom_options(self, graph):
+    def _fix_custom_options(self, model):
+        graph = model.main
         for op in graph.operations:
             if op.custom:
                 options = op.attribs.get(CustomOptionsKey)
@@ -274,10 +265,13 @@ _Transforms = Converter.unpack_transforms({
     'concat':
         Transform(
             type='CONCATENATION',
-            inputs=['!I[:]'],
-            outputs='!transpose_like(O[0], I[0])',
+            using={
+                'items': '!I[0]',
+            },
+            inputs='!tuple(items)',
+            outputs='!transpose_like(O[0], items[0])',
             attribs={
-                'axis': '!transpose_axis_like(axis, I[0])',
+                'axis': '!transpose_axis_like(axis, items[0])',
             }
         ),
     'copy':

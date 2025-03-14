@@ -1,24 +1,10 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import numpy as np
-import nnef_tools.io.nnef as nnef_io
-import nnef_tools.io.tf.lite as lite_io
-import nnef_tools.conversion.tflite_to_nnef as tflite_to_nnef
-import nnef_tools.conversion.nnef_to_tflite as nnef_to_tflite
-import nnef_tools.optimization.nnef_optimizer as nnef_opt
-import nnef_tools.optimization.tflite_optimizer as tflite_opt
+from nnef_tools.io import nnef as nnef_io
+from nnef_tools.io.tf import lite as lite_io
+from nnef_tools.conversion import tflite_to_nnef
+from nnef_tools.conversion import nnef_to_tflite
+from nnef_tools.optimization import nnef_optimizer
+from nnef_tools.optimization import tflite_optimizer
 import unittest
 import tempfile
 import os
@@ -34,8 +20,8 @@ UNITTEST_FOLDER = os.environ.get('UNITTEST_FOLDER')
 
 class TestEnv(unittest.TestCase):
 
-    _network_folder = os.path.join(UNITTEST_FOLDER, 'tflite/nets/') if UNITTEST_FOLDER else None
-    _output_folder = os.path.join(UNITTEST_FOLDER, 'tflite/ops/') if UNITTEST_FOLDER else None
+    _network_folder = os.path.join(UNITTEST_FOLDER, 'nnef/tflite/nets/') if UNITTEST_FOLDER else None
+    _output_folder = os.path.join(UNITTEST_FOLDER, 'nnef/tflite/ops/') if UNITTEST_FOLDER else None
     _mirror_unsupported = False
     _io_transpose = True
     _optimize = True
@@ -50,8 +36,8 @@ class TestEnv(unittest.TestCase):
         self._nnef_reader = nnef_io.Reader(custom_shapes=self._nnef_to_tflite_converter.defined_shapes(),
                                            decomposed=self._nnef_to_tflite_converter.decomposed_operations())
         self._nnef_writer = nnef_io.Writer(fragments=self._tflite_to_nnef_converter.defined_operations())
-        self._nnef_optimizer = nnef_opt.Optimizer()
-        self._tflite_optimizer = tflite_opt.Optimizer()
+        self._nnef_optimizer = nnef_optimizer.Optimizer()
+        self._tflite_optimizer = tflite_optimizer.Optimizer()
 
     def tearDown(self) -> None:
         tf.reset_default_graph()
@@ -59,10 +45,10 @@ class TestEnv(unittest.TestCase):
     def _convert_to_nnef(self, filename):
         tflite_graph = self._tflite_reader(filename)
         if self._optimize:
-            tflite_graph = self._tflite_optimizer(tflite_graph)
+            self._tflite_optimizer(tflite_graph)
         nnef_graph = self._tflite_to_nnef_converter(tflite_graph)
         if self._optimize:
-            nnef_graph = self._nnef_optimizer(nnef_graph)
+            self._nnef_optimizer(nnef_graph)
         self._nnef_writer(nnef_graph, filename + '.nnef')
 
     def _convert_from_nnef(self, filename):

@@ -1,20 +1,6 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from ..model.utils import bypass_and_remove, replace_chain
 from ..model.utils import generate_tensor_names_from_op_type, generate_missing_tensor_names_from_op_type
-from ..model.graph import *
+from ..model import *
 
 
 class Optimizer:
@@ -24,7 +10,9 @@ class Optimizer:
         self._custom_optimizers = custom_optimizers or {}
         self._dequantize = dequantize
 
-    def __call__(self, graph, only_required=False):
+    def __call__(self, model, only_required=False):
+        graph = model.main
+
         self._fix_inputs_as_output(graph)
         self._fix_inputs_without_producer(graph)
 
@@ -95,15 +83,13 @@ class Optimizer:
                 changed |= self._remove_unused_variables_and_constants(graph)
 
         if self._keep_tensor_names:
-            generate_missing_tensor_names_from_op_type(graph)
+            generate_missing_tensor_names_from_op_type(model)
         else:
-            generate_tensor_names_from_op_type(graph)
+            generate_tensor_names_from_op_type(model)
 
         if self._dequantize:
             Optimizer._dequantize_variables(graph)
             Optimizer._remove_quantization_attribs(graph)
-
-        return graph
 
     @staticmethod
     def _fix_inputs_without_producer(graph):
@@ -119,8 +105,8 @@ class Optimizer:
 
     @staticmethod
     def _fix_inputs_as_output(graph):
-        graph.outputs = [Optimizer._insert_copy(tensor) if tensor in graph.inputs else tensor
-                         for tensor in graph.outputs]
+        graph.outputs = tuple(Optimizer._insert_copy(tensor) if tensor in graph.inputs else tensor
+                              for tensor in graph.outputs)
 
     @staticmethod
     def _insert_copy(tensor, copy=None):
@@ -197,7 +183,7 @@ class Optimizer:
 
     def _bypass_and_remove(self, graph, op):
         if op.output in graph.outputs and (op.input in graph.inputs or op.input in graph.outputs):
-            self._insert_copy(op.input, op.output)
+            self._insert_copy(op.input, op.detach_output())
             graph.remove_operation(op, unlink=True)
             return False
         else:
@@ -241,7 +227,7 @@ class Optimizer:
         linear.copy_with(type=type or linear.type,
                          attribs=linear.attribs if type != 'linear' else {},
                          inputs=(linear.inputs[0], linear.inputs[1], bias),
-                         outputs=add.output)
+                         outputs=add.detach_output())
 
     @staticmethod
     def _merge_matmul_bias(matmul, add):
@@ -338,10 +324,10 @@ class Optimizer:
             conv.inputs[2].data = bias
             conv.inputs[2].shape = bias.shape
             Optimizer._ensure_variable_producer(conv.inputs[2], label=conv.output.name + '_bias')
-            conv.copy_with(outputs=bn.output)
+            conv.copy_with(outputs=bn.detach_output())
         else:
             bias = Optimizer._add_variable(conv.graph, data=bias, name=conv.output.name + '_bias')
-            conv.copy_with(inputs=(*conv.inputs[:2], bias), outputs=bn.output)
+            conv.copy_with(inputs=(*conv.inputs[:2], bias), outputs=bn.detach_output())
 
     @staticmethod
     def _merged_batch_norm_params(mean, variance, offset, scale, epsilon):
@@ -367,7 +353,7 @@ class Optimizer:
         scaled = Tensor(graph=bn.graph, name=bn.output.name + '_scaled', shape=bn.output.shape, dtype=bn.output.dtype)
 
         Operation(graph=bn.graph, type='mul', inputs=(bn.inputs[0], scale), outputs=scaled)
-        Operation(graph=bn.graph, type='add', inputs=(scaled, offset), outputs=bn.output)
+        Operation(graph=bn.graph, type='add', inputs=(scaled, offset), outputs=bn.detach_output())
 
     @staticmethod
     def _merge_mul_linear(mul, linear):
@@ -393,7 +379,7 @@ class Optimizer:
 
         weights.data = weights.data * scale if mul.type != 'div' else weights.data / scale
 
-        linear.copy_with(inputs=(mul.inputs[other], weights, *linear.inputs[2:]), outputs=linear.output)
+        linear.copy_with(inputs=(mul.inputs[other], weights, *linear.inputs[2:]), outputs=linear.detach_output())
 
     @staticmethod
     def _merge_linear_mul(linear, mul):
@@ -428,7 +414,7 @@ class Optimizer:
 
         weights.data = weights.data * scale if not negate else weights.data / scale
 
-        linear.copy_with(inputs=(linear.inputs[0], weights, *linear.inputs[2:]), outputs=mul.output)
+        linear.copy_with(inputs=(linear.inputs[0], weights, *linear.inputs[2:]), outputs=mul.detach_output())
 
     @staticmethod
     def _remove_unused_variables_and_constants(graph):
@@ -452,7 +438,7 @@ class Optimizer:
         attribs['padding'] = pad.attribs['padding'][offset:]
         attribs['border'] = pad.attribs['border']
 
-        sliding.copy_with(inputs=(pad.input, *sliding.inputs[1:]), attribs=attribs)
+        sliding.copy_with(inputs=(pad.input, *sliding.inputs[1:]), outputs=sliding.detach_outputs(), attribs=attribs)
 
     @staticmethod
     def _squeeze_batch_and_spatial_dims(data):
@@ -485,7 +471,7 @@ class Optimizer:
         attribs = dict(squeeze.attribs)
         attribs['axes'] = [transpose_axes[x] for x in squeeze_axes]
 
-        squeeze.copy_with(inputs=transpose.input, attribs=attribs)
+        squeeze.copy_with(inputs=transpose.input, outputs=squeeze.detach_outputs(), attribs=attribs)
 
     @staticmethod
     def _substitute_squeeze(reshape):
@@ -510,7 +496,7 @@ class Optimizer:
         if dtype is not None:
             attribs['dtype'] = dtype
 
-        Operation(reshape.graph, type='squeeze', name=reshape.name, inputs=reshape.input, outputs=reshape.output,
+        Operation(reshape.graph, type='squeeze', name=reshape.name, inputs=reshape.input, outputs=reshape.detach_output(),
                   attribs=attribs)
 
     @staticmethod

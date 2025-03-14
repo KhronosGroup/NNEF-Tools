@@ -1,31 +1,11 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 
 import os
+import nnef
 import shutil
 import tempfile
-from collections import OrderedDict
-
-import nnef
-import numpy as np
-import six
-
 from ...model import *
-from ...utils import types
-from .helpers import tgz_extract
+from ...utils import types, tgz
 
 
 _DtypeToNumpy = {
@@ -33,17 +13,6 @@ _DtypeToNumpy = {
     'integer': np.int64,
     'logical': np.bool_,
 }
-
-
-def _recursive_itemize(arg):
-    if type(arg) is tuple or type(arg) is list:
-        for item in arg:
-            yield from _recursive_itemize(item)
-    elif type(arg) is dict or type(arg) is OrderedDict:
-        for item in six.itervalues(arg):
-            yield from _recursive_itemize(item)
-    else:
-        yield arg
 
 
 def _make_constant_tensor(graph, value):
@@ -57,21 +26,24 @@ def _make_tensor(graph, nnef_tensor):
                   dtype=dtype, data=nnef_tensor.data, quant=nnef_tensor.quantization)
 
 
-def _build_graph(nnef_graph):
-    graph = Graph(name=nnef_graph.name)
+def _remap_item(arg, graph, tensor_by_name, only_tensors):
+    return tensor_by_name[str(arg)] if isinstance(arg, nnef.Identifier) or only_tensors else _make_constant_tensor(graph, arg)
 
-    tensor_by_name = {}
+
+def _remap(arg, graph, tensor_by_name, only_tensors=False):
+    return [_remap_item(item, graph, tensor_by_name, only_tensors) for item in arg] \
+        if isinstance(arg, list) else _remap_item(arg, graph, tensor_by_name, only_tensors)
+
+
+def _build_model(nnef_graph):
+    model = Model(name=nnef_graph.name)
+    graph = Graph(model=model, name=nnef_graph.name)
+
+    tensor_by_name = {str(item): _make_tensor(graph, nnef_graph.tensors[str(item)]) for item in nnef_graph.tensors}
+
     for nnef_op in nnef_graph.operations:
-        inputs = (tensor_by_name[item] if isinstance(item, nnef.Identifier) else _make_constant_tensor(graph, item)
-                  for item in _recursive_itemize(nnef_op.inputs))
-        inputs = list(inputs) if any(isinstance(item, list) for item in six.itervalues(nnef_op.inputs)) else tuple(inputs)
-
-        outputs = (_make_tensor(graph, nnef_graph.tensors[str(item)])
-                   for item in _recursive_itemize(nnef_op.outputs))
-        outputs = list(outputs) if any(isinstance(item, list) for item in six.itervalues(nnef_op.outputs)) else tuple(outputs)
-
-        for tensor in outputs:
-            tensor_by_name[str(tensor.name)] = tensor
+        inputs = tuple(_remap(item, graph, tensor_by_name, only_tensors=False) for item in six.itervalues(nnef_op.inputs))
+        outputs = tuple(_remap(item, graph, tensor_by_name, only_tensors=True) for item in six.itervalues(nnef_op.outputs))
 
         attribs = dict(nnef_op.attribs)
         if nnef_op.dtype is not None:
@@ -85,10 +57,10 @@ def _build_graph(nnef_graph):
 
         Operation(graph=graph, type=nnef_op.name, attribs=attribs, inputs=inputs, outputs=outputs, custom=custom)
 
-    graph.inputs = [tensor_by_name[str(item)] for item in nnef_graph.inputs]
-    graph.outputs = [tensor_by_name[str(item)] for item in nnef_graph.outputs]
+    graph.inputs = tuple(_remap(item, graph, tensor_by_name, only_tensors=True)for item in nnef_graph.inputs)
+    graph.outputs = tuple(_remap(item, graph, tensor_by_name, only_tensors=True) for item in nnef_graph.outputs)
 
-    return graph
+    return model
 
 
 def _substitute_empty_array(op, key, attribs, inputs):
@@ -121,7 +93,7 @@ class Reader(object):
         try:
             if compressed:
                 folder = tempfile.mkdtemp(prefix="nnef_")
-                tgz_extract(path, folder)
+                tgz.extract(path, folder)
                 path = folder
 
             if not os.path.isdir(path):
@@ -131,7 +103,7 @@ class Reader(object):
             if self._infer_shapes:
                 nnef.infer_shapes(nnef_graph, external_shapes=input_shapes or {}, custom_shapes=self._custom_shapes or {})
 
-            return _build_graph(nnef_graph)
+            return _build_model(nnef_graph)
         finally:
             if folder is not None:
                 shutil.rmtree(folder)

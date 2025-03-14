@@ -1,22 +1,9 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-from collections.abc import Iterable
+from . import *
+import re
 
 
 def _split_counter_from_name(str):
-    if len(str) > 0 and not str[-1].isdigit():
+    if len(str) == 0 or not str[-1].isdigit():
         return str, None
 
     i = len(str)
@@ -27,77 +14,116 @@ def _split_counter_from_name(str):
     return None, int(str)
 
 
-def generate_tensor_names_from_op_type(graph, keep_io_names=False):
+def generate_tensor_names_from_op_type(model, keep_io_names=False):
     used_names = set()
     if keep_io_names:
-        used_names.update(tensor.name for tensor in graph.inputs if tensor.name is not None)
-        used_names.update(tensor.name for tensor in graph.outputs if tensor.name is not None)
+        for graph in model.graphs:
+            used_names.update(tensor.name for tensor in graph.inputs if tensor.name is not None)
+            used_names.update(tensor.name for tensor in graph.outputs if tensor.name is not None)
 
     op_counts = {}
 
-    for op in graph.operations:
-        for tensor in op.outputs:
-            if keep_io_names and tensor.name is not None and (tensor in graph.inputs or tensor in graph.outputs):
-                continue
+    for graph in model.graphs:
+        for op in graph.operations:
+            for tensor in op.outputs:
+                if keep_io_names and tensor.name is not None and (tensor in graph.inputs or tensor in graph.outputs):
+                    continue
 
-            idx = op_counts.get(op.type, 0) + 1
-            while op.type + str(idx) in used_names:
-                idx += 1
+                idx = op_counts.get(op.type, 0) + 1
+                while op.type + str(idx) in used_names:
+                    idx += 1
 
-            op_counts[op.type] = idx
-            tensor.name = op.type + str(idx)
+                op_counts[op.type] = idx
+                tensor.name = op.type + str(idx)
 
-    for tensor in graph.tensors:
-        if tensor.producer is None:
-            tensor.name = None
+        for tensor in graph.tensors:
+            if tensor.data is not None:
+                tensor.name = None
 
 
-def generate_missing_tensor_names_from_op_type(graph):
+def generate_missing_tensor_names_from_op_type(model):
     counters = {}
-    for tensor in graph.tensors:
-        if tensor.name is not None:
-            name, count = _split_counter_from_name(tensor.name)
-            if name is not None and count is not None:
-                counters[name] = max(counters.get(name, 0), count)
+    for graph in model.graphs:
+        for tensor in graph.tensors:
+            if tensor.name is not None:
+                name, count = _split_counter_from_name(tensor.name)
+                if name is not None and count is not None:
+                    counters[name] = max(counters.get(name, 0), count)
 
-    for tensor in graph.tensors:
-        if tensor.name is None and tensor.producer is not None:
-            op = tensor.producer
-            idx = counters.get(op.type, 0) + 1
-            counters[op.type] = idx
-            tensor.name = op.type + str(idx)
+        for tensor in graph.tensors:
+            if tensor.name is None and tensor.producer is not None:
+                op = tensor.producer
+                idx = counters.get(op.type, 0) + 1
+                counters[op.type] = idx
+                tensor.name = op.type + str(idx)
 
 
-def generate_op_names_from_op_type(graph):
+def generate_op_names_from_op_type(model):
     op_counts = {}
-    for op in graph.operations:
-        idx = op_counts.get(op.type, 0) + 1
-        op_counts[op.type] = idx
-        op.name = op.type + str(idx)
+    for graph in model.graphs:
+        for op in graph.operations:
+            idx = op_counts.get(op.type, 0) + 1
+            op_counts[op.type] = idx
+            op.name = op.type + str(idx)
+
+
+def valid_id(name):
+    id = re.sub('[^~_0-9a-zA-Z]+', '_', name)
+    if len(id) > 0 and id[0].isdigit():
+        id = "__" + id
+    return id
+
+
+def ensure_valid_ids(model):
+    if model.name is not None:
+        model.name = valid_id(model.name)
+
+    graph_names = {}
+    for graph in model.graphs:
+        if graph.name is not None:
+            graph.name = valid_id(graph.name)
+            count = graph_names.get(graph.name, 0)
+            graph_names[graph.name] = count + 1
+            if count:
+                graph.name += f'_{count + 1}'
+
+    tensor_names = {}
+    for graph in model.graphs:
+        for tensor in graph.tensors:
+            if tensor.name is not None:
+                tensor.name = valid_id(tensor.name)
+                count = tensor_names.get(tensor.name, 0)
+                tensor_names[tensor.name] = count + 1
+                if count:
+                    tensor.name += f'_{count + 1}'
 
 
 def replace_tensor_in_graph_inputs(graph, old_tensor, new_tensor):
-    graph.inputs = [new_tensor if t is old_tensor else t for t in graph.inputs]
+    graph.inputs = tuple(new_tensor if t is old_tensor else t for t in graph.inputs)
 
 
 def replace_tensor_in_graph_outputs(graph, old_tensor, new_tensor):
-    graph.outputs = [new_tensor if t is old_tensor else t for t in graph.outputs]
+    graph.outputs = tuple(new_tensor if t is old_tensor else t for t in graph.outputs)
 
 
-def replace_tensor_in_consumers(graph, old_tensor, new_tensor):
+def replace_tensor_in_consumers(old_tensor, new_tensor):
     for consumer in list(old_tensor.consumers):     # copy list to avoid changes during iteration
-        sequence = tuple if isinstance(consumer.inputs, tuple) else list
-        consumer.inputs = sequence(new_tensor if t is old_tensor else t for t in consumer.inputs)
-
-    replace_tensor_in_graph_outputs(graph, old_tensor, new_tensor)
+        assert isinstance(consumer.inputs, tuple)
+        consumer.inputs = replace_tensor_in_sequence_nested(consumer.inputs, old_tensor, new_tensor)
 
 
-def replace_tensor_in_producers(graph, old_tensor, new_tensor):
-    for producer in list(old_tensor.producers):     # copy list to avoid changes during iteration
-        sequence = tuple if isinstance(producer.outputs, tuple) else list
-        producer.outputs = sequence(new_tensor if t is old_tensor else t for t in producer.outputs)
+def replace_tensor_in_producers(old_tensor, new_tensor):
+    producer = old_tensor.producer
+    if producer is not None:
+        assert isinstance(producer.outputs, tuple)
+        producer.outputs = replace_tensor_in_sequence_nested(producer.outputs, old_tensor, new_tensor)
 
-    replace_tensor_in_graph_inputs(graph, old_tensor, new_tensor)
+
+def replace_tensor_in_sequence_nested(sequence, old_tensor, new_tensor):
+    type = tuple if isinstance(sequence, tuple) else list
+    return type((new_tensor if item is old_tensor else item) if isinstance(item, Tensor)
+                else replace_tensor_in_sequence_nested(item, old_tensor, new_tensor)
+                for item in sequence)
 
 
 def bypass_and_remove(graph, op, remove_input_not_output=False):
@@ -109,19 +135,22 @@ def bypass_and_remove(graph, op, remove_input_not_output=False):
     graph.remove_operation(op, unlink=True)
 
     if remove_input_not_output:
-        replace_tensor_in_consumers(graph, op_input, op_output)
-        replace_tensor_in_producers(graph, op_input, op_output)
+        replace_tensor_in_consumers(op_input, op_output)
+        replace_tensor_in_producers(op_input, op_output)
+        replace_tensor_in_graph_inputs(graph, op_input, op_output)
+        replace_tensor_in_graph_outputs(graph, op_input, op_output)
         graph.remove_tensor(op_input)
     else:
-        replace_tensor_in_consumers(graph, op_output, op_input)
-        replace_tensor_in_producers(graph, op_output, op_input)
+        replace_tensor_in_consumers(op_output, op_input)
+        replace_tensor_in_producers(op_output, op_input)
+        replace_tensor_in_graph_inputs(graph, op_output, op_input)
+        replace_tensor_in_graph_outputs(graph, op_output, op_input)
         graph.remove_tensor(op_output)
 
 
-def replace_chain(graph, types, func, allow_forks=False):
+def _replace_chain(graph, types, func, allow_forks=False):
     def _match_type(type, template):
-        return type == template if isinstance(template, str) else\
-            type in template if isinstance(template, Iterable) else False
+        return type in template if isinstance(template, set) else type == template
 
     def _match_link(op, template, is_last):
         return _match_type(op.type, template) and (len(op.outputs) == 1 or is_last)
@@ -175,7 +204,14 @@ def replace_chain(graph, types, func, allow_forks=False):
     return changed
 
 
-def remove_unreachable(graph):
+def replace_chain(arg, types, func, allow_forks=False):
+    if isinstance(arg, Graph):
+        return _replace_chain(arg, types, func, allow_forks)
+    else:
+        return any(_replace_chain(graph, types, func, allow_forks) for graph in arg.graphs)
+
+
+def _remove_unreachables(graph):
     visited = {tensor.producer for tensor in graph.outputs}
     queue = list(visited)
 
@@ -192,33 +228,35 @@ def remove_unreachable(graph):
 
     graph.remove_operations({op for op in graph.operations if op not in visited}, unlink=True)
     graph.remove_tensors({tensor for tensor in graph.tensors
-                          if len(tensor.producers) == 0 and len(tensor.consumers) == 0
+                          if not tensor.has_producer and not tensor.has_consumer
                           and tensor not in graph.inputs and tensor not in graph.outputs})
 
 
-def remove_dynamic(graph):
-    dynamic_tensors = {tensor for tensor in graph.tensors if tensor.shape is None or any(s is None for s in tensor.shape)}
-    dynamic_ops = {tensor.producer for tensor in dynamic_tensors}
+def remove_unreachables(arg):
+    if isinstance(arg, Graph):
+        _remove_unreachables(arg)
+    else:
+        for graph in arg.graphs:
+            _remove_unreachables(graph)
 
-    queue = list(dynamic_ops)
 
-    k = 0
-    while k < len(queue):
-        op = queue[k]
-        k += 1
+def _remove_unused_tensors(graph):
+    graph.remove_tensors([tensor for tensor in graph.tensors
+                          if not tensor.has_producer and tensor not in graph.inputs and
+                          not tensor.has_consumer and not (tensor in graph.outputs and tensor.is_constant)])
 
-        for tensor in op.outputs:
-            dynamic_tensors.add(tensor)
-            for op in tensor.consumers:
-                if op not in dynamic_ops:
-                    dynamic_ops.add(op)
-                    queue.append(op)
 
-    kept_outputs = [tensor for tensor in graph.outputs if tensor not in dynamic_tensors]
-    new_outputs = kept_outputs + [tensor for tensor in graph.tensors
-                                  if all(op in dynamic_ops for op in tensor.consumers) and tensor not in dynamic_tensors]
+def remove_unused_tensors(arg):
+    if isinstance(arg, Graph):
+        _remove_unused_tensors(arg)
+    else:
+        for graph in arg.graphs:
+            _remove_unused_tensors(graph)
 
-    graph.outputs = kept_outputs
-    graph.remove_operations(dynamic_ops, unlink=True)
-    graph.remove_tensors(dynamic_tensors)
-    graph.outputs = new_outputs
+
+def recursive_itemize(arg):
+    if type(arg) is list or type(arg) is tuple:
+        for item in arg:
+            yield from recursive_itemize(item)
+    else:
+        yield arg

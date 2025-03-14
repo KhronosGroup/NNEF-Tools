@@ -1123,7 +1123,7 @@ def compile_model(model, keep_generated_code=False):
     _save_to_file(_generate_model_source(model), hdr_name)
     _save_to_file(WrapperSource, cpp_name)
 
-    base = os.path.normpath(os.path.join(__file__, '../../../cpp'))
+    base = os.path.normpath(os.path.join(__file__, '../cpp/include'))
 
     ext_modules = [
         Pybind11Extension(module_name,

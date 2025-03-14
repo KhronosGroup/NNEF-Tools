@@ -1,17 +1,3 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 
 from .protobuf import *
@@ -161,7 +147,8 @@ def _build_node(node_def, operation):
     return node_def
 
 
-def build_graphdef(graph):
+def build_graphdef(model):
+    graph = model.main
     graph_def = GraphDef()
     for operation in graph.operations:
         node_def = graph_def.node.add()
@@ -169,8 +156,8 @@ def build_graphdef(graph):
     return graph_def
 
 
-def write_graphdef(graph, filename):
-    graph_def = build_graphdef(graph)
+def write_graphdef(model, filename):
+    graph_def = build_graphdef(model)
 
     with open(filename, 'wb') as file:
         file.write(graph_def.SerializeToString())
@@ -178,5 +165,5 @@ def write_graphdef(graph, filename):
 
 class Writer(object):
 
-    def __call__(self, graph, filename):
-        return write_graphdef(graph, filename)
+    def __call__(self, model, filename):
+        return write_graphdef(model, filename)

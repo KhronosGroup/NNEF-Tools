@@ -1,17 +1,3 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 
 from collections import namedtuple
@@ -180,8 +166,9 @@ def _get_output_shapes(attr_map_proto):
     return _get_attribute(field, value)
 
 
-def build_graph(graph_def):
-    graph = Graph()
+def build_model(graph_def):
+    model = Model()
+    graph = Graph(model=model)
 
     dtypes = _get_dtypes(graph_def)
 
@@ -191,16 +178,16 @@ def build_graph(graph_def):
         output_shapes = _get_output_shapes(node.attr)
         if output_shapes is not None:
             name = as_str(node.name)
-            node_outputs[name] = [Tensor(graph, _get_output_name(name, idx), shape=shape, dtype=dtypes.get(name))
-                                  for idx, shape in enumerate(output_shapes)]
+            node_outputs[name] = tuple(Tensor(graph, _get_output_name(name, idx), shape=shape, dtype=dtypes.get(name))
+                                       for idx, shape in enumerate(output_shapes))
 
     tensors = {tensor.name: tensor for outputs in six.itervalues(node_outputs) for tensor in outputs}
 
     # create ops
     for node in graph_def.node:
         attributes = _get_attributes(node.attr)
-        inputs = [tensors[name] for name in node.input if not name.startswith('^')]
-        outputs = node_outputs[node.name] if node.name in node_outputs else []
+        inputs = tuple(tensors[name] for name in node.input if not name.startswith('^'))
+        outputs = node_outputs[node.name] if node.name in node_outputs else ()
 
         Operation(graph,
                   type=as_str(node.op),
@@ -209,10 +196,10 @@ def build_graph(graph_def):
                   outputs=outputs,
                   attribs=attributes)
 
-    graph.inputs = [node_outputs[node.name][0] for node in graph_def.node if node.op == 'Placeholder']
-    graph.outputs = [output for op in graph.operations if all(len(output.consumers) == 0 for output in op.outputs)
-                     for output in op.outputs]
-    return graph
+    graph.inputs = tuple(node_outputs[node.name][0] for node in graph_def.node if node.op == 'Placeholder')
+    graph.outputs = tuple(output for op in graph.operations if all(len(output.consumers) == 0 for output in op.outputs)
+                          for output in op.outputs)
+    return model
 
 
 def _unpack_custom_ops(graph):
@@ -240,10 +227,10 @@ def read_graphdef(filename, input_shapes, fold_constants):
         from .utils import fold_constant_tensors
         graph_def = fold_constant_tensors(graph_def)
 
-    graph = build_graph(graph_def)
-    _unpack_custom_ops(graph)
+    model = build_model(graph_def)
+    _unpack_custom_ops(model.main)
 
-    return graph
+    return model
 
 
 class Reader(object):

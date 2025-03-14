@@ -1,19 +1,5 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from ..model.utils import replace_chain, bypass_and_remove
-from ..model.graph import *
+from ..model import *
 from ..utils.types import from_numpy
 
 
@@ -22,14 +8,15 @@ class Optimizer:
     def __init__(self, custom_optimizers=None):
         self._custom_optimizers = custom_optimizers or {}
 
-    def __call__(self, graph, only_required=False):
-        Optimizer._eliminate_variable_dequantize_ops(graph)
-        replace_chain(graph, ['SPACE_TO_BATCH_ND', {'CONV_2D', 'DEPTHWISE_CONV_2D'}, 'BATCH_TO_SPACE_ND'], self._replace_dilated_conv)
-        replace_chain(graph, ['RESHAPE', 'RESHAPE', 'PACK', 'PACK', 'RESHAPE'], self._replace_resize_nearest)
-        replace_chain(graph, ['SHAPE'], self._replace_const_shape)
-        for chain, replacer in six.iteritems(self._custom_optimizers):
-            replace_chain(graph, chain, replacer)
-        return graph
+    def __call__(self, model, only_required=False):
+        for graph in model.graphs:
+            Optimizer._eliminate_variable_dequantize_ops(graph)
+            replace_chain(graph, ['SPACE_TO_BATCH_ND', {'CONV_2D', 'DEPTHWISE_CONV_2D'}, 'BATCH_TO_SPACE_ND'], self._replace_dilated_conv)
+            replace_chain(graph, ['RESHAPE', 'RESHAPE', 'PACK', 'PACK', 'RESHAPE'], self._replace_resize_nearest)
+            replace_chain(graph, ['SHAPE'], self._replace_const_shape)
+            for chain, replacer in six.iteritems(self._custom_optimizers):
+                replace_chain(graph, chain, replacer)
+        return model
 
     @staticmethod
     def _replace_resize_nearest(reshape1, reshape2, pack1, pack2, reshape3):

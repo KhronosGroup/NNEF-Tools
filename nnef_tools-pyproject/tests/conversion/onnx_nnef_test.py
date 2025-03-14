@@ -1,23 +1,9 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-import nnef_tools.io.nnef as nnef_io
-import nnef_tools.io.onnx as onnx_io
-import nnef_tools.conversion.onnx_to_nnef as onnx_to_nnef
-import nnef_tools.conversion.nnef_to_onnx as nnef_to_onnx
-import nnef_tools.optimization.nnef_optimizer as nnef_opt
-import nnef_tools.optimization.onnx_optimizer as onnx_opt
+from nnef_tools.io import nnef as nnef_io
+from nnef_tools.io import onnx as onnx_io
+from nnef_tools.conversion import onnx_to_nnef
+from nnef_tools.conversion import nnef_to_onnx
+from nnef_tools.optimization import nnef_optimizer
+from nnef_tools.optimization import onnx_optimizer
 import numpy as np
 import unittest
 import tempfile
@@ -50,16 +36,16 @@ class TestEnv(unittest.TestCase):
         "tensor(bool)": np.bool_,
     }
 
-    _network_folder = os.path.join(UNITTEST_FOLDER, 'onnx/nets/') if UNITTEST_FOLDER else None
-    _output_folder = os.path.join(UNITTEST_FOLDER, 'onnx/ops/') if UNITTEST_FOLDER else None
+    _network_folder = os.path.join(UNITTEST_FOLDER, 'nnef/onnx/nets/') if UNITTEST_FOLDER else None
+    _output_folder = os.path.join(UNITTEST_FOLDER, 'nnef/onnx/ops/') if UNITTEST_FOLDER else None
     _infer_shapes = False
     _optimize = True
 
     def setUp(self) -> None:
         self._onnx_reader = onnx_io.Reader(simplify=True)
         self._onnx_writer = onnx_io.Writer()
-        self._nnef_optimizer = nnef_opt.Optimizer()
-        self._onnx_optimizer = onnx_opt.Optimizer()
+        self._nnef_optimizer = nnef_optimizer.Optimizer()
+        self._onnx_optimizer = onnx_optimizer.Optimizer()
         self._onnx_to_nnef_converter = onnx_to_nnef.Converter(infer_shapes=self._infer_shapes)
         self._nnef_to_onnx_converter = nnef_to_onnx.Converter()
         self._nnef_reader = nnef_io.Reader(custom_shapes=self._nnef_to_onnx_converter.defined_shapes(),
@@ -73,10 +59,10 @@ class TestEnv(unittest.TestCase):
     def _convert_to_nnef(self, filename):
         onnx_graph = self._onnx_reader(filename)
         if self._optimize:
-            onnx_graph = self._onnx_optimizer(onnx_graph)
+            self._onnx_optimizer(onnx_graph)
         nnef_graph = self._onnx_to_nnef_converter(onnx_graph)
         if self._optimize:
-            nnef_graph = self._nnef_optimizer(nnef_graph)
+            self._nnef_optimizer(nnef_graph)
         self._nnef_writer(nnef_graph, filename + '.nnef')
 
     def _convert_from_nnef(self, filename):

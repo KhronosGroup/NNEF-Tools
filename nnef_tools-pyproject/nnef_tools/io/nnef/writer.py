@@ -1,17 +1,3 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 
 import nnef
@@ -20,7 +6,7 @@ import tempfile
 import shutil
 import six
 import os
-from .helpers import tgz_compress
+from ...utils import tgz
 from ...model import Tensor
 from ...utils.types import as_str, from_numpy
 
@@ -54,6 +40,16 @@ def _nnef_dtype(dtype):
     return _DtypeFromNumpy[dtype.type if isinstance(dtype, np.dtype) else dtype] if dtype is not None else None
 
 
+def _make_argument_item(arg):
+    if not isinstance(arg, Tensor):
+        return arg
+    return from_numpy(arg.data) if arg.producer is None else nnef.Identifier(as_str(arg.name))
+
+
+def _make_argument(arg):
+    return [_make_argument_item(item) for item in arg] if isinstance(arg, list) else _make_argument_item(arg)
+
+
 def _print(graph, file, extensions, fragments, version_custom_ops, annotate_shapes):
     assert graph.is_sorted(), "graph must be topologically sorted"
     assert all(tensor.name is not None or (tensor.producer is None and tensor.data is not None)
@@ -81,14 +77,11 @@ def _print(graph, file, extensions, fragments, version_custom_ops, annotate_shap
 
     versions = {}
     for op in graph.operations:
-        assert all(isinstance(item, Tensor) for item in op.outputs)
+        assert all(isinstance(item, Tensor) or (isinstance(item, list) and all(isinstance(x, Tensor) for x in item))
+                   for item in op.outputs)
 
-        inputs = ((from_numpy(item.data) if item.producer is None else nnef.Identifier(as_str(item.name)))
-                  if isinstance(item, Tensor) else item for item in op.inputs)
-        inputs = tuple(inputs) if isinstance(op.inputs, tuple) else (list(inputs),)
-
-        outputs = (nnef.Identifier(as_str(item.name)) for item in op.outputs)
-        outputs = tuple(outputs) if isinstance(op.outputs, tuple) else (list(outputs),)
+        inputs = tuple(_make_argument(item) for item in op.inputs)
+        outputs = tuple(_make_argument(item) for item in op.outputs)
 
         attribs = {as_str(key): value for key, value in six.iteritems(op.attribs)}
 
@@ -226,7 +219,8 @@ class Writer(object):
         self._version_custom_fragments = version_custom_fragments
         self._annotate_shapes = annotate_shapes
 
-    def __call__(self, graph, path):
+    def __call__(self, model, path):
+        graph = model.main
         folder = None
         try:
             if self._compression is not None:
@@ -271,7 +265,7 @@ class Writer(object):
                     _write_quantization(graph, file)
         finally:
             if self._compression is not None and folder:
-                tgz_compress(folder, path + '.tgz', compression_level=self._compression)
+                tgz.compress(folder, path + '.tgz', compression_level=self._compression)
                 shutil.rmtree(folder)
 
     @staticmethod

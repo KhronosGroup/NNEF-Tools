@@ -1,17 +1,3 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 from .converter import Converter as _Converter, Transform, ConversionError
 from .tf_to_nnef import Converter as _TFConverter, _Transforms as _TFTransforms, _RELU6_FRAGMENT
@@ -72,19 +58,19 @@ class Converter(_TFConverter):
         self._io_transpose = io_transpose
         self._keep_io_names = keep_io_names
 
-    def __call__(self, graph):
-        graph = _TFConverter.__call__(self, graph)
-        self._fix_custom_options(graph)
-        return graph
+    def __call__(self, model):
+        model = _TFConverter.__call__(self, model)
+        self._fix_custom_options(model)
+        return model
 
     def _global_attribs(self):
         return {'_lite_': True}
 
-    def _prepare(self, graph):
-        self._fix_quantization_attribs(graph)
-        self._fix_quantized_dtypes(graph)
-        self._insert_externals_and_constants(graph)
-        self._transpose_externals(graph)
+    def _prepare(self, model):
+        self._fix_quantization_attribs(model)
+        self._fix_quantized_dtypes(model)
+        self._insert_externals_and_constants(model)
+        self._transpose_externals(model)
 
     def _is_constant(self, tensor):
         return tensor.producer is None and tensor.data is not None
@@ -95,7 +81,8 @@ class Converter(_TFConverter):
         else:
             raise ConversionError('trying to evaluate non-constant tensor')
 
-    def _transpose_externals(self, graph):
+    def _transpose_externals(self, model):
+        graph = model.main
         for op in graph.operations:
             if op.type == 'external':
                 if self.needs_io_transpose(op.output):
@@ -107,7 +94,8 @@ class Converter(_TFConverter):
     def _is_zero(value):
         return np.all(value == 0) if isinstance(value, np.ndarray) else value == 0
 
-    def _fix_quantized_dtypes(self, graph):
+    def _fix_quantized_dtypes(self, model):
+        graph = model.main
         for tensor in graph.tensors:
             if tensor.quant:
                 scale = tensor.quant.get('scale')
@@ -116,7 +104,9 @@ class Converter(_TFConverter):
                 else:
                     tensor.quant = None
 
-    def _fix_quantization_attribs(self, graph):
+    def _fix_quantization_attribs(self, model):
+        graph = model.main
+
         dtype_bits = {
             np.int8: 8,
             np.uint8: 8,
@@ -152,7 +142,8 @@ class Converter(_TFConverter):
                         if isinstance(scale, np.ndarray) and len(scale.shape) == 1:
                             tensor.quant['scale'] = np.expand_dims(scale, axis=0)
 
-    def _fix_custom_options(self, graph):
+    def _fix_custom_options(self, model):
+        graph = model.main
         for op in graph.operations:
             if op.custom:
                 options = op.attribs.get(CustomOptionsKey)
@@ -260,7 +251,7 @@ _Transforms = Converter.unpack_transforms({
     'CONCATENATION':
         Transform(
             type='concat',
-            inputs=['!I[:]'],
+            inputs='!list(I)',
             outputs='!activation(transpose_like(O[0], I[0]), fused_activation_function)',
             attribs={
                 'axis': '!transpose_axis_like(axis, I[0], O[0].rank)',

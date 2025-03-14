@@ -1,20 +1,6 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 from .converter import ConverterToNNEF as _Converter, Transform, ConversionError
-from ..model.utils import generate_tensor_names_from_op_type
+from ..model.utils import ensure_valid_ids, generate_missing_tensor_names_from_op_type
 from ..utils import types
 from collections import OrderedDict
 import numpy as np
@@ -48,22 +34,24 @@ class Converter(_Converter):
         self._io_transpose = io_transpose
         self._keep_io_names = keep_io_names
 
-    def __call__(self, graph):
-        graph = _Converter.__call__(self, graph)
-        self.remove_unused_constants(graph)
-        self.inline_scalar_constants(graph)
-        self.convert_constants_to_variables(graph)
-        self._fix_output_transposes(graph)
-        self._ensure_valid_ids(graph)
-        generate_tensor_names_from_op_type(graph, keep_io_names=self._keep_io_names)
-        return graph
+    def __call__(self, model):
+        model = _Converter.__call__(self, model)
+        self.remove_unused_constants(model)
+        self.inline_scalar_constants(model)
+        self.convert_constants_to_variables(model)
+        self._fix_output_transposes(model)
+        ensure_valid_ids(model)
+        generate_missing_tensor_names_from_op_type(model)
+        return model
 
     def _global_attribs(self):
         return {'_lite_': False}
 
-    def _fix_output_transposes(self, graph):
-        outputs = [self.transpose_input(tensor) if self.needs_io_transpose(tensor) else
-                   self.undo_transpose(tensor) for tensor in graph.outputs]
+    def _fix_output_transposes(self, model):
+        graph = model.main
+
+        outputs = tuple(self.transpose_input(tensor) if self.needs_io_transpose(tensor) else
+                        self.undo_transpose(tensor) for tensor in graph.outputs)
 
         if self._keep_io_names:
             for i in range(len(outputs)):
@@ -98,7 +86,7 @@ class Converter(_Converter):
             raise ConversionError('trying to evaluate non-constant tensor')
 
     def needs_io_transpose(self, tensor):
-        if tensor.rank <= 2:
+        if tensor.rank is not None and tensor.rank <= 2:
             return False
         if isinstance(self._io_transpose, bool):
             return self._io_transpose
@@ -117,7 +105,7 @@ class Converter(_Converter):
     def transpose_input(self, tensor, format='NXC'):
         if self.is_nxc(format):
             return self._pre_transpose(tensor, self.nxc_to_ncx_perm(tensor.rank)) \
-                if not self.transposing(tensor) and tensor.rank > 2 else tensor
+                if not self.transposing(tensor) and tensor.rank is not None and tensor.rank > 2 else tensor
         else:
             assert not self.transposing(tensor)
             return tensor
@@ -337,7 +325,7 @@ _Transforms = Converter.unpack_transforms({
     'Concat':
         Transform(
             type='concat',
-            inputs=['!I[1:]'],
+            inputs='!list(I[1:])',
             outputs='!transpose_like(O[0], I[1])',
             attribs={
                 'axis': '!transpose_axis_like(as_const(I[0]), I[1], O[0].rank)',
@@ -346,7 +334,7 @@ _Transforms = Converter.unpack_transforms({
     'ConcatV2':
         Transform(
             type='concat',
-            inputs=['!I[:-1]'],
+            inputs='!list(I[:-1])',
             outputs='!transpose_like(O[0], I[0])',
             attribs={
                 'axis': '!transpose_axis_like(as_const(I[-1]), I[0], O[0].rank)',
@@ -356,7 +344,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='split',
             inputs='!I[1]',
-            outputs=['![transpose_like(O[i], I[1]) for i in range(len(O))]'],
+            outputs='![transpose_like(O[i], I[1]) for i in range(len(O))]',
             attribs={
                 'axis': '!transpose_axis_like(as_const(I[0]), I[1])',
                 'ratios': '![1] * (num_split if not _lite_ else num_splits)',
@@ -366,7 +354,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='split',
             inputs='!I[0]',
-            outputs=['![transpose_like(O[i], I[0]) for i in range(len(O))]'],
+            outputs='![transpose_like(O[i], I[0]) for i in range(len(O))]',
             attribs={
                 'axis': '!transpose_axis_like(as_const(I[2]), I[0])',
                 'ratios': '!as_const(I[1])',
@@ -416,7 +404,7 @@ _Transforms = Converter.unpack_transforms({
     'Pack':
         Transform(
             type='stack',
-            inputs=['![undo_transpose(t) for t in I]'],
+            inputs='![undo_transpose(t) for t in I]',
             outputs='!O[0]',
             attribs={
                 'axis': '!ensure_positive(axis, O[0].rank)',
@@ -426,7 +414,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='unstack',
             inputs='!undo_transpose(I[0])',
-            outputs=['!O[:]'],
+            outputs='!list(O)',
             attribs={
                 'axis': '!ensure_positive(axis, I[0].rank)',
             }
@@ -731,7 +719,7 @@ _Transforms = Converter.unpack_transforms({
     'AddN':
         Transform(
             type='add_n',
-            inputs=['!I[:]'],
+            inputs='!list(I)',
             outputs='!transpose_like(O[0], I[0])'
         ),
 })

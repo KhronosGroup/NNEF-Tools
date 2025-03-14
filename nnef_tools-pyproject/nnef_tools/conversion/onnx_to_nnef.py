@@ -1,20 +1,6 @@
-# Copyright (c) 2020 The Khronos Group Inc.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 from __future__ import division, print_function, absolute_import
 from .converter import ConverterToNNEF as _Converter, Transform, ConversionError
-from ..model.utils import generate_tensor_names_from_op_type
+from ..model.utils import generate_missing_tensor_names_from_op_type, ensure_valid_ids
 from ..model import Tensor
 from ..utils import types
 from collections import OrderedDict
@@ -166,21 +152,21 @@ class Converter(_Converter):
         self._keep_io_names = keep_io_names
         self._io_transpose = io_transpose
 
-    def __call__(self, graph):
-        graph = _Converter.__call__(self, graph)
-        self.remove_unused_constants(graph)
-        self.inline_scalar_constants(graph)
-        self.convert_constants_to_variables(graph)
-        self._ensure_valid_ids(graph)
+    def __call__(self, model):
+        model = _Converter.__call__(self, model)
+        self.remove_unused_constants(model)
+        self.inline_scalar_constants(model)
+        self.convert_constants_to_variables(model)
+        ensure_valid_ids(model)
         if self._io_transpose is not False:
-            self._transpose_inputs(graph)
-            self._transpose_outputs(graph)
-            graph.sort()
-        generate_tensor_names_from_op_type(graph, keep_io_names=self._keep_io_names)
-        return graph
+            self._transpose_inputs(model)
+            self._transpose_outputs(model)
+            model.sort()
+        generate_missing_tensor_names_from_op_type(model)
+        return model
 
-    def _prepare(self, graph):
-        self._insert_externals_and_constants(graph)
+    def _prepare(self, model):
+        self._insert_externals_and_constants(model)
 
     def _is_constant(self, tensor):
         if tensor.producer:
@@ -206,7 +192,9 @@ class Converter(_Converter):
         else:
             return tensor.name in self._io_transpose
 
-    def _transpose_inputs(self, graph):
+    def _transpose_inputs(self, model):
+        graph = model.main
+
         inputs = [self._transpose_input(tensor) if self._needs_io_transpose(tensor) else tensor
                   for tensor in graph.inputs]
 
@@ -217,7 +205,9 @@ class Converter(_Converter):
 
         graph.inputs = inputs
 
-    def _transpose_outputs(self, graph):
+    def _transpose_outputs(self, model):
+        graph = model.main
+
         outputs = [self._transpose_output(tensor) if self._needs_io_transpose(tensor) else tensor
                    for tensor in graph.outputs]
 
@@ -616,7 +606,7 @@ _Transforms = Converter.unpack_transforms({
             defaults={
                 'axis': 1,
             },
-            inputs=['!I[:]'],
+            inputs='!list(I)',
             outputs='!O[0]',
             attribs={
                 'axis': '!ensure_positive(axis, O[0].rank)',
@@ -630,7 +620,7 @@ _Transforms = Converter.unpack_transforms({
                 'split': '!as_const(I[1])',
             },
             inputs='!I[0]',
-            outputs=['!O[:]'],
+            outputs='!list(O)',
             attribs={
                 'axis': '!ensure_positive(axis, I[0].rank)',
                 'ratios': '!split',
@@ -657,7 +647,7 @@ _Transforms = Converter.unpack_transforms({
     'Sum':
         Transform(
             type='add_n',
-            inputs=['!I[:]'],
+            inputs='!list(I)',
             outputs='!O[0]',
         ),
     'Where':
