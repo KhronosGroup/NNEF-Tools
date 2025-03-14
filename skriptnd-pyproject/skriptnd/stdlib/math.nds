@@ -1,0 +1,1874 @@
+# @title math-ops Basic Math Operators
+
+import layout;
+
+
+# @section unary-ops Unary Element-wise Operators
+
+# @item Identity operator
+
+operator iden {
+    @dtype {
+        T: type;
+    }
+    @input {
+        x: T[s..];
+    }
+    @output {
+        y: T[s..];
+    }
+    @lower {
+        y[i..] = x[i..],
+            i < s;
+    }
+}
+
+# @item Element-wise negation
+
+operator neg {
+    @dtype {
+        T: num;
+    }
+    @input {
+        x: T[s..];
+    }
+    @output {
+        y: T[s..];
+    }
+    @lower {
+        y[i..] = -x[i..],
+            i < s;
+    }
+}
+
+# @item Element-wise reciprocal
+
+operator rcp {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = 1.0 / x[i..],
+            i < s;
+    }
+}
+
+# @item Element-wise square
+
+operator sqr {
+    @dtype {
+        T: num;
+    }
+    @input {
+        x: T[s..];
+    }
+    @output {
+        y: T[s..];
+    }
+    @lower {
+        y[i..] = x[i..] * x[i..],
+            i < s;
+    }
+}
+
+# @item Element-wise square root
+
+operator sqrt {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `sqrt`(x[i..]),
+            i < s;
+    }
+}
+
+# @item Element-wise reciprocal square
+
+operator rsqr {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = 1.0 / (x[i..] * x[i..]),
+            i < s;
+    }
+}
+
+# @item Element-wise reciprocal square root
+
+operator rsqrt {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = 1.0 / `sqrt`(x[i..]),
+            i < s;
+    }
+}
+
+# @item Element-wise exponential (natural base)
+
+operator exp {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `exp`(x[i..]),
+            i < s;
+    }
+}
+
+# @item Element-wise logarithm (natural base)
+
+operator log {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `log`(x[i..]),
+            i < s;
+    }
+}
+
+# @item Element-wise logarithm (base 2)
+
+operator log2 {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `log`(x[i..]) / `log`(2.0),
+            i < s;
+    }
+}
+
+# @item Element0wise trigonometric functions
+
+operator sin {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `sin`(x[i..]),
+            i < s;
+    }
+}
+
+operator cos {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `cos`(x[i..]),
+            i < s;
+    }
+}
+
+operator tan {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `tan`(x[i..]),
+            i < s;
+    }
+}
+
+operator sinh {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `sinh`(x[i..]),
+            i < s;
+    }
+}
+
+operator cosh {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `cosh`(x[i..]),
+            i < s;
+    }
+}
+
+operator tanh {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `tanh`(x[i..]),
+            i < s;
+    }
+}
+
+operator asin {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `asin`(x[i..]),
+            i < s;
+    }
+}
+
+operator acos {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `acos`(x[i..]),
+            i < s;
+    }
+}
+
+operator atan {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `atan`(x[i..]),
+            i < s;
+    }
+}
+
+operator asinh {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `asinh`(x[i..]),
+            i < s;
+    }
+}
+
+operator acosh {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `acosh`(x[i..]),
+            i < s;
+    }
+}
+
+operator atanh {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `atanh`(x[i..]),
+            i < s;
+    }
+}
+
+# @item Element-wise absolute value
+
+operator abs {
+    @dtype {
+        T: num;
+    }
+    @input {
+        x: T[s..];
+    }
+    @output {
+        y: T[s..];
+    }
+    @lower {
+        y[i..] = x[i..] < T(0) ? -x[i..] : x[i..],
+            i < s;
+    }
+}
+
+# @item Element-wise sign
+
+operator sign {
+    @dtype {
+        T: num;
+    }
+    @input {
+        x: T[s..];
+    }
+    @output {
+        y: T[s..];
+    }
+    @lower {
+        y[i..] = x[i..] > T(0) ? T(1) : x[i..] < T(0) ? T(-1) : T(0),
+            i < s;
+    }
+}
+
+# @item Element-wise logical not
+
+operator not {
+    @input {
+        x: bool[s..];
+    }
+    @output {
+        y: bool[s..];
+    }
+    @lower {
+        y[i..] = !x[i..],
+            i < s;
+    }
+}
+
+# @item Element-wise floor (rounding down)
+
+operator floor {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `floor`(x[i..]),
+            i < s;
+    }
+}
+
+# @item Element-wise ceil (rounding up)
+
+operator ceil {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `ceil`(x[i..]),
+            i < s;
+    }
+}
+
+# @item Element-wise rounding (to closest integer)
+
+operator round {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `round`(x[i..]),
+            i < s;
+    }
+}
+
+# @section binary-ops Binary Element-wise Operators
+
+# @text In case of binary element-wise operators, broadcasting must also be considered. When the ranks of the two arguments are the eqaul, broadcasting requires that the size of each dimension match or one of them is singular. If the ranks of the two arguments are not equal then one of is implicitly padded with singular dimensions either from left (first dimension) or right (last dimension).
+
+# @text By default, if the ranks of the two arguments are different, the arguments are aligned from the right, and the shorter one is padded with singular dimensions on the left for broadcasting. However, this behavior can be changed by aligning each of the arguments (with attributes `lhs_align` and `rhs_align`), padding with specified number of singular dimensions both from left (zero or positive alignment) or right (negative alignment). Note that the alignment of zero corresponds to complete left-alignment of the argument, while the complete right-alignment is achieved by not supplying the alignment attribute (default null value).
+
+# @text The whole alignment procedure can be summarized as follows. For each argument, calculate the _aligned rank_ (sum of argument rank plus the absolute value of the alignment, if any), and pad both arguments with singular dimensions as specified by their alignment (left or right), if any. The result's rank will be the maximum of the two aligned ranks. Then for the argument that has lower aligned rank (shorter), align it (already padded) with the other one (already padded) from the left if the alignment (of the shorter) is positive or zero, or from the right if the alignment (of the shorter) is negative or not specified. Finally, pad the shorter with singular dimensions on the non-aligned end if necessary to make the two padded ranks equal.
+
+# @text All this alignment and padding computation is incorporated in the `@using` block of the binary operators. The final aligned and padded shapes are checked for being broadcast compatible in the `@assert` block.
+
+
+# @item Element-wise addition
+
+operator add {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: T[sx..(rx)];
+        y: T[sy..(ry)];
+    }
+    @output {
+        z: T[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] + y[sy is 1 ? 0 :zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise subtraction
+
+operator sub {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: T[sx..(rx)];
+        y: T[sy..(ry)];
+    }
+    @output {
+        z: T[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] - y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise multiplication
+
+operator mul {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: T[sx..(rx)];
+        y: T[sy..(ry)];
+    }
+    @output {
+        z: T[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] * y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise division
+
+operator div {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: T[sx..(rx)];
+        y: T[sy..(ry)];
+    }
+    @output {
+        z: T[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] / y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise modulo
+
+operator mod {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: T[sx..(rx)];
+        y: T[sy..(ry)];
+    }
+    @output {
+        z: T[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] % y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise power
+
+operator pow {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: T[sx..(rx)];
+        y: T[sy..(ry)];
+    }
+    @output {
+        z: T[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] ** y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise minimum
+
+operator min {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: T[sx..(rx)];
+        y: T[sy..(ry)];
+    }
+    @output {
+        z: T[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] << y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise maximum
+
+operator max {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: T[sx..(rx)];
+        y: T[sy..(ry)];
+    }
+    @output {
+        z: T[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] >> y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise less-than comparison
+
+operator lt {
+    @dtype {
+        X: num;
+        Y: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: X[sx..(rx)];
+        y: Y[sy..(ry)];
+    }
+    @output {
+        z: bool[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] < y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise greater-than comparison
+
+operator gt {
+    @dtype {
+        X: num;
+        Y: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: X[sx..(rx)];
+        y: Y[sy..(ry)];
+    }
+    @output {
+        z: bool[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] > y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise less-equal comparison
+
+operator le {
+    @dtype {
+        X: num;
+        Y: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: X[sx..(rx)];
+        y: Y[sy..(ry)];
+    }
+    @output {
+        z: bool[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] <= y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise greater-equal comparison
+
+operator ge {
+    @dtype {
+        X: num;
+        Y: num;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: X[sx..(rx)];
+        y: Y[sy..(ry)];
+    }
+    @output {
+        z: bool[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] >= y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise equal
+
+operator eq {
+    @dtype {
+        X: type;
+        Y: type;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: X[sx..(rx)];
+        y: Y[sy..(ry)];
+    }
+    @output {
+        z: bool[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] == y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise not-equal comparison
+
+operator ne {
+    @dtype {
+        X: type;
+        Y: type;
+    }
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: X[sx..(rx)];
+        y: Y[sy..(ry)];
+    }
+    @output {
+        z: bool[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] != y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise logical and
+
+operator and {
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: bool[sx..(rx)];
+        y: bool[sy..(ry)];
+    }
+    @output {
+        z: bool[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] && y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise logical or
+
+operator or {
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: bool[sx..(rx)];
+        y: bool[sy..(ry)];
+    }
+    @output {
+        z: bool[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] || y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @item Element-wise logical xor
+
+operator xor {
+    @attrib {
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        x: bool[sx..(rx)];
+        y: bool[sy..(ry)];
+    }
+    @output {
+        z: bool[sz..];
+    }
+    @using {
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ex is 1 ? ey : ex;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting ({ex} vs {ey} after alignment)",
+            'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] ^ y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @section ternary-select-operator Ternary Select Operator
+
+# @text For the ternay (and higher arity operators in general), broadcasting works similarly to binary operators, but among all arguments.
+
+# @item Element-wise conditional selection
+
+operator select {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        cond_align: optional int;
+        lhs_align: optional int;
+        rhs_align: optional int;
+    }
+    @input {
+        c: bool[sc..(rc)];
+        x: T[sx..(rx)];
+        y: T[sy..(ry)];
+    }
+    @output {
+        z: T[sz..];
+    }
+    @using {
+        qc = rc + `abs`(cond_align ?? 0);
+        qx = rx + `abs`(lhs_align ?? 0);
+        qy = ry + `abs`(rhs_align ?? 0);
+        rz = qx >> qy >> qc;
+        pc = (cond_align < 0 ? rz - qc : cond_align) ?? rz - rc;
+        px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
+        py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
+        ec = [1 ..(pc), sc.., 1 ..(rz - rc - pc)];
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        sz = ec is 1 ? (ex is 1 ? ey : ex) : ec;
+    }
+    @assert {
+        ex == ey || ex is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting "
+            "({ex} vs {ey} after alignment for arguments 'x' and 'y')",
+            'cond.shape': c.shape, 'lhs.shape': x.shape, 'rhs.shape': y.shape,
+            cond_align, lhs_align, rhs_align;
+        ex == ec || ex is 1 || ec is 1:
+            "incompatible argument shapes for broadcasting "
+            "({ex} vs {ec} after alignment for arguments 'x' and 'c')",
+            'cond.shape': c.shape, 'lhs.shape': x.shape, 'rhs.shape': y.shape,
+            cond_align, lhs_align, rhs_align;
+        ey == ec || ey is 1 || ec is 1:
+            "incompatible argument shapes for broadcasting "
+            "({ey} vs {ec} after alignment for arguments 'y' and 'c')",
+            'cond.shape': c.shape, 'lhs.shape': x.shape, 'rhs.shape': y.shape,
+            cond_align, lhs_align, rhs_align;
+    }
+    @lower {
+        z[zi..] = c[sc is 1 ? 0 : zi[pc:pc+rc]..] ?
+                  x[sx is 1 ? 0 : zi[px:px+rx]..] :
+                  y[sy is 1 ? 0 : zi[py:py+ry]..],
+            zi < sz;
+    }
+}
+
+# @section n-ary-ops Variadric n-ary Element-wise Operators
+
+# @text The following operators perform associative and commutative operations on arbitrary number of input tensors. They only accept inputs of the same shape.
+
+# @item Sum of n tensors
+
+operator sum_n {
+    @dtype {
+        T: num;
+    }
+    @input {
+        xs: T[s..]..(n);
+    }
+    @output {
+        y: T[s..];
+    }
+    @lower {
+        y[i..] += xs[k][i..],
+            k < n, i < s;
+    }
+}
+
+# @item Product of n tensors
+
+operator prod_n {
+    @dtype {
+        T: num;
+    }
+    @input {
+        xs: T[s..]..(n);
+    }
+    @output {
+        y: T[s..];
+    }
+    @lower {
+        y[i..] *= xs[k][i..],
+            k < n, i < s;
+    }
+}
+
+# @item Minimum of n tensors
+
+operator min_n {
+    @dtype {
+        T: num;
+    }
+    @input {
+        xs: T[s..]..(n);
+    }
+    @output {
+        y: T[s..];
+    }
+    @lower {
+        y[i..] <= xs[k][i..],
+            k < n, i < s;
+    }
+}
+
+# @item Maximum of n tensors
+
+operator max_n {
+    @dtype {
+        T: num;
+    }
+    @input {
+        xs: T[s..]..(n);
+    }
+    @output {
+        y: T[s..];
+    }
+    @lower {
+        y[i..] >= xs[k][i..],
+            k < n, i < s;
+    }
+}
+
+# @item Argmin across n tensors
+
+operator argmin_n {
+    @dtype {
+        T: num;
+    }
+    @input {
+        xs: T[s..]..(n);
+    }
+    @output {
+        y: int[s..];
+    }
+    @lower {
+        y[i..] = 0,
+            i < s;
+        y[i..] := k,
+            k < n, i < s | xs[k][i..] < xs[y[i..]][i..];
+    }
+}
+
+# @item Argmax across n tensors
+
+operator argmax_n {
+    @dtype {
+        T: num;
+    }
+    @input {
+        xs: T[s..]..(n);
+    }
+    @output {
+        y: int[s..];
+    }
+    @lower {
+        y[i..] = 0,
+            i < s;
+        y[i..] := k,
+            k < n, i < s | xs[k][i..] > xs[y[i..]][i..];
+    }
+}
+
+# @item Logical or of n tensors
+
+operator any_n {
+    @input {
+        xs: bool[s..]..(n);
+    }
+    @output {
+        y: bool[s..];
+    }
+    @lower {
+        y[i..] |= xs[k][i..],
+            k < n, i < s;
+    }
+}
+
+# @item Logical and of n tensors
+
+operator all_n {
+    @input {
+        xs: bool[s..]..(n);
+    }
+    @output {
+        y: bool[s..];
+    }
+    @lower {
+        y[i..] &= xs[k][i..],
+            k < n, i < s;
+    }
+}
+
+# @section misc-elementwise-ops Miscellaneous Element-wise Operators
+
+# @item Element-wise weighted addition (a * x + b)
+
+operator axpb {
+    @attrib {
+        x_align: optional int;
+        a_align: optional int;
+        b_align: optional int;
+    }
+    @input {
+        a: real[sa..(ra)];
+        x: real[sx..(rx)];
+        b: real[sb..(rb)];
+    }
+    @output {
+        y: real[sy..];
+    }
+    @using {
+        qx = rx + `abs`(x_align ?? 0);
+        qa = ra + `abs`(a_align ?? 0);
+        qb = rb + `abs`(b_align ?? 0);
+        ry = qx >> qa >> qb;
+        px = (x_align < 0 ? ry - qx : x_align) ?? ry - rx;
+        pa = (a_align < 0 ? ry - qa : a_align) ?? ry - ra;
+        pb = (b_align < 0 ? ry - qb : b_align) ?? ry - rb;
+        ex = [1 ..(px), sx.., 1 ..(ry - rx - px)];
+        ea = [1 ..(pa), sa.., 1 ..(ry - ra - pa)];
+        eb = [1 ..(pb), sb.., 1 ..(ry - rb - pb)];
+        sy = ex is 1 ? (ea is 1 ? eb : ea) : ex;
+    }
+    @assert {
+        ea == ex || ea is 1 || ex is 1:
+            "incompatible argument shapes for broadcasting "
+            "({ea} vs {ex} for arguments 'a' and 'x')",
+            a.shape, x.shape, b.shape, a_align, x_align, b_align;
+        eb == ex || eb is 1 || ex is 1:
+            "incompatible argument shapes for broadcasting "
+            "({eb} vs {ex} for arguments 'b' and 'x')",
+            a.shape, x.shape, b.shape, a_align, x_align, b_align;
+        ea == eb || ea is 1 || eb is 1:
+            "incompatible argument shapes for broadcasting "
+            "({ea} vs {eb} for arguments 'a' and 'b')",
+            a.shape, x.shape, b.shape, a_align, x_align, b_align;
+    }
+    @lower {
+        y[i..] = a[sa is 1 ? 0 : i[pa:pa+ra]..] * x[sx is 1 ? 0 : i[px:px+rx]..] +
+                 b[sb is 1 ? 0 : i[pb:pb+rb]..],
+            i < sy;
+    }
+}
+
+# @item Element-wise weighted addition (a * x + b * y)
+
+operator axpby {
+    @attrib {
+        x_align: optional int;
+        y_align: optional int;
+        a_align: optional int;
+        b_align: optional int;
+    }
+    @input {
+        a: real[sa..(ra)];
+        x: real[sx..(rx)];
+        b: real[sb..(rb)];
+        y: real[sy..(ry)];
+    }
+    @output {
+        z: real[sz..];
+    }
+    @using {
+        qx = rx + `abs`(x_align ?? 0);
+        qy = ry + `abs`(y_align ?? 0);
+        qa = ra + `abs`(a_align ?? 0);
+        qb = rb + `abs`(b_align ?? 0);
+        rz = qx >> qy >> qa >> qb;
+        px = (x_align < 0 ? rz - qx : x_align) ?? rz - rx;
+        py = (y_align < 0 ? rz - qy : y_align) ?? rz - ry;
+        pa = (a_align < 0 ? rz - qa : a_align) ?? rz - ra;
+        pb = (b_align < 0 ? rz - qb : b_align) ?? rz - rb;
+        ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
+        ey = [1 ..(py), sy.., 1 ..(rz - ry - py)];
+        ea = [1 ..(pa), sa.., 1 ..(rz - ra - pa)];
+        eb = [1 ..(pb), sb.., 1 ..(rz - rb - pb)];
+        sax = ea is 1 ? ex : ea;
+        sby = eb is 1 ? ey : eb;
+        sz = sax is 1 ? sby : sax;
+    }
+    @assert {
+        ea == ex || ea is 1 || ex is 1:
+            "incompatible argument shapes for broadcasting "
+            "({ea} vs {ex} for arguments 'a' and 'x')",
+            a.shape, x.shape, b.shape, y.shape, a_align, x_align, b_align, y_align;
+        eb == ey || eb is 1 || ey is 1:
+            "incompatible argument shapes for broadcasting "
+            "({eb} vs {ey} for arguments 'b' and 'y')",
+            a.shape, x.shape, b.shape, y.shape, a_align, x_align, b_align, y_align;
+        sax == sby || sax is 1 || sby is 1:
+            "incompatible argument shapes for broadcasting "
+            "({sax} vs {sby} for 'ax' and 'by')",
+            a.shape, x.shape, b.shape, y.shape, a_align, x_align, b_align, y_align;
+    }
+    @lower {
+        z[i..] = a[sa is 1 ? 0 : i[pa:pa+ra]..] * x[sx is 1 ? 0 : i[px:px+rx]..] +
+                 b[sb is 1 ? 0 : i[pb:pb+rb]..] * y[sy is 1 ? 0 : i[py:py+ry]..],
+            i < sz;
+    }
+}
+
+# @item Element-wise clamping
+
+operator clamp {
+    @attrib {
+        val_align: optional int;
+        min_align: optional int;
+        max_align: optional int;
+    }
+    @dtype {
+        T: num;
+    }
+    @input {
+        x: T[sx..(rx)];
+        a: T[sa..(ra)];
+        b: T[sb..(rb)];
+    }
+    @output {
+        y: T[sy..];
+    }
+    @using {
+        qx = rx + `abs`(val_align ?? 0);
+        qa = ra + `abs`(min_align ?? 0);
+        qb = rb + `abs`(max_align ?? 0);
+        ry = qx >> qa >> qb;
+        px = (val_align < 0 ? ry - qx : val_align) ?? ry - rx;
+        pa = (min_align < 0 ? ry - qa : min_align) ?? ry - ra;
+        pb = (max_align < 0 ? ry - qb : max_align) ?? ry - rb;
+        ex = [1 ..(px), sx.., 1 ..(ry - rx - px)];
+        ea = [1 ..(pa), sa.., 1 ..(ry - ra - pa)];
+        eb = [1 ..(pb), sb.., 1 ..(ry - rb - pb)];
+        sy = ex is 1 ? (ea is 1 ? eb : ea) : ex;
+    }
+    @assert {
+        ex == ea || ex is 1 || ea is 1:
+            "incompatible argument shapes for broadcasting "
+            "({sx} vs {sa} for arguments 'a' and 'x')",
+            'val.shape': x.shape, 'min.shape': a.shape, 'max.shape': b.shape,
+            val_align, min_align, max_align;
+        ex == eb || ex is 1 || eb is 1:
+            "incompatible argument shapes for broadcasting "
+            "({sx} vs {sb} for arguments 'b' and 'x')",
+            'val.shape': x.shape, 'min.shape': a.shape, 'max.shape': b.shape,
+            val_align, min_align, max_align;
+        ea == eb || ea is 1 || eb is 1:
+            "incompatible argument shapes for broadcasting "
+            "({sa} vs {sb} for arguments 'a' and 'b')",
+            'val.shape': x.shape, 'min.shape': a.shape, 'max.shape': b.shape,
+            val_align, min_align, max_align;
+    }
+    @lower {
+        xi = x[sx is 1 ? 0 : i[px:px+rx]..],
+        ai = a[sa is 1 ? 0 : i[pa:pa+ra]..],
+        bi = b[sb is 1 ? 0 : i[pb:pb+rb]..],
+        y[i..] = xi < ai ? ai : xi > bi ? bi : xi,
+            i < sy;
+    }
+}
+
+
+# @section reduce-ops Reduction Operators
+
+# @text Reduction operators reduce a set of values to a single value along one or more axes of a tensor (using various operations). The reduced dimensions may optionally be squeezed out.
+
+
+# @item Minimum reduction
+
+operator min_reduce {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        axes: int..(k) = [0:d];
+        squeeze: bool = false;
+    }
+    @input {
+        input: T[s..(d)];
+    }
+    @output {
+        output: T[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != .. :
+            "'axes' must be distinct", axes;
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+    }
+    @lower {
+        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] <= input[i..],
+            i < s;
+    }
+}
+
+# @item Maximum reduction
+
+operator max_reduce {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        axes: int..(k) = [0:d];
+        squeeze: bool = false;
+    }
+    @input {
+        input: T[s..(d)];
+    }
+    @output {
+        output: T[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != .. :
+            "'axes' must be distinct", axes;
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+    }
+    @lower {
+        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] >= input[i..],
+            i < s;
+    }
+}
+
+# @item Sum reduction
+
+operator sum_reduce {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        axes: int..(k) = [0:d];
+        squeeze: bool = false;
+    }
+    @input {
+        input: T[s..(d)];
+    }
+    @output {
+        output: T[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != .. :
+            "'axes' must be distinct", axes;
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+    }
+    @lower {
+        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] += input[i..],
+            i < s;
+    }
+}
+
+# @item Product reduction
+
+operator prod_reduce {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        axes: int..(k) = [0:d];
+        squeeze: bool = false;
+    }
+    @input {
+        input: T[s..(d)];
+    }
+    @output {
+        output: T[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != .. :
+            "'axes' must be distinct", axes;
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+    }
+    @lower {
+        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] *= input[i..],
+            i < s;
+    }
+}
+
+# @item Mean reduction
+
+operator mean_reduce {
+    @attrib {
+        axes: int..(k) = [0:d];
+        squeeze: bool = false;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != .. :
+            "'axes' must be distinct", axes;
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+    }
+    @compose {
+        sum = sum_reduce{axes=axes, squeeze=squeeze}(input);
+        output = div(sum, real(s[axes] * ..));
+    }
+}
+
+# @item Lp-norm reduction
+
+operator lp_reduce {
+    @attrib {
+        axes: int..(k) = [0:d];
+        squeeze: bool = false;
+        p: real;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != .. :
+            "'axes' must be distinct", axes;
+        p > 0.0:
+            "'p' must be positive", p;
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+    }
+    @compose {
+        abs = math.abs(input);
+        pow = math.pow(abs, p);
+        sum = sum_reduce{axes=axes, squeeze=squeeze}(pow);
+        output = math.pow(sum, 1.0 / p);
+    }
+}
+
+# @item Logical or reduction (any)
+
+operator any_reduce {
+    @attrib {
+        axes: int..(k) = [0:d];
+        squeeze: bool = false;
+    }
+    @input {
+        input: bool[s..(d)];
+    }
+    @output {
+        output: bool[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != .. :
+            "'axes' must be distinct", axes;
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+    }
+    @lower {
+        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] |= input[i..],
+            i < s;
+    }
+}
+
+# @item Logical and reduction (all)
+
+operator all_reduce {
+    @attrib {
+        axes: int..(k) = [0:d];
+        squeeze: bool = false;
+    }
+    @input {
+        input: bool[s..(d)];
+    }
+    @output {
+        output: bool[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != .. :
+            "'axes' must be distinct", axes;
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+    }
+    @lower {
+        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] &= input[i..],
+            i < s;
+    }
+}
+
+# @item Argmin reduction
+
+operator argmin {
+    @attrib {
+        axis: int;
+        squeeze: bool = false;
+    }
+    @input {
+        input: real^(rank)[s..(axis < 0 ? axis + rank : axis),z,t..];
+    }
+    @output {
+        output: int[s..,1 ..(!squeeze),t..];
+    }
+    @assert {
+        axis >= -rank && axis < rank:
+            "'axis' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axis;
+        z > 0: "input shape along dimension 'axis' must be positive";
+    }
+    @lower {
+        output[si..,0 ..(!squeeze),ti..] = 0,
+            si < s, ti < t;
+        output[si..,0 ..(!squeeze),ti..] := zi,
+            si < s, zi < z, ti < t | input[si..,zi,ti..] < input[si..,output[si..,0 ..(!squeeze),ti..],ti..];
+    }
+}
+
+operator argmin_nd {
+    @attrib {
+        axes: int..(k) = [0:d];
+        squeeze: bool = false;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: int[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..]..(k);
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != .. :
+            "'axes' must be distinct", axes;
+        s[axes] > 0: "input shape along 'axes' must be positive";
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+        zeros = [0 ..(d)];
+    }
+    @lower {
+        output[squeeze ? i : (zeros[kept_axes] <- i)..] = 0,
+            i < s[kept_axes];
+        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] := i[axes],
+            i < s | input[i..] < input[i[axes] <- output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..]..];
+    }
+}
+
+# @item Argmax reduction
+
+operator argmax {
+    @attrib {
+        axis: int;
+        squeeze: bool = false;
+    }
+    @input {
+        input: real^(rank)[s..(axis < 0 ? axis + rank : axis),z,t..];
+    }
+    @output {
+        output: int[s..,1 ..(!squeeze),t..];
+    }
+    @assert {
+        axis >= -rank && axis < rank:
+            "'axis' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axis;
+        z > 0: "input shape along dimension 'axis' must be positive";
+    }
+    @lower {
+        output[si..,0 ..(!squeeze),ti..] = 0,
+            si < s, ti < t;
+        output[si..,0 ..(!squeeze),ti..] := zi,
+            si < s, zi < z, ti < t | input[si..,zi,ti..] > input[si..,output[si..,0 ..(!squeeze),ti..],ti..];
+    }
+}
+
+operator argmax_nd {
+    @attrib {
+        axes: int..(k) = [0:d];
+        squeeze: bool = false;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: int[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..]..(k);
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != .. :
+            "'axes' must be distinct", axes;
+        s[axes] > 0: "input shape along 'axes' must be positive";
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+        zeros = [0 ..(d)];
+    }
+    @lower {
+        output[squeeze ? i : (zeros[kept_axes] <- i)..] = 0,
+            i < s[kept_axes];
+        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] := i[axes],
+            i < s | input[i..] > input[i[axes] <- output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..]..];
+    }
+}
+
+# @item Mean and variance reduction
+
+operator moments {
+    @attrib {
+        axes: int..(k) = [0:d];
+        squeeze: bool = false;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        mean: real[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..];
+        variance: real[squeeze ? s[kept_axes] : (axes_mask ? 1 : s)..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != .. :
+            "'axes' must be distinct", axes;
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+        squeeze_mean = squeeze && k == d;
+    }
+    @compose {
+        _mean = mean_reduce{axes=axes, squeeze=squeeze_mean}(input);
+        mean = if squeeze && !squeeze_mean then layout.squeeze{axes=axes}(_mean) else _mean;
+        diff = sub(input, _mean);
+        square = sqr(diff);
+        variance = mean_reduce{axes=axes, squeeze=squeeze}(square);
+    }
+}

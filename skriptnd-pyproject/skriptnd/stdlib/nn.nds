@@ -1,0 +1,1042 @@
+# @title nn-ops Neural Network Operators
+
+import math;
+import layout;
+
+# @section linear-ops Linear Operators
+
+# @item Fully Connected Linear Operator
+
+operator linear {
+    @input {
+        input: real[b,c];
+        filter: real[n,c];
+        bias: optional real[n];
+    }
+    @output {
+        output: real[b,n];
+    }
+    @lower {
+        output[bi,ni] = bias[ni,] ?? 0.0,
+            bi < b, ni < n;
+        output[bi,ni] += input[bi,ci] * filter[ni,ci],
+            bi < b, ci < c, ni < n;
+    }
+}
+
+# @item Convolution
+
+operator conv {
+    @attrib {
+        stride: int..(d) = 1;
+        dilation: int..(d) = 1;
+        padding: optional int..(2 * d);
+        padding_align: str = 'UPPER';
+        ceil_mode: bool = false;
+        groups: int = 1;
+        data_format: str = 'CHANNELS_FIRST';
+    }
+    @input {
+        input: real[b,c * groups..(data_format == 'CHANNELS_FIRST'),s..(d),c * groups..(data_format == 'CHANNELS_LAST')];
+        filter: real[n,c,fs..(d)];
+        bias: optional real[n];
+    }
+    @using {
+        fd = (fs - 1) * dilation + 1;
+        paddings = padding[:d] + padding[d:] ??
+                   ((ceil_mode ? s \ stride : s / stride) - 1) * stride + fd - s;
+        offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
+        os = ceil_mode ? (s + paddings - fd) \ stride + 1 :
+                         (s + paddings - fd) / stride + 1;
+        m = n / groups;
+        padding_aligns = ['LOWER', 'UPPER'];
+        data_formats = ['CHANNELS_FIRST', 'CHANNELS_LAST'];
+        channels_first = data_format == 'CHANNELS_FIRST';
+        channels_last = data_format == 'CHANNELS_LAST';
+    }
+    @output {
+        output: real[b,n..(channels_first),os..,n..(channels_last)];
+    }
+    @assert {
+        stride > 0: "'stride' must be positive", stride;
+        dilation > 0: "'dilation' must be positive", dilation;
+        groups > 0: "'groups' must be positive", groups;
+        s + paddings >= fd:
+            "padded input-size must be greater than (dilated) filter-size",
+            'input.size': s, 'filter.size': fs, dilation, 'total-padding': paddings;
+        n % groups == 0:
+            "output-channels must be divisible by groups",
+            'output-channels': n, groups;
+        padding_align in padding_aligns:
+            "'padding_align' must be one of {padding_aligns}", padding_align;
+        data_format in data_formats:
+            "'data_format' must be one of {data_formats}", data_format;
+    }
+    @lower {
+        output[bi,ni..(channels_first),i..,ni..(channels_last)] = bias[ni,] ?? 0.0,
+            bi < b, ni < n, i < os;
+        output[bi,gi * m + mi..(channels_first),i..,gi * m + mi..(channels_last)]
+            += input[bi,gi * c + ci..(channels_first),
+                     |stride * i + dilation * j - offset|..,
+                     gi * c + ci..(channels_last)]
+            * filter[gi * m + mi,ci,j..],
+                bi < b, gi < groups, mi < m, ci < c, i < os, j < fs;
+    }
+}
+
+# @item Deconvolution (transposed convolution)
+
+operator deconv {
+    @attrib {
+        stride: int..(d) = 1;
+        dilation: int..(d) = 1;
+        padding: optional int..(2 * d);
+        padding_align: str = 'UPPER';
+        output_size: optional int..(d);
+        groups: int = 1;
+        data_format: str = 'CHANNELS_FIRST';
+    }
+    @input {
+        input: real[b,n..(data_format == 'CHANNELS_FIRST'),s..(d),n..(data_format == 'CHANNELS_LAST')];
+        filter: real[n,c,fs..(d)];
+        bias: optional real[c * groups];
+    }
+    @using {
+        fd = (fs - 1) * dilation + 1;
+        paddings = padding[:d] + padding[d:] ?? (s - 1) * stride + fd - s * stride;
+        offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
+        os = output_size ?? (s - 1) * stride + fd - paddings;
+        m = n / groups;
+        padding_aligns = ['LOWER', 'UPPER'];
+        data_formats = ['CHANNELS_FIRST', 'CHANNELS_LAST'];
+        channels_first = data_format == 'CHANNELS_FIRST';
+        channels_last = data_format == 'CHANNELS_LAST';
+    }
+    @output {
+        output: real[b,c * groups..(channels_first),os..,c * groups..(channels_last)];
+    }
+    @assert {
+        stride > 0: "'stride' must be positive", stride;
+        dilation > 0: "'dilation' must be positive", dilation;
+        groups > 0: "'groups' must be positive", groups;
+        (output_size + paddings - fd) / stride + 1 == s:
+            "'output_size' must be compatible with what would be calculated from "
+            "input-size, filter-size, 'stride', 'dilation' and 'padding'",
+            'output.size': os, 'input.size': s, 'filter.size': fs,
+            stride, dilation, 'total-padding': paddings;
+        n % groups == 0:
+            "input-channels must be divisible by 'groups'", 'input-channels': n, groups;
+        padding_align in padding_aligns:
+            "'padding_align' must be one of {padding_aligns}", padding_align;
+        data_format in data_formats:
+            "'data_format' must be one of {data_formats}", data_format;
+    }
+    @lower {
+        output[bi,zi..(channels_first),k..,zi..(channels_last)] = bias[zi,] ?? 0.0,
+            bi < b, zi < c * groups, k < os;
+        output[bi,gi * c + ci..(channels_first),|stride * i + dilation * j - offset|..,
+               gi * c + ci..(channels_last)]
+            += input[bi,gi * m + mi..(channels_first),i..,gi * m + mi..(channels_last)]
+            * filter[gi * m + mi,ci,j..],
+                bi < b, ci < c, gi < groups, mi < m, i < s, j < fs;
+    }
+}
+
+# @item Depth-wise (channel-wise) convolution operator
+
+operator depthwise_conv {
+    @attrib {
+        stride: int..(d) = 1;
+        dilation: int..(d) = 1;
+        padding: optional int..(2 * d);
+        padding_align: str = 'UPPER';
+        ceil_mode: bool = false;
+        data_format: str = 'CHANNELS_FIRST';
+    }
+    @input {
+        input: real[b,c..(data_format == 'CHANNELS_FIRST'),s..(d),c..(data_format == 'CHANNELS_LAST')];
+        filter: real[c,m,fs..(d)];
+        bias: optional real[m * c];
+    }
+    @output {
+        output: real[b,m * c..(channels_first),os..,m * c..(channels_last)];
+    }
+    @using {
+        fd = (fs - 1) * dilation + 1;
+        paddings = padding[:d] + padding[d:] ??
+                   ((ceil_mode ? s \ stride : s / stride) - 1) * stride + fd - s;
+        offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
+        os = ceil_mode ? (s + paddings - fd) \ stride + 1 :
+                         (s + paddings - fd) / stride + 1;
+        padding_aligns = ['LOWER', 'UPPER'];
+        data_formats = ['CHANNELS_FIRST', 'CHANNELS_LAST'];
+        channels_first = data_format == 'CHANNELS_FIRST';
+        channels_last = data_format == 'CHANNELS_LAST';
+    }
+    @assert {
+        stride > 0: "'stride' must be positive, got {stride}";
+        dilation > 0: "'dilation' must be positive, got {dilation}";
+        s + paddings >= fd:
+            "padded input-size must be greater than (dilated) filter-size",
+            'input.size': s, 'filter.size': fs, dilation, 'total-padding': paddings;
+        padding_align in padding_aligns:
+            "'padding_align' must be one of {padding_aligns}", padding_align;
+        data_format in data_formats:
+            "'data_format' must be one of {data_formats}", data_format;
+    }
+    @lower {
+        output[bi,zi..(channels_first),i..,zi..(channels_last)] = bias[zi,] ?? 0.0,
+            bi < b, zi < m * c, i < os;
+        output[bi,m * ci + mi..(channels_first),i..,m * ci + mi..(channels_last)]
+            += input[bi,ci..(channels_first),|stride * i + dilation * j - offset|..,
+                     ci..(channels_last)]
+            * filter[ci,mi,j..],
+                bi < b, ci < c, mi < m, i < os, j < fs;
+    }
+}
+
+# @item Depth-wise (channel-wise) deconvolution operator
+
+operator depthwise_deconv {
+    @attrib {
+        stride: int..(d) = 1;
+        dilation: int..(d) = 1;
+        padding: optional int..(2 * d);
+        padding_align: str = 'UPPER';
+        output_size: optional int..(d);
+        data_format: str = 'CHANNELS_FIRST';
+    }
+    @input {
+        input: real[b,m * c..(data_format == 'CHANNELS_FIRST'),s..(d),m * c..(data_format == 'CHANNELS_LAST')];
+        filter: real[c,m,fs..(d)];
+        bias: optional real[c];
+    }
+    @output {
+        output: real[b,c..(channels_first),os..,c..(channels_last)];
+    }
+    @using {
+        fd = (fs - 1) * dilation + 1;
+        paddings = padding[:d] + padding[d:] ?? (s - 1) * stride + fd - s * stride;
+        offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
+        os = (output_size ?? (s - 1) * stride + fd - paddings);
+        padding_aligns = ['LOWER', 'UPPER'];
+        data_formats = ['CHANNELS_FIRST', 'CHANNELS_LAST'];
+        channels_first = data_format == 'CHANNELS_FIRST';
+        channels_last = data_format == 'CHANNELS_LAST';
+    }
+    @assert {
+        stride > 0: "'stride' must be positive", stride;
+        dilation > 0: "'dilation' must be positive", dilation;
+        (output_size + paddings - fd) / stride + 1 == s:
+            "output-size must be compatible with what would be calculated from "
+            "input-size, filter-size, 'stride', 'dilation' and 'padding'",
+            'output-size': os, 'input-size': s, 'filter-size': fs,
+            stride, dilation, 'total-padding': paddings;
+        padding_align in padding_aligns:
+            "'padding_align' must be one of {padding_aligns}", padding_align;
+        data_format in data_formats:
+            "'data_format' must be one of {data_formats}", data_format;
+    }
+    @lower {
+        output[bi,ci..(channels_first),k..,ci..(channels_last)] = bias[ci,] ?? 0.0,
+            bi < b, ci < c, k < os;
+        output[bi,ci..(channels_first),|stride * i + dilation * j - offset|..,
+               ci..(channels_last)]
+            += input[bi,m * ci + mi..(channels_first),i..,m * ci + mi..(channels_last)]
+            * filter[ci,mi,j..],
+                bi < b, ci < c, mi < m, i < s, j < fs;
+    }
+}
+
+# @item Separable convolution
+
+operator separable_conv {
+    @attrib {
+        stride: int..(d) = 1;
+        dilation: int..(d) = 1;
+        padding: optional int..(2 * d);
+        padding_align: str = 'UPPER';
+        ceil_mode: bool = false;
+        groups: int = 1;
+        data_format: str = 'CHANNELS_FIRST';
+    }
+    @input {
+        input: real[b,c..(data_format == 'CHANNELS_FIRST'),s..(d),c..(data_format == 'CHANNELS_LAST')];
+        depthwise_filter: real[c,m,fs..(d)];
+        pointwise_filter: real[n,c * m / groups,1 ..(d)];
+        bias: optional real[n];
+    }
+    @using {
+        fd = (fs - 1) * dilation + 1;
+        paddings = padding[:d] + padding[d:] ??
+                   ((ceil_mode ? s \ stride : s / stride) - 1) * stride + fd - s;
+        offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
+        os = ceil_mode ? (s + paddings - fd) \ stride + 1 :
+                         (s + paddings - fd) / stride + 1;
+        padding_aligns = ['LOWER', 'UPPER'];
+        data_formats = ['CHANNELS_FIRST', 'CHANNELS_LAST'];
+        channels_first = data_format == 'CHANNELS_FIRST';
+        channels_last = data_format == 'CHANNELS_LAST';
+    }
+    @output {
+        output: real[b,n..(channels_first),os..,n..(channels_last)];
+    }
+    @assert {
+        stride > 0: "'stride' must be positive", stride;
+        dilation > 0: "'dilation' must be positive", dilation;
+        groups > 0: "'groups' must be positive", groups;
+        s + paddings >= fd:
+            "padded input-size must be greater than (dilated) filter-size",
+            'input.size': s, 'filter.size': fs, dilation, 'total-padding': paddings;
+        (c * m) % groups == 0:
+            "input-channels times depthwise filter channels must be divisible by 'groups'",
+            'input-channels': c, 'depthwise-channels': m, groups;
+        n % groups == 0:
+            "output-channels must be divisible by 'groups'",
+            'output-channels': n, groups;
+        padding_align in padding_aligns:
+            "'padding_align' must be one of {padding_aligns}", padding_align;
+        data_format in data_formats:
+            "'data_format' must be one of {data_formats}", data_format;
+    }
+    @compose {
+        intermediate = depthwise_conv{stride=stride, dilation=dilation, padding=padding,
+                                      padding_align=padding_align, data_format=data_format}
+                                     (input, depthwise_filter);
+        output = conv{groups=groups, data_format=data_format}
+                     (intermediate, pointwise_filter, bias);
+    }
+}
+
+# @section pooling-ops Pooling Operators
+
+operator max_pool {
+    @attrib {
+        axes: int..(k) = [2:d];
+        size: int..(k);
+        stride: int..(k) = 1;
+        dilation: int..(k) = 1;
+        padding: optional int..(2 * k);
+        padding_align: str = 'UPPER';
+        ceil_mode: bool = false;
+        ignore_border: bool = true;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[os..];
+    }
+    @using {
+        sa = s[axes];
+        fd = (size - 1) * dilation + 1;
+        paddings = padding[:k] + padding[k:] ??
+                   ((ceil_mode ? sa \ stride : sa / stride) - 1) * stride + fd - sa;
+        offset = padding[:k] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
+        os = s[axes] <- (ceil_mode ? (sa + paddings - fd) \ stride + 1 :
+                                      (sa + paddings - fd) / stride + 1);
+        padding_aligns = ['LOWER', 'UPPER'];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        size > 0: "'size' must be positive", size;
+        stride > 0: "'stride' must be positive", stride;
+        dilation > 0: "'dilation' must be positive", dilation;
+        sa + paddings >= fd:
+            "padded input-size must be greater than (dilated) filter-size",
+            'input-size': sa, 'filter-size': size, dilation, 'total-padding': paddings;
+        padding_align in padding_aligns:
+            "'padding_align' must be one of {padding_aligns}", padding_align;
+    }
+    @lower {
+        output[i..] = !ignore_border ? 0.0,
+            i < os;
+        output[i..] >= input[i[axes] <- |stride * i[axes] + dilation * j - offset|..],
+            i < os, j < size;
+    }
+}
+
+operator sum_pool {
+    @attrib {
+        axes: int..(k) = [2:d];
+        size: int..(k);
+        stride: int..(k) = 1;
+        dilation: int..(k) = 1;
+        padding: optional int..(2 * k);
+        padding_align: str = 'UPPER';
+        ceil_mode: bool = false;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[os..];
+    }
+    @using {
+        sa = s[axes];
+        fd = (size - 1) * dilation + 1;
+        paddings = padding[:k] + padding[k:] ??
+                   ((ceil_mode ? sa \ stride : sa / stride) - 1) * stride + fd - sa;
+        offset = padding[:k] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
+        os = s[axes] <- (ceil_mode ? (sa + paddings - fd) \ stride + 1 :
+                                      (sa + paddings - fd) / stride + 1);
+        padding_aligns = ['LOWER', 'UPPER'];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        size > 0: "'size' must be positive", size;
+        stride > 0: "'stride' must be positive", stride;
+        dilation > 0: "'dilation' must be positive", dilation;
+        sa + paddings >= fd:
+            "padded input-size must be greater than (dilated) filter-size",
+            'input-size': sa, 'filter-size': size, dilation, 'total-padding': paddings;
+        padding_align in padding_aligns:
+            "'padding_align' must be one of {padding_aligns}", padding_align;
+    }
+    @lower {
+        output[i..] += input[i[axes] <- |stride * i[axes] + dilation * j - offset|..],
+            i < os, j < size;
+    }
+}
+
+operator avg_pool {
+    @attrib {
+        axes: int..(k) = [2:d];
+        size: int..(k);
+        stride: int..(k) = 1;
+        dilation: int..(k) = 1;
+        padding: optional int..(2 * k);
+        padding_align: str = 'UPPER';
+        ignore_border: bool = true;
+        ceil_mode: bool = false;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[os..];
+    }
+    @using {
+        sa = s[axes];
+        fd = (size - 1) * dilation + 1;
+        paddings = padding[:k] + padding[k:] ??
+                   ((ceil_mode ? sa \ stride : sa / stride) - 1) * stride + fd - sa;
+        os = s[axes] <- (ceil_mode ? (sa + paddings - fd) \ stride + 1 :
+                                      (sa + paddings - fd) / stride + 1);
+        padding_aligns = ['LOWER', 'UPPER'];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        size > 0: "'size' must be positive", size;
+        stride > 0: "'stride' must be positive", stride;
+        dilation > 0: "'dilation' must be positive", dilation;
+        sa + paddings >= fd:
+            "padded input-size must be greater than (dilated) filter-size",
+            'input-size': sa, 'filter-size': size, dilation, 'total-padding': paddings;
+        padding_align in padding_aligns:
+            "'padding_align' must be one of {padding_aligns}", padding_align;
+    }
+    @constant {
+        ones: real[[1 ..(d)][axes] <- sa..] = 1.0;
+    }
+    @compose {
+        sum = sum_pool{size=size, stride=stride, dilation=dilation, padding=padding,
+                        padding_align=padding_align, axes=axes, ceil_mode=ceil_mode}(input);
+        cnt = if ignore_border then
+                  sum_pool{size=size, stride=stride, dilation=dilation, padding=padding,
+                           padding_align=padding_align, axes=axes, ceil_mode=ceil_mode}(ones)
+              else real(size * ..);
+        output = math.div(sum, cnt);
+    }
+}
+
+operator rms_pool {
+    @attrib {
+        axes: int..(k) = [2:d];
+        size: int..(k);
+        stride: int..(k) = 1;
+        dilation: int..(k) = 1;
+        padding: optional int..(2 * k);
+        padding_align: str = 'UPPER';
+        ignore_border: bool = true;
+        ceil_mode: bool = false;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[os..];
+    }
+    @using {
+        sa = s[axes];
+        fd = (size - 1) * dilation + 1;
+        paddings = padding[:k] + padding[k:] ??
+                   ((ceil_mode ? sa \ stride : sa / stride) - 1) * stride + fd - sa;
+        os = s[axes] <- (ceil_mode ? (sa + paddings - fd) \ stride + 1 :
+                                      (sa + paddings - fd) / stride + 1);
+        padding_aligns = ['LOWER', 'UPPER'];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        size > 0: "'size' must be positive", size;
+        stride > 0: "'stride' must be positive", stride;
+        dilation > 0: "'dilation' must be positive", dilation;
+        sa + paddings >= fd:
+            "padded input-size must be greater than (dilated) filter-size",
+            'input-size': sa, 'filter-size': size, dilation, 'total-padding': paddings;
+        padding_align in padding_aligns:
+            "'padding_align' must be one of {padding_aligns}", padding_align;
+    }
+    @compose {
+        square = math.sqr(input);
+        mean = avg_pool{size=size, stride=stride, dilation=dilation,
+                        padding=padding, padding_align=padding_align,
+                        axes=axes, ceil_mode=ceil_mode, ignore_border=ignore_border}(square);
+        output = math.sqrt(mean);
+    }
+}
+
+operator lp_pool {
+    @attrib {
+        axes: int..(k) = [2:d];
+        size: int..(k);
+        stride: int..(k) = 1;
+        dilation: int..(k) = 1;
+        padding: optional int..(2 * k);
+        padding_align: str = 'UPPER';
+        ceil_mode: bool = false;
+        p: real;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[os..];
+    }
+    @using {
+        sa = s[axes];
+        fd = (size - 1) * dilation + 1;
+        paddings = padding[:k] + padding[k:] ??
+                   ((ceil_mode ? sa \ stride : sa / stride) - 1) * stride + fd - sa;
+        os = s[axes] <- (ceil_mode ? (sa + paddings - fd) \ stride + 1 :
+                                      (sa + paddings - fd) / stride + 1);
+        padding_aligns = ['LOWER', 'UPPER'];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        size > 0: "'size' must be positive", size;
+        stride > 0: "'stride' must be positive", stride;
+        dilation > 0: "'dilation' must be positive", dilation;
+        sa + paddings >= fd:
+            "padded input-size must be greater than (dilated) filter-size",
+            'input-size': sa, 'filter-size': size, dilation, 'total-padding': paddings;
+        padding_align in padding_aligns:
+            "'padding_align' must be one of {padding_aligns}", padding_align;
+        p > 0.0: "'p' must be positive", p;
+    }
+    @compose {
+        abs = math.abs(input);
+        pow = math.pow(abs, p);
+        sum = sum_pool{size=size, stride=stride, dilation=dilation,
+                        padding=padding, padding_align=padding_align,
+                        axes=axes, ceil_mode=ceil_mode}(pow);
+        output = math.pow(sum, 1.0 / p);
+    }
+}
+
+# @section activation-ops Activation Functions
+
+operator relu {
+    @attrib {
+        alpha: optional real;
+        max: optional real;
+    }
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @assert {
+        alpha >= 0.0 && alpha <= 1.0:
+            "'alpha' must be between 0 and 1 (inclusive)'", alpha;
+        max > 0.0:
+            "'max' must be positive", max;
+    }
+    @lower {
+        y[i..] = (x[i..] << max ?? x[i..]) >> (alpha * x[i..] ?? 0.0),
+            i < s;
+    }
+}
+
+operator prelu {
+    @attrib {
+        axis: int = 1;
+    }
+    @input {
+        x: real[s..(d)];
+        alpha: real[s[axis]];
+    }
+    @output {
+        y: real[s..];
+    }
+    @assert {
+        axis >= -d && axis < d:
+            "axis must be between -x.rank (inclusive) and x.rank (exclusive)",
+            x.rank, axis;
+    }
+    @lower {
+        y[i..] = x[i..] < 0.0 ? alpha[i[axis],] * x[i..] : x[i..],
+            i < s;
+    }
+}
+
+operator thresholded_relu {
+    @attrib {
+        theta: real = 0.0;
+    }
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @assert {
+        theta >= 0.0: "'theta' must be positive", theta;
+    }
+    @lower {
+        y[i..] = x[i..] > theta ? x[i..] : 0.0,
+            i < s;
+    }
+}
+
+operator elu {
+    @attrib {
+        alpha: real = 1.0;
+    }
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = x[i..] < 0.0 ? alpha * (`exp`(x[i..]) - 1.0) : x[i..],
+            i < s;
+    }
+}
+
+operator selu {
+    @attrib {
+        alpha: real = 1.67326319;
+        lambda: real = 1.05070102;
+    }
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = lambda * (x[i..] < 0.0 ? alpha * (`exp`(x[i..]) - 1.0) : x[i..]),
+            i < s;
+    }
+}
+
+operator gelu {
+    @attrib {
+        approximate: optional str;
+    }
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @using {
+        approximations = ['TANH', 'SIGMOID'];
+        approximation = approximate ?? '';
+    }
+    @assert {
+        approximate in approximations:
+            "'approximate' must be one of {approximations}", approximate;
+    }
+    @lower {
+        y[i..] = approximation == 'TANH' ? 0.5 * x[i..] * (1.0 + `tanh`(`sqrt`(2.0 / pi) * (x[i..] + 0.044715 * x[i..] ** 3.0))) :
+                 approximation == 'SIGMOID' ? x[i..] / (1.0 + `exp`(-1.702 * x[i..])) :
+                 0.5 * x[i..] * (1.0 + `erf`(x[i..] / `sqrt`(2.0))),
+            i < s;
+    }
+}
+
+operator silu {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = x[i..] / (1.0 + `exp`(-x[i..])),
+            i < s;
+    }
+}
+
+operator sigmoid {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = 1.0 / (1.0 + `exp`(-x[i..])),
+            i < s;
+    }
+}
+
+operator softplus {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `log`(`exp`(x[i..]) + 1.0),
+            i < s;
+    }
+}
+
+operator erf {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = `erf`(x[i..]),
+            i < s;
+    }
+}
+
+# @section normalization-ops Normalization Operators
+
+operator batch_norm {
+    @attrib {
+        epsilon: real = 1e-5;
+    }
+    @input {
+        input: real[b,c,s..];
+        mean: real[c];
+        variance: real[c];
+        bias: optional real[c];
+        scale: optional real[c];
+    }
+    @output {
+        output: real[b,c,s..];
+    }
+    @assert {
+        epsilon >= 0.0: "'epsilon' must be non-negative", epsilon;
+    }
+    @compose {
+        centered = math.sub{rhs_align=1}(input, mean);
+        stabilized = math.add(variance, epsilon);
+        std = math.sqrt(stabilized);
+        normalized = math.div{rhs_align=1}(centered, std);
+        scaled = if ?scale then math.mul{rhs_align=1}(normalized, scale) else normalized;
+        output = if ?bias then math.add{rhs_align=1}(scaled, bias) else scaled;
+    }
+}
+
+operator mean_variance_norm {
+    @attrib {
+        axes: int.. = [2:d+2];
+        epsilon: real = 1e-5;
+    }
+    @input {
+        input: real[b,c,s..(d)];
+        bias: optional real[c];
+        scale: optional real[c];
+    }
+    @output {
+        output: real[b,c,s..];
+    }
+    @assert {
+        axes >= -(d + 2) && axes < d + 2:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        epsilon >= 0.0:
+            "'epsilon' must be non-negative", epsilon;
+    }
+    @compose {
+        mean, variance = moments: math.moments{axes=axes}(input);
+        centered = math.sub(input, mean);
+        stabilized = math.add(variance, epsilon);
+        sigma = math.sqrt(stabilized);
+        normalized = math.div(centered, sigma);
+        scaled = if ?scale then math.mul{rhs_align=1}(normalized, scale) else normalized;
+        output = if ?bias then math.add{rhs_align=1}(scaled, bias) else scaled;
+    }
+}
+
+operator local_response_norm {
+    @attrib {
+        axes: int..(k) = [1];
+        size: int..(k);
+        alpha: real = 1.0;
+        beta: real = 0.5;
+        bias: real = 1.0;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[s..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        alpha >= 0.0: "'alpha' must be non-negative", alpha;
+        beta >= 0.0: "'beta' must be non-negative", beta;
+        bias >= 0.0: "'bias' must be non-negative", bias;
+    }
+    @compose {
+        square = math.sqr(input);
+        mean = avg_pool{axes=axes, size=size, padding=[(size - 1) / 2 .., (size - 1) \ 2 ..],
+                        ignore_border=false}(square);
+        scaled = math.mul(mean, alpha);
+        biased = math.add(scaled, bias);
+        powered = math.pow(biased, beta);
+        output = math.div(input, powered);
+    }
+}
+
+operator l1_norm {
+    @attrib {
+        axes: int..;
+        bias: optional real;
+        epsilon: optional real;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[s..];
+    }
+    @assert {
+        bias >= 0.0: "'bias' must be non-negative", bias;
+        epsilon >= 0.0: "'epsilon' must be non-negative", epsilon;
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+    }
+    @compose {
+        abs = math.abs(input);
+        sum = math.sum_reduce{axes=axes}(abs);
+        biased = if ?bias then math.add(sum, bias) else sum;
+        capped = if ?epsilon then math.max(biased, epsilon) else biased;
+        output = math.div(input, capped);
+    }
+}
+
+operator l2_norm {
+    @attrib {
+        axes: int..;
+        bias: optional real;
+        epsilon: optional real;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[s..];
+    }
+    @assert {
+        bias >= 0.0: "'bias' must be non-negative", bias;
+        epsilon >= 0.0: "'epsilon' must be non-negative", epsilon;
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+    }
+    @compose {
+        square = math.sqr(input);
+        sum = math.sum_reduce{axes=axes}(square);
+        sigma = math.sqrt(sum);
+        biased = if ?bias then math.add(sigma, bias) else sigma;
+        capped = if ?epsilon then math.max(biased, epsilon) else biased;
+        output = math.div(input, capped);
+    }
+}
+
+operator softmax {
+    @attrib {
+        axes: int.. = [1];
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[s..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+    }
+    @compose {
+        max = math.max_reduce{axes=axes}(input);
+        shifted = math.sub(input, max);
+        exped = math.exp(shifted);
+        sum = math.sum_reduce{axes=axes}(exped);
+        output = math.div(exped, sum);
+    }
+}
+
+# @section recurrent-ops Recurrent Operators
+
+# @item LSTM
+
+# @text This is a module-private helper operator to describe a single step of an LSTM.
+
+operator _lstm_step {
+    @input {
+        h0: real[b,n];
+        c0: real[b,n];
+        x: real[b,c];
+        W: real[4*n,c];
+        R: real[4*n,n];
+        B: real[4*n];
+    }
+    @output {
+        h1: real[b,n];
+        c1: real[b,n];
+    }
+    @compose {
+        y = linear(x, W, B);
+        z = linear(h0, R);
+        s = math.add(y, z);
+        [i, f, g, o] = layout.split{axis=1, count=4}(s);
+        sf = sigmoid(f);
+        si = sigmoid(i);
+        so = sigmoid(o);
+        tg = math.tanh(g);
+        c1 = math.axpby(sf, c0, si, tg);
+        tc = math.tanh(c1);
+        h1 = math.mul(so, tc);
+    }
+}
+
+# @text This is a module-private helper operator to describe an LSTM iteration where each batch item has the same number of steps (which may be a static or dynamic count).
+
+operator _lstm_loop {
+    @input {
+        X: real[s,b,c];
+        W: real[4*n,c];
+        R: real[4*n,n];
+        B: real[4*n];
+        h0: real[b,n];
+        c0: real[b,n];
+        steps: optional int[];
+    }
+    @output {
+        Y: real[~|s,b,n];
+        hN: real[b,n];
+        cN: real[b,n];
+    }
+    @compose {
+        Xs..(s) = layout.unstack{axis=0}(X);
+        hN, cN, hs = with hi = h0, ci = c0 for Xi : Xs do..(steps) {
+            h1, c1 = step: _lstm_step(hi, ci, Xi, W, R, B);
+            yield h1, c1, h1;
+        };
+        Y = layout.stack{axis=0}(hs);
+    }
+}
+
+# @text This is a module-private helper operator to describe an LSTM iteration where each batch item may have different number of steps (dynamic counts).
+
+operator _jagged_lstm_loops {
+    @input {
+        X: real[s,b,c];
+        W: real[4*n,c];
+        R: real[4*n,n];
+        B: real[4*n];
+        h0: real[b,n];
+        c0: real[b,n];
+        steps: int[b];
+    }
+    @output {
+        Y: real[~|s,b,n];
+        hN: real[b,n];
+        cN: real[b,n];
+    }
+    @compose {
+        counts..(b) = layout.unstack{axis=0}(steps);
+        Xs: real[s,1,c]..(b) = layout.unstack{axis=1, squeeze=false}(X);
+        h0s: real[1,n]..(b) = layout.unstack{axis=0, squeeze=false}(h0);
+        c0s: real[1,n]..(b) = layout.unstack{axis=0, squeeze=false}(c0);
+        Ys..(b), hNs..(b), cNs..(b) = for Xi : Xs, h0i : h0s, c0i : c0s, cnt : counts do..(b)
+                                        item: _lstm_loop(Xi, W, R, B, h0i, c0i, cnt);
+        Y = layout.stack{axis=1, squeeze=true}(Ys);
+        hN = layout.stack{axis=0, squeeze=true}(hNs);
+        cN = layout.stack{axis=0, squeeze=true}(cNs);
+    }
+}
+
+# @text This is the public LSTM operator. The step count may be static (given by the first dimension of the input shape, same for all batch items) or dynamic if provided (potentially different for each batch item).
+
+operator lstm {
+    @input {
+        X: real[s,b,c];
+        W: real[4*n,c];
+        R: real[4*n,n];
+        B: real[4*n];
+        h0: real[b,n] = 0.0;
+        c0: real[b,n] = 0.0;
+        steps: optional int[b];
+    }
+    @output {
+        Y: real[~|s,b,n];
+        hN: real[b,n];
+        cN: real[b,n];
+    }
+    @compose {
+        Y, hN, cN = if ?steps then
+                        _jagged_lstm_loops(X, W, R, B, h0, c0, steps)
+                    else
+                        _lstm_loop(X, W, R, B, h0, c0);
+    }
+}

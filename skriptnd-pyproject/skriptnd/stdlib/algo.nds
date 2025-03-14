@@ -1,0 +1,59 @@
+# @title algo-ops Algorithmic operators
+
+# @text The below operators are inherently sequential and cannot be expressed with massively parallelizable closed form math formulae, hence they need to be defined as intrinsic operators in an actual compiler implementation.
+
+
+# @item Top-k element selection
+
+operator top_k {
+    @attrib {
+        k: int;
+        axis: int = 0;
+        largest: bool = true;
+        sorted: bool = true;
+    }
+    @input {
+        input: real^(rank)[s..(axis < 0 ? axis + rank : axis),m,t..];
+    }
+    @output {
+        values: real[s..,k << m,t..];
+        indices: int[s..,k << m,t..];
+    }
+    @assert {
+        axis >= -rank && axis < rank:
+            "axis must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axis;
+        k > 0: "'k' must be positive", k;
+    }
+}
+
+# @item Non-maximum suppression
+
+# @text This operator returns a dynamic number of outputs (batch dimension) depending on the input data.
+
+operator nonmax_suppress {
+    @attrib {
+        box_format: str = "CORNERS";
+        max_outputs_per_class: int = n;
+        iou_threshold: real = 0.0;
+        score_threshold: optional real;
+    }
+    @input {
+        boxes: real[b,n,4];
+        scores: real[b,c,n];
+    }
+    @output {
+        indices: int[~|b * c * max_outputs_per_class,3];
+    }
+    @using {
+        bbox_formats = ["CORNERS", "CENTER"];
+    }
+    @assert {
+        box_format in bbox_formats:
+            "'box_format' must be one of {bbox_formats}", box_format;
+        iou_threshold >= 0.0 && iou_threshold <= 1.0:
+            "'iou_threshold' must be between 0 and 1 (inclusive)", iou_threshold;
+        max_outputs_per_class >= 0:
+            "'max_outputs_per_class' must be non-negative", max_outputs_per_class;
+    }
+}

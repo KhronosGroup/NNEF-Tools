@@ -1,0 +1,394 @@
+# @title image-ops Image Processing Operators
+
+import math;
+import nn;
+
+# @section sampling-ops Image Up/down-Sampling Operators
+
+
+operator nearest_downsample {
+    @attrib {
+        axes: int..(k) = [0:d];
+        factor: int..(k);
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[os..];
+    }
+    @using {
+        os = s[axes] <- s[axes] / factor;
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        factor > 0:
+            "'factor' must be positive", factor;
+        s[axes] % factor == 0:
+            "input.shape at 'axes' must be divisible by 'factor'",
+            input.shape, axes, factor;
+    }
+    @lower {
+        output[si..] = input[si[axes] <- si[axes] * factor..],
+            si < os;
+    }
+}
+
+operator nearest_upsample {
+    @attrib {
+        axes: int..(k) = [0:d];
+        factor: int..(k);
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[os..];
+    }
+    @using {
+        os = s[axes] <- s[axes] * factor;
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        factor > 0:
+            "'factor' must be positive", factor;
+    }
+    @lower {
+        output[si[axes] <- si[axes] * factor + fi..] = input[si..],
+            si < s, fi < factor;
+    }
+}
+
+operator area_downsample {
+    @attrib {
+        axes: int..(k) = [0:d];
+        factor: int..(k);
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[os..];
+    }
+    @using {
+        os = s[axes] <- s[axes] / factor;
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        factor > 0:
+            "'factor' must be positive", factor;
+        s[axes] % factor == 0:
+            "input.shape at 'axes' must be divisible by 'factor'",
+            input.shape, axes, factor;
+    }
+    @compose {
+        sum = nn.sum_pool{size=factor, stride=factor, axes=axes}(input);
+        output = math.div(sum, real(factor * ..));
+    }
+}
+
+operator linear_upsample {
+    @attrib {
+        axes: int..(k) = [0:d];
+        factor: int..(k);
+        symmetric: bool = true;
+        replicate_border: bool = true;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[s[axes] <- (factor * s[axes])..];
+    }
+    @using {
+        fs = symmetric ? 2 * factor - factor % 2 : 2 * factor - 1;
+        padding = symmetric ? (replicate_border ? factor + factor / 2 : factor / 2) : factor - 1;
+        offset = symmetric && factor % 2 == 0 ? 0.5 : 1.0;
+        axes_mask = [0:d] in axes;
+        c = int(symmetric);
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        factor > 0:
+            "'factor' must be positive", factor;
+    }
+    @constant {
+        filter: real[fs..] = (1.0 - `abs`(real(i - factor) + offset) / real(factor)) * ..,
+                             i < fs;
+    }
+    @lower {
+        output[i[axes] <- |factor * i[axes] + j - padding|..]
+            += input[replicate_border && axes_mask ? |i - c <> 0 : s - 1| : i..] * filter[j..],
+            i < replicate_border && axes_mask ? s + c + 1 : s, j < fs;
+    }
+}
+
+# @section resize-ops Image Resize/Rescale Operators
+
+# @text The following operators cannot be expressed using affine indexing, hence they need to be defined as intrinsic operators in an actual compiler implementation.
+
+operator nearest_resize {
+    @attrib {
+        axes: int..(k) = [0:d];
+        size: int..(k);
+        coordinate_transform: str = 'SYMMETRIC';
+        rounding_method: str = 'ROUND_PREFER_FLOOR';
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[os..];
+    }
+    @using {
+        coordinate_transforms = ['SYMMETRIC', 'ASYMMETRIC', 'ALIGNED'];
+        rounding_methods = ['FLOOR', 'CEIL', 'ROUND_PREFER_FLOOR', 'ROUND_PREFER_CEIL'];
+        scale = coordinate_transform != 'ALIGNED' ? real(s[axes]) / real(size) :
+                        (size <= 1 ? 0.0 : real(s[axes] - 1) / real(size - 1));
+        offset = coordinate_transform == 'SYMMETRIC' ? 0.5 * scale - 0.5 : 0.0;
+        os = s[axes] <- size;
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        size > 0:
+            "'size' must be positive", size;
+        coordinate_transform in coordinate_transforms:
+            "'coordinate_transform' must be one of {coordinate_transforms}",
+            coordinate_transform;
+        rounding_method in rounding_methods:
+            "'rounding_method' must be one of {rounding_methods}",
+            rounding_method;
+    }
+    @lower {
+        r = real(i[axes]) * scale + offset,
+        output[i..] = input[i[axes] <- (int(rounding_method == 'FLOOR' ? `floor`(r) :
+                                            rounding_method == 'CEIL' ? `ceil`(r) :
+                                            rounding_method == 'ROUND_PREFER_FLOOR' ?
+                                               `ceil`(r - 0.5) : `floor`(r + 0.5))
+                                        << (s[axes] - 1))..],
+            i < os;
+    }
+}
+
+operator linear_resize {
+    @attrib {
+        axes: int..(k) = [0:d];
+        size: int..(k);
+        antialias: bool = true;
+        coordinate_transform: str = 'SYMMETRIC';
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[os..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        size > 0:
+            "'size' must be positive", size;
+        coordinate_transform in coordinate_transforms:
+            "'coordinate_transform' must be one of {coordinate_transforms}",
+            coordinate_transform;
+    }
+    @using {
+        coordinate_transforms = ['SYMMETRIC', 'ASYMMETRIC', 'ALIGNED'];
+        scale = coordinate_transform != 'ALIGNED' ? real(s[axes]) / real(size) :
+                        (size <= 1 ? 0.0 : real(s[axes] - 1) / real(size - 1));
+        offset = coordinate_transform == 'SYMMETRIC' ? 0.5 * scale - 0.5 : 0.0;
+        os = s[axes] <- size;
+        w = [2 ..(k)];
+    }
+    @lower {
+        r = real(i[axes]) * scale + offset,
+        output[i..] += `abs`(real(1 - j) - `frac`(`abs`(r))) * ..
+                     * input[i[axes] <- |int(`floor`(r)) + j <> 0 : s[axes] - 1|..],
+            i < os, j < w;
+    }
+}
+
+operator cubic_resize {
+    @attrib {
+        axes: int..(k) = [0:d];
+        size: int..(k);
+        antialias: bool = true;
+        coeff_a: real = -0.75;
+        coordinate_transform: str = 'SYMMETRIC';
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[s[axes] <- size..];
+    }
+    @using {
+        coordinate_transforms = ['SYMMETRIC', 'ASYMMETRIC', 'ALIGNED'];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        size > 0:
+            "'size' must be positive", size;
+        coordinate_transform in coordinate_transforms:
+            "'coordinate_transform' must be one of {coordinate_transforms}",
+            coordinate_transform;
+    }
+}
+
+operator resize {
+    @attrib {
+        axes: int..(k) = [0:d];
+        size: int..(k);
+        mode: str = 'NEAREST';
+        coordinate_transform: str = 'SYMMETRIC';
+        rounding_method: str = 'ROUND_PREFER_FLOOR';
+        antialias: bool = true;
+        cubic_coeff_a: real = -0.75;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[s[axes] <- size..];
+    }
+    @using {
+        modes = ['NEAREST', 'LINEAR', 'CUBIC'];
+        coordinate_transforms = ['SYMMETRIC', 'ASYMMETRIC', 'ALIGNED'];
+        rounding_methods = ['FLOOR', 'CEIL', 'ROUND_PREFER_FLOOR', 'ROUND_PREFER_CEIL'];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        size > 0:
+            "'size' must be positive", size;
+        mode in modes:
+            "'mode' must be one of {modes}", mode;
+        coordinate_transform in coordinate_transforms:
+            "'coordinate_transform' must be one of {coordinate_transforms}",
+            coordinate_transform;
+        rounding_method in rounding_methods:
+            "'rounding_method' must be one of {rounding_methods}",
+            rounding_method;
+    }
+    @compose {
+        output = if mode == 'NEAREST' then
+                     nearest_resize{axes=axes, size=size,
+                                    coordinate_transform=coordinate_transform,
+                                    rounding_method=rounding_method}(input)
+                 elif mode == 'LINEAR' then
+                     linear_resize{axes=axes, size=size, antialias=antialias,
+                                   coordinate_transform=coordinate_transform}(input)
+                 else
+                     cubic_resize{axes=axes, size=size, antialias=antialias,
+                                  coordinate_transform=coordinate_transform,
+                                  coeff_a=cubic_coeff_a}(input);
+    }
+}
+
+operator rescale {
+    @attrib {
+        axes: int..(k) = [0:d];
+        factor: real..(k);
+        mode: str = 'NEAREST';
+        coordinate_transform: str = 'SYMMETRIC';
+        rounding_method: str = 'ROUND_PREFER_FLOOR';
+        antialias: bool = true;
+        cubic_coeff_a: real = -0.75;
+    }
+    @input {
+        input: real[s..(d)];
+    }
+    @output {
+        output: real[s[axes] <- size..];
+    }
+    @using {
+        modes = ['NEAREST', 'LINEAR', 'CUBIC'];
+        coordinate_transforms = ['SYMMETRIC', 'ASYMMETRIC', 'ALIGNED'];
+        rounding_methods = ['FLOOR', 'CEIL', 'ROUND_PREFER_FLOOR', 'ROUND_PREFER_CEIL'];
+        size = int(`round`(real(s[axes]) * factor));
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        size > 0:
+            "'size' must be positive", size;
+        mode in modes:
+            "'mode' must be one of {modes}", mode;
+        coordinate_transform in coordinate_transforms:
+            "'coordinate_transform' must be one of {coordinate_transforms}",
+            coordinate_transform;
+        rounding_method in rounding_methods:
+            "'rounding_method' must be one of {rounding_methods}",
+            rounding_method;
+    }
+    @compose {
+        output = resize{axes=axes, size=size, mode=mode, rounding_method=rounding_method,
+                        coordinate_transform=coordinate_transform, antialias=antialias,
+                        cubic_coeff_a=cubic_coeff_a}(input);
+    }
+}
+
+# @section roi-ops ROI Operators
+
+# @text The following operators cannot be expressed using affine indexing, hence they need to be defined as intrinsic operators in an actual compiler implementation.
+
+operator max_roi_pool {
+    @attrib {
+        output_size: int..(d);
+    }
+    @input {
+        input: real[b,c,s..(d)];
+        rois: real[m,2 * d];
+        index: int[m];
+    }
+    @output {
+        output: real[b,c,output_size..];
+    }
+}
+
+operator avg_roi_pool {
+    @attrib {
+        output_size: int..(d);
+    }
+    @input {
+        input: real[b,c,s..(d)];
+        rois: real[m,2 * d];
+        index: int[m];
+    }
+    @output {
+        output: real[b,c,output_size..];
+    }
+}

@@ -1,0 +1,137 @@
+import math;
+import nn;
+
+operator linear {
+    @attrib {
+        channels: int;
+        use_bias: bool = true;
+    }
+    @input {
+        input: real[b,c];
+    }
+    @output {
+        output: real[b,channels];
+    }
+    @variable {
+        filter: real[channels,c];
+        bias: real[channels];
+    }
+    @compose {
+        output = nn.linear(input, filter, use_bias ? bias);
+    }
+}
+
+operator conv {
+    @attrib {
+        channels: int;
+        size: int..(d);
+        stride: int..(d) = 1;
+        dilation: int..(d) = 1;
+        padding: optional int..(2 * d);
+        ceil_mode: bool = false;
+        use_bias: bool = true;
+        groups: int = 1;
+    }
+    @input {
+        input: real[b,c,s..(d)];
+    }
+    @using {
+        fd = (size - 1) * dilation + 1;
+        paddings = padding[:d] + padding[d:] ?? ((ceil_mode ? s \ stride : s / stride) - 1) * stride + fd - s;
+        os = ceil_mode ? (s + paddings - fd) \ stride + 1 : (s + paddings - fd) / stride + 1;
+    }
+    @output {
+        output: real[b,channels,os..];
+    }
+    @variable {
+        filter: real[channels,c / groups,size..];
+        bias: real[channels];
+    }
+    @assert {
+        size > 0;
+        channels > 0;
+        stride > 0: "stride must be positive, got {stride}";
+        dilation > 0;
+        groups > 0;
+        s + paddings >= fd;
+        c % groups == 0;
+        channels % groups == 0;
+    }
+    @compose {
+        output = nn.conv{stride=stride, dilation=dilation, padding=padding, groups=groups}(input, filter, use_bias ? bias);
+    }
+}
+
+operator deconv {
+    @attrib {
+        channels: int;
+        size: int..(d);
+        stride: int..(d) = 1;
+        dilation: int..(d) = 1;
+        padding: optional int..(2 * d);
+        output_size: optional int..(d);
+        use_bias: bool = true;
+        groups: int = 1;
+    }
+    @input {
+        input: real[b,n,s..(d)];
+    }
+    @using {
+        fd = (size - 1) * dilation + 1;
+        paddings = padding[:d] + padding[d:] ?? (s - 1) * stride + fd - s * stride;
+        os = output_size ?? (s - 1) * stride + fd - paddings;
+    }
+    @output {
+        output: real[b,channels * groups,os..];
+    }
+    @variable {
+        filter: real[n,channels,size..];
+        bias: real[channels];
+    }
+    @assert {
+        size > 0;
+        channels > 0;
+        stride > 0;
+        dilation > 0;
+        groups > 0;
+        (output_size + paddings - fd) / stride + 1 == s;
+        n % groups == 0;
+        channels % groups == 0;
+    }
+    @compose {
+        output = nn.deconv{stride=stride, dilation=dilation, padding=padding, groups=groups, output_size=output_size}(input, filter, use_bias ? bias);
+    }
+}
+
+operator batch_norm {
+    @attrib {
+        epsilon: real = 1e-5;
+        use_bias: bool = true;
+        use_scale: bool = true;
+        momentum: real = 0.0;
+    }
+    @input {
+        input: real[b,c,s..(d)];
+    }
+    @output {
+        output: real[b,c,s..];
+    }
+    @variable {
+        running_mean: real[c];
+        running_variance: real[c];
+        bias: real[c];
+        scale: real[c];
+    }
+    @assert {
+        epsilon >= 0.0;
+        momentum >= 0.0;
+    }
+    @compose {
+        batch_mean, batch_variance = if momentum > 0.0 then moments: math.moments{axes=[0,2:d+2]}(input) else { yield running_mean, running_variance; };
+        output = nn.batch_norm{epsilon=epsilon}(input, batch_mean, batch_variance, use_bias ? bias, use_scale ? scale);
+    }
+    @update {
+        running_mean = math.axpb(batch_mean, momentum, running_mean);
+        running_variance = math.axpb(batch_variance, momentum, running_variance);
+    }
+}

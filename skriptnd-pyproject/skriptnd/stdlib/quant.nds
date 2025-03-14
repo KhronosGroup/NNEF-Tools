@@ -1,0 +1,36 @@
+# @title quant-ops Quatization Operators
+
+# @item Linear Quantization
+
+operator linear {
+    @attrib {
+        zero_point: int..(c);
+        scale: real..(c);
+        bits: int;
+        signed: bool = true;
+        symmetric: bool = false;
+    }
+    @input {
+        input: real[b,c,s..];
+    }
+    @output {
+        output: real[b,c,s..];
+    }
+    @using {
+        r = signed ? 2 ** (bits - 1) - 1 : 2 ** bits - 1;
+        m = !signed ? 0 : symmetric ? -r : -r - 1;
+        uz = zero_point := ..;
+        us = scale := ..;
+    }
+    @assert {
+        scale > 0.0: "scale must be positive", scale;
+        bits > 0: "bits must be positive", bits;
+    }
+    @lower {
+        zp = uz ?? zero_point[ci],
+        sc = us ?? scale[ci],
+        quantized = zp + int(`round`(input[bi,ci,i..] / sc)) >> m << r,
+        output[bi,ci,i..] = real(quantized - zp) * sc,
+            bi < b, ci < c, i < s;
+    }
+}

@@ -1,0 +1,35 @@
+
+operator uniform {
+    @dtype {
+        T: num = real;
+    }
+    @attrib {
+        min: T = T(0);
+        max: T = T(1);
+        shape: int..(d);
+    }
+    @output {
+        output: T[shape..];
+    }
+}
+
+operator normal {
+    @attrib {
+        mean: real = 0.0;
+        std: real = 1.0;
+        shape: int..(d);
+    }
+    @output {
+        output: real[shape..];
+    }
+}
+
+operator bernoulli {
+    @attrib {
+        prob: real;
+        shape: int..(d);
+    }
+    @output {
+        output: bool[shape..];
+    }
+}

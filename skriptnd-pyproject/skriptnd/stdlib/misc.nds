@@ -1,0 +1,14 @@
+
+operator mesh_grid {
+    @input {
+        inputs: real[..shape]..(n);
+    }
+    @output {
+        outputs: real[shape..]..(n);
+    }
+    @lower {
+        unroll..(i -> n)
+            outputs[i][si..] = inputs[i][si[i],],
+                si < shape;
+    }
+}

@@ -1,0 +1,863 @@
+# @title layout-ops Data Layout Operators
+
+# @section generator-ops Tensor Creation Operators
+
+
+# @item Constant of a given shape
+
+operator constant {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        shape: int..(d);
+        value: T..(shape * ..);
+    }
+    @output {
+        output: T[shape..];
+    }
+    @using {
+        u = value := ..;
+        prods = [1, shape[::-1]..] * ...;
+        strides = prods[d-1::-1];
+    }
+    @lower {
+        output[i..] = u ?? value[(i * strides) + ..],
+            i < shape;
+    }
+}
+
+# @item Uniform value of a given shape
+
+operator uniform {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        shape: int..(d);
+    }
+    @input {
+        value: T[];
+    }
+    @output {
+        output: T[shape..];
+    }
+    @lower {
+        output[i..] = value[],
+            i < shape;
+    }
+}
+
+# @item Range of values
+
+operator range {
+    @dtype {
+        T: num;
+    }
+    @attrib {
+        first: T;
+        last: T;
+        stride: T = T(1);
+    }
+    @output {
+        output: T[count];
+    }
+    @assert {
+        stride != T(0);
+        stride > T(0) => last >= first;
+        stride < T(0) => first >= last;
+    }
+    @using {
+        count = int((last - first) \ stride);
+    }
+    @lower {
+        output[i,] = first + T(i) * stride,
+            i < count;
+    }
+}
+
+# @item Shape of a tensor as an integer tensor
+
+operator shape {
+    @dtype {
+        T: type;
+    }
+    @input {
+        input: T[s..(d)];
+    }
+    @output {
+        output: int[d];
+    }
+    @lower {
+        output[i,] = input.shape[i],
+            i < d;
+    }
+}
+
+
+# @section view-ops Data View Operators
+
+
+# @item Data type casting
+
+operator cast {
+    @dtype {
+        R: arith;
+        T: arith;
+    }
+    @input {
+        x: T[s..];
+    }
+    @output {
+        y: R[s..];
+    }
+    @lower {
+        y[i..] = R(x[i..]),
+            i < s;
+    }
+}
+
+# @item Reshaping dimensions
+
+operator reshape {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axis: int = 0;      # dimension where reshaping starts
+        rank: int = d;      # number of reshaped dimensions
+        shape: int..(r);    # new shape for marked dimensions
+    }
+    @input {
+        input: T^(input_rank)[s..(axis < 0 ? axis + input_rank : axis),t..(d)];
+    }
+    @output {
+        output: T[s..,_shape..,t[rank:]..];
+    }
+    @using {
+        input_volume = t[:rank] * ..;
+        shape_volume = (shape is -1 ? 1 : shape) * ..;
+        inferred_extent = shape_volume != 0 ? input_volume / shape_volume : 0;
+        _shape = shape is -1 ? inferred_extent : shape;
+    }
+    @assert {
+        axis >= -input.rank && axis < input.rank:
+            "'axis' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axis;
+        rank >= 0; rank <= d:
+            "'rank' must be between 0 (inclusive) and (input.rank - axis) (exclusive)",
+            input.rank, axis, rank;
+        input_volume != 0 => shape > 0 || shape is -1:
+            "'shape' must be positive or -1", shape;
+        input_volume == 0 => shape >= 0:
+            "'shape' must be non-negative", shape;
+        ((shape is -1 ? 1 : 0) + ..) <= 1:
+            "at most 1 item of 'shape' can be -1", shape;
+        input_volume != 0 => input_volume % shape_volume == 0:
+            "the product of input shape items (starting from 'axis', of length 'rank') "
+            "must be divisible by the product of the positive items of 'shape'",
+            input.shape, axis, rank, shape;
+        (_shape * ..) == input_volume:
+            "the volume of 'shape' must be the same as implied by the "
+            "input shape items (starting from 'axis', of length 'rank') ",
+            'input-shape': [s..,t..], axis, rank, shape;
+    }
+    @compose {
+        flattened = if rank == 1 then input else flatten{axis=axis, rank=rank}(input);
+        output = if r == 1 then flattened else unflatten{axis=axis, shape=_shape}(flattened);
+    }
+}
+
+# @item Flattening dimensions
+
+operator flatten {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axis: int = 0;      # dimension where flattening starts
+        rank: int = d;      # number of flattened dimensions
+    }
+    @input {
+        input: T^(input_rank)[s..(axis < 0 ? axis + input_rank : axis),t..(d)];
+    }
+    @output {
+        output: T[s..,shape * ..,t[rank:d]..];
+    }
+    @assert {
+        axis >= -input.rank && axis < input.rank:
+            "'axis' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axis;
+        rank >= 0; rank <= d:
+            "'rank' must be between 0 (inclusive) and input.rank (exclusive)",
+            input.rank, rank;
+    }
+    @using {
+        shape = t[:rank];
+        prods = [1, shape[::-1]..] * ...;
+        strides = prods[rank-1::-1];
+    }
+    @lower {
+        output[si.., (i * strides) + .., ti..] = input[si.., i.., ti..],
+            si < s, i < shape, ti < t[rank:d];
+    }
+}
+
+operator unflatten {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axis: int;          # unflattened dimension
+        shape: int..(d);    # new shape
+    }
+    @input {
+        input: T^(input_rank)[s..(axis < 0 ? axis + input_rank : axis),z,t..];
+    }
+    @output {
+        output: T[s..,shape..,t..];
+    }
+    @assert {
+        axis >= -input.rank && axis < input.rank:
+            "'axis' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axis;
+        shape > 0:
+            "shape items must be positive", shape;
+        (shape * ..) == z:
+            "the volume of 'shape' must equal the input extent at dimension 'axis'",
+            input.shape, axis, shape;
+    }
+    @using {
+        prods = [1, shape[::-1]..] * ...;
+        strides = prods[d-1::-1];
+    }
+    @lower {
+        output[si.., i.., ti..] = input[si.., (i * strides) + .., ti..],
+            si < s, i < shape, ti < t;
+    }
+}
+
+# @item Squeezing dimensions
+
+operator squeeze {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axes: int..(k);
+    }
+    @input {
+        input: T[s..(d)];
+    }
+    @output {
+        output: T[s[kept_axes]..];
+    }
+    @using {
+        dims = [0:d];
+        axes_mask = dims in (axes < 0 ? axes + d : axes);
+        kept_axes = dims[!axes_mask];
+        zeros = [0 ..(d)];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "axes must be distinct", axes;
+        s[axes] == 1:
+            "input.shape at 'axes' must be 1", input.shape, axes;
+    }
+    @lower {
+        output[si..] = input[zeros[kept_axes] <- si..],
+            si < s[kept_axes];
+    }
+}
+
+operator unsqueeze {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axes: int..(k);
+    }
+    @input {
+        input: T[s..(d)];
+    }
+    @output {
+        output: T[ones[comp_axes] <- s..];
+    }
+    @using {
+        dims = [0:d+k];
+        axes_mask = dims in (axes < 0 ? axes + (d + k) : axes);
+        comp_axes..(d) = dims[!axes_mask];
+        ones = [1 ..(d+k)];
+        zeros = [0 ..(d+k)];
+    }
+    @assert {
+        axes >= -(d + k) && axes < d + k:
+            "'axes' must be between -output.rank (inclusive) and output.rank (exclusive)",
+            'output.rank': d+k, axes;
+        axes != ..:
+            "'axes' must be distinct", axes;
+    }
+    @lower {
+        output[zeros[comp_axes] <- si..] = input[si..],
+            si < s;
+    }
+}
+
+# @section join-split-ops Joining and Splitting Operators
+
+
+# @item Concatenating tensors along a dimension
+
+operator concat {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axis: int;
+    }
+    @input {
+        inputs: T^(rank)[s..(axis < 0 ? axis + rank : axis),..z,t..]..(n);
+    }
+    @output {
+        output: T[s..,u * n ?? (z + ..),t..];
+    }
+    @assert {
+        axis >= -rank && axis < rank:
+            "'axis' must be between -input-rank (inclusive) and input-rank (exclusive)",
+            'input-rank': rank, axis;
+    }
+    @using {
+        u = z := ..;
+        sums = z + ...;
+        offs = [0, sums..];
+    }
+    @lower {
+        output[si..,(u * ni ?? offs[ni]) + zi,ti..] = inputs[ni][si..,zi,ti..],
+            ni < n, si < s, zi < u ?? z[ni], ti < t;
+    }
+}
+
+# @item Splitting tensors along a dimension
+
+operator split {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axis: int;
+        count: optional int;
+        sizes: int..(n) = [(z / count)..(count)];
+    }
+    @input {
+        input: T^(rank)[s..(axis < 0 ? axis + rank : axis),z,t..];
+    }
+    @output {
+        outputs: T[s.., ..sizes, t..]..(n);
+    }
+    @assert {
+        axis >= -rank && axis < rank:
+            "'axis' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axis;
+        count >= 0:
+            "'count' must be non-negative", count;
+        n == count:
+            "length of 'sizes' must equal 'count'", count, sizes;
+        sizes >= 0:
+            "'sizes' must be non-negative", sizes;
+        (sizes + ..) == z:
+            "sum of 'sizes' must equal input extent at dimension 'axis'",
+            input.shape, axis, sizes;
+    }
+    @using {
+        u = sizes := ..;
+        sums = sizes + ...;
+        offs = [0, sums..];
+    }
+    @lower {
+        outputs[ni][si..,zi,ti..] = input[si..,(u * ni ?? offs[ni]) + zi,ti..],
+            ni < n, si < s, zi < u ?? sizes[ni], ti < t;
+    }
+}
+
+# @item Stacking tensors along a dimension
+
+operator stack {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axis: int;
+        squeeze: bool = false;
+    }
+    @input {
+        inputs: T^(rank)[s..(axis < 0 ? axis + rank : axis),1 ..(squeeze ? 1 : 0),t..]..(n);
+    }
+    @output {
+        output: T[s..,n,t..];
+    }
+    @assert {
+        axis >= -rank && axis <= rank:
+            "'axis' must be between -input-rank (inclusive) and input-rank (inclusive)",
+            'input-rank': rank, axis;
+    }
+    @lower {
+        output[si..,ni,ti..] = inputs[ni][si..,0 ..(squeeze ? 1 : 0),ti..],
+            si < s, ti < t, ni < n;
+    }
+}
+
+operator unstack {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axis: int;
+        squeeze: bool = true;
+    }
+    @input {
+        input: T^(rank)[s..(axis < 0 ? axis + rank : axis),n,t..];
+    }
+    @output {
+        outputs: T[s..,1 ..(!squeeze ? 1 : 0),t..]..(n);
+    }
+    @assert {
+        axis >= -rank && axis < rank:
+            "'axis' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axis;
+    }
+    @lower {
+        outputs[ni][si..,0 ..(!squeeze ? 1 : 0),ti..] = input[si..,ni,ti..],
+            si < s, ti < t, ni < n;
+    }
+}
+
+# @section expand-shrink-ops Dimension Expanding and Shrinking Operators
+
+
+# @item Tiling along dimensions
+
+operator tile {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axes: int..(k) = [0:d];     # effected axes
+        repeats: int..(k);          # number of repeats for effected axes
+    }
+    @input {
+        input: T[s..(d)];
+    }
+    @output {
+        output: T[s[axes] <- s[axes] * repeats..];
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "'axes' must be distinct", axes;
+        repeats > 0:
+            "'repeats' must be positive", repeats;
+    }
+    @lower {
+        output[si[axes] <- ri * s[axes] + si[axes]..] = input[si..],
+            si < s, ri < repeats;
+    }
+}
+
+# @item Broadcasting along dimensions
+
+operator broadcast {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axes: int..(k) = [0:d];     # effected axes
+        shape: int..(k);            # new dimensions for effected axes
+    }
+    @input {
+        input: T[s..(d)];
+    }
+    @output {
+        output: T[os..];
+    }
+    @using {
+        os = s[axes] <- shape;
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "'axes' must be distinct", axes;
+        shape > 0:
+            "'shape' items must be positive", shape;
+        s[axes] is 1 || s[axes] == shape:
+            "input.shape must be 1 or equal to 'shape' at 'axes'",
+            input.shape, axes, shape;
+    }
+    @lower {
+        output[si..] = input[s is 1 ? 0 : si..],
+            si < os;
+    }
+}
+
+# @item Slicing along dimensions
+
+operator slice {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axes: int..(k) = [0:d];     # effected dimensions
+        begin: int..(k);            # beginning positions for effected dimensions
+        end: int..(k);              # ending positions for effected dimensions
+        stride: int..(k) = 1;       # strides for effected dimensions
+    }
+    @input {
+        input: T[s..(d)];
+    }
+    @output {
+        output: T[os..];
+    }
+    @using {
+        _begin = ((begin < 0 ? begin + s[axes] : begin) >> -1) << s[axes];
+        _end = ((end < 0 ? end + s[axes] : end) >> -1) << s[axes];
+        os = s[axes] <- (_end - _begin) \ stride;
+    }
+    @assert {
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "'axes' must be distinct", axes;
+        stride != 0:
+            "'stride' must be non-zero", stride;
+        stride > 0 => _begin >= 0:
+            "'begin' must be non-negative if 'stride' is positive";
+        stride < 0 => _begin < s[axes]:
+            "'begin' must be less than input.shape at 'axes' if stride is negative";
+        stride > 0 => _end >= _begin:
+            "'end' must be greater than or equal to begin if stride is positive";
+        stride < 0 => _end <= _begin:
+            "'end' must be less than or equal to begin if stride is negative";
+    }
+    @lower {
+        output[si..] = input[si[axes] <- _begin + stride * si[axes]..],
+            si < os;
+    }
+}
+
+# @item Padding along dimensions
+
+operator pad {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axes: int..(k) = [0:d];
+        padding: int..(2 * k);
+        method: str = 'CONSTANT';
+    }
+    @input {
+        input: T[s..(d)];
+        value: optional T[];
+    }
+    @output {
+        output: T[before + s + after..];
+    }
+    @using {
+        methods = ['CONSTANT', 'REFLECT', 'REPLICATE'];
+        before = [0 ..(d)][axes] <- padding[:k];
+        after = [0 ..(d)][axes] <- padding[k:];
+    }
+    @assert {
+        method == methods || ..:
+            "'method' must be one of {methods}", method;
+        padding >= 0:
+            "'padding' must be non-negative", padding;
+        axes >= -d && axes < d:
+            "'axes' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axes;
+        axes != ..:
+            "'axes' must be distinct", axes;
+    }
+    @lower {
+        zi = si - before,
+        output[si..] = method == 'REFLECT' ? input[|zi <> -zi : 2 * (s - 1) - zi|..] :
+                       method == 'REPLICATE' ? input[|zi <> 0 : s - 1|..] :
+                       (before + after == 0 || (zi >= 0 && zi < s)) && .. ? input[zi..] :
+                       (value[] ?? T()),
+            si < before + s + after;
+    }
+}
+
+# @section dimension-reorder-ops Dimension Reordering Operators
+
+
+# @item Transposing dimensions
+
+operator transpose {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axis: int = 0;
+        perm: int..(d) = [d-1:-1:-1];
+    }
+    @input {
+        input: T^(rank)[z..(axis < 0 ? axis + rank : axis),s..(d)];
+    }
+    @output {
+        output: T[z..,s[_perm - _axis]..];
+    }
+    @using {
+        _axis = axis < 0 ? axis + input.rank : axis;
+        _perm = perm < 0 ? perm + input.rank : perm;
+    }
+    @assert {
+        axis >= -rank && axis < rank:
+            "'axis' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axis;
+        _perm >= _axis && _perm < input.rank:
+            "items in 'perm' must be between axis (inclusive) and input.rank (exclusive) "
+            "after correction for negative values",
+            input.rank, axis, perm;
+        perm != ..:
+            "'perm' must be distinct", perm;
+    }
+    @lower {
+        output[zi..,si[_perm - _axis]..] = input[zi..,si..],
+            zi < z, si < s;
+    }
+}
+
+# @item Merging space dimensions into / out of batch dimension
+
+operator space_to_batch {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        block_size: int..(d);
+    }
+    @input {
+        input: T[b,c,s..(d)];
+    }
+    @output {
+        output: T[block_size * .. * b,c,s / block_size..];
+    }
+    @assert {
+        block_size > 0:
+            "'block_size' must be positive", block_size;
+        s % block_size == 0:
+            "spatial size of input must be divisibe by 'block_size'",
+            'size': s, block_size;
+    }
+    @compose {
+        reshaped = reshape{axis=2, rank=d, shape=[(block_size,s / block_size)..]}(input);
+        transposed = transpose{perm=[2:2*d+2:2,0,1,3:2*d+2:2]}(reshaped);
+        output = flatten{axis=0, rank=d+1}(transposed);
+    }
+}
+
+operator batch_to_space {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        block_size: int..(d);
+    }
+    @input {
+        input: T[b,c,s..(d)];
+    }
+    @output {
+        output: T[b / (block_size * ..),c,s * block_size..];
+    }
+    @assert {
+        block_size > 0:
+            "'block_size' must be positive", block_size;
+        b % (block_size * ..) == 0:
+            "batch size of input must be divisible by product of 'block_size'",
+            'batch': b, block_size;
+    }
+    @using {
+        range_d = [0:d];
+    }
+    @compose {
+        reshaped = reshape{axis=0, rank=1, shape=[block_size..,b / (block_size * ..)]}(input);
+        transposed = transpose{perm=[d,d+1,(range_d,range_d+d+2)..]}(reshaped);
+        output = reshape{axis=2, rank=2*d, shape=[s * block_size..]}(transposed);
+    }
+}
+
+# @item Shuffling channels
+
+operator shuffle {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axis: int;
+        groups: int;
+    }
+    @input {
+        input: T^(rank)[s..(axis < 0 ? axis + rank : axis),c,t..(k)];
+    }
+    @output {
+        output: T[s..,c,t..];
+    }
+    @using {
+        offs = axis < 0 ? axis + rank : axis;
+    }
+    @assert {
+        axis >= -input.rank && axis < input.rank:
+            "'axis' must be between -input.rank (inclusive) and input.rank (exclusive)",
+            input.rank, axis;
+        groups > 0:
+            "'groups' must be positive", groups;
+        c % groups == 0:
+            "input shape at 'axis' must be divisible by 'groups'",
+            input.shape, axis, groups;
+    }
+    @compose {
+        reshaped = reshape{axis=axis, rank=1, shape=[groups, c / groups]}(input);
+        transposed = transpose{axis=axis, perm=[offs+1,offs,offs+2:input.rank+1]}(reshaped);
+        output = reshape{axis=axis, rank=2, shape=[c]}(transposed);
+    }
+}
+
+# @section indexing-ops Data Indexing Operators
+
+
+# @item Finding indices where data is non-zero
+
+# @text This operator produces an output of dynamic size depending on the actual data contained in the input.
+# @text It cannot be defined using affine index notation, hence it needs to be defined as an intrinsic operator in an actual compiler implementation.
+
+operator nonzero {
+    @dtype {
+        T: arith;
+    }
+    @input {
+        input: T[s..(d)];
+    }
+    @output {
+        index: int[d,~|(s * ..)];
+    }
+}
+
+# @item Gathering data based on indices
+
+operator gather {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axis: int;
+    }
+    @input {
+        data: T^(rank)[s..(axis < 0 ? axis + rank : axis),z,t..];
+        index: int[n..];
+    }
+    @output {
+        output: T[s..,n..,t..];
+    }
+    @assert {
+        axis >= -rank && axis < rank:
+            "'axis' must be between -data.rank (inclusive) and data.rank (exclusive)",
+            data.rank, axis;
+    }
+    @lower {
+        output[si..,ni..,ti..] = data[si..,index[ni..],ti..],
+            si < s, ni < n, ti < t;
+    }
+}
+
+operator gather_nd {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        batch_dims: int = 0;
+    }
+    @input {
+        data: T[b..(batch_dims),s..(d),t..];
+        indices: int[b..(batch_dims),z..,d];
+    }
+    @output {
+        output: T[b..,z..,t..];
+    }
+    @using {
+        di = [0:d];
+    }
+    @assert {
+        batch_dims >= 0: "'batch_dims' must be non-negative", batch_dims;
+    }
+    @lower {
+        output[bi..,zi..,ti..] = data[bi..,indices[bi..,zi..,di]..,ti..],
+            bi < b, zi < z, ti < t;
+    }
+}
+
+# @item Scattering data based on indices
+
+operator scatter {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        axis: int;
+    }
+    @input {
+        data: T^(rank)[s..(axis),n,t..];
+        indices: int[s..(axis),m,t..];
+        updates: T[s..(axis),m,t..];
+    }
+    @output {
+        output: T[s..,n,t..];
+    }
+    @assert {
+        axis >= -rank && axis < rank:
+            "'axis' must be between -data.rank (inclusive) and data.rank (exclusive)",
+            data.rank, axis;
+    }
+    @lower {
+        output[si..,ni,ti..] = data[si..,ni,ti..],
+            si < s, ni < n, ti < t;
+        output[si..,indices[si..,mi,ti..],ti..] := updates[si..,mi,ti..],
+            si < s, mi < m, ti < t;
+    }
+}
+
+operator scatter_nd {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        batch_dims: int = 0;
+    }
+    @input {
+        data: T[b..(batch_dims),s..(d),t..];
+        indices: int[b..(batch_dims),z..,d];
+        updates: T[b..(batch_dims),z..,t..];
+    }
+    @output {
+        output: T[b..,s..,t..];
+    }
+    @using {
+        di = [0:d];
+    }
+    @assert {
+        batch_dims >= 0: "'batch_dims' must be non-negative", batch_dims;
+    }
+    @lower {
+        output[bi..,si..,ti..] = data[bi..,si..,ti..],
+            bi < b, si < s, ti < t;
+        output[bi..,indices[bi..,zi..,di]..,ti..] := updates[bi..,zi..,ti..],
+            bi < b, zi < z, ti < t;
+    }
+}

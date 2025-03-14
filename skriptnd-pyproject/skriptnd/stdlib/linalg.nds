@@ -1,0 +1,121 @@
+# @title linalg-ops Linear Algebra Operators
+
+# @item Dot product of vectors
+
+operator dot {
+    @input {
+        x: real[n];
+        y: real[n];
+        b: optional real[];
+    }
+    @output {
+        z: real[];
+    }
+    @lower {
+        z[] = b[] ?? 0.0;
+        z[] += x[i,] * y[i,],
+            i < n;
+    }
+}
+
+# @item Matrix-vector multiplication
+
+operator matvec {
+    @attrib {
+        transA: bool = false;
+    }
+    @input {
+        A: real[m,n];
+        x: real[transA ? m : n];
+        b: optional real[transA ? n : m];
+    }
+    @output {
+        y: real[transA ? n : m];
+    }
+    @lower {
+        y[i,] = b[i,] ?? 0.0,
+            i < (transA ? n : m);
+        y[i,] += A[transA ? j : i, transA ? i : j] * x[j,],
+            i < (transA ? n : m), j < (transA ? m : n);
+    }
+}
+
+# @item Matrix multiplication (possibly batched)
+
+operator matmul {
+    @attrib {
+        transA: bool = false;
+        transB: bool = false;
+    }
+    @input {
+        A: real[a..(da),mA,nA];
+        B: real[b..(db),mB,nB];
+        C: optional real[c..(dc), transA ? nA : mA, transB ? mB : nB];
+    }
+    @output {
+        Z: real[z..,mZ,nZ];
+    }
+    @using {
+        dz = da >> db;
+        ea = [1 ..(dz - da), a..];
+        eb = [1 ..(dz - db), b..];
+        ec = [1 ..(dz - dc), c..];
+        z = ea >> eb;
+        mZ = transA ? nA : mA;
+        nZ = transB ? mB : nB;
+        kZ = transA ? mA : nA;
+    }
+    @assert {
+        !transA && !transB => nA == mB:
+            "last dimension of A must match first (non-batch) dimension of B "
+            "when A and B are not transposed",
+            'A.shape': [mA,nA], 'B.shape': [mB,nB];
+         transA && !transB => mA == mB:
+            "first (non-batch) dimension of A must match first (non-batch) dimension of B "
+            "when A is transposed and B is not transposed",
+            'A.shape': [mA,nA], 'B.shape': [mB,nB];
+        !transA && transB => nA == nB: "last dimension of A must match last dimension of B "
+            "when A is not transposed and B is transposed",
+            'A.shape': [mA,nA], 'B.shape': [mB,nB];
+         transA && transB => mA == nB: "first (non-batch) dimension of A must match "
+            "last dimension of B when both A and B are transposed",
+            'A.shape': [mA,nA], 'B.shape': [mB,nB];
+        ea == eb || ea == 1 || eb == 1:
+            "incompatible argument shapes of A and B for broadcasting batch dimensions "
+            "({ea} vs {eb} after alignment)",
+            A.shape, B.shape;
+        ec == z || ec == 1:
+            "incompatible argument shape of C for broadcasting batch dimensions "
+            "({ec} vs {z} after alignment)",
+            C.shape, "result shape": [z..,mZ,nZ];
+    }
+    @lower {
+        Z[l..,i,j] = C[c == 1 ? 0 : l[dz-dc:]..,i,j] ?? 0.0,
+            l < z, i < mZ, j < nZ;
+        Z[l..,i,j] += transA && transB ? A[a == 1 ? 0 : l[dz-da:]..,k,i] *
+                                         B[b == 1 ? 0 : l[dz-db:]..,j,k] :
+                                transA ? A[a == 1 ? 0 : l[dz-da:]..,k,i] *
+                                         B[b == 1 ? 0 : l[dz-db:]..,k,j] :
+                                transB ? A[a == 1 ? 0 : l[dz-da:]..,i,k] *
+                                         B[b == 1 ? 0 : l[dz-db:]..,j,k] :
+                                         A[a == 1 ? 0 : l[dz-da:]..,i,k] *
+                                         B[b == 1 ? 0 : l[dz-db:]..,k,j],
+            l < z, i < mZ, j < nZ, k < kZ;
+    }
+}
+
+# @item Outer product of vectors
+
+operator outer {
+    @input {
+        x: real[sx..];
+        y: real[sy..];
+    }
+    @output {
+        z: real[sx..,sy..];
+    }
+    @lower {
+        z[i..,j..] = x[i..] * y[j..],
+            i < sx, j < sy;
+    }
+}
