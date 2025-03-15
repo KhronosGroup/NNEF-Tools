@@ -243,7 +243,7 @@ def remove_unreachables(arg):
 def _remove_unused_tensors(graph):
     graph.remove_tensors([tensor for tensor in graph.tensors
                           if not tensor.has_producer and tensor not in graph.inputs and
-                          not tensor.has_consumer and not (tensor in graph.outputs and tensor.is_constant)])
+                          not tensor.has_consumer and not (tensor in graph.outputs and tensor.data is not None)])
 
 
 def remove_unused_tensors(arg):
