@@ -56,6 +56,7 @@ def is_conv_bias(tensor):
 def main(args):
     reader = Reader(infer_shapes=False)
     model = reader(args.model)
+    graph = model.main
 
     stats_path = args.statistics or os.path.join(args.model, 'graph.stats')
     if not os.path.exists(stats_path):
@@ -65,7 +66,7 @@ def main(args):
     with open(stats_path, 'r') as file:
         stats = json.load(file)
 
-    for tensor in model.tensors:
+    for tensor in graph.tensors:
         stat = stats.get(tensor.name)
         if stat is not None:
 
@@ -83,7 +84,7 @@ def main(args):
                                               args.signed, args.symmetric)
 
     if args.wide_bias:
-        for tensor in model.tensors:
+        for tensor in graph.tensors:
             if len(tensor.quant) > 0 and tensor.data is not None and is_conv_bias(tensor):
                 conv = tensor.consumer
                 tensor.quant['bits'] = 32

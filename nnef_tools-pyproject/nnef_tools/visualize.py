@@ -97,7 +97,8 @@ def _generate_digraph(graph, show_variables, verbose):
 
 def main(args):
     reader = Reader(decomposed=args.decompose, infer_shapes=args.infer_shapes)
-    graph = reader(args.model)
+    model = reader(args.model)
+    graph = model.main
     digraph = _generate_digraph(graph, args.show_variables, args.verbose)
     digraph.render(args.model + '.gv', format=args.format, cleanup=True)
     os.rename(args.model + '.gv.' + args.format, args.model + '.' + args.format)
