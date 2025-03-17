@@ -10,7 +10,7 @@
 #include <map>
 
 
-namespace ts
+namespace nd
 {
 
     typedef std::function<Typename(const std::string&)> SymbolTypes;
@@ -726,7 +726,7 @@ namespace ts
         Dict<symbol_type> _symbols;
     };
     
-}   // namespace ts
+}   // namespace nd
 
 
 #endif

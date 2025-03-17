@@ -13,7 +13,7 @@
 #include <cmath>
 
 
-namespace ts
+namespace nd
 {
 
     class ValueExpr;
@@ -2092,7 +2092,7 @@ namespace ts
     {
         if ( arg.is_literal() )
         {
-            return arg.dtype() == ts::Typename::Real ? ValueExpr(-arg.as_real()) : ValueExpr(-arg.as_int());
+            return arg.dtype() == nd::Typename::Real ? ValueExpr(-arg.as_real()) : ValueExpr(-arg.as_int());
         }
         else
         {
@@ -2109,7 +2109,7 @@ namespace ts
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == ts::Typename::Real ? ValueExpr(left.as_real() + right.as_real()) : ValueExpr(left.as_int() + right.as_int());
+            return left.dtype() == nd::Typename::Real ? ValueExpr(left.as_real() + right.as_real()) : ValueExpr(left.as_int() + right.as_int());
         }
         else if ( left == (real_t)0 || left == (int_t)0 )
         {
@@ -2129,7 +2129,7 @@ namespace ts
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == ts::Typename::Real ? ValueExpr(left.as_real() - right.as_real()) : ValueExpr(left.as_int() - right.as_int());
+            return left.dtype() == nd::Typename::Real ? ValueExpr(left.as_real() - right.as_real()) : ValueExpr(left.as_int() - right.as_int());
         }
         else if ( left == (real_t)0 || left == (int_t)0 )
         {
@@ -2149,7 +2149,7 @@ namespace ts
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == ts::Typename::Real ? ValueExpr(left.as_real() * right.as_real()) : ValueExpr(left.as_int() * right.as_int());
+            return left.dtype() == nd::Typename::Real ? ValueExpr(left.as_real() * right.as_real()) : ValueExpr(left.as_int() * right.as_int());
         }
         else if ( left == (real_t)1 || left == (int_t)1 )
         {
@@ -2177,7 +2177,7 @@ namespace ts
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == ts::Typename::Real ? ValueExpr(left.as_real() / right.as_real()) : ValueExpr(left.as_int() / right.as_int());
+            return left.dtype() == nd::Typename::Real ? ValueExpr(left.as_real() / right.as_real()) : ValueExpr(left.as_int() / right.as_int());
         }
         else if ( right == (real_t)1 || right == (int_t)1 )
         {
@@ -2197,7 +2197,7 @@ namespace ts
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == ts::Typename::Real ? ValueExpr(std::fmod(left.as_real(), right.as_real())) : ValueExpr(left.as_int() % right.as_int());
+            return left.dtype() == nd::Typename::Real ? ValueExpr(std::fmod(left.as_real(), right.as_real())) : ValueExpr(left.as_int() % right.as_int());
         }
         else if ( right == (real_t)1 )
         {
@@ -2217,7 +2217,7 @@ namespace ts
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == ts::Typename::Real ? ValueExpr(ceil_div(left.as_real(), right.as_real())) :
+            return left.dtype() == nd::Typename::Real ? ValueExpr(ceil_div(left.as_real(), right.as_real())) :
                                                         ValueExpr(ceil_div(left.as_int(), right.as_int()));
         }
         else if ( right == (real_t)1 || right == (int_t)1 )
@@ -2238,7 +2238,7 @@ namespace ts
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == ts::Typename::Real ? ValueExpr(std::pow(left.as_real(), right.as_real())) :
+            return left.dtype() == nd::Typename::Real ? ValueExpr(std::pow(left.as_real(), right.as_real())) :
                                                        ValueExpr((int_t)std::pow(left.as_int(), right.as_int()));
         }
         else if ( left == (real_t)1 || left == (int_t)1 )
@@ -2328,20 +2328,20 @@ namespace ts
         }
     }
 
-}   // namespace ts
+}   // namespace nd
 
 
 namespace std
 {
 
-    inline string to_string( const ts::ValueExpr& expr )
+    inline string to_string( const nd::ValueExpr& expr )
     {
         std::stringstream ss;
         ss << expr;
         return ss.str();
     }
 
-    inline void swap( ts::ValueExpr& a, ts::ValueExpr& b )
+    inline void swap( nd::ValueExpr& a, nd::ValueExpr& b )
     {
         a.swap(b);
     }

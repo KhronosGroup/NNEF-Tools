@@ -5,7 +5,7 @@
 #include "error.h"
 
 
-namespace ts
+namespace nd
 {
     
     template<typename T>
@@ -195,7 +195,7 @@ namespace ts
         error_type _error;
     };
 
-}   // namespace ts
+}   // namespace nd
 
 
 #define _CAT(X,Y) _CAT_(X,Y)

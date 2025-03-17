@@ -8,7 +8,7 @@
 #include <set>
 
 
-namespace ts
+namespace nd
 {
     
     template<typename T, typename S>
@@ -1131,7 +1131,7 @@ namespace ts
     
     
     template<typename T, typename S>
-    inline std::ostream& operator<<( std::ostream& os, const ts::polynom<T,S>& poly )
+    inline std::ostream& operator<<( std::ostream& os, const nd::polynom<T,S>& poly )
     {
         if ( poly.constant_value() || poly.is_constant() )
         {
@@ -1148,13 +1148,13 @@ namespace ts
             {
                 os << coeff;
             }
-            os << ts::to_string(it->first);
+            os << nd::to_string(it->first);
         }
         return os;
     }
     
     template<typename S>
-    inline std::ostream& operator<<( std::ostream& os, const ts::polynom<bool,S>& poly )
+    inline std::ostream& operator<<( std::ostream& os, const nd::polynom<bool,S>& poly )
     {
         if ( poly.constant_value() || poly.is_constant() )
         {
@@ -1166,13 +1166,13 @@ namespace ts
             {
                 os << '^';
             }
-            os << ts::to_string(*it);
+            os << nd::to_string(*it);
         }
         return os;
     }
     
     template<typename T, typename S>
-    inline std::ostream& operator<<( std::ostream& os, const ts::polynom_ratio<T,S>& ratio )
+    inline std::ostream& operator<<( std::ostream& os, const nd::polynom_ratio<T,S>& ratio )
     {
         if ( ratio.denominator() != 1 )
         {
@@ -1186,7 +1186,7 @@ namespace ts
     }
     
     template<typename P>
-    inline std::ostream& operator<<( std::ostream& os, const ts::polynom_cases<P>& cases )
+    inline std::ostream& operator<<( std::ostream& os, const nd::polynom_cases<P>& cases )
     {
         if ( cases.is_unique() )
         {
@@ -1237,20 +1237,20 @@ namespace ts
         return os.str();
     }
     
-}   // namespace ts
+}   // namespace nd
 
 
 namespace std
 {
     
     template<typename T, typename S>
-    void swap( ts::polynom<T,S>& lhs, ts::polynom<T,S>& rhs )
+    void swap( nd::polynom<T,S>& lhs, nd::polynom<T,S>& rhs )
     {
         lhs.swap(rhs);
     }
     
     template<typename T, typename S>
-    void swap( ts::polynom_ratio<T,S>& lhs, ts::polynom_ratio<T,S>& rhs )
+    void swap( nd::polynom_ratio<T,S>& lhs, nd::polynom_ratio<T,S>& rhs )
     {
         lhs.swap(rhs);
     }

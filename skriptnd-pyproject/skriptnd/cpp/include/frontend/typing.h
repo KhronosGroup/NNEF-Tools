@@ -15,7 +15,7 @@
 
 
 
-namespace ts
+namespace nd
 {
     
     class Typing
@@ -2101,7 +2101,7 @@ namespace ts
                 {
                     str += ',';
                 }
-                str += ts::str(types[i]);
+                str += nd::str(types[i]);
             }
             str += ')';
             return str;
@@ -3582,7 +3582,7 @@ namespace ts
         const ErrorCallback _error;
     };
     
-}   // namespace ts
+}   // namespace nd
 
 
 #endif

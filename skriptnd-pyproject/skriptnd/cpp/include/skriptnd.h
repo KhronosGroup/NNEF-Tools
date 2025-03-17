@@ -7,7 +7,7 @@
 #include "error.h"
 
 
-namespace ts
+namespace nd
 {
     
     std::string model_name_from_path( const std::string& path );
@@ -17,13 +17,13 @@ namespace ts
     
     std::optional<Model> read_model( const std::string& path, const std::string& graph_name, const std::string& stdlib_path,
                                     const ErrorCallback error, const OperationCallback atomic = nullptr, const OperationCallback unroll = nullptr,
-                                    const std::map<std::string, ts::ValueExpr>& attribs = {} );
+                                    const std::map<std::string, nd::ValueExpr>& attribs = {} );
     std::optional<Model> read_model( std::istream& is, const std::string& module, const std::string& graph_name,
                                     const std::string& stdlib_path, const std::string& import_path,
                                     const ErrorCallback error, const OperationCallback atomic = nullptr, const OperationCallback unroll = nullptr,
-                                    const std::map<std::string, ts::ValueExpr>& attribs = {} );
+                                    const std::map<std::string, nd::ValueExpr>& attribs = {} );
     
-}   // namespace ts
+}   // namespace nd
 
 
 #endif

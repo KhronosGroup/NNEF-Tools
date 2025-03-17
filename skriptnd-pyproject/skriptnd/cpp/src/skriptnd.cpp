@@ -3,7 +3,7 @@
 #include "composer.h"
 
 
-namespace ts
+namespace nd
 {
 
     std::string model_name_from_path( const std::string& path )
@@ -138,4 +138,4 @@ namespace ts
         return error_count ? std::optional<Model>() : std::move(*model);
     }
     
-}   // namespace ts
+}   // namespace nd

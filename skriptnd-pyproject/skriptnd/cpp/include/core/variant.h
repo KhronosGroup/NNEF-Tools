@@ -5,7 +5,7 @@
 #include <type_traits>
 
 
-namespace ts
+namespace nd
 {
 
     namespace detail
@@ -450,7 +450,7 @@ namespace ts
         size_t _data;
     };
 
-}   // namespace ts
+}   // namespace nd
 
 
 #endif

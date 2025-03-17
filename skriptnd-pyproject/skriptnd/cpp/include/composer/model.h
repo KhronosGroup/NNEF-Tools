@@ -14,7 +14,7 @@
 #include "tensorref.h"
 
 
-namespace ts
+namespace nd
 {
 
     typedef std::function<bool( const std::string& name, const std::map<std::string,Typename>& dtypes,
@@ -510,23 +510,23 @@ namespace ts
         return os;
     }
     
-}   // namespace ts
+}   // namespace nd
 
 
 template<>
-struct std::hash<ts::TensorRef>
+struct std::hash<nd::TensorRef>
 {
-    std::size_t operator()( const ts::TensorRef& r ) const noexcept
+    std::size_t operator()( const nd::TensorRef& r ) const noexcept
     {
         if ( r.packed() )
         {
-            std::hash<ts::TensorPack*> hasher;
-            return hasher(r.as<ts::TensorPack*>());
+            std::hash<nd::TensorPack*> hasher;
+            return hasher(r.as<nd::TensorPack*>());
         }
         else
         {
-            std::hash<ts::Tensor*> hasher;
-            return hasher(r.as<ts::Tensor*>());
+            std::hash<nd::Tensor*> hasher;
+            return hasher(r.as<nd::Tensor*>());
         }
     }
 };

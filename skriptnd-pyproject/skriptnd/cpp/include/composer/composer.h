@@ -25,7 +25,7 @@ struct std::hash<std::vector<T>>
 };
 
 
-namespace ts
+namespace nd
 {
     
     class Composer : private Evaluation
@@ -4327,7 +4327,7 @@ namespace ts
         size_t _next_placeholder_idx;
     };
     
-}   // namespace ts
+}   // namespace nd
 
 
 #endif

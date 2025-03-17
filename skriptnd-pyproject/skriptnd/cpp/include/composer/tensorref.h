@@ -7,7 +7,7 @@
 #include <string>
 
 
-namespace ts
+namespace nd
 {
 
     struct Tensor;
@@ -78,7 +78,7 @@ namespace ts
 
     using TensorRef = impl::TensorRef<Tensor,TensorPack,ValueExpr>;
 
-}   // namespace ts
+}   // namespace nd
 
 
 #endif

@@ -23,17 +23,17 @@ struct {name}_model
 
     {name}_model() {init}
 
-    std::vector<ts::rt::TensorRef> inputs()
+    std::vector<nd::rt::TensorRef> inputs()
     {{
         return {inputs};
     }}
     
-    std::vector<ts::rt::TensorRef> outputs()
+    std::vector<nd::rt::TensorRef> outputs()
     {{
         return {outputs};
     }}
 
-    std::map<const char*,ts::rt::TensorRef> variables()
+    std::map<const char*,nd::rt::TensorRef> variables()
     {{
         return {variables};
     }}
@@ -53,7 +53,7 @@ WrapperSource = \
 namespace py = pybind11;
 
 #include "runtime.h"
-using ts::rt::str;
+using nd::rt::str;
 
 
 #include HEADER_NAME
@@ -75,13 +75,13 @@ py::object make_namedtuple( const std::string& name, std::initializer_list<std::
 py::object TensorInfo = make_namedtuple("TensorInfo", { "shape", "dtype" });
 
 
-py::dtype py_dtype( ts::rt::Dtype dtype )
+py::dtype py_dtype( nd::rt::Dtype dtype )
 {
     static const py::dtype py_dtypes[] =
     {
-        py::dtype::of<ts::real_t>(),
-        py::dtype::of<ts::int_t>(),
-        py::dtype::of<ts::bool_t>(),
+        py::dtype::of<nd::real_t>(),
+        py::dtype::of<nd::int_t>(),
+        py::dtype::of<nd::bool_t>(),
     };
     return py_dtypes[(int)dtype];
 }
@@ -91,7 +91,7 @@ std::string str( const py::dtype& dtype )
     return std::string(1, dtype.char_());
 }
 
-void fill_tensor( ts::rt::TensorView& tensor, const py::array& array )
+void fill_tensor( nd::rt::TensorView& tensor, const py::array& array )
 {
     auto dtype = py_dtype(tensor.dtype());
     if ( !array.dtype().is(dtype) )
@@ -104,7 +104,7 @@ void fill_tensor( ts::rt::TensorView& tensor, const py::array& array )
     std::copy_n((char*)array.data(), array.nbytes(), tensor.bytes());
 }
 
-py::array fetch_tensor( const ts::rt::TensorView& tensor )
+py::array fetch_tensor( const nd::rt::TensorView& tensor )
 {
     std::vector<py::ssize_t> shape(tensor.rank());
     std::copy_n(tensor.shape(), tensor.rank(), shape.data());
@@ -125,9 +125,9 @@ void load( MODEL_TYPE& model, const std::map<std::string,py::object>& variables 
             throw std::invalid_argument("could not fetch variable '" + std::string(name) + "'");
         }
         
-        if ( value.is<ts::rt::TensorPackView*>() )
+        if ( value.is<nd::rt::TensorPackView*>() )
         {
-            auto& items = *value.as<ts::rt::TensorPackView*>();
+            auto& items = *value.as<nd::rt::TensorPackView*>();
             auto& list = (const py::list&)it->second;
             
             for ( int k = 0; k < items.size(); ++k )
@@ -137,7 +137,7 @@ void load( MODEL_TYPE& model, const std::map<std::string,py::object>& variables 
         }
         else
         {
-            auto& tensor = *value.as<ts::rt::TensorView*>();
+            auto& tensor = *value.as<nd::rt::TensorView*>();
             fill_tensor(tensor, (const py::array&)it->second);
         }
     }
@@ -154,9 +154,9 @@ py::tuple execute( MODEL_TYPE& model, py::args args )
     for ( size_t i = 0; i < args.size(); ++i )
     {
         auto& input = inputs[i];
-        if ( input.is<ts::rt::TensorPackView*>() )
+        if ( input.is<nd::rt::TensorPackView*>() )
         {
-            auto& items = *input.as<ts::rt::TensorPackView*>();
+            auto& items = *input.as<nd::rt::TensorPackView*>();
             auto& arg = (const py::list&)args[i];
             
             items.resize(arg.size());
@@ -167,7 +167,7 @@ py::tuple execute( MODEL_TYPE& model, py::args args )
         }
         else
         {
-            auto& item = *input.as<ts::rt::TensorView*>();
+            auto& item = *input.as<nd::rt::TensorView*>();
             auto& arg = (const py::array&)args[i];
             fill_tensor(item, arg);
         }
@@ -182,9 +182,9 @@ py::tuple execute( MODEL_TYPE& model, py::args args )
     for ( size_t i = 0; i < outputs.size(); ++i )
     {
         auto& output = outputs[i];
-        if ( output.is<ts::rt::TensorPackView*>() )
+        if ( output.is<nd::rt::TensorPackView*>() )
         {
-            auto& items = *output.as<ts::rt::TensorPackView*>();
+            auto& items = *output.as<nd::rt::TensorPackView*>();
             auto result = py::list(items.size());
             for ( int k = 0; k < items.size(); ++k )
             {
@@ -194,7 +194,7 @@ py::tuple execute( MODEL_TYPE& model, py::args args )
         }
         else
         {
-            auto& item = *output.as<ts::rt::TensorView*>();
+            auto& item = *output.as<nd::rt::TensorView*>();
             results[i] = fetch_tensor(item);
         }
     }
@@ -212,15 +212,15 @@ py::tuple make_shape( const size_t rank, const int* extents )
     return shape;
 }
 
-py::tuple tensor_info( const std::vector<ts::rt::TensorRef>& views )
+py::tuple tensor_info( const std::vector<nd::rt::TensorRef>& views )
 {
     py::tuple infos(views.size());
     for ( size_t i = 0; i < views.size(); ++i )
     {
         auto& view = views[i];
-        if ( view.is<ts::rt::TensorPackView*>() )
+        if ( view.is<nd::rt::TensorPackView*>() )
         {
-            auto& pack = *view.as<ts::rt::TensorPackView*>();
+            auto& pack = *view.as<nd::rt::TensorPackView*>();
             py::list items(pack.size());
             for ( int k = 0; k < pack.size(); ++k )
             {
@@ -230,7 +230,7 @@ py::tuple tensor_info( const std::vector<ts::rt::TensorRef>& views )
         }
         else
         {
-            auto& item = *view.as<ts::rt::TensorView*>();
+            auto& item = *view.as<nd::rt::TensorView*>();
             infos[i] = TensorInfo(make_shape(item.rank(), item.shape()), py_dtype(item.dtype()));
         }
     }
@@ -394,16 +394,16 @@ def _format_guard(index, tensor, dim):
 
 
 def _format_dtype(dtype):
-    return f"ts::{dtype.name.lower()}_t"
+    return f"nd::{dtype.name.lower()}_t"
 
 
 def _format_decl_type(tensor):
     rank = len(tensor.shape)
     dtype = _format_dtype(tensor.dtype)
     if isinstance(tensor, nd.TensorPack):
-        return f"ts::rt::TensorPack<{rank},{dtype},{tensor.max_size}>"
+        return f"nd::rt::TensorPack<{rank},{dtype},{tensor.max_size}>"
     else:
-        return f"ts::rt::Tensor<{rank},{dtype}>"
+        return f"nd::rt::Tensor<{rank},{dtype}>"
 
 
 def _format_dynamic_mask(tensor):
@@ -452,7 +452,7 @@ def _format_tensor_initializers(model, indent, context):
 
 
 def _format_uniform(arg, max_size):
-    return "ts::rt::uniform<{max_size}>({arg})".format(arg=arg, max_size=max_size)
+    return "nd::rt::uniform<{max_size}>({arg})".format(arg=arg, max_size=max_size)
 
 
 def _format_value_expr(expr, bracket=True, extent=None):
@@ -466,9 +466,9 @@ def _format_value_expr(expr, bracket=True, extent=None):
         return str(expr)
     elif isinstance(expr, float):
         if expr == math.inf:
-            return "std::numeric_limits<ts::real_t>::infinity()"
+            return "std::numeric_limits<nd::real_t>::infinity()"
         elif expr == -math.inf:
-            return "-std::numeric_limits<ts::real_t>::infinity()"
+            return "-std::numeric_limits<nd::real_t>::infinity()"
         return f"{expr}f"
     elif isinstance(expr, str):
         return f'"{expr}"'
@@ -495,22 +495,22 @@ def _format_value_expr(expr, bracket=True, extent=None):
         if not expr.packed:
             if expr.dtype == nd.Dtype.Int:
                 if expr.arg == float('inf'):
-                    return "std::numeric_limits<ts::int_t>::max()"
+                    return "std::numeric_limits<nd::int_t>::max()"
                 elif expr.arg == float('-inf'):
-                    return "std::numeric_limits<ts::int_t>::min()"
+                    return "std::numeric_limits<nd::int_t>::min()"
             arg = _format_value_expr(expr.arg)
             dtype = _format_dtype(expr.dtype)
             return f"({dtype}){arg}"
         else:
             arg = _format_value_expr(expr.arg, bracket=False)
             dtype = expr.dtype.name.lower()
-            return f"ts::rt::unary<ts::rt::to_{dtype}>({arg})"
+            return f"nd::rt::unary<nd::rt::to_{dtype}>({arg})"
     elif isinstance(expr, nd.UnaryExpr):
         if not expr.packed:
             if len(expr.op) < 3:
                 return expr.op + _format_value_expr(expr.arg)
             else:
-                ns = "ts" if expr.op == "sign" or expr.op == "frac" else "std"
+                ns = "nd" if expr.op == "sign" or expr.op == "frac" else "std"
                 arg = _format_value_expr(expr.arg, bracket=False)
                 return f"{ns}::{expr.op}({arg})"
         else:
@@ -522,7 +522,7 @@ def _format_value_expr(expr, bracket=True, extent=None):
                 op = expr.op
 
             arg = _format_value_expr(expr.arg, bracket=False)
-            return "ts::rt::unary<{op}>({arg})".format(op=op, arg=arg)
+            return "nd::rt::unary<{op}>({arg})".format(op=op, arg=arg)
     elif isinstance(expr, nd.BinaryExpr):
         if not expr.packed:
             left = _format_value_expr(expr.left)
@@ -538,7 +538,7 @@ def _format_value_expr(expr, bracket=True, extent=None):
             elif expr.op == "->":
                 return f"!{left} || {right}"
             elif expr.op == "\\":
-                return f"ts::rt::ceil_div({left}, {right})"
+                return f"nd::rt::ceil_div({left}, {right})"
             else:
                 return lb + f"{left} {expr.op} {right}" + rb
         else:
@@ -551,13 +551,13 @@ def _format_value_expr(expr, bracket=True, extent=None):
             elif expr.op == "/":
                 op = "std::divides"
             elif expr.op == "\\":
-                op = "ts::rt::ceil_divides"
+                op = "nd::rt::ceil_divides"
             elif expr.op == "%":
                 op = "std::modulus"
             elif expr.op == "<<":
-                op = "ts::rt::minimize"
+                op = "nd::rt::minimize"
             elif expr.op == ">>":
-                op = "ts::rt::maximize"
+                op = "nd::rt::maximize"
             elif expr.op == "&&":
                 op = "std::logical_and"
             elif expr.op == "||":
@@ -583,7 +583,7 @@ def _format_value_expr(expr, bracket=True, extent=None):
             right = _format_value_expr(expr.right, bracket=False)
             if not nd.expr_is_packed(expr.right):
                 right = _format_uniform(right, expr.max_size)
-            return f"ts::rt::binary<{op}>({left}, {right})"
+            return f"nd::rt::binary<{op}>({left}, {right})"
     elif isinstance(expr, nd.SelectExpr):
         cond = _format_value_expr(expr.cond, bracket=False)
         left = _format_value_expr(expr.left, bracket=False)
@@ -595,16 +595,16 @@ def _format_value_expr(expr, bracket=True, extent=None):
                 left = _format_uniform(left, expr.max_size)
             if not nd.expr_is_packed(expr.right):
                 right = _format_uniform(right, expr.max_size)
-            return f"ts::rt::select({cond}, {left}, {right})"
+            return f"nd::rt::select({cond}, {left}, {right})"
     elif isinstance(expr, nd.FoldExpr):
         if expr.op == "+":
             op = "std::plus"
         elif expr.op == "*":
             op = "std::multiplies"
         elif expr.op == "<<":
-            op = "ts::rt::minimize"
+            op = "nd::rt::minimize"
         elif expr.op == ">>":
-            op = "ts::rt::maximize"
+            op = "nd::rt::maximize"
         elif expr.op == "||":
             op = "std::logical_or"
         elif expr.op == "&&":
@@ -614,9 +614,9 @@ def _format_value_expr(expr, bracket=True, extent=None):
 
         arg = _format_value_expr(expr.pack)
         if not expr.packed:
-            return f"ts::rt::reduce<{op}>({arg})"
+            return f"nd::rt::reduce<{op}>({arg})"
         else:
-            return f"ts::rt::accum<{op}>({arg})"
+            return f"nd::rt::accum<{op}>({arg})"
     elif isinstance(expr, nd.BoundedExpr):
         arg = _format_value_expr(expr.arg, bracket=False)
         if expr.lower is not None and expr.upper is not None:
@@ -626,18 +626,18 @@ def _format_value_expr(expr, bracket=True, extent=None):
         else:
             return arg
     elif isinstance(expr, nd.ListExpr):
-        return "ts::rt::list({})".format(", ".join(_format_value_expr(item, bracket=False) for item in expr))
+        return "nd::rt::list({})".format(", ".join(_format_value_expr(item, bracket=False) for item in expr))
     elif isinstance(expr, nd.ConcatExpr):
-        return "ts::rt::concat({})".format(", ".join(_format_value_expr(item, bracket=False) for item in expr.items))
+        return "nd::rt::concat({})".format(", ".join(_format_value_expr(item, bracket=False) for item in expr.items))
     elif isinstance(expr, nd.SliceExpr):
         pack = _format_value_expr(expr.pack)
         first = _format_value_expr(expr.first)
         last = _format_value_expr(expr.last)
         if expr.stride == 1:
-            return f"ts::rt::slice({pack}, {first}, {last})"
+            return f"nd::rt::slice({pack}, {first}, {last})"
         else:
             stride = _format_value_expr(expr.stride)
-            return f"ts::rt::slice({pack}, {first}, {last}, {stride})"
+            return f"nd::rt::slice({pack}, {first}, {last}, {stride})"
     elif isinstance(expr, nd.SubscriptExpr):
         pack = _format_value_expr(expr.pack)
         index = _format_value_expr(expr.index)
@@ -645,15 +645,15 @@ def _format_value_expr(expr, bracket=True, extent=None):
     elif isinstance(expr, nd.UniformExpr):
         value = _format_value_expr(expr.value)
         size = _format_value_expr(expr.size)
-        return f"ts::rt::uniform<{expr.max_size}>({value}, {size})"
+        return f"nd::rt::uniform<{expr.max_size}>({value}, {size})"
     elif isinstance(expr, nd.RangeExpr):
         first = _format_value_expr(expr.first)
         last = _format_value_expr(expr.last)
         if expr.stride == 1:
-            return f"ts::rt::range<{expr.max_size}>({first}, {last})"
+            return f"nd::rt::range<{expr.max_size}>({first}, {last})"
         else:
             stride = _format_value_expr(expr.stride)
-            return f"ts::rt::range<{expr.max_size}>({first}, {last}, {stride})"
+            return f"nd::rt::range<{expr.max_size}>({first}, {last}, {stride})"
     else:
         raise TypeError("Invalid value expression: " + str(type(expr)))
 
@@ -751,7 +751,7 @@ def _format_operation(op, indent, context):
         value = _format_value_expr(expr, bracket=False) if not isinstance(expr, nd.ListExpr) \
             else "{ " + ", ".join(_format_value_expr(item, bracket=False) for item in expr) + " }"
         if size is not None:
-            text += indent + f"const ts::rt::ValuePack<{dtype},{size}> {iden} = {value};\n"
+            text += indent + f"const nd::rt::ValuePack<{dtype},{size}> {iden} = {value};\n"
         else:
             text += indent + f"const {dtype} {iden} = {value};\n"
 
@@ -829,7 +829,7 @@ def _format_assert_check_code(assertion, indent):
     message = assertion.message.replace("{}", "%s")
     args = ", ".join(_format_value_expr(arg) for arg in assertion.args)
     return (indent + f"if ( {condition} )\n" + indent +
-            f"\tthrow std::runtime_error(ts::string_format(\"{message}\", {args}));\n")
+            f"\tthrow std::runtime_error(nd::string_format(\"{message}\", {args}));\n")
 
 
 def _format_block_code(block, idx, indent, context, condition):
@@ -839,7 +839,7 @@ def _format_block_code(block, idx, indent, context, condition):
     code = _format_execution_code(block.operations, indent, context)
     if condition:
         output = block.outputs[0]
-        params += " = ts::rt::condition_result<{rank}>()".format(rank=len(output.shape))
+        params += " = nd::rt::condition_result<{rank}>()".format(rank=len(output.shape))
         code += "\n" + indent + "return " + _valid_id(output.name) + "(" + ",".join("0" for _ in output.shape) + ");"
     return "{type} {name}( {params} ) {code}".format(type=type,
                                                      name=name,
@@ -991,14 +991,14 @@ def _format_do(op, indent, context):
 
 
 def _format_nonzero(op, indent):
-    return indent + "ts::rt::nonzero({input}, {indices});".format(
+    return indent + "nd::rt::nonzero({input}, {indices});".format(
         input=_valid_id(op.inputs[0].name),
         indices=_valid_id(op.outputs[0].name),
     )
 
 
 def _format_topk(op, indent):
-    return indent + "ts::rt::top_k({input}, {values}, {indices}, {k}, {axis}, {largest}, {sorted});".format(
+    return indent + "nd::rt::top_k({input}, {values}, {indices}, {k}, {axis}, {largest}, {sorted});".format(
         input=_valid_id(op.inputs[0].name),
         values=_valid_id(op.outputs[0].name),
         indices=_valid_id(op.outputs[1].name),
@@ -1010,7 +1010,7 @@ def _format_topk(op, indent):
 
 
 def _format_nms(op, indent):
-    return indent + "ts::rt::bbox_nms({boxes}, {scores}, {indices}, {box_format_centered}, {max_outputs_per_class}, " \
+    return indent + "nd::rt::bbox_nms({boxes}, {scores}, {indices}, {box_format_centered}, {max_outputs_per_class}, " \
                     "{iou_threshold}, {score_threshold});".format(
         boxes=_valid_id(op.inputs[0].name),
         scores=_valid_id(op.inputs[1].name),

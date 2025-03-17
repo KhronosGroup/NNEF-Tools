@@ -7,7 +7,7 @@
 #include <set>
 
 
-namespace ts
+namespace nd
 {
 
     template<typename K, typename V>
@@ -515,7 +515,7 @@ namespace ts
         return callable.is<Invocation>() ? callable.as<Invocation>().position : callable.as<Region>().position;
     }
 
-}   // namespace ts
+}   // namespace nd
 
 
 #endif

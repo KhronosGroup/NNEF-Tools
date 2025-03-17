@@ -9,7 +9,7 @@
 #include <unordered_map>
 
 
-namespace ts
+namespace nd
 {
     
     class Lexer
@@ -857,7 +857,7 @@ namespace ts
 #endif
     
 
-}   // namespace ts
+}   // namespace nd
 
 
 #endif

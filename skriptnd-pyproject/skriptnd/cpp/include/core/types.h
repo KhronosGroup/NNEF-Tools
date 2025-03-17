@@ -7,7 +7,7 @@
 #include <map>
 
 
-namespace ts
+namespace nd
 {
     
     typedef float real_t;
@@ -134,7 +134,7 @@ namespace ts
         {
             str += "optional ";
         }
-        str += ts::str(type.name);
+        str += nd::str(type.name);
         if ( type.tensor )
         {
             str += "[]";
@@ -193,7 +193,7 @@ namespace ts
         }
     };
     
-}   // namespace ts
+}   // namespace nd
 
 
 #endif

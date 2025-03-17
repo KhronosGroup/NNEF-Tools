@@ -4,7 +4,7 @@
 #include <numeric>
 
 
-namespace ts
+namespace nd
 {
 
     template<typename T>
@@ -121,268 +121,268 @@ namespace ts
 
     
     template<typename T>
-    ts::ratio<T> operator+( const ts::ratio<T>& p, const ts::ratio<T>& q )
+    nd::ratio<T> operator+( const nd::ratio<T>& p, const nd::ratio<T>& q )
     {
         if ( p.denominator() == q.denominator() )
         {
-            return ts::ratio(p.nominator() + q.nominator(), p.denominator());
+            return nd::ratio(p.nominator() + q.nominator(), p.denominator());
         }
         else
         {
-            return ts::ratio(p.nominator() * q.denominator() + q.nominator() * p.denominator(), p.denominator() * q.denominator());
+            return nd::ratio(p.nominator() * q.denominator() + q.nominator() * p.denominator(), p.denominator() * q.denominator());
         }
     }
 
     template<typename T>
-    ts::ratio<T> operator+( const ts::ratio<T>& p, const T& v )
+    nd::ratio<T> operator+( const nd::ratio<T>& p, const T& v )
     {
         if ( p.is_integer() )
         {
-            return ts::ratio(p.nominator() + v);
+            return nd::ratio(p.nominator() + v);
         }
         else
         {
-            return ts::ratio(p.nominator() + p.denominator() * v, p.denominator());
+            return nd::ratio(p.nominator() + p.denominator() * v, p.denominator());
         }
     }
 
     template<typename T>
-    ts::ratio<T> operator+( const T& v, const ts::ratio<T>& p )
+    nd::ratio<T> operator+( const T& v, const nd::ratio<T>& p )
     {
         if ( p.is_integer() )
         {
-            return ts::ratio(p.nominator() + v);
+            return nd::ratio(p.nominator() + v);
         }
         else
         {
-            return ts::ratio(p.nominator() + p.denominator() * v, p.denominator());
+            return nd::ratio(p.nominator() + p.denominator() * v, p.denominator());
         }
     }
 
     template<typename T>
-    ts::ratio<T> operator-( const ts::ratio<T>& p, const ts::ratio<T>& q )
+    nd::ratio<T> operator-( const nd::ratio<T>& p, const nd::ratio<T>& q )
     {
         if ( p.denominator() == q.denominator() )
         {
-            return ts::ratio(p.nominator() - q.nominator(), p.denominator());
+            return nd::ratio(p.nominator() - q.nominator(), p.denominator());
         }
         else
         {
-            return ts::ratio(p.nominator() * q.denominator() - q.nominator() * p.denominator(), p.denominator() * q.denominator());
+            return nd::ratio(p.nominator() * q.denominator() - q.nominator() * p.denominator(), p.denominator() * q.denominator());
         }
     }
 
     template<typename T>
-    ts::ratio<T> operator-( const ts::ratio<T>& p, const T& v )
+    nd::ratio<T> operator-( const nd::ratio<T>& p, const T& v )
     {
         if ( p.is_integer() )
         {
-            return ts::ratio(p.nominator() - v);
+            return nd::ratio(p.nominator() - v);
         }
         else
         {
-            return ts::ratio(p.nominator() - p.denominator() * v, p.denominator());
+            return nd::ratio(p.nominator() - p.denominator() * v, p.denominator());
         }
     }
 
     template<typename T>
-    ts::ratio<T> operator-( const T& v, const ts::ratio<T>& p )
+    nd::ratio<T> operator-( const T& v, const nd::ratio<T>& p )
     {
         if ( p.is_integer() )
         {
-            return ts::ratio(v - p.nominator());
+            return nd::ratio(v - p.nominator());
         }
         else
         {
-            return ts::ratio(p.denominator() * v - p.nominator(), p.denominator());
+            return nd::ratio(p.denominator() * v - p.nominator(), p.denominator());
         }
     }
 
     template<typename T>
-    ts::ratio<T> operator*( const ts::ratio<T>& p, const ts::ratio<T>& q )
+    nd::ratio<T> operator*( const nd::ratio<T>& p, const nd::ratio<T>& q )
     {
-        return ts::ratio(p.nominator() * q.nominator(), p.denominator() * q.denominator());
+        return nd::ratio(p.nominator() * q.nominator(), p.denominator() * q.denominator());
     }
 
     template<typename T>
-    ts::ratio<T> operator*( const ts::ratio<T>& p, const T& v )
+    nd::ratio<T> operator*( const nd::ratio<T>& p, const T& v )
     {
-        return ts::ratio(p.nominator() * v, p.denominator());
+        return nd::ratio(p.nominator() * v, p.denominator());
     }
 
     template<typename T>
-    ts::ratio<T> operator*( const T& v, const ts::ratio<T>& p )
+    nd::ratio<T> operator*( const T& v, const nd::ratio<T>& p )
     {
-        return ts::ratio(p.nominator() * v, p.denominator());
+        return nd::ratio(p.nominator() * v, p.denominator());
     }
 
     template<typename T>
-    ts::ratio<T> operator/( const ts::ratio<T>& p, const ts::ratio<T>& q )
+    nd::ratio<T> operator/( const nd::ratio<T>& p, const nd::ratio<T>& q )
     {
-        return ts::ratio(p.nominator() * q.denominator(), p.denominator() * q.nominator());
+        return nd::ratio(p.nominator() * q.denominator(), p.denominator() * q.nominator());
     }
 
     template<typename T>
-    ts::ratio<T> operator/( const ts::ratio<T>& p, const T& v )
+    nd::ratio<T> operator/( const nd::ratio<T>& p, const T& v )
     {
-        return ts::ratio(p.nominator(), p.denominator() * v);
+        return nd::ratio(p.nominator(), p.denominator() * v);
     }
 
     template<typename T>
-    ts::ratio<T> operator/( const T& v, const ts::ratio<T>& p )
+    nd::ratio<T> operator/( const T& v, const nd::ratio<T>& p )
     {
-        return ts::ratio(v * p.denominator(), p.nominator());
+        return nd::ratio(v * p.denominator(), p.nominator());
     }
 
     template<typename T>
-    ts::ratio<T>& ts::ratio<T>::operator+=( const ts::ratio<T>& other )
+    nd::ratio<T>& nd::ratio<T>::operator+=( const nd::ratio<T>& other )
     {
         *this = *this + other;
         return *this;
     }
 
     template<typename T>
-    ts::ratio<T>& ts::ratio<T>::operator-=( const ts::ratio<T>& other )
+    nd::ratio<T>& nd::ratio<T>::operator-=( const nd::ratio<T>& other )
     {
         *this = *this - other;
         return *this;
     }
 
     template<typename T>
-    ts::ratio<T>& ts::ratio<T>::operator*=( const ts::ratio<T>& other )
+    nd::ratio<T>& nd::ratio<T>::operator*=( const nd::ratio<T>& other )
     {
         *this = *this * other;
         return *this;
     }
 
     template<typename T>
-    ts::ratio<T>& ts::ratio<T>::operator/=( const ts::ratio<T>& other )
+    nd::ratio<T>& nd::ratio<T>::operator/=( const nd::ratio<T>& other )
     {
         *this = *this / other;
         return *this;
     }
 
     template<typename T>
-    ts::ratio<T>& ts::ratio<T>::operator+=( const T& other )
+    nd::ratio<T>& nd::ratio<T>::operator+=( const T& other )
     {
         *this = *this + other;
         return *this;
     }
 
     template<typename T>
-    ts::ratio<T>& ts::ratio<T>::operator-=( const T& other )
+    nd::ratio<T>& nd::ratio<T>::operator-=( const T& other )
     {
         *this = *this - other;
         return *this;
     }
 
     template<typename T>
-    ts::ratio<T>& ts::ratio<T>::operator*=( const T& other )
+    nd::ratio<T>& nd::ratio<T>::operator*=( const T& other )
     {
         *this = *this * other;
         return *this;
     }
 
     template<typename T>
-    ts::ratio<T>& ts::ratio<T>::operator/=( const T& other )
+    nd::ratio<T>& nd::ratio<T>::operator/=( const T& other )
     {
         *this = *this / other;
         return *this;
     }
 
     template<typename T>
-    ts::ratio<T> operator+( const ts::ratio<T>& r )
+    nd::ratio<T> operator+( const nd::ratio<T>& r )
     {
         return r;
     }
 
     template<typename T>
-    ts::ratio<T> operator-( const ts::ratio<T>& r )
+    nd::ratio<T> operator-( const nd::ratio<T>& r )
     {
-        return ts::ratio<T>::unnormalized(-r.nominator(), r.denominator());
+        return nd::ratio<T>::unnormalized(-r.nominator(), r.denominator());
     }
 
     template<typename T>
-    bool operator==( const ts::ratio<T>& p, const ts::ratio<T>& q )
+    bool operator==( const nd::ratio<T>& p, const nd::ratio<T>& q )
     {
         return p.nominator() == q.nominator() && p.denominator() == q.denominator();
     }
 
     template<typename T>
-    bool operator==( const ts::ratio<T>& p, const T& v )
+    bool operator==( const nd::ratio<T>& p, const T& v )
     {
         return p.is_integer() && p.nominator() == v;
     }
 
     template<typename T>
-    bool operator!=( const ts::ratio<T>& p, const ts::ratio<T>& q )
+    bool operator!=( const nd::ratio<T>& p, const nd::ratio<T>& q )
     {
         return !(p == q);
     }
 
     template<typename T>
-    bool operator!=( const ts::ratio<T>& p, const T& v )
+    bool operator!=( const nd::ratio<T>& p, const T& v )
     {
         return !(p == v);
     }
 
     template<typename T>
-    bool operator<( const ts::ratio<T>& p, const ts::ratio<T>& q )
+    bool operator<( const nd::ratio<T>& p, const nd::ratio<T>& q )
     {
         return p.nominator() * q.denominator() < q.nominator() * p.denominator();
     }
 
     template<typename T>
-    bool operator<( const ts::ratio<T>& p, const T& v )
+    bool operator<( const nd::ratio<T>& p, const T& v )
     {
         return p.nominator() < v * p.denominator();
     }
 
     template<typename T>
-    bool operator<=( const ts::ratio<T>& p, const ts::ratio<T>& q )
+    bool operator<=( const nd::ratio<T>& p, const nd::ratio<T>& q )
     {
         return p.nominator() * q.denominator() <= q.nominator() * p.denominator();
     }
 
     template<typename T>
-    bool operator<=( const ts::ratio<T>& p, const T& v )
+    bool operator<=( const nd::ratio<T>& p, const T& v )
     {
         return p.nominator() <= v * p.denominator();
     }
 
     template<typename T>
-    bool operator>( const ts::ratio<T>& p, const ts::ratio<T>& q )
+    bool operator>( const nd::ratio<T>& p, const nd::ratio<T>& q )
     {
         return p.nominator() * q.denominator() > q.nominator() * p.denominator();
     }
 
     template<typename T>
-    bool operator>( const ts::ratio<T>& p, const T& v )
+    bool operator>( const nd::ratio<T>& p, const T& v )
     {
         return p.nominator() > v * p.denominator();
     }
 
     template<typename T>
-    bool operator>=( const ts::ratio<T>& p, const ts::ratio<T>& q )
+    bool operator>=( const nd::ratio<T>& p, const nd::ratio<T>& q )
     {
         return p.nominator() * q.denominator() >= q.nominator() * p.denominator();
     }
 
     template<typename T>
-    bool operator>=( const ts::ratio<T>& p, const T& v )
+    bool operator>=( const nd::ratio<T>& p, const T& v )
     {
         return p.nominator() >= v * p.denominator();
     }
 
 
     template<typename T>
-    bool is_divisible( const ts::ratio<T>& x, const T& y ) { return true; }
+    bool is_divisible( const nd::ratio<T>& x, const T& y ) { return true; }
 
-}   // namespace ts
+}   // namespace nd
 
 
 template<typename T>
-std::ostream& operator<<( std::ostream& os, const ts::ratio<T>& r )
+std::ostream& operator<<( std::ostream& os, const nd::ratio<T>& r )
 {
     if ( r.is_integer() )
     {
@@ -400,9 +400,9 @@ namespace std
 {
 
     template<typename T>
-    ts::ratio<T> abs( const ts::ratio<T>& x )
+    nd::ratio<T> abs( const nd::ratio<T>& x )
     {
-        return ts::ratio<T>::unnormalized(std::abs(x.nominator()), x.denominator());
+        return nd::ratio<T>::unnormalized(std::abs(x.nominator()), x.denominator());
     }
 
 }   // namespace std

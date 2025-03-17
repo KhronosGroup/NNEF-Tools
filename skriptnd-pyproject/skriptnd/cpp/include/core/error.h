@@ -9,7 +9,7 @@
 #include <type_traits>
 
 
-namespace ts
+namespace nd
 {
     
     typedef std::pair<std::string,Position> StackTraceItem;
@@ -62,7 +62,7 @@ namespace ts
         }
     };
     
-}   // namespace ts
+}   // namespace nd
 
 
 #endif
