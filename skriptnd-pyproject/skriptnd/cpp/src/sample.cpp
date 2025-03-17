@@ -1,6 +1,6 @@
 #include <fstream>
 #include "skriptnd.h"
-#include "runtime/runtime.h"
+#include "runtime.h"
 
 
 int main( int argc, const char * argv[] )
@@ -70,7 +70,7 @@ int main( int argc, const char * argv[] )
         is.close();
         is.open(fn);
         
-        auto model = ts::read_model(is, module.c_str(), graph_name, "stdlib/", "", error_handler, atomic, unroll);
+        auto model = ts::read_model(is, module.c_str(), graph_name, "skriptnd/stdlib/", "", error_handler, atomic, unroll);
         if ( model )
         {
             std::cout << "✅ Succesfully parsed graph '" + graph_name + "'" << std::endl;

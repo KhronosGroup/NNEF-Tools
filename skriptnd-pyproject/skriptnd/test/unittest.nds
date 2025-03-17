@@ -1,0 +1,2765 @@
+import layer, image, layout, quant, math, algo, rand, nn, linalg, misc;
+
+
+graph constant {
+    @input {
+    }
+    @output {
+        output: real[10,20];
+    }
+    @compose {
+        output = layout.constant{shape=[10,20], value=42.0}();
+    }
+}
+
+graph uniform {
+    @input {
+        value: real[];
+    }
+    @output {
+        output: real[10,20];
+    }
+    @compose {
+        output = layout.uniform{shape=[10,20]}(value);
+    }
+}
+
+graph range_int {
+    @input {
+    }
+    @output {
+        output: int[5];
+    }
+    @compose {
+        output = layout.range{first=1, last=10, stride=2}();
+    }
+}
+
+graph range_real {
+    @input {
+    }
+    @output {
+        output: real[5];
+    }
+    @compose {
+        output = layout.range{first=1.0, last=10.0, stride=2.0}();
+    }
+}
+
+graph shape {
+    @input {
+        input: real[2,3,4,5];
+    }
+    @output {
+        output: int[4];
+    }
+    @compose {
+        output = layout.shape(input);
+    }
+}
+
+graph iden {
+    @input {
+        input: real[10,20];
+    }
+    @output {
+        output: real[10,20];
+    }
+    @compose {
+        output = math.iden(input);
+    }
+}
+
+graph neg {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.neg(x);
+    }
+}
+
+graph rcp {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.rcp(x);
+    }
+}
+
+graph sqr {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.sqr(x);
+    }
+}
+
+graph sqrt {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.sqrt(x);
+    }
+}
+
+graph rsqr {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.rsqr(x);
+    }
+}
+
+graph rsqrt {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.rsqrt(x);
+    }
+}
+
+graph exp {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.exp(x);
+    }
+}
+
+graph log {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.log(x);
+    }
+}
+
+graph log2 {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.log2(x);
+    }
+}
+
+graph sin {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.sin(x);
+    }
+}
+
+graph cos {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.cos(x);
+    }
+}
+
+graph tan {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.tan(x);
+    }
+}
+
+graph sinh {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.sinh(x);
+    }
+}
+
+graph cosh {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.cosh(x);
+    }
+}
+
+graph tanh {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.tanh(x);
+    }
+}
+
+graph asin {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.asin(x);
+    }
+}
+
+graph acos {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.acos(x);
+    }
+}
+
+graph atan {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.atan(x);
+    }
+}
+
+graph asinh {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.asinh(x);
+    }
+}
+
+graph acosh {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.acosh(x);
+    }
+}
+
+graph atanh {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.atanh(x);
+    }
+}
+
+graph abs {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.abs(x);
+    }
+}
+
+graph sign {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.sign(x);
+    }
+}
+
+graph not {
+    @input {
+        x: bool[4,10];
+    }
+    @output {
+        y: bool[4,10];
+    }
+    @compose {
+        y = math.not(x);
+    }
+}
+
+graph floor {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.floor(x);
+    }
+}
+
+graph ceil {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.ceil(x);
+    }
+}
+
+graph round {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.round(x);
+    }
+}
+
+graph as_int {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: int[4,10];
+    }
+    @compose {
+        y = layout.cast<int>(x);
+    }
+}
+
+graph as_real {
+    @input {
+        x: int[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = layout.cast<real>(x);
+    }
+}
+
+graph as_bool {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: bool[4,10];
+    }
+    @compose {
+        y = layout.cast<bool>(x);
+    }
+}
+
+graph add {
+    @input {
+        x: real[4,10];
+        y: real[4,10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.add(x, y);
+    }
+}
+
+graph sub {
+    @input {
+        x: real[4,10];
+        y: real[1,10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.sub(x, y);
+    }
+}
+
+graph mul {
+    @input {
+        x: real[4,10];
+        y: real[10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.mul{rhs_align=1}(x, y);
+    }
+}
+
+graph div {
+    @input {
+        x: real[4,10];
+        y: real[10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.div(x, y);
+    }
+}
+
+graph mod_real {
+    @input {
+        x: real[4,10];
+        y: real[10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.mod(x, y);
+    }
+}
+
+graph mod_int {
+    @input {
+        x: int[4,10];
+        y: int[10];
+    }
+    @output {
+        z: int[4,10];
+    }
+    @compose {
+        z = math.mod(x, y);
+    }
+}
+
+graph pow {
+    @input {
+        x: real[4,10];
+        y: real[4,1];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.pow(x, y);
+    }
+}
+
+graph min {
+    @input {
+        x: real[4,10];
+        y: real[4,10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.min(x, y);
+    }
+}
+
+graph max {
+    @input {
+        x: real[4,10];
+        y: real[4,10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.max(x, y);
+    }
+}
+
+graph lt {
+    @input {
+        x: real[4,10];
+        y: real[4,10];
+    }
+    @output {
+        z: bool[4,10];
+    }
+    @compose {
+        z = math.lt(x, y);
+    }
+}
+
+graph gt {
+    @input {
+        x: int[4,10];
+        y: real[4,1];
+    }
+    @output {
+        z: bool[4,10];
+    }
+    @compose {
+        z = math.gt(x, y);
+    }
+}
+
+graph le {
+    @input {
+        x: real[4,10];
+        y: int[10];
+    }
+    @output {
+        z: bool[4,10];
+    }
+    @compose {
+        z = math.le(x, y);
+    }
+}
+
+graph ge {
+    @input {
+        x: int[4,10];
+        y: real[10];
+    }
+    @output {
+        z: bool[4,10];
+    }
+    @compose {
+        z = math.ge{rhs_align=1}(x, y);
+    }
+}
+
+graph eq {
+    @input {
+        x: real[4,10];
+        y: real[1,10];
+    }
+    @output {
+        z: bool[4,10];
+    }
+    @compose {
+        z = math.eq(x, y);
+    }
+}
+
+graph ne {
+    @input {
+        x: real[4,10];
+        y: bool[10];
+    }
+    @output {
+        z: bool[4,10];
+    }
+    @compose {
+        z = math.ne{rhs_align=1}(x, y);
+    }
+}
+
+graph and {
+    @input {
+        x: bool[4,10];
+        y: bool[4,10];
+    }
+    @output {
+        z: bool[4,10];
+    }
+    @compose {
+        z = math.and(x, y);
+    }
+}
+
+graph or {
+    @input {
+        x: bool[4,10];
+        y: bool[10];
+    }
+    @output {
+        z: bool[4,10];
+    }
+    @compose {
+        z = math.or(x, y);
+    }
+}
+
+graph xor {
+    @input {
+        x: bool[4,10];
+        y: bool[10];
+    }
+    @output {
+        z: bool[4,10];
+    }
+    @compose {
+        z = math.xor{rhs_align=1}(x, y);
+    }
+}
+
+graph select {
+    @input {
+        c: bool[4,1];
+        x: real[4,10];
+        y: real[4,10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.select(c, x, y);
+    }
+}
+
+graph clamp {
+    @input {
+        x: real[4,10];
+        a: real[4];
+        b: real[10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.clamp{min_align=0}(x, a, b);
+    }
+}
+
+graph axpb {
+    @input {
+        a: real[4];
+        x: real[4,10];
+        b: real[10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = math.axpb{a_align=0}(a, x, b);
+    }
+}
+
+graph axpby {
+    @input {
+        a: real[4];
+        x: real[4,10];
+        b: real[10];
+        y: real[4,10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.axpby{a_align=0}(a, x, b, y);
+    }
+}
+
+graph min_reduce {
+    @input {
+        input: real[1,16,224,224];
+    }
+    @output {
+        output: real[1,1,224,224];
+    }
+    @compose {
+        output = math.min_reduce{axes=[1], squeeze=false}(input);
+    }
+}
+
+graph max_reduce {
+    @input {
+        input: real[1,16,224,224];
+    }
+    @output {
+        output: real[1,224,224];
+    }
+    @compose {
+        output = math.max_reduce{axes=[1], squeeze=true}(input);
+    }
+}
+
+graph sum_reduce {
+    @input {
+        input: real[1,16,224,224];
+    }
+    @output {
+        output: real[1,1,224,224];
+    }
+    @compose {
+        output = math.sum_reduce{axes=[1], squeeze=false}(input);
+    }
+}
+
+graph mean_reduce {
+    @input {
+        input: real[1,3,224,224];
+    }
+    @output {
+        output: real[1,3];
+    }
+    @compose {
+        output = math.mean_reduce{axes=[2,3], squeeze=true}(input);
+    }
+}
+
+graph l1_reduce {
+    @input {
+        input: real[1,3,224,224];
+    }
+    @output {
+        output: real[1,3];
+    }
+    @compose {
+        output = math.lp_reduce{axes=[2,3], squeeze=true, p=1.0}(input);
+    }
+}
+
+graph l2_reduce {
+    @input {
+        input: real[1,3,224,224];
+    }
+    @output {
+        output: real[1,3];
+    }
+    @compose {
+        output = math.lp_reduce{axes=[2,3], squeeze=true, p=2.0}(input);
+    }
+}
+
+graph any_reduce {
+    @input {
+        input: bool[1,16,224,224];
+    }
+    @output {
+        output: bool[1,1,224,224];
+    }
+    @compose {
+        output = math.any_reduce{axes=[1], squeeze=false}(input);
+    }
+}
+
+graph all_reduce {
+    @input {
+        input: bool[1,16,224,224];
+    }
+    @output {
+        output: bool[1,1,224,224];
+    }
+    @compose {
+        output = math.all_reduce{axes=[1], squeeze=false}(input);
+    }
+}
+
+graph argmin {
+    @input {
+        input: real[1,16,224,224];
+    }
+    @output {
+        output: int[1,1,224,224];
+    }
+    @compose {
+        output = math.argmin{axis=1}(input);
+    }
+}
+
+graph argmin_nd {
+    @input {
+        input: real[1,16,224,224];
+    }
+    @output {
+        output: int[1,16,1,1]..(2);
+    }
+    @compose {
+        output..(2) = math.argmin_nd{axes=[2,3]}(input);
+    }
+}
+
+graph argmax {
+    @input {
+        input: real[1,16,224,224];
+    }
+    @output {
+        output: int[1,224,224];
+    }
+    @compose {
+        output = math.argmax{axis=1, squeeze=true}(input);
+    }
+}
+
+graph argmax_nd {
+    @input {
+        input: real[1,16,224,224];
+    }
+    @output {
+        output: int[1,16,1,1]..(2);
+    }
+    @compose {
+        output..(2) = math.argmax_nd{axes=[2,3]}(input);
+    }
+}
+
+graph moments {
+    @input {
+        input: real[1,3,224,224];
+    }
+    @output {
+        mean: real[1,3];
+        std: real[1,3];
+    }
+    @compose {
+        mean, std = math.moments{axes=[2,3], squeeze=true}(input);
+    }
+}
+
+graph dot {
+    @input {
+        x: real[10];
+        y: real[10];
+    }
+    @output {
+        z: real[];
+    }
+    @compose {
+        z = linalg.dot(x, y);
+    }
+}
+
+graph matvec {
+    @input {
+        A: real[10,20];
+        x: real[20];
+    }
+    @output {
+        y: real[10];
+    }
+    @compose {
+        y = linalg.matvec(A, x);
+    }
+}
+
+graph matvec_trA {
+    @input {
+        A: real[10,20];
+        x: real[10];
+    }
+    @output {
+        y: real[20];
+    }
+    @compose {
+        y = linalg.matvec{transA=true}(A, x);
+    }
+}
+
+graph matmul {
+    @input {
+        A: real[10,20];
+        B: real[20,30];
+    }
+    @output {
+        C: real[10,30];
+    }
+    @compose {
+        C = linalg.matmul(A, B);
+    }
+}
+
+graph matmul_trA {
+    @input {
+        A: real[20,10];
+        B: real[20,30];
+    }
+    @output {
+        C: real[10,30];
+    }
+    @compose {
+        C = linalg.matmul{transA=true}(A, B);
+    }
+}
+
+graph matmul_trB {
+    @input {
+        A: real[10,20];
+        B: real[30,20];
+    }
+    @output {
+        C: real[10,30];
+    }
+    @compose {
+        C = linalg.matmul{transB=true}(A, B);
+    }
+}
+
+graph outer {
+    @input {
+        A: real[10];
+        B: real[20];
+    }
+    @output {
+        C: real[10,20];
+    }
+    @compose {
+        C = linalg.outer(A, B);
+    }
+}
+
+graph reshape {
+    @input {
+        input: real[4,16,10,10];
+    }
+    @output {
+        output: real[4,1600];
+    }
+    @compose {
+        output = layout.reshape{shape=[4,1600]}(input);
+    }
+}
+
+graph flatten {
+    @input {
+        input: real[4,16,10,10];
+    }
+    @output {
+        output: real[4,1600];
+    }
+    @compose {
+        output = layout.flatten{axis=1}(input);
+    }
+}
+
+graph unflatten {
+    @input {
+        input: real[4,1600];
+    }
+    @output {
+        output: real[4,16,10,10];
+    }
+    @compose {
+        output = layout.unflatten{axis=1, shape=[16,10,10]}(input);
+    }
+}
+
+graph squeeze {
+    @input {
+        input: real[4,16,1,1];
+    }
+    @output {
+        output: real[4,16];
+    }
+    @compose {
+        output = layout.squeeze{axes=[2,3]}(input);
+    }
+}
+
+graph unsqueeze {
+    @input {
+        input: real[4,16];
+    }
+    @output {
+        output: real[4,16,1,1];
+    }
+    @compose {
+        output = layout.unsqueeze{axes=[2,3]}(input);
+    }
+}
+
+graph transpose {
+    @input {
+        input: real[4,16,224,224];
+    }
+    @output {
+        output: real[4,224,224,16];
+    }
+    @compose {
+        output = layout.transpose{axis=1, perm=[2,3,1]}(input);
+    }
+}
+
+graph concat {
+    @input {
+        input1: real[4,1,224,224];
+        input2: real[4,2,224,224];
+        input3: real[4,3,224,224];
+    }
+    @output {
+        output: real[4,6,224,224];
+    }
+    @compose {
+        output = layout.concat{axis=1}([input1, input2, input3]);
+    }
+}
+
+graph concat_even {
+    @input {
+        input: real[2]..(s|5);
+    }
+    @output {
+        output: real[2 * s];
+    }
+    @compose {
+        output = layout.concat{axis=0}(input);
+    }
+}
+
+graph split {
+    @input {
+        input: real[4,6,224,224];
+    }
+    @output {
+        output1: real[4,3,224,224];
+        output2: real[4,2,224,224];
+        output3: real[4,1,224,224];
+    }
+    @compose {
+        [output1, output2, output3] = layout.split{axis=1, sizes=[3,2,1]}(input);
+    }
+}
+
+graph split_even {
+    @input {
+        input: real[s|5];
+    }
+    @output {
+        output: real[1]..(s);
+    }
+    @compose {
+        output..(s) = layout.split{axis=0, count=s}(input);
+    }
+}
+
+graph dynamic_concat {
+    @input {
+        inputs: real[4,c|2,224,224]..(5);
+    }
+    @output {
+        output: real[4,5*c,224,224];
+    }
+    @compose {
+        output = layout.concat{axis=1}(inputs);
+    }
+}
+
+graph dynamic_split {
+    @input {
+        input: real[s|10];
+    }
+    @output {
+        output1: real[s \ 2];
+        output2: real[s / 2];
+    }
+    @compose {
+        [output1, output2] = layout.split{axis=0, sizes=[s \ 2, s / 2]}(input);
+    }
+}
+
+graph stack {
+    @input {
+        input1: real[4,224,224];
+        input2: real[4,224,224];
+        input3: real[4,224,224];
+        
+    }
+    @output {
+        output: real[4,3,224,224];
+    }
+    @compose {
+        output = layout.stack{axis=1}([input1, input2, input3]);
+    }
+}
+
+graph squeeze_stack {
+    @input {
+        input1: real[4,1,224,224];
+        input2: real[4,1,224,224];
+        input3: real[4,1,224,224];
+        
+    }
+    @output {
+        output: real[4,3,224,224];
+    }
+    @compose {
+        output = layout.stack{axis=1, squeeze=true}([input1, input2, input3]);
+    }
+}
+
+graph dynamic_stack {
+    @input {
+        input: real[10]..(s|5);
+    }
+    @output {
+        output: real[s,10];
+    }
+    @compose {
+        output = layout.stack{axis=0}(input);
+    }
+}
+
+graph unstack {
+    @input {
+        input: real[4,3,224,224];
+    }
+    @output {
+        output1: real[4,224,224];
+        output2: real[4,224,224];
+        output3: real[4,224,224];
+    }
+    @compose {
+        [output1, output2, output3] = layout.unstack{axis=1}(input);
+    }
+}
+
+graph unsqueeze_unstack {
+    @input {
+        input: real[4,3,224,224];
+    }
+    @output {
+        output1: real[4,1,224,224];
+        output2: real[4,1,224,224];
+        output3: real[4,1,224,224];
+    }
+    @compose {
+        [output1, output2, output3] = layout.unstack{axis=1, squeeze=false}(input);
+    }
+}
+
+graph dynamic_unstack {
+    @input {
+        input: real[s|5,10];
+    }
+    @output {
+        output: real[10]..(s);
+    }
+    @compose {
+        output..(s) = layout.unstack{axis=0}(input);
+    }
+}
+
+graph tile {
+    @input {
+        input: real[4,16,2,2];
+    }
+    @output {
+        output: real[4,16,10,10];
+    }
+    @compose {
+        output = layout.tile{axes=[2,3], repeats=[5,5]}(input);
+    }
+}
+
+graph broadcast {
+    @input {
+        input: real[4,16,1,1];
+    }
+    @output {
+        output: real[4,16,10,10];
+    }
+    @compose {
+        output = layout.broadcast{axes=[2,3], shape=[10,10]}(input);
+    }
+}
+
+graph slice {
+    @input {
+        input: real[4,16,10,10];
+    }
+    @output {
+        output: real[4,16,8,8];
+    }
+    @compose {
+        output = layout.slice{axes=[2,3], begin=[1,1], end=[-1,-1]}(input);
+    }
+}
+
+graph constant_pad {
+    @input {
+        input: real[4,16,10,10];
+    }
+    @output {
+        output: real[4,16,12,12];
+    }
+    @compose {
+        output = layout.pad{axes=[2,3], padding=[1,1,1,1]}(input);
+    }
+}
+
+graph constant_pad_nonzero {
+    @input {
+        input: real[4,16,10,10];
+    }
+    @output {
+        output: real[4,16,12,12];
+    }
+    @compose {
+        output = layout.pad{axes=[2,3], padding=[1,1,1,1]}(input, 42.0);
+    }
+}
+
+graph replicate_pad {
+    @input {
+        input: real[4,16,10,10];
+    }
+    @output {
+        output: real[4,16,12,12];
+    }
+    @compose {
+        output = layout.pad{axes=[2,3], padding=[1,1,1,1], method='REPLICATE'}(input);
+    }
+}
+
+graph reflect_pad {
+    @input {
+        input: real[4,16,10,10];
+    }
+    @output {
+        output: real[4,16,12,12];
+    }
+    @compose {
+        output = layout.pad{axes=[2,3], padding=[1,1,1,1], method='REFLECT'}(input);
+    }
+}
+
+graph space_to_batch {
+    @input {
+        input: real[4,32,10,10];
+    }
+    @output {
+        output: real[16,32,5,5];
+    }
+    @compose {
+        output = layout.space_to_batch{block_size=[2,2]}(input);
+    }
+}
+
+graph batch_to_space {
+    @input {
+        input: real[16,32,10,10];
+    }
+    @output {
+        output: real[4,32,20,20];
+    }
+    @compose {
+        output = layout.batch_to_space{block_size=[2,2]}(input);
+    }
+}
+
+graph shuffle {
+    @input {
+        input: real[4,32,10,10];
+    }
+    @output {
+        output: real[4,32,10,10];
+    }
+    @compose {
+        output = layout.shuffle{axis=1, groups=4}(input);
+    }
+}
+
+graph nonzero {
+    @input {
+        input: real[10];
+    }
+    @output {
+        output: int[1,~|10];
+    }
+    @compose {
+        output = layout.nonzero(input);
+    }
+}
+
+graph gather {
+    @input {
+        input: real[4,32,10,10];
+        index: int[8,16];
+    }
+    @output {
+        output: real[4,8,16,10,10];
+    }
+    @compose {
+        output = layout.gather{axis=1}(input, index);
+    }
+}
+
+graph scatter {
+    @input {
+        input: real[8,16];
+        index: int[8,16];
+        update: real[8,16];
+    }
+    @output {
+        output: real[8,16];
+    }
+    @compose {
+        output = layout.scatter{axis=1}(input, index, update);
+    }
+}
+
+graph gather_nd_1 {
+    @input {
+        input: real[2,2];
+        indices: int[2,2];
+    }
+    @output {
+        output: real[2];
+    }
+    @compose {
+        output = layout.gather_nd(input, indices);
+    }
+}
+
+graph gather_nd_2 {
+    @input {
+        input: real[2,2];
+        indices: int[2,1];
+    }
+    @output {
+        output: real[2,2];
+    }
+    @compose {
+        output = layout.gather_nd(input, indices);
+    }
+}
+
+graph gather_nd_3 {
+    @input {
+        input: real[2,2,2];
+        indices: int[2,2];
+    }
+    @output {
+        output: real[2,2];
+    }
+    @compose {
+        output = layout.gather_nd(input, indices);
+    }
+}
+
+graph gather_nd_4 {
+    @input {
+        input: real[2,2,2];
+        indices: int[2,1,2];
+    }
+    @output {
+        output: real[2,1,2];
+    }
+    @compose {
+        output = layout.gather_nd(input, indices);
+    }
+}
+
+graph gather_nd_5 {
+    @input {
+        input: real[2,2,2];
+        indices: int[2,1];
+    }
+    @output {
+        output: real[2,2];
+    }
+    @compose {
+        output = layout.gather_nd{batch_dims=1}(input, indices);
+    }
+}
+
+graph scatter_nd_1 {
+    @input {
+        input: real[8];
+        indices: int[4,1];
+        updates: real[4];
+    }
+    @output {
+        output: real[8];
+    }
+    @compose {
+        output = layout.scatter_nd(input, indices, updates);
+    }
+}
+
+graph scatter_nd_2 {
+    @input {
+        input: real[4,8,16];
+        indices: int[2,1];
+        updates: real[2,8,16];
+    }
+    @output {
+        output: real[4,8,16];
+    }
+    @compose {
+        output = layout.scatter_nd(input, indices, updates);
+    }
+}
+
+graph linear {
+    @input {
+        input: real[4,32];
+    }
+    @variable {
+        filter: real[64,32];
+        bias: real[64];
+    }
+    @output {
+        output: real[4,64];
+    }
+    @compose {
+        output = nn.linear(input, filter, bias);
+    }
+}
+
+graph linear_no_bias {
+    @input {
+        input: real[4,32];
+    }
+    @variable {
+        filter: real[64,32];
+    }
+    @output {
+        output: real[4,64];
+    }
+    @compose {
+        output = nn.linear(input, filter);
+    }
+}
+
+graph conv {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[64];
+    }
+    @output {
+        output: real[4,64,224,224];
+    }
+    @compose {
+        output = nn.conv{}(input, filter, bias);
+    }
+}
+
+graph conv_no_bias {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+    }
+    @output {
+        output: real[4,64,224,224];
+    }
+    @compose {
+        output = nn.conv{}(input, filter);
+    }
+}
+
+graph conv_strided {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[64];
+    }
+    @output {
+        output: real[4,64,112,112];
+    }
+    @compose {
+        output = nn.conv{stride=2}(input, filter, bias);
+    }
+}
+
+graph conv_dilated {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[64];
+    }
+    @output {
+        output: real[4,64,224,224];
+    }
+    @compose {
+        output = nn.conv{dilation=2}(input, filter, bias);
+    }
+}
+
+graph conv_padded {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[64];
+    }
+    @output {
+        output: real[4,64,224,224];
+    }
+    @compose {
+        output = nn.conv{padding=2}(input, filter, bias);
+    }
+}
+
+graph conv_valid {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[64];
+    }
+    @output {
+        output: real[4,64,220,220];
+    }
+    @compose {
+        output = nn.conv{padding=0}(input, filter, bias);
+    }
+}
+
+graph conv_grouped {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @variable {
+        filter: real[64,16,5,5];
+        bias: real[64];
+    }
+    @output {
+        output: real[4,64,224,224];
+    }
+    @compose {
+        output = nn.conv{groups=2}(input, filter, bias);
+    }
+}
+
+graph conv_channels_last {
+    @input {
+        input: real[4,224,224,32];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[64];
+    }
+    @output {
+        output: real[4,224,224,64];
+    }
+    @compose {
+        output = nn.conv{data_format='CHANNELS_LAST'}(input, filter, bias);
+    }
+}
+
+graph conv_dephwise {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @variable {
+        filter: real[32,2,5,5];
+        bias: real[64];
+    }
+    @output {
+        output: real[4,64,224,224];
+    }
+    @compose {
+        output = nn.depthwise_conv{}(input, filter, bias);
+    }
+}
+
+graph conv_dephwise_channels_last {
+    @input {
+        input: real[4,224,224,32];
+    }
+    @variable {
+        filter: real[32,2,5,5];
+        bias: real[64];
+    }
+    @output {
+        output: real[4,224,224,64];
+    }
+    @compose {
+        output = nn.depthwise_conv{data_format='CHANNELS_LAST'}(input, filter, bias);
+    }
+}
+
+graph conv_separable {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @variable {
+        depthwise_filter: real[32,2,5,5];
+        pointwise_filter: real[16,64,1,1];
+        bias: real[16];
+    }
+    @output {
+        output: real[4,16,224,224];
+    }
+    @compose {
+        output = nn.separable_conv{}(input, depthwise_filter, pointwise_filter, bias);
+    }
+}
+
+graph conv_separable_channels_last {
+    @input {
+        input: real[4,224,224,32];
+    }
+    @variable {
+        depthwise_filter: real[32,2,5,5];
+        pointwise_filter: real[16,64,1,1];
+        bias: real[16];
+    }
+    @output {
+        output: real[4,224,224,16];
+    }
+    @compose {
+        output = nn.separable_conv{data_format='CHANNELS_LAST'}(input, depthwise_filter, pointwise_filter, bias);
+    }
+}
+
+graph deconv {
+    @input {
+        input: real[4,64,224,224];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[32];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.deconv{}(input, filter, bias);
+    }
+}
+
+graph deconv_no_bias {
+    @input {
+        input: real[4,64,224,224];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.deconv{}(input, filter);
+    }
+}
+
+graph deconv_strided {
+    @input {
+        input: real[4,64,112,112];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[32];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.deconv{stride=2}(input, filter, bias);
+    }
+}
+
+graph deconv_dilated {
+    @input {
+        input: real[4,64,224,224];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[32];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.deconv{dilation=2}(input, filter, bias);
+    }
+}
+
+graph deconv_padded {
+    @input {
+        input: real[4,64,224,224];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[32];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.deconv{padding=2}(input, filter, bias);
+    }
+}
+
+graph deconv_valid {
+    @input {
+        input: real[4,64,220,220];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[32];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.deconv{padding=0}(input, filter, bias);
+    }
+}
+
+graph deconv_grouped {
+    @input {
+        input: real[4,64,224,224];
+    }
+    @variable {
+        filter: real[64,16,5,5];
+        bias: real[32];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.deconv{groups=2}(input, filter, bias);
+    }
+}
+
+graph deconv_channels_last {
+    @input {
+        input: real[4,224,224,64];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[32];
+    }
+    @output {
+        output: real[4,224,224,32];
+    }
+    @compose {
+        output = nn.deconv{data_format='CHANNELS_LAST'}(input, filter, bias);
+    }
+}
+
+graph deconv_depthwise {
+    @input {
+        input: real[4,64,224,224];
+    }
+    @variable {
+        filter: real[32,2,5,5];
+        bias: real[32];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.depthwise_deconv{}(input, filter, bias);
+    }
+}
+
+graph deconv_depthwise_channels_last {
+    @input {
+        input: real[4,224,224,64];
+    }
+    @variable {
+        filter: real[32,2,5,5];
+        bias: real[32];
+    }
+    @output {
+        output: real[4,224,224,32];
+    }
+    @compose {
+        output = nn.depthwise_deconv{data_format='CHANNELS_LAST'}(input, filter, bias);
+    }
+}
+
+graph max_pool {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.max_pool{size=3}(input);
+    }
+}
+
+graph max_pool_strided {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,112,112];
+    }
+    @compose {
+        output = nn.max_pool{size=2, stride=2}(input);
+    }
+}
+
+graph avg_pool {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.avg_pool{size=3}(input);
+    }
+}
+
+graph avg_pool_strided {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,112,112];
+    }
+    @compose {
+        output = nn.avg_pool{size=2, stride=2}(input);
+    }
+}
+
+graph avg_pool_with_border {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.avg_pool{size=3, ignore_border=false}(input);
+    }
+}
+
+graph rms_pool {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.rms_pool{size=3}(input);
+    }
+}
+
+graph l1_pool {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.lp_pool{size=3, p=1.0}(input);
+    }
+}
+
+graph l2_pool {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.lp_pool{size=3, p=2.0}(input);
+    }
+}
+
+graph relu {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.relu(input);
+    }
+}
+
+graph leaky_relu {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.relu{alpha=0.1}(input);
+    }
+}
+
+graph relu6 {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.relu{max=6.0}(input);
+    }
+}
+
+graph prelu {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @variable {
+        alpha: real[32];
+    }
+    @compose {
+        output = nn.prelu(input, alpha);
+    }
+}
+
+graph elu {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.elu(input);
+    }
+}
+
+graph selu {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.selu(input);
+    }
+}
+
+graph gelu {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.gelu(input);
+    }
+}
+
+graph gelu_approx {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.gelu{approximate='SIGMOID'}(input);
+    }
+}
+
+graph silu {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.silu(input);
+    }
+}
+
+graph sigmoid {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.sigmoid(input);
+    }
+}
+
+graph softplus {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.softplus(input);
+    }
+}
+
+graph erf {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.erf(input);
+    }
+}
+
+graph softmax {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.softmax{axes=[1]}(input);
+    }
+}
+
+graph batch_norm {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @variable {
+        mean: real[32];
+        variance: real[32];
+    }
+    @compose {
+        output = nn.batch_norm(input, mean, variance);
+    }
+}
+
+graph batch_norm_scaled {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @variable {
+        mean: real[32];
+        variance: real[32];
+        scale: real[32];
+        bias: real[32];
+    }
+    @compose {
+        output = nn.batch_norm(input, mean, variance, scale, bias);
+    }
+}
+
+graph local_response_norm_spatial {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.local_response_norm{axes=[2,3], size=5}(input);
+    }
+}
+
+graph local_response_norm_channel {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.local_response_norm{axes=[1], size=5}(input);
+    }
+}
+
+graph layer_norm {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.mean_variance_norm{axes=[1,2,3]}(input);
+    }
+}
+
+graph instance_norm {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @variable {
+        scale: real[32];
+        bias: real[32];
+    }
+    @compose {
+        output = nn.mean_variance_norm{axes=[2,3]}(input, scale, bias);
+    }
+}
+
+graph l1_norm {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.l1_norm{axes=[2,3]}(input);
+    }
+}
+
+graph l2_norm {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.l2_norm{axes=[2,3]}(input);
+    }
+}
+
+graph static_lstm {
+    @input {
+        X: real[3, 1, 64];
+    }
+    @output {
+        Y: real[3, 1, 64];
+    }
+    @variable {
+        W: real[256, 64];
+        R: real[256, 64];
+        B: real[256];
+    }
+    @constant {
+        h0: real[1, 64] = 0.0;
+        c0: real[1, 64] = 0.0;
+    }
+    @compose {
+        Y, hn, cn = nn.lstm(X, W, R, B, h0, c0);
+    }
+}
+
+graph dynamic_lstm {
+    @input {
+        X: real[3, 1, 64];
+        len: int[1];
+    }
+    @output {
+        Y: real[~|3, 1, 64];
+    }
+    @variable {
+        W: real[256, 64];
+        R: real[256, 64];
+        B: real[256];
+    }
+    @constant {
+        h0: real[1, 64] = 0.0;
+        c0: real[1, 64] = 0.0;
+    }
+    @compose {
+        Y, hn, cn = nn.lstm(X, W, R, B, h0, c0, len);
+    }
+}
+
+graph nearest_downsample {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,112,112];
+    }
+    @compose {
+        output = image.nearest_downsample{axes=[2,3], factor=2}(input);
+    }
+}
+
+graph nearest_upsample {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = image.nearest_upsample{axes=[2,3], factor=2}(input);
+    }
+}
+
+graph nearest_resize_symmetric {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = image.nearest_resize{axes=[2,3], size=[224,224], coordinate_transform='SYMMETRIC'}(input);
+    }
+}
+
+graph nearest_resize_asymmetric {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = image.nearest_resize{axes=[2,3], size=[224,224], coordinate_transform='ASYMMETRIC'}(input);
+    }
+}
+
+graph nearest_resize_aligned {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = image.nearest_resize{axes=[2,3], size=[224,224], coordinate_transform='ALIGNED'}(input);
+    }
+}
+
+graph nearest_resize_prefer_ceil {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,100,100];
+    }
+    @compose {
+        output = image.nearest_resize{axes=[2,3], size=[100,100], rounding_method='ROUND_PREFER_CEIL'}(input);
+    }
+}
+
+graph area_downsample {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,112,112];
+    }
+    @compose {
+        output = image.area_downsample{axes=[2,3], factor=2}(input);
+    }
+}
+
+graph linear_upsample2x_symmetric {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = image.linear_upsample{axes=[2,3], factor=2, symmetric=true}(input);
+    }
+}
+
+graph linear_upsample3x_symmetric {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,336,336];
+    }
+    @compose {
+        output = image.linear_upsample{axes=[2,3], factor=3, symmetric=true}(input);
+    }
+}
+
+graph linear_upsample2x_asymmetric {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = image.linear_upsample{axes=[2,3], factor=2, symmetric=false}(input);
+    }
+}
+
+graph linear_upsample3x_asymmetric {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,336,336];
+    }
+    @compose {
+        output = image.linear_upsample{axes=[2,3], factor=3, symmetric=false}(input);
+    }
+}
+
+graph resize_linear_symmetric {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = image.resize{axes=[2,3], size=[224,224], mode='LINEAR', coordinate_transform='SYMMETRIC'}(input);
+    }
+}
+
+graph resize_linear_asymmetric {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = image.resize{axes=[2,3], size=[224,224], mode='LINEAR', coordinate_transform='ASYMMETRIC'}(input);
+    }
+}
+
+graph resize_linear_aligned {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = image.resize{axes=[2,3], size=[224,224], mode='LINEAR', coordinate_transform='ALIGNED'}(input);
+    }
+}
+
+graph resize_nearest_upsample {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = image.resize{axes=[2,3], size=[224,224], mode='NEAREST'}(input);
+    }
+}
+
+graph resize_nearest_downsample {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,112,112];
+    }
+    @compose {
+        output = image.resize{axes=[2,3], size=[112,112], mode='NEAREST'}(input);
+    }
+}
+
+graph resize_cubic {
+    @input {
+        input: real[4,32,112,112];
+    }
+    @output {
+        output: real[4,32,100,100];
+    }
+    @compose {
+        output = image.resize{axes=[2,3], size=[100,100], mode='CUBIC'}(input);
+    }
+}
+
+graph linear_quantize {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = quant.linear{bits=8, zero_point=0, scale=1.0}(input);
+    }
+}
+
+graph linear_quantize_per_channel {
+    @input {
+        input: real[4,3,224,224];
+    }
+    @output {
+        output: real[4,3,224,224];
+    }
+    @compose {
+        output = quant.linear{bits=8, zero_point=[1, 2, 3], scale=[1.0, 2.0, 3.0]}(input);
+    }
+}
+
+graph if_then {
+    @input {
+        c: bool[];
+        x: real[4,10];
+    }
+    @output {
+        y: real[4,10];
+    }
+    @compose {
+        y = if c then block1: math.add(x, 1.0) else block2: math.sub(x, 1.0);
+    }
+}
+
+graph while_do {
+    @input {
+        x: real[];
+    }
+    @output {
+        y: real[];
+    }
+    @compose {
+        y = with xi = x while block1: math.lt(xi, 100.0) do block2: math.mul(xi, 2.0);
+    }
+}
+
+graph do_while {
+    @input {
+        x: real[];
+    }
+    @output {
+        y: real[];
+    }
+    @compose {
+        y = with xi = x do block1: math.mul(xi, 2.0) while block2: math.lt(xi, 100.0);
+    }
+}
+
+graph do_count {
+    @input {
+        input: real[];
+        count: int[];
+    }
+    @output {
+        output: real[];
+    }
+    @compose {
+        output = with x = input do..(count) block1: math.mul(x, 2.0);
+    }
+}
+
+graph parallel_for {
+    @input {
+        values: real[]..(3);
+    }
+    @output {
+        output: real[]..(3);
+    }
+    @compose {
+        output = for value : values do block1: math.add(value, 1.0);
+    }
+}
+
+graph folding_for {
+    @input {
+        init: real[];
+        values: real[]..(3);
+    }
+    @output {
+        output: real[];
+    }
+    @compose {
+        output = with sum = init for value : values do block1: math.add(sum, value);
+    }
+}
+
+graph unrolled_parallel_for {
+    @input {
+        values: real[]..(3);
+    }
+    @output {
+        output: real[]..(3);
+    }
+    @compose {
+        output = for value : values unroll math.add(value, 1.0);
+    }
+}
+
+graph unrolled_folding_for {
+    @input {
+        init: real[];
+        values: real[]..(3);
+    }
+    @output {
+        output: real[];
+    }
+    @compose {
+        output = with sum = init for value : values unroll math.add(sum, value);
+    }
+}
+
+graph top_k {
+    @input {
+        input: real[10];
+    }
+    @output {
+        values: real[3];
+        indices: int[3];
+    }
+    @compose {
+        values, indices = algo.top_k{k=3}(input);
+    }
+}
+
+graph nms {
+    @input {
+        boxes: real[16,1024,4];
+        scores: real[16,10,1024];
+    }
+    @output {
+        indices: int[~|16*10*5,3];
+    }
+    @compose {
+        indices = algo.nonmax_suppress{max_outputs_per_class=5, iou_threshold=0.5, score_threshold=0.1}(boxes, scores);
+    }
+}
+
+graph sum_n {
+    @input {
+        x: real[4,10];
+        y: real[4,10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.sum_n([x, y]);
+    }
+}
+
+graph prod_n {
+    @input {
+        x: real[4,10];
+        y: real[4,10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.prod_n([x, y]);
+    }
+}
+
+graph min_n {
+    @input {
+        x: real[4,10];
+        y: real[4,10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.min_n([x, y]);
+    }
+}
+
+graph max_n {
+    @input {
+        x: real[4,10];
+        y: real[4,10];
+    }
+    @output {
+        z: real[4,10];
+    }
+    @compose {
+        z = math.max_n([x, y]);
+    }
+}
+
+graph argmin_n {
+    @input {
+        x: real[4,10];
+        y: real[4,10];
+    }
+    @output {
+        z: int[4,10];
+    }
+    @compose {
+        z = math.argmin_n([x, y]);
+    }
+}
+
+graph argmax_n {
+    @input {
+        x: real[4,10];
+        y: real[4,10];
+    }
+    @output {
+        z: int[4,10];
+    }
+    @compose {
+        z = math.argmax_n([x, y]);
+    }
+}
+
+graph any_n {
+    @input {
+        x: bool[4,10];
+        y: bool[4,10];
+    }
+    @output {
+        z: bool[4,10];
+    }
+    @compose {
+        z = math.any_n([x, y]);
+    }
+}
+
+graph all_n {
+    @input {
+        x: bool[4,10];
+        y: bool[4,10];
+    }
+    @output {
+        z: bool[4,10];
+    }
+    @compose {
+        z = math.all_n([x, y]);
+    }
+}
+
+graph nonzero_gather {
+    @input {
+        input: real[100];
+    }
+    @output {
+        output: real[1,~|100];
+    }
+    @compose {
+        greater = math.gt(input, 0.0);
+        indices = layout.nonzero(greater);
+        output = layout.gather{axis=0}(input, indices);
+    }
+}
+
+graph nonzero_gather_add {
+    @input {
+        input: real[100];
+    }
+    @output {
+        output: real[1,~|100];
+    }
+    @compose {
+        greater = math.gt(input, 0.0);
+        indices = layout.nonzero(greater);
+        items = layout.gather{axis=0}(input, indices);
+        output = math.add(items, 1.0);
+    }
+}
+
+graph cumsum {
+    @attrib {
+        n: int = 5;
+        m: int = 6;
+    }
+    @input {
+        data: real[n,m];
+    }
+    @output {
+        sums: real[m]..(n);
+    }
+    @compose {
+        items..(n) = layout.unstack{axis=0}(data);
+        _, sums = with sum: real[m] = 0.0 for item : items do {
+            next = math.add(sum, item);
+            yield next, next;
+        };
+    }
+}
+
+graph mesh_grid {
+    @input {
+        in_x: real[5];
+        in_y: real[6];
+    }
+    @output {
+        out_x: real[5,6];
+        out_y: real[5,6];
+    }
+    @compose {
+        [out_x, out_y] = misc.mesh_grid([in_x, in_y]);
+    }
+}
