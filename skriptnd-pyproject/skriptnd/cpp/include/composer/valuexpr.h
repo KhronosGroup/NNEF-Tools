@@ -1652,7 +1652,11 @@ namespace nd
         {
             os << '[' << access.item << ']';
         }
-        os << ".shape" << '[' << access.dim << ']';
+        os << ".shape";
+        if ( access.dim != nullptr )
+        {
+            os << '[' << access.dim << ']';
+        }
         return os;
     }
 
