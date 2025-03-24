@@ -321,7 +321,7 @@ def _add_implicit_loop_and_branch_inputs(model):
             if op.type == 'If':
                 then_branch = op.attribs['then_branch']
                 else_branch = op.attribs['else_branch']
-                op.attribs['_implicit_input_count_'] = len(then_branch.inputs) + len(else_branch.inputs)
+                op.attribs['_implicit_input_count_'] = [len(then_branch.inputs), len(else_branch.inputs)]
                 op.inputs = op.inputs + then_branch.inputs + else_branch.inputs
 
 
