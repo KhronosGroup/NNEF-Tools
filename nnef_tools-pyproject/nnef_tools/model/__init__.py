@@ -205,9 +205,9 @@ class Operation:
         assert isinstance(tensors, tuple)
         for tensor in tensors:
             if isinstance(tensor, list):
-                assert all(isinstance(t, Tensor) for t in tensor)
+                assert all(isinstance(t, Tensor) or t is None for t in tensor)
             else:
-                assert isinstance(tensor, Tensor)
+                assert isinstance(tensor, Tensor) or tensor is None
 
         for tensor in self._inputs:
             if isinstance(tensor, list):
@@ -228,10 +228,10 @@ class Operation:
         for tensor in tensors:
             if isinstance(tensor, list):
                 for t in tensor:
-                    if self not in t._consumers:
+                    if t is not None and self not in t._consumers:
                         t._consumers.append(self)
             else:
-                if self not in tensor._consumers:
+                if tensor is not None and self not in tensor._consumers:
                     tensor._consumers.append(self)
 
     @property
@@ -465,7 +465,8 @@ class Graph:
         for idx in range(offset, count):
             i = idx
             while i < count and not all(sorted.get(tensor.producer, True)
-                                        for tensor in _recursive_itemize(self._operations[i].inputs)):
+                                        for tensor in _recursive_itemize(self._operations[i].inputs)
+                                        if tensor is not None):
                 i += 1
             if i == count:  # the graph contains a loop
                 return False
