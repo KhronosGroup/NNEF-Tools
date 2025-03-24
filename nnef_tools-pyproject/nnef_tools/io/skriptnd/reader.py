@@ -3,7 +3,10 @@ from ...model import *
 
 
 def _remap(tensor, tensor_map):
-    return [tensor_map[t.name] for t in tensor] if isinstance(tensor, list) else tensor_map[tensor.name]
+    def fetch(tensor):
+        return tensor_map[tensor.name] if tensor is not None else None
+
+    return [fetch(t) for t in tensor] if isinstance(tensor, (list, nd.TensorPack)) else fetch(tensor)
 
 
 def _build_tensor(graph, ts_tensor):
@@ -56,7 +59,7 @@ class Reader(object):
         self._atomics = atomics
 
     def __call__(self, filename, attribs=None):
-        ts_model = nd.read_model(filename, atomics=self._atomics, attribs=attribs)
+        ts_model = nd.read_model(filename, atomic=self._atomics, attribs=attribs)
         if ts_model is None:
             raise IOError('could not read model')
         return _build_model(ts_model)
