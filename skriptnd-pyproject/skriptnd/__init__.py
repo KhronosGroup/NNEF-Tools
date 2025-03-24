@@ -138,6 +138,48 @@ SliceExpr.packed = property(lambda expr: True)
 UniformExpr.packed = property(lambda expr: True)
 RangeExpr.packed = property(lambda expr: True)
 
+
+def _local_name(name):
+    return name[name.rfind('.')+1:]
+
+
+def _shape_access_str(x):
+    s = _local_name(x.tensor.name)
+    if x.item is not None:
+        s += '[' + str(x.item) + ']'
+    s += '.shape'
+    if x.dim is not None:
+        s += '[' + str(x.dim) + ']'
+    return s
+
+
+def _tensor_access_str(x):
+    s = _local_name(x.tensor.name)
+    if x.item is not None:
+        s += '[' + str(x.item) + ']'
+    s += '[' + ','.join(str(i) for i in x.indices) + ']'
+    return s
+
+
+PlaceholderExpr.__str__ = lambda x: '~|' + str(x.max_value)
+IdentifierExpr.__str__ = lambda x: _local_name(x.name)
+ReferenceExpr.__str__ = lambda x: _local_name(x.name)
+SizeAccess.__str__ = lambda x: _local_name(x.pack.name) + '.size'
+ShapeAccess.__str__ = _shape_access_str
+TensorAccess.__str__ = _tensor_access_str
+CastExpr.__str__ = lambda x: f"{x.dtype}({x.arg})"
+UnaryExpr.__str__ = lambda x: f"{x.op}({x.arg})"
+BinaryExpr.__str__ = lambda x: f"({x.left} {x.op} {x.right})"
+SelectExpr.__str__ = lambda x: f"({x.cond} ? {x.left} : {x.right})"
+FoldExpr.__str__ = lambda x: f"( {x.pack} {x.op} {'...' if x.packed else '..'} )"
+ListExpr.__str__ = lambda x: f"[{', '.join(str(item) for item in x.items)}]"
+BoundedExpr.__str__ = lambda x: f"|{x.value} <> {x.lower} : {x.upper}|" if x.lower is not None and x.upper is not None else f"|{x.value}|"
+ConcatExpr.__str__ = lambda x: f"[{', '.join(f'{item}..' for item in x.items)}]"
+SliceExpr.__str__ = lambda x: f"{x.pack}[{x.first}:{x.last}{':'+str(x.stride) if x.stride != 1 else ''}]"
+SubscriptExpr.__str__ = lambda x: f"{x.pack}[{x.index}]"
+UniformExpr.__str__ = lambda x: f"[{x.value} ..({x.size})]"
+RangeExpr.__str__ = lambda x: f"({x.first}:{x.last}{':'+str(x.stride) if x.stride != 1 else ''})"
+
 Tensor.__hash__ = lambda tensor: hash(tensor.name)
 Tensor.is_activation = property(lambda tensor: tensor.value is None and not tensor.variable)
 Tensor.is_variable = property(lambda tensor: tensor.variable)
