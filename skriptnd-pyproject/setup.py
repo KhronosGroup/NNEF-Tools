@@ -1,7 +1,18 @@
 from setuptools import Extension, setup
 import numpy
+import os
+import shutil
 from os import name as os_name
 from sys import platform
+
+
+if os.path.exists("build"):
+    shutil.rmtree("build")
+if os.path.exists("dist"):
+    shutil.rmtree("dist")
+if os.path.exists("skriptnd.egg-info"):
+    shutil.rmtree("skriptnd.egg-info")
+
 
 setup(
     ext_modules=[
