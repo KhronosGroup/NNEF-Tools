@@ -143,7 +143,7 @@ namespace nd
             const std::string scope = main.name + ".";
             
             Model model = { main.name };
-            new_graph(model, main.name);
+            new_graph(model, graph_name);
             
             for ( auto& param : main.inputs )
             {
@@ -1301,7 +1301,7 @@ namespace nd
             TRY_CALL(add_placeholder_symbols(op.outputs, locals))
             
             bool is_private = op.name.front() == '_';
-            bool is_atomic = !is_private && _atomic(invocation.target, types, attribs, inputs);
+            bool is_atomic = !is_private && !op.graph && _atomic(invocation.target, types, attribs, inputs);
             bool is_compound = !op.components.empty();
             bool is_primitive = !op.lowerings.empty();
             
