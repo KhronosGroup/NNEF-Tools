@@ -104,6 +104,9 @@ def get_optimizer(format, custom_optimizers=None, dequantize=False):
     if format == 'nnef':
         from .optimization.nnef_optimizer import Optimizer
         return Optimizer(custom_optimizers=custom_optimizers, dequantize=dequantize)
+    elif format == 'nnef2':
+        from .optimization.skriptnd_optimizer import Optimizer
+        return Optimizer(custom_optimizers=custom_optimizers, dequantize=dequantize)
     elif format == 'onnx':
         from .optimization.onnx_optimizer import Optimizer
         return Optimizer(custom_optimizers=custom_optimizers)
