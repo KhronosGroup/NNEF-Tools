@@ -2,6 +2,8 @@ from nnef_tools.io import onnx as onnx_io
 from nnef_tools.io import skriptnd as skriptnd_io
 from nnef_tools.conversion import onnx_to_nnef2
 from nnef_tools.conversion.onnx_to_nnef2 import ShapeExpr
+from nnef_tools.optimization import skriptnd_optimizer
+from nnef_tools.optimization import onnx_optimizer
 from skriptnd import DtypeToNumpy
 import numpy as np
 import unittest
@@ -35,7 +37,7 @@ class TestEnv(unittest.TestCase):
         "tensor(bool)": np.bool_,
     }
 
-    _ts_dtype_to_numpy = DtypeToNumpy
+    _skriptnd_dtype_to_numpy = DtypeToNumpy
 
     _network_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/onnx/nets/') if UNITTEST_FOLDER else None
     _output_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/onnx/ops/') if UNITTEST_FOLDER else None
@@ -45,21 +47,26 @@ class TestEnv(unittest.TestCase):
     def setUp(self) -> None:
         self._onnx_reader = onnx_io.Reader(simplify=False, enforce_output_shapes=True)
         self._onnx_writer = onnx_io.Writer()
-        self._onnx_to_ts_converter = onnx_to_nnef2.Converter()
-        self._ts_reader = skriptnd_io.Reader()
-        self._ts_writer = skriptnd_io.Writer(operators=onnx_to_nnef2.Converter.defined_operations(),
-                                             imports=onnx_to_nnef2.Converter.defined_imports(),
-                                             inline_subgraphs=False)
+        self._onnx_to_skriptnd_converter = onnx_to_nnef2.Converter()
+        self._skriptnd_reader = skriptnd_io.Reader(atomics=True)
+        self._skriptnd_writer = skriptnd_io.Writer(operators=onnx_to_nnef2.Converter.defined_operations(),
+                                                   imports=onnx_to_nnef2.Converter.defined_imports(),
+                                                   inline_subgraphs=False)
+        self._skriptnd_optimizer = skriptnd_optimizer.Optimizer()
+        self._onnx_optimizer = onnx_optimizer.Optimizer()
 
     def tearDown(self) -> None:
         pass
 
-    def _convert_to_nnef2(self, filename, input_shape=None):
+    def _convert_to_skriptnd(self, filename, input_shape=None):
         onnx_model = self._onnx_reader(filename)
-        ts_model = self._onnx_to_ts_converter(onnx_model)
+        if self._optimize:
+            self._onnx_optimizer(onnx_model)
+        nnef_model = self._onnx_to_skriptnd_converter(onnx_model)
         if input_shape is not None:
-            self._set_max_input_shapes(ts_model, input_shape)
-        self._ts_writer(ts_model, filename + '.nnef2')
+            self._set_max_input_shapes(nnef_model, input_shape)
+        output_filename = filename + '.nnef2'
+        self._skriptnd_writer(nnef_model, output_filename)
 
     def _set_max_input_shapes(self, model, input_shape):
         if not isinstance(input_shape, list):
@@ -111,7 +118,7 @@ class TestEnv(unittest.TestCase):
         return session.run([output.name for output in session.get_outputs()], inputs)
 
     @staticmethod
-    def _exec_ts_model(path, input_shape=None,  input_range=None):
+    def _exec_skriptnd_model(path, input_shape=None, input_range=None):
         import skriptnd as nd
         np.random.seed(0)
 
@@ -126,13 +133,13 @@ class TestEnv(unittest.TestCase):
         if not isinstance(input_range, list):
             input_range = [input_range] * len(model.graphs[0].inputs)
 
-        inputs = [TestEnv._random_data(TestEnv._ts_dtype_to_numpy[input.dtype],
+        inputs = [TestEnv._random_data(TestEnv._skriptnd_dtype_to_numpy[input.dtype],
                                        input_shape[idx] or input.shape, input_range[idx])
                   for idx, input in enumerate(model.graphs[0].inputs)]
 
         return compiled_model(*inputs)
 
-    def _compile_ts_model(self, path):
+    def _compile_skriptnd_model(self, path):
         import skriptnd as nd
 
         model = nd.read_model(path)
@@ -176,14 +183,14 @@ class TestEnv(unittest.TestCase):
         self._test_conversion_from_file(filename, epsilon=epsilon, input_range=input_range)
 
     def _test_conversion_from_file(self, filename, epsilon=1e-5, input_shape=None, input_range=None):
-        self._convert_to_nnef2(filename, input_shape=input_shape)
+        self._convert_to_skriptnd(filename, input_shape=input_shape)
 
         if not self._execute:
-            assert self._compile_ts_model(filename + '.nnef2') is not None
+            assert self._compile_skriptnd_model(filename + '.nnef2') is not None
             return
 
         original_outputs = self._exec_onnx_model(filename, input_shape=input_shape, input_range=input_range)
-        converted_outputs = self._exec_ts_model(filename + '.nnef2', input_shape=input_shape, input_range=input_range)
+        converted_outputs = self._exec_skriptnd_model(filename + '.nnef2', input_shape=input_shape, input_range=input_range)
 
         self.assertTrue(original_outputs is not None)
         self.assertTrue(converted_outputs is not None)
