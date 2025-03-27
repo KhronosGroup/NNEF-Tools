@@ -229,7 +229,7 @@ class Converter(_Converter):
                     tensor.name = name
 
     def _fix_loops(self, model):
-        body_graphs = {op.attribs['body']: op.attribs.get('condition') is not None
+        body_graphs = {op.attribs['body_graph']: op.attribs.get('cond_graph') is not None
                        for graph in model.graphs for op in graph.operations if op.type == 'do'}
 
         for body, has_cond in body_graphs.items():
@@ -243,7 +243,7 @@ class Converter(_Converter):
         for graph in model.graphs:
             for op in graph.operations:
                 if op.type == 'do':
-                    cond = op.attribs.get('condition')
+                    cond = op.attribs.get('cond_graph')
                     if cond is not None:
                         op.outputs = (Tensor(graph, name='', dtype=np.void, shape=()),) + op.outputs
 
@@ -259,10 +259,10 @@ class Converter(_Converter):
                 for input in op.inputs:
                     if isinstance(input, list):
                         for item in input:
-                            if not item.has_producer and self._is_shape_expr(item):
+                            if item is not None and not item.has_producer and self._is_shape_expr(item):
                                 self._fix_shape_expr_arg(item, graph)
                     else:
-                        if not input.has_producer and self._is_shape_expr(input):
+                        if input is not None and not input.has_producer and self._is_shape_expr(input):
                             self._fix_shape_expr_arg(input, graph)
             graph.sort()
 
@@ -548,7 +548,7 @@ class Converter(_Converter):
         check_shape_expr(symbolic)
         return symbolic
 
-    def arg_as_attrib(self, arg, as_scalar=False, convert_int_inf=False, arg_on_failure=False):
+    def arg_as_attrib(self, arg, as_scalar=False, convert_int_inf=False, none_on_failure=False):
         if isinstance(arg, list):
             return [self.arg_as_attrib(item, as_scalar=as_scalar, convert_int_inf=convert_int_inf) for item in arg]
 
@@ -561,8 +561,8 @@ class Converter(_Converter):
             try:
                 return self.eval_symbolic_shape(arg, as_scalar=as_scalar)
             except AssertionError as e:
-                if arg_on_failure:
-                    return arg
+                if none_on_failure:
+                    return None
                 raise ConversionError(f"Conversion of shape expression is not possible: " + str(e))
 
 
@@ -772,6 +772,7 @@ _Transforms = Converter.unpack_transforms({
             outputs='!O[0]',
             attribs={
                 'perm': '!perm',
+                'axis': 0,
             }
         ),
     'Reshape':
@@ -1167,11 +1168,17 @@ _Transforms = Converter.unpack_transforms({
     'If':
         Transform(
             type='if',
-            inputs='!I[0]',
+            inputs='!tuple(I)',
             outputs='!tuple(O)',
+            using={
+                'then_inputs': '!range(1, _implicit_input_count_[0] + 1)',
+                'else_inputs': '!range(1 + _implicit_input_count_[0], 1 + _implicit_input_count_[0] + _implicit_input_count_[1])',
+            },
             attribs={
-                'conditions': '![I[0]]',
-                'branches': '![then_branch, else_branch]',
+                'cond_graphs': '![I[0]]',
+                'branch_graphs': '![then_branch, else_branch]',
+                'cond_inputs': [0],
+                'branch_inputs': '![*then_inputs, *else_inputs]',
             },
         ),
     'Loop':
@@ -1186,14 +1193,14 @@ _Transforms = Converter.unpack_transforms({
                 'num_deps': '!len(I) - 2 - _implicit_input_count_',
                 'num_scan_outputs': '!len(O) - num_deps',
             },
-            inputs='!tupled(I[1], has_cond) + I[2:] + tupled(I[0], has_count)',
+            inputs='!tupled(I[1], has_cond) + I[2:] + (I[0] if has_count else None,)',
             outputs='!tuple(O[:num_deps]) + tuple(stack_output(output) for output in O[num_deps:])',
             attribs={
-                'condition': '!body.inputs[1] if has_cond else None',
-                'iters': '!arg_as_attrib(I[0], arg_on_failure=True) if has_count else None',
-                'max-iters': '!as_const(I[0]) if has_count and is_const(I[0]) else None',
-                'index': '!body.inputs[0]',
-                'body': '!body',
+                'cond_graph': '!body.inputs[1] if has_cond else None',
+                'cond_inputs': '![0] if has_cond else []',
+                'body_graph': '!body',
+                'body_inputs': '!list(range(int(has_cond) + num_deps + 1 + _implicit_input_count_))',
+                'iters': '!arg_as_attrib(I[0], none_on_failure=True) if has_count else None',
                 'pretest': '!True if has_cond else None',
                 'nvars': '!len(I) - (1 if has_cond else 2) - _implicit_input_count_',
                 'nscans': 0,
