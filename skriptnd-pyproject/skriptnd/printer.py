@@ -191,11 +191,11 @@ class Printer:
             nvars = attribs['nvars']
             nscans = attribs['nscans']
             iters = attribs.get('iters')
-            index = body.inputs[nvars + nscans]
+            index = body.inputs[-1]
             indexed = index is not None
             pretest = attribs.get('pretest', False)
 
-            subgraph_inputs = body.inputs[:nvars+nscans] + (index,) + args[nvars + nscans + 1:]
+            subgraph_inputs = body.inputs[:nvars + nscans] + args[nvars + nscans:-1] + (index,)
             cond_inputs = [subgraph_inputs[idx] for idx in cond_input_indices] \
                 if condition and isinstance(condition, _nd.Graph) else None
 

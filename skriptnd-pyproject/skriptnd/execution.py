@@ -949,7 +949,7 @@ def _format_do(op, indent, context):
     auxiliaries = context['auxiliaries']
     index = nd.Tensor(name='$', dtype=nd.Dtype.Int, shape=(), max_shape=())
     vars = tuple(auxiliaries[output] for output in op.outputs[:nvars])
-    subgraph_inputs = vars + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
+    subgraph_inputs = vars + op.inputs[nvars:nvars+nscans] + op.inputs[nvars+nscans:-1] + (index,)
     body_inputs = tuple(subgraph_inputs[idx] for idx in op.attribs['body_inputs'])
 
     text = ""
@@ -958,7 +958,7 @@ def _format_do(op, indent, context):
         text += indent + "{lhs} = {rhs};\n".format(lhs=_format_tensor_ref(op.outputs[i]), rhs=_format_tensor_ref(op.inputs[i]))
 
     if condition:
-        subgraph_inputs = op.outputs[:nvars] + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
+        subgraph_inputs = op.outputs[:nvars] + op.inputs[nvars:nvars+nscans] + op.inputs[nvars+nscans:-1] + (index,)
         cond_inputs = tuple(subgraph_inputs[idx] for idx in op.attribs['cond_inputs'])
         cond_text = (indent + "\tif ( !{cond} ) break;\n"
                      .format(cond=_format_call(condition, cond_inputs, is_condition=True)))
