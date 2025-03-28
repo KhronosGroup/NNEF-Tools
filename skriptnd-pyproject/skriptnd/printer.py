@@ -12,8 +12,9 @@ def valid_id(name):
 
 class Printer:
 
-    def __init__(self, inline_subgraphs=False):
+    def __init__(self, inline_subgraphs=False, module=None):
         self._inline_subgraphs = inline_subgraphs
+        self._module_scope = module + '.' if module else None
 
     def __call__(self, model, file=None):
         self._block_scope = ''
@@ -26,10 +27,12 @@ class Printer:
             for i, graph in enumerate(model.graphs[1:]):
                 self._print_graph(model, graph, idx=i + 1, file=file)
 
+    @staticmethod
+    def _strip_scope(name, scope):
+        return name[len(scope):] if scope and name.startswith(scope) and len(name) > len(scope) else name
+
     def _make_id(self, name):
-        if self._block_scope and name.startswith(self._block_scope) and len(name) > len(self._block_scope):
-            name = name[len(self._block_scope):]
-        return valid_id(name)
+        return valid_id(self._strip_scope(name, self._block_scope))
 
     def _can_inline(self, tensor):
         return tensor.shape is not None and len(tensor.shape) == 0 and \
@@ -53,6 +56,8 @@ class Printer:
                 return "[" + ", ".join(self._format_value(v) for v in value) + "]"
         elif isinstance(value, _nd.Graph):
             return value.name
+        elif isinstance(value, np.ndarray):
+            return "[" + ", ".join(self._format_value(v.item()) for v in value.flat) + "]"
         elif isinstance(value, list):
             return "[" + ", ".join(self._format_value(v) for v in value) + "]"
         elif isinstance(value, bool):
@@ -119,7 +124,7 @@ class Printer:
             args = [item for item in args
                     if (isinstance(item, _nd.TensorPack) and len(item) > 0)
                     or (isinstance(item, _nd.Tensor) and not self._can_inline(item))]
-            name = self._make_id(target.name)
+            name = self._make_id(self._strip_scope(target.name, self._module_scope))
             return self._format_invocation(name, args)
 
     def _format_invocation(self, name, args, dtypes=None, attribs=None, alias=None, label=None):
@@ -239,10 +244,10 @@ class Printer:
 
         return text
 
-    def _print_graph(self, model, graph, idx, file=None):
+    def _print_graph(self, model, graph, idx, file):
         self._block_scope = graph.name + '.'
 
-        print("graph " + self._make_id(graph.name) + " {", file=file)
+        print("graph " + self._make_id(self._strip_scope(graph.name, self._module_scope)) + " {", file=file)
 
         print("\t@input {", file=file)
         for input in graph.inputs:
@@ -297,6 +302,6 @@ class Printer:
         print("}\n", file=file)
 
 
-def print_model(model, file=None, inline_subgraphs=False):
-    printer = Printer(inline_subgraphs=inline_subgraphs)
+def print_model(model, file=None, inline_subgraphs=False, module=None):
+    printer = Printer(inline_subgraphs=inline_subgraphs, module=module)
     printer(model, file)

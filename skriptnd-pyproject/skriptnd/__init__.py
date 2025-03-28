@@ -351,13 +351,14 @@ def write_model(model, path, operators=None, imports=None, inline_subgraphs=Fals
                 print(op, file=file)
                 print('', file=file)
 
-        print_model(model, file, inline_subgraphs=inline_subgraphs)
+        print_model(model, file, inline_subgraphs=inline_subgraphs, module='main')
 
+    module_scope = 'main.'
     for i, graph in enumerate(model.graphs):
-        block_scope = graph.name + '.'
+        graph_name = graph.name if graph.name.startswith(module_scope) else module_scope + graph.name
+        block_scope = graph_name + '.'
         for tensor in graph.variables:
-            id = valid_id(tensor.name)
-            name = id if tensor.name.startswith(block_scope) else block_scope + id
+            name = tensor.name if tensor.name.startswith(block_scope) else block_scope + tensor.name
             variable_path = os.path.join(path, name + '.dat')
             with open(variable_path, 'wb') as variable_file:
                 write_tensor(variable_file, tensor.value)
