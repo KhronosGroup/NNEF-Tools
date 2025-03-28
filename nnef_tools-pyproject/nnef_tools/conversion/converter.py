@@ -746,7 +746,7 @@ class ConverterToNNEF(Converter):
 
         tensor = Tensor(graph, dtype=dtype, shape=shape)
         if inline:
-            tensor.data = types.to_numpy(value, dtype)
+            tensor.set_data(types.to_numpy(value, dtype), variable=False)
         else:
             self._const_operation(tensor, value=value if isarray else [value])
         return tensor
@@ -803,7 +803,7 @@ class ConverterToNNEF(Converter):
                     if not isinstance(value, np.ndarray):
                         value = np.array(value, op.output.dtype).reshape(op.output.shape)
                     if len(value.shape) == 0:
-                        op.output.data = value
+                        op.output.set_data(value, variable=False)
                         graph.remove_operation(op, unlink=True)
 
     @staticmethod
@@ -817,7 +817,7 @@ class ConverterToNNEF(Converter):
                         variables += 1
                         op.type = 'variable'
                         op.attribs['label'] = op.name if op.name else 'variable' + str(variables)
-                        op.output.data = value
+                        op.output.set_data(value, variable=True)
                         del op.attribs['value']
 
     @staticmethod
@@ -853,7 +853,7 @@ class ConverterFromNNEF(Converter):
         for graph in model.graphs:
             for op in graph.operations:
                 if op.type == 'constant':
-                    op.output.data = op.attribs['value']
+                    op.output.set_data(op.attribs['value'], variable=False)
 
     def _is_constant(self, tensor):
         if tensor.producer:

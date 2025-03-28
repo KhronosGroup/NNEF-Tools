@@ -129,6 +129,10 @@ class Tensor:
     def is_null(self):
         return self.dtype == np.void
 
+    def set_data(self, data, variable=None):
+        self.data = data
+        self._variable = variable if variable is not None else isinstance(data, np.ndarray)
+
     def __repr__(self):
         return self.name if self.name is not None else _hex_id(self)
 

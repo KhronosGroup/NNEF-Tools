@@ -158,8 +158,7 @@ def _get_tensors(graph_proto, graph, tensors_by_name):
         if name not in tensors_by_name:
             if isinstance(data, np.ndarray) and data.shape == ():
                 data = from_numpy(data)
-            tensors_by_name[name] = Tensor(graph=graph, name=name, shape=shape, dtype=dtype, data=data,
-                                           variable=isinstance(data, np.ndarray) and shape != ())
+            tensors_by_name[name] = Tensor(graph=graph, name=name, shape=shape, dtype=dtype, data=data)
     for value_info in graph_proto.input:
         name, shape, dtype = _get_value_info(value_info)
         if name not in tensors_by_name:

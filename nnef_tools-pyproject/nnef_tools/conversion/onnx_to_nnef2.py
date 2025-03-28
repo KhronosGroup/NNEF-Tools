@@ -158,12 +158,12 @@ class Converter(_Converter):
             for op in graph.operations:
                 if op.type == 'Constant':
                     value = op.attribs['value']
-                    op.output.data = value
+                    op.output.set_data(value)
                     removed.append(op)
                 elif op.type == 'ConstantOfShape' and op.input.data is not None:
                     shape = op.input.data
                     value = op.attribs['value']
-                    op.output.data = value.item() if value.size == 1 else np.reshape(value, shape)
+                    op.output.set_data(value.item() if value.size == 1 else np.reshape(value, shape))
                     removed.append(op)
 
             graph.remove_operations(removed, unlink=True)
@@ -269,7 +269,7 @@ class Converter(_Converter):
     def _fix_shape_expr_arg(self, arg, graph):
         expr = self.arg_as_attrib(arg)
         if expr.op == ShapeExpr.Op.Const:
-            arg.data = expr.args[0]
+            arg.set_data(expr.args[0], variable=False)
         else:
             Operation(graph, type="layout.constant", attribs={"shape": list(arg.shape), "value": expr}, inputs=(), outputs=(arg,))
 
