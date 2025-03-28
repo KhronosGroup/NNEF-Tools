@@ -1561,7 +1561,7 @@ class TestCases(TestEnv):
         W = helper.make_tensor_value_info('W', TensorProto.FLOAT, [1, 256, 32])
         R = helper.make_tensor_value_info('R', TensorProto.FLOAT, [1, 256, 64])
         B = helper.make_tensor_value_info('B', TensorProto.FLOAT, [1, 512])
-        Y = helper.make_tensor_value_info('Y', TensorProto.FLOAT, [5, 1, 4, 64])
+        Y = helper.make_tensor_value_info('Y', TensorProto.FLOAT, [None, 1, 4, 64])
         h0 = helper.make_tensor_value_info('h0', TensorProto.FLOAT, [1, 4, 64])
         c0 = helper.make_tensor_value_info('c0', TensorProto.FLOAT, [1, 4, 64])
         hn = helper.make_tensor_value_info('hn', TensorProto.FLOAT, [1, 4, 64])
