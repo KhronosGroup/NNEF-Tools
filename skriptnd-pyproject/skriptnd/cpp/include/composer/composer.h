@@ -140,7 +140,7 @@ namespace nd
             
             TRY_CALL(add_placeholder_symbols(main.inputs, symbols))
             
-            const std::string scope = main.name + ".";
+            const std::string scope = graph_name + ".";
             
             Model model = { main.name };
             new_graph(model, graph_name);
@@ -988,7 +988,7 @@ namespace nd
                 auto new_scope = op.publish ? nested_scope(invocation.label, scope, auto_label) : std::nullopt;
                 if ( op.graph && invocation.label.empty() )
                 {
-                    new_scope = op.name + ".";
+                    new_scope = invocation.target + ".";
                 }
                 _trace.emplace_back(invocation.target, invocation.position);
                 auto result = invoke(invocation, operators, symbols, model, ctx_graph_idx, sub_graph_idx, new_scope);
