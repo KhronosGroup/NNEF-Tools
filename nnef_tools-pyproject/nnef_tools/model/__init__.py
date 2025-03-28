@@ -17,12 +17,14 @@ class Tensor:
                  shape=None,        # type: typing.Optional[typing.Tuple[int, ...]]
                  dtype=None,        # type: typing.Optional[type]
                  data=None,         # type: typing.Union[None, np.ndarray, typing.Any]
-                 quant=None         # type: typing.Optional[typing.Dict[str, typing.Any]]
+                 quant=None,        # type: typing.Optional[typing.Dict[str, typing.Any]]
+                 variable=None,     # type: typing.Optional[bool]
                  ):
         # type: (...)->None
         self._graph = graph
         self._producer = None
         self._consumers = []
+        self._variable = variable if variable is not None else isinstance(data, np.ndarray)
 
         self.name = name            # type: typing.Optional[str]
         self.shape = shape          # type: typing.Optional[typing.Tuple[int, ...]]
@@ -33,13 +35,14 @@ class Tensor:
         assert isinstance(graph, Graph)
         graph._tensors.append(self)
 
-    def copy_with(self, graph=None, name=None, dtype=None, shape=None, data=None, quant=None):
+    def copy_with(self, graph=None, name=None, dtype=None, shape=None, data=None, quant=None, variable=None):
         return Tensor(graph=graph if graph is not None else self.graph,
                       name=name if name is not None else self.name,
                       dtype=dtype if dtype is not None else self.dtype,
                       shape=shape if shape is not None else self.shape,
                       data=data if data is not None else self.data,
-                      quant=quant if quant is not None else self.quant)
+                      quant=quant if quant is not None else self.quant,
+                      variable=variable if variable is not None else self.is_variable)
 
     @property
     def graph(self):
@@ -110,12 +113,12 @@ class Tensor:
     @property
     def is_constant(self):
         # type: ()->bool
-        return self.data is not None and not isinstance(self.data, np.ndarray)
+        return self.data is not None and not self._variable
 
     @property
     def is_variable(self):
         # type: ()->bool
-        return isinstance(self.data, np.ndarray)
+        return self._variable
 
     @property
     def is_activation(self):

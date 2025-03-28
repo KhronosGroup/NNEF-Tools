@@ -132,7 +132,7 @@ class Converter:
 
             for tensor in graph.tensors:
                 self._tensor_map[tensor] = Tensor(self._graph, name=tensor.name, dtype=tensor.dtype, shape=tensor.shape,
-                                                       data=tensor.data, quant=copy.deepcopy(tensor.quant))
+                                                  data=tensor.data, quant=copy.deepcopy(tensor.quant), variable=tensor.is_variable)
 
             self._graph.inputs = tuple(self._map_tensor(tensor) for tensor in graph.inputs)
             self._graph.outputs = tuple(self._map_tensor(tensor) for tensor in graph.outputs)

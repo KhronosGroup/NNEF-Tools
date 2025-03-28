@@ -1,7 +1,5 @@
 import skriptnd as nd
 from ...model import *
-import numpy as np
-from ...utils.types import from_numpy
 from ...utils.tgz import compress
 import tempfile
 import shutil
@@ -36,14 +34,13 @@ def _build_model(model):
 
 
 def _build_tensor(tensor):
-    value = from_numpy(tensor.data) if isinstance(tensor.data, np.ndarray) and tensor.data.shape == () else tensor.data
     return nd.Tensor(name=tensor.name or "~",
                      shape=tensor.shape,
                      max_shape=tensor.shape,
                      dtype=nd.DtypeFromNumpy[tensor.dtype] if tensor.dtype else None,
                      quant=tensor.quant,
-                     value=value,
-                     variable=isinstance(value, np.ndarray))
+                     value=tensor.data,
+                     variable=tensor.is_variable)
 
 
 def _build_graph(graph, tensor_map):

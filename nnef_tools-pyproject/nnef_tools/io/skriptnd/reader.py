@@ -15,7 +15,8 @@ def _build_tensor(graph, ts_tensor):
                   shape=ts_tensor.shape,
                   dtype=nd.DtypeToNumpy[ts_tensor.dtype],
                   data=ts_tensor.value,
-                  quant=ts_tensor.quant)
+                  quant=ts_tensor.quant,
+                  variable=ts_tensor.variable)
 
 
 def _build_operation(graph, ts_operation, tensor_map):

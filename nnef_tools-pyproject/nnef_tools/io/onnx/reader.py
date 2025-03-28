@@ -2,6 +2,7 @@ from __future__ import division, print_function, absolute_import
 
 from ...model import *
 from ...model.utils import recursive_itemize
+from ...utils.types import from_numpy
 from onnx.shape_inference import infer_shapes
 import numpy as np
 import onnx
@@ -155,7 +156,10 @@ def _get_tensors(graph_proto, graph, tensors_by_name):
     for tensor_proto in graph_proto.initializer:
         name, shape, dtype, data = _get_tensor(tensor_proto)
         if name not in tensors_by_name:
-            tensors_by_name[name] = Tensor(graph=graph, name=name, shape=shape, dtype=dtype, data=data)
+            if isinstance(data, np.ndarray) and data.shape == ():
+                data = from_numpy(data)
+            tensors_by_name[name] = Tensor(graph=graph, name=name, shape=shape, dtype=dtype, data=data,
+                                           variable=isinstance(data, np.ndarray) and shape != ())
     for value_info in graph_proto.input:
         name, shape, dtype = _get_value_info(value_info)
         if name not in tensors_by_name:
@@ -187,7 +191,8 @@ def _get_graph(graph_proto, model, graphs_by_name, tensors_by_name):
     graph = Graph(model, name=name)
 
     if len(tensors_by_name) == 0:
-        tensors_by_name[''] = Tensor(graph, name='', shape=(), dtype=np.void, data=np.zeros(shape=(), dtype=np.float32))
+        tensors_by_name[''] = Tensor(graph, name='', shape=(), dtype=np.void, data=np.zeros(shape=(), dtype=np.float32),
+                                     variable=False)
 
     _get_tensors(graph_proto, graph, tensors_by_name)
 
