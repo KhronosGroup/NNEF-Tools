@@ -48,7 +48,7 @@ class TestEnv(unittest.TestCase):
         self._onnx_reader = onnx_io.Reader(simplify=False, enforce_output_shapes=True)
         self._onnx_writer = onnx_io.Writer()
         self._onnx_to_skriptnd_converter = onnx_to_nnef2.Converter()
-        self._skriptnd_reader = skriptnd_io.Reader(atomics=True)
+        self._skriptnd_reader = skriptnd_io.Reader(atomics=lambda name, dtypes, attribs, shapes: not name.startswith('main.'))
         self._skriptnd_writer = skriptnd_io.Writer(operators=onnx_to_nnef2.Converter.defined_operations(),
                                                    imports=onnx_to_nnef2.Converter.defined_imports(),
                                                    inline_subgraphs=False)

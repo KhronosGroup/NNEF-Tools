@@ -639,6 +639,7 @@ namespace nd
                 
                 const size_t nscans = locals.size() - nvars;
                 
+                std::string index;
                 if ( component.loop->index )
                 {
                     auto& iden = component.loop->index->name;
@@ -646,6 +647,7 @@ namespace nd
                     symbols.insert_or_assign(iden, Symbol(tensor, Typename::Int));
                     add_shape_symbols(iden, {}, symbols);
                     locals.push_back(tensor);
+                    index = iden;
                 }
                 else
                 {
@@ -736,6 +738,10 @@ namespace nd
                 if ( repeats != nullptr )
                 {
                     attribs.emplace("iters", repeats);
+                }
+                if ( !index.empty() )
+                {
+                    attribs.emplace("index", ValueExpr((str_t)index));
                 }
                 
                 if ( component.loop->condition )

@@ -191,11 +191,12 @@ class Printer:
             nvars = attribs['nvars']
             nscans = attribs['nscans']
             iters = attribs.get('iters')
-            index = body.inputs[-1]
-            indexed = index is not None
+            index_name = attribs.get('index')
             pretest = attribs.get('pretest', False)
 
-            subgraph_inputs = body.inputs[:nvars + nscans] + args[nvars + nscans:-1] + (index,)
+            index = _nd.Tensor(name=index_name, dtype=_nd.Dtype.Int, shape=(), max_shape=()) if index_name else None
+
+            subgraph_inputs = body.inputs[:nvars + nscans] + (index,) + args[nvars + nscans + 1:]
             cond_inputs = [subgraph_inputs[idx] for idx in cond_input_indices] \
                 if condition and isinstance(condition, _nd.Graph) else None
 
@@ -224,10 +225,10 @@ class Printer:
                 text += ' '
             text += 'do'
 
-            if indexed or iters:
+            if index_name or iters:
                 text += '..('
-                if indexed:
-                    text += self._make_id(index.name) + ' -> '
+                if index_name:
+                    text += self._make_id(index_name) + ' -> '
                 if iters:
                     text += self._format_value(iters)
                 text += ')'

@@ -229,11 +229,14 @@ class Converter(_Converter):
                     tensor.name = name
 
     def _fix_loops(self, model):
-        body_graphs = {op.attribs['body_graph']: op.attribs.get('cond_graph') is not None
+        body_graphs = {op.attribs['body_graph']: op.attribs
                        for graph in model.graphs for op in graph.operations if op.type == 'do'}
 
-        for body, has_cond in body_graphs.items():
-            body.inputs = self.tupled(body.inputs[1], has_cond) + body.inputs[2:] + (body.inputs[0],)
+        for body, attribs in body_graphs.items():
+            nvars = attribs['nvars']
+            has_cond = 'cond_graph' in attribs
+
+            body.inputs = self.tupled(body.inputs[1], has_cond) + body.inputs[2:2+nvars] + (body.inputs[0],) + body.inputs[2+nvars:]
 
             if not has_cond:
                 body.remove_operation(body.outputs[0].producer, unlink=True)
@@ -1193,14 +1196,15 @@ _Transforms = Converter.unpack_transforms({
                 'num_deps': '!len(I) - 2 - _implicit_input_count_',
                 'num_scan_outputs': '!len(O) - num_deps',
             },
-            inputs='!tupled(I[1], has_cond) + I[2:] + (I[0] if has_count else None,)',
+            inputs='!tupled(I[1], has_cond) + I[2:2+num_deps] + (I[0] if has_count else None,) + I[2+num_deps:]',
             outputs='!tuple(O[:num_deps]) + tuple(stack_output(output) for output in O[num_deps:])',
             attribs={
                 'cond_graph': '!body.inputs[1] if has_cond else None',
                 'cond_inputs': '![0] if has_cond else []',
                 'body_graph': '!body',
-                'body_inputs': '!list(range(int(has_cond) + num_deps + 1 + _implicit_input_count_))',
+                'body_inputs': '!list(range(int(has_cond) + num_deps + _implicit_input_count_ + 1))',
                 'iters': '!arg_as_attrib(I[0], none_on_failure=True) if has_count else None',
+                'index': '!body.inputs[0].name',
                 'pretest': '!True if has_cond else None',
                 'nvars': '!len(I) - (1 if has_cond else 2) - _implicit_input_count_',
                 'nscans': 0,
