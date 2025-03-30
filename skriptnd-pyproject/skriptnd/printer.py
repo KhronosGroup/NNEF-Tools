@@ -148,8 +148,11 @@ class Printer:
     def _format_operation(self, results, name, dtypes, attribs, args, alias=None):
         if name == 'do':
             nvars = attribs['nvars']
-            iters = attribs.get('iters')
-            repeats = '..(' + self._format_value(iters) + ')' if iters else ''
+            nscans = attribs['nscans']
+            static_iters = attribs.get('iters')
+            dynamic_iters = args[nvars + nscans]
+            repeats = '..(' + self._format_value(static_iters) + ')' \
+                if static_iters is not None and dynamic_iters is not None else ''
             text = self._format_result(results[:nvars])
             for result in results[nvars:]:
                 if len(text) != 0:
@@ -190,7 +193,8 @@ class Printer:
             body_input_indices = attribs['body_inputs']
             nvars = attribs['nvars']
             nscans = attribs['nscans']
-            iters = attribs.get('iters')
+            static_iters = attribs.get('iters')
+            dynamic_iters = args[nvars + nscans]
             index_name = attribs.get('index')
             pretest = attribs.get('pretest', False)
 
@@ -225,12 +229,14 @@ class Printer:
                 text += ' '
             text += 'do'
 
-            if index_name or iters:
+            if index_name is not None or dynamic_iters is not None or static_iters is not None:
                 text += '..('
-                if index_name:
+                if index_name is not None:
                     text += self._make_id(index_name) + ' -> '
-                if iters:
-                    text += self._format_value(iters)
+                if dynamic_iters is not None:
+                    text += self._format_value(dynamic_iters)
+                elif static_iters is not None:
+                    text += self._format_value(static_iters)
                 text += ')'
 
             text += ' ' + self._format_subgraph(body, body_inputs)
