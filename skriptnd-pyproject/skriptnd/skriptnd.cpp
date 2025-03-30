@@ -33,6 +33,7 @@ static PyObject* OrderedDict;
 static PyObject* DataClass;
 static PyObject* DataClassField;
 static PyObject* Enum;
+static PyObject* Signature;
 
 static PyObject* Dtype;
 static PyObject* Position;
@@ -865,6 +866,20 @@ static std::set<std::string> make_string_set_from_iterable( PyObject* obj )
     return set;
 }
 
+static size_t function_arg_count( PyObject* pyFunc )
+{
+    Py_INCREF(pyFunc);
+    PyObject* sig = callPyFunc(Signature, { pyFunc });
+    PyObject* params = PyObject_GetAttrString(sig, "parameters");
+    auto length = (size_t)PyObject_Length(params);
+    Py_DECREF(params);
+    return length;
+}
+
+static nd::OperationCallback make_operation_callback()
+{
+}
+
 static nd::OperationCallback make_operation_callback( PyObject* obj, const std::string& key )
 {
     if ( obj == Py_None )
@@ -895,32 +910,68 @@ static nd::OperationCallback make_operation_callback( PyObject* obj, const std::
             {
                 return func == Py_True;
             }
-            PyObject* pyName = buildPyStr(name.c_str());
-            PyObject* pyDtypes = buildPyDtypes(dtypes);
-            PyObject* pyAttribs = buildPyAttribs(attribs, EmptyBuildContext, true);
-            PyObject* pyShapes = buildPyShapes(inputs, EmptyBuildContext, true);
-            PyObject* ret = callPyFunc(func, { pyName, pyDtypes, pyAttribs, pyShapes });
-            return (bool)PyObject_IsTrue(ret);
+            auto argc = function_arg_count(func);
+            if ( argc == 1 )
+            {
+                PyObject* pyName = buildPyStr(name.c_str());
+                PyObject* ret = callPyFunc(func, { pyName });
+                return (bool)PyObject_IsTrue(ret);
+            }
+            else if ( argc == 4 )
+            {
+                PyObject* pyName = buildPyStr(name.c_str());
+                PyObject* pyDtypes = buildPyDtypes(dtypes);
+                PyObject* pyAttribs = buildPyAttribs(attribs, EmptyBuildContext, true);
+                PyObject* pyShapes = buildPyShapes(inputs, EmptyBuildContext, true);
+                PyObject* ret = callPyFunc(func, { pyName, pyDtypes, pyAttribs, pyShapes });
+                return (bool)PyObject_IsTrue(ret);
+            }
+            else
+            {
+                return false;
+            }
         };
     }
     else if ( PyFunction_Check(obj) )
     {
-        return [=]( const std::string& name,
-                    const std::map<std::string,nd::Typename>& dtypes,
-                    const std::map<std::string,nd::ValueExpr>& attribs,
-                    const std::vector<nd::TensorRef>& inputs )
+        auto argc = function_arg_count(obj);
+        if ( argc == 1 )
         {
-            PyObject* pyName = buildPyStr(name.c_str());
-            PyObject* pyDtypes = buildPyDtypes(dtypes);
-            PyObject* pyAttribs = buildPyAttribs(attribs, EmptyBuildContext, true);
-            PyObject* pyShapes = buildPyShapes(inputs, EmptyBuildContext, true);
-            PyObject* ret = callPyFunc(obj, { pyName, pyDtypes, pyAttribs, pyShapes });
-            return (bool)PyObject_IsTrue(ret);
-        };
+            return [=]( const std::string& name,
+                        const std::map<std::string,nd::Typename>& dtypes,
+                        const std::map<std::string,nd::ValueExpr>& attribs,
+                        const std::vector<nd::TensorRef>& inputs )
+            {
+                PyObject* pyName = buildPyStr(name.c_str());
+                PyObject* ret = callPyFunc(obj, { pyName });
+                return (bool)PyObject_IsTrue(ret);
+            };
+        }
+        else if ( argc == 4 )
+        {
+            return [=]( const std::string& name,
+                        const std::map<std::string,nd::Typename>& dtypes,
+                        const std::map<std::string,nd::ValueExpr>& attribs,
+                        const std::vector<nd::TensorRef>& inputs )
+            {
+                PyObject* pyName = buildPyStr(name.c_str());
+                PyObject* pyDtypes = buildPyDtypes(dtypes);
+                PyObject* pyAttribs = buildPyAttribs(attribs, EmptyBuildContext, true);
+                PyObject* pyShapes = buildPyShapes(inputs, EmptyBuildContext, true);
+                PyObject* ret = callPyFunc(obj, { pyName, pyDtypes, pyAttribs, pyShapes });
+                return (bool)PyObject_IsTrue(ret);
+            };
+        }
+        else
+        {
+            const std::string message = "Paremeter '" + key + "' must take 1 or 4 arguments";
+            PyErr_SetString(PyExc_TypeError, message.c_str());
+            return NULL;
+        }
     }
     else
     {
-        const std::string message = "Paremeter '" + key + "' must be either bool, list, tuple, set, map or a callable";
+        const std::string message = "Paremeter '" + key + "' must be either bool, list, tuple, set, dict or a callable";
         PyErr_SetString(PyExc_TypeError, message.c_str());
         return NULL;
     }
@@ -945,7 +996,16 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
     }
 
     auto atomic_callback = make_operation_callback(atomic, "atomic_callback");
+    if ( !atomic_callback )
+    {
+        return NULL;
+    }
+
     auto unroll_callback = make_operation_callback(unroll, "unroll_callback");
+    if ( !unroll_callback )
+    {
+        return NULL;
+    }
 
     auto error_callback = [&]( const nd::Position& position, const std::string& message, const nd::StackTrace& trace,
                                 const bool warning )
@@ -1080,6 +1140,11 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
     DataClass = PyDict_GetItemString(dataclasses_dict, "make_dataclass");
     DataClassField = PyDict_GetItemString(dataclasses_dict, "field");
     Py_DECREF(dataclasses);
+
+    auto inspect = PyImport_ImportModule("inspect");
+    auto inspect_dict = PyModule_GetDict(inspect);
+    Signature = PyDict_GetItemString(inspect_dict, "signature");
+    Py_DECREF(inspect);
 
     Dtype = makeEnum(module, "Dtype", { "Type", "Arith", "Num", "Int", "Real", "Bool", "Str" });
     Position = makeDataClass(module, "Position", { "module", "line", "column" });
