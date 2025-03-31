@@ -121,7 +121,7 @@ def replace_tensor_in_producers(old_tensor, new_tensor):
 
 def replace_tensor_in_sequence_nested(sequence, old_tensor, new_tensor):
     type = tuple if isinstance(sequence, tuple) else list
-    return type((new_tensor if item is old_tensor else item) if isinstance(item, Tensor)
+    return type((new_tensor if item is old_tensor else item) if isinstance(item, Tensor) or item is None
                 else replace_tensor_in_sequence_nested(item, old_tensor, new_tensor)
                 for item in sequence)
 

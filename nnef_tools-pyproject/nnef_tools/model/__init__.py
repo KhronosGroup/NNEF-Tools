@@ -218,17 +218,17 @@ class Operation:
 
         for tensor in self._inputs:
             if isinstance(tensor, list):
-                assert all(self in t._consumers for t in tensor)
+                assert all(t is None or self in t._consumers for t in tensor)
             else:
-                assert self in tensor._consumers
+                assert tensor is None or self in tensor._consumers
 
         for tensor in self._inputs:
             if isinstance(tensor, list):
                 for t in tensor:
-                    if self in t._consumers:
+                    if t is not None and self in t._consumers:
                         t._consumers.remove(self)
             else:
-                if self in tensor._consumers:
+                if tensor is not None and self in tensor._consumers:
                     tensor._consumers.remove(self)
 
         self._inputs = tensors
