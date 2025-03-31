@@ -67,6 +67,10 @@ class TestEnv(unittest.TestCase):
             self._set_max_input_shapes(nnef_model, input_shape)
         output_filename = filename + '.nnef2'
         self._skriptnd_writer(nnef_model, output_filename)
+        if self._optimize:
+            nnef_model = self._skriptnd_reader(output_filename)
+            self._skriptnd_optimizer(nnef_model)
+            self._skriptnd_writer(nnef_model, output_filename)
 
     def _set_max_input_shapes(self, model, input_shape):
         if not isinstance(input_shape, list):

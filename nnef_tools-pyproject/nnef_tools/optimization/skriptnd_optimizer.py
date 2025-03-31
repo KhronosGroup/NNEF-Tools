@@ -23,11 +23,13 @@ class Optimizer:
                 changed |= self._remove_identity_ops(graph, ('layout.squeeze', 'layout.unsqueeze'),
                                                      lambda op: op.attribs['axes'] == [])
                 changed |= self._remove_identity_ops(graph, 'math.mul',
-                                                     lambda op: self._is_constant(op.inputs[0], 1.0) or
-                                                                self._is_constant(op.inputs[1], 1.0))
+                                                     lambda op: self._is_constant(op.inputs[0], 1.0), input_index=1)
+                changed |= self._remove_identity_ops(graph, 'math.mul',
+                                                     lambda op: self._is_constant(op.inputs[1], 1.0), input_index=0)
                 changed |= self._remove_identity_ops(graph, 'math.add',
-                                                     lambda op: self._is_constant(op.inputs[0], 0.0) or
-                                                                self._is_constant(op.inputs[1], 0.0))
+                                                     lambda op: self._is_constant(op.inputs[0], 0.0), input_index=1)
+                changed |= self._remove_identity_ops(graph, 'math.add',
+                                                     lambda op: self._is_constant(op.inputs[1], 0.0), input_index=0)
                 changed |= self._remove_identity_ops(graph, ('nn.avg_pool', 'nn.max_pool'),
                                                      lambda op: self._is_uniform(op.attribs['size'], 1) and
                                                                 self._is_uniform(op.attribs['stride'], 1) and
@@ -70,11 +72,13 @@ class Optimizer:
     def _is_uniform(array, value):
         return all(item == value for item in array)
 
-    def _remove_identity_ops(self, graph, type, cond):
+    def _remove_identity_ops(self, graph, type, cond, input_index=None):
         changed = False
         for op in graph.operations:
-            if self._match_op_type(op.type, type) and cond(op) and op.input.quant == op.output.quant:
-                changed |= self._bypass_and_remove(graph, op)
+            if self._match_op_type(op.type, type) and cond(op):
+                input = op.input if input_index is None else op.inputs[input_index]
+                if input.quant == op.output.quant:
+                    changed |= self._bypass_and_remove(graph, op, input_index=input_index)
 
         return changed
 
@@ -96,13 +100,14 @@ class Optimizer:
             permuted[i] = items[perm[i]]
         return type(items)(permuted)
 
-    def _bypass_and_remove(self, graph, op):
-        if op.output in graph.outputs and (op.input in graph.inputs or op.input in graph.outputs):
-            self._insert_copy(op.input, op.detach_output())
+    def _bypass_and_remove(self, graph, op, input_index=None):
+        input = op.input if input_index is None else op.inputs[input_index]
+        if op.output in graph.outputs and (input in graph.inputs or input in graph.outputs):
+            self._insert_copy(input, op.detach_output())
             graph.remove_operation(op, unlink=True)
             return False
         else:
-            bypass_and_remove(graph, op, remove_input_not_output=op.output in graph.outputs)
+            bypass_and_remove(graph, op, remove_input_not_output=op.output in graph.outputs, input_index=input_index)
             return True
 
     @staticmethod
