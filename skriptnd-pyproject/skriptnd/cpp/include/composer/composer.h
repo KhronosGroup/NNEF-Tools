@@ -79,7 +79,7 @@ namespace nd
                 {
                     pack->items[i] = tensors[i];
                 }
-                packs.emplace(tensors, pack);
+                cache_tensor_pack(pack);
                 return TensorRef(pack);
             };
         }
@@ -723,6 +723,7 @@ namespace nd
                         {
                             pack->items[k] = make_tensor(*graph, output.dtype, dereferenced(output.shape), output.max_shape, {}, {});
                         }
+                        cache_tensor_pack(pack);
                         outputs[i] = TensorRef(pack);
                     }
                 }
@@ -873,6 +874,11 @@ namespace nd
                     {
                         outputs[k].as<TensorPack*>()->items[i] = &*item_outputs[k];
                     }
+                }
+                
+                for ( size_t k = component.loop->carries.size(); k < outputs.size(); ++k )
+                {
+                    cache_tensor_pack(outputs[k].as<TensorPack*>());
                 }
                 
                 std::swap(symbols, saved_symbols);
@@ -1533,6 +1539,8 @@ namespace nd
                                 {
                                     pack->items[i] = (Tensor*)&output[k+i];
                                 }
+                                cache_tensor_pack(pack);
+                                
                                 if ( !item.name.empty() )
                                 {
                                     symbols.insert_or_assign(item.name, Symbol(TensorRef(pack), result_type));
@@ -3206,6 +3214,7 @@ namespace nd
                     auto name = scoped_name(scope, param.name, i+1);
                     pack->items[i] = make_tensor(graph, type, shape, max_shape, name, value.packed() ? value[i] : value, variable);
                 }
+                cache_tensor_pack(pack);
                 return TensorRef(pack);
             }
             else
@@ -3238,6 +3247,11 @@ namespace nd
             return graph.packs.back().get();
         }
         
+        void cache_tensor_pack( TensorPack* pack )
+        {
+            _contexts.top().packs.emplace(pack->items, pack);
+        }
+        
         TensorRef make_tensors_like( Graph& graph, const TensorRef& tensor, const std::optional<std::string>& scope,
                                  const std::string& iden, const bool dereference_shape = false )
         {
@@ -3263,6 +3277,7 @@ namespace nd
                         dereference(pack->items[i]->shape);
                     }
                 }
+                cache_tensor_pack(pack);
                 return pack;
             }
             else
@@ -3310,6 +3325,7 @@ namespace nd
                     {
                         pack->items[i] = make_tensor(graph, type, shape, max_shape, {}, value[i]);
                     }
+                    cache_tensor_pack(pack);
                     it = consts.emplace(str, TensorRef(pack)).first;
                 }
                 else
