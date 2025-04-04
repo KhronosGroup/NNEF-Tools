@@ -1,6 +1,8 @@
 from ..model.utils import bypass_and_remove, replace_chain
 from ..model.utils import generate_tensor_names_from_op_type, generate_missing_tensor_names_from_op_type
 from ..model import *
+import numpy as np
+import skriptnd as nd
 
 
 class Optimizer:
@@ -11,6 +13,8 @@ class Optimizer:
         self._dequantize = dequantize
 
     def __call__(self, model, only_required=False):
+        self._referenced_tensors = self._collect_shape_referenced_tensors(model)
+
         for graph in model.graphs:
             changed = True
             while changed:
@@ -56,6 +60,31 @@ class Optimizer:
                 changed |= self._merge_op_into_variables_and_constants(graph, 'layout.unsqueeze',
                                    lambda data, attribs: data.reshape(self._unsqueeze_shape(data.shape, attribs)))
 
+                changed |= self._merge_reshape_sequence(graph)
+
+                changed |= replace_chain(graph, ['layout.pad', {'nn.conv', 'nn.deconv', 'nn.max_pool', 'nn.avg_pool'}],
+                                         self._merge_pad_with_sliding)
+                changed |= replace_chain(graph, [{'math.mul', 'math.div'}, {'nn.conv', 'nn.deconv', 'nn.linear'}],
+                                         self._merge_mul_linear, allow_forks=True)
+                changed |= replace_chain(graph, [{'nn.conv', 'nn.deconv', 'nn.linear'}, {'math.add', 'math.sub'}],
+                                         self._merge_linear_add)
+                changed |= replace_chain(graph, [{'nn.conv', 'nn.deconv', 'nn.linear'}, {'math.mul', 'math.div'}],
+                                         self._merge_linear_mul)
+
+    @staticmethod
+    def _collect_shape_referenced_tensors(model):
+        tensors = set()
+        for graph in model.graphs:
+            for op in graph.operations:
+                for key, value in op.attribs.items():
+                    if isinstance(value, nd.Expr):
+                        for expr in nd.recursive_enumerate_expr(value):
+                            if isinstance(expr, nd.ShapeAccess):
+                                tensors.add(expr.tensor.name)
+                            if isinstance(expr, nd.SizeAccess):
+                                tensors.add(expr.pack.name)
+        return tensors
+
     @staticmethod
     def _match_op_type(type, types):
         return type in types if isinstance(types, tuple) else type == types
@@ -72,12 +101,15 @@ class Optimizer:
     def _is_uniform(array, value):
         return all(item == value for item in array)
 
+    def _is_referenced(self, tensor):
+        return tensor.name in self._referenced_tensors
+
     def _remove_identity_ops(self, graph, type, cond, input_index=None):
         changed = False
         for op in graph.operations:
             if self._match_op_type(op.type, type) and cond(op):
                 input = op.input if input_index is None else op.inputs[input_index]
-                if input.quant == op.output.quant:
+                if not self._is_referenced(op.output) and input.quant == op.output.quant:
                     changed |= self._bypass_and_remove(graph, op, input_index=input_index)
 
         return changed
@@ -87,7 +119,8 @@ class Optimizer:
         for op in graph.operations:
             if op.type == type1 and len(op.output.consumers) == 1:
                 consumer = op.output.consumer
-                if consumer.type == type2 and cond(op, consumer):
+                if consumer.type == type2 and cond(op, consumer) and \
+                        not self._is_referenced(op.output) and not self._is_referenced(consumer.output):
                     changed |= self._bypass_and_remove(graph, op)
                     changed |= self._bypass_and_remove(graph, consumer)
 
@@ -156,3 +189,148 @@ class Optimizer:
         for axis in axes:
             shape = shape[:axis] + (1,) + shape[axis:]
         return shape
+
+    def _merge_reshape_sequence(self, graph):
+        changed = False
+        for op in graph.operations:
+            if op.type == 'layout.reshape' and len(op.output.consumers) == 1:
+                consumer = op.output.consumer
+                if consumer.type == 'layout.reshape' and not self._is_referenced(op.output):
+                    new_shape = self._reshape_shape(consumer.input.shape, consumer.attribs)
+                    if any(s == 0 for s in new_shape):
+                        old_shape = self._reshape_shape(op.input.shape, op.attribs)
+                        new_shape = tuple(old_shape[i] if s == 0 else s for i, s in enumerate(new_shape))
+
+                    consumer.attribs['shape'] = list(new_shape)
+                    del consumer.attribs['axis']
+                    del consumer.attribs['rank']
+
+                    changed |= self._bypass_and_remove(graph, op)
+
+        return changed
+
+    @staticmethod
+    def _interleave(a):
+        n = len(a)
+        return list(zip(a[:n], a[n:]))
+
+    @staticmethod
+    def _uninterleave(a):
+        return [x for x, y in a] + [y for x, y in a]
+
+    def _merge_pad_with_sliding(self, pad, sliding):
+        offset = 2 if sliding.type == 'nn.conv' or sliding.type == 'nn.deconv' else 0
+        padding = Optimizer._interleave(pad.attribs['padding'])
+
+        if self._is_referenced(pad.output):
+            return False
+
+        if not all(p == 0 and q == 0 for p, q in Optimizer._interleave(sliding.attribs['padding'])) or \
+                len(padding) < offset or not all(p == 0 and q == 0 for p, q in padding[:offset]):
+            return False
+
+        attribs = dict(sliding.attribs)
+        attribs['padding'] = Optimizer._uninterleave(padding[offset:])
+
+        sliding.copy_with(inputs=(pad.input, *sliding.inputs[1:]), outputs=sliding.detach_outputs(), attribs=attribs)
+
+    @staticmethod
+    def _is_channelwise_shape(shape):
+        return len(shape) <= 1 or all(s == 1 or i == 1 for i, s in enumerate(shape))
+
+    @staticmethod
+    def _squeeze_batch_and_spatial_dims(data):
+        return np.squeeze(data, axis=(0,) + tuple(i for i in range(2, len(data.shape))))
+
+    def _merge_mul_linear(self, mul, linear):
+        if self._is_referenced(mul.output):
+            return False
+
+        which = 0 if mul.inputs[0].data is not None else 1
+        other = 1 - which
+
+        variable = mul.inputs[which]
+        if variable.data is None or not Optimizer._is_channelwise_shape(variable.shape):
+            return False
+
+        if len(variable.shape) == 0:
+            scale = np.expand_dims(variable.data, axis=0)
+        elif len(variable.shape) >= 2:
+            scale = Optimizer._squeeze_batch_and_spatial_dims(variable.data)
+
+        weights = linear.inputs[1]
+        if weights.data is None:
+            return False
+
+        rank = len(weights.shape)
+        shape = scale.shape + (1,) * (rank - 1) if linear.type == 'nn.deconv' else (1,) + scale.shape + (1,) * (rank - 2)
+        scale = np.reshape(scale, newshape=shape)
+
+        weights.data = weights.data * scale if mul.type != 'math.div' else weights.data / scale
+
+        linear.copy_with(inputs=(mul.inputs[other], weights, *linear.inputs[2:]), outputs=linear.detach_output())
+
+    def _merge_linear_add(self, linear, add, type=None):
+        if self._is_referenced(linear.output):
+            return False
+
+        bias = add.inputs[1] if add.inputs[0] == linear.output else add.inputs[0]
+        if bias.data is None or not Optimizer._is_channelwise_shape(bias.shape):
+            return False
+
+        if len(linear.inputs) > 2 and linear.inputs[2] is not None and linear.inputs[2].data is None:
+            return None
+
+        if len(bias.shape) == 0:
+            bias.data = np.expand_dims(bias.data, axis=0)
+        elif len(bias.shape) >= 2:
+            bias.data = Optimizer._squeeze_batch_and_spatial_dims(bias.data)
+
+        bias.shape = bias.data.shape
+
+        if bias.shape[0] == 1 and linear.inputs[1].shape[0] != 1:
+            bias.data = np.tile(bias.data, linear.inputs[1].shape[0])
+            bias.shape = bias.data.shape
+
+        if len(linear.inputs) > 2 and linear.inputs[2] is not None:
+            bias.data = linear.inputs[2].data - bias.data if add.type == 'math.sub' else linear.inputs[2].data + bias.data
+
+        linear.copy_with(type=type or linear.type,
+                         attribs=linear.attribs if type != 'nn.linear' else {},
+                         inputs=(linear.inputs[0], linear.inputs[1], bias),
+                         outputs=add.detach_output())
+
+    def _merge_linear_mul(self, linear, mul):
+        if self._is_referenced(linear.output):
+            return False
+
+        variable = mul.inputs[1] if mul.inputs[0] == linear.output else mul.inputs[0]
+        if variable.data is None or not Optimizer._is_channelwise_shape(variable.shape):
+            return False
+
+        if len(variable.shape) == 0:
+            scale = np.expand_dims(variable.data, axis=0)
+        elif len(variable.shape) >= 2:
+            scale = Optimizer._squeeze_batch_and_spatial_dims(variable.data)
+
+        negate = mul.type == 'math.div'
+
+        weights = linear.inputs[1]
+        if weights.data is None:
+            return False
+
+        if len(linear.inputs) > 2 and linear.inputs[2] is not None:
+            bias = linear.inputs[2]
+            if bias.data is None:
+                return False
+
+            bias.data = bias.data * scale if not negate else bias.data / scale
+            bias.shape = bias.data.shape
+
+        rank = len(weights.shape)
+        shape = (1,) + scale.shape + (1,) * (rank - 2) if linear.type == 'nn.deconv' else scale.shape + (1,) * (rank - 1)
+        scale = np.reshape(scale, newshape=shape)
+
+        weights.data = weights.data * scale if not negate else weights.data / scale
+
+        linear.copy_with(inputs=(linear.inputs[0], weights, *linear.inputs[2:]), outputs=mul.detach_output())
