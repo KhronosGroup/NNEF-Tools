@@ -58,7 +58,7 @@ class Printer:
             return value.name
         elif isinstance(value, np.ndarray):
             return "[" + ", ".join(self._format_value(v.item()) for v in value.flat) + "]"
-        elif isinstance(value, list):
+        elif isinstance(value, (list, tuple)):
             return "[" + ", ".join(self._format_value(v) for v in value) + "]"
         elif isinstance(value, bool):
             return "true" if value else "false"
