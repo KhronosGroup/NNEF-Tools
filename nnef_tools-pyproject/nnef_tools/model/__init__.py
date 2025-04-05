@@ -46,7 +46,7 @@ class Tensor:
 
     @property
     def graph(self):
-        # type: ()->typing.Optional[Model]
+        # type: ()->typing.Optional[Graph]
         return self._graph
 
     @property
@@ -132,6 +132,88 @@ class Tensor:
     def set_data(self, data, variable=None):
         self.data = data
         self._variable = variable if variable is not None else isinstance(data, np.ndarray)
+
+    def __repr__(self):
+        return self.name if self.name is not None else _hex_id(self)
+
+    def __str__(self):
+        return '{name}: {dtype}[{shape}]'.format(
+            name=self.name if self.name is not None else _hex_id(self),
+            dtype=self.dtype.__name__ if self.dtype is not None else 'void',
+            shape=', '.join(str(s) for s in self.shape) if self.shape is not None else '...')
+
+
+class TensorPack(list):
+
+    def __init__(self, graph, name, shape, dtype, size, items):
+        super().__init__(items)
+        self._graph = graph
+        self.name = name
+        self.shape = shape
+        self.dtype = dtype
+        self.size = size
+
+        assert isinstance(graph, Graph)
+        graph._packs.append(self)
+
+    def copy_with(self, graph=None, name=None, dtype=None, shape=None, size=None, items=None):
+        return TensorPack(graph=graph if graph is not None else self.graph,
+                          name=name if name is not None else self.name,
+                          dtype=dtype if dtype is not None else self.dtype,
+                          shape=shape if shape is not None else self.shape,
+                          size=size if size is not None else self.size,
+                          items=items if items is not None else self)
+
+    @property
+    def graph(self):
+        # type: ()->typing.Optional[Graph]
+        return self._graph
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, name):
+        assert name is None or isinstance(name, str)
+        self._name = name
+
+    @property
+    def shape(self):
+        return self._shape
+
+    @shape.setter
+    def shape(self, shape):
+        assert shape is None or isinstance(shape, (list, tuple))
+        self._shape = tuple(shape) if shape is not None else None
+
+    @property
+    def dtype(self):
+        return self._dtype
+
+    @dtype.setter
+    def dtype(self, dtype):
+        assert dtype is None or isinstance(dtype, type)
+        self._dtype = dtype
+
+    @property
+    def size(self):
+        return self._size
+
+    @size.setter
+    def size(self, size):
+        self._size = size
+
+    @property
+    def rank(self):
+        # type: ()->typing.Optional[int]
+        return len(self.shape) if self.shape is not None else None
+
+    @property
+    def volume(self):
+        # type: ()->typing.Optional[int]
+        return reduce((lambda x, y: x * y), self.shape) if self.shape is not None and \
+                                                           all(s is not None for s in self.shape) else None
 
     def __repr__(self):
         return self.name if self.name is not None else _hex_id(self)
@@ -340,6 +422,7 @@ class Graph:
         self._inputs = tuple()
         self._outputs = tuple()
         self._tensors = []
+        self._packs = []
         self._operations = []
 
         self.name = name
@@ -369,7 +452,7 @@ class Graph:
         assert isinstance(tensors, tuple)
 
         for tensor in self._inputs:
-            if isinstance(tensor, tuple):
+            if isinstance(tensor, list):
                 assert all(isinstance(t, Tensor) for t in tensor)
             else:
                 assert isinstance(tensor, Tensor)
@@ -401,6 +484,11 @@ class Graph:
         return _ListView(self._tensors)
 
     @property
+    def packs(self):
+        # type: ()->typing.Sequence[TensorPack]
+        return _ListView(self._packs)
+
+    @property
     def operations(self):
         # type: ()->typing.Sequence[Operation]
         return _ListView(self._operations)
@@ -409,8 +497,8 @@ class Graph:
         # type: (Tensor)->None
         assert not tensor.has_producer
         assert not tensor.has_consumer
-        assert tensor not in self.inputs
-        assert tensor not in self.outputs
+        assert tensor not in _recursive_itemize(self.inputs)
+        assert tensor not in _recursive_itemize(self.outputs)
         self._tensors.remove(tensor)
         tensor._graph = None
 
@@ -419,12 +507,27 @@ class Graph:
         for tensor in tensors:
             assert not tensor.has_producer
             assert not tensor.has_consumer
-            assert tensor not in self.inputs
-            assert tensor not in self.outputs or not tensor.is_constant
+            assert tensor not in _recursive_itemize(self.inputs)
+            assert tensor not in _recursive_itemize(self.outputs) or not tensor.is_constant
         self._tensors = [tensor for tensor in self._tensors if tensor not in tensors]
         self._outputs = tuple(tensor for tensor in self._outputs if tensor not in tensors)
         for tensor in tensors:
             tensor._graph = None
+
+    def remove_pack(self, pack):
+        assert pack not in self.inputs
+        assert pack not in self.outputs
+        self._packs.remove(pack)
+        pack._graph = None
+
+    def remove_packs(self, packs):
+        for pack in packs:
+            assert pack not in self.inputs
+            assert pack not in self.outputs
+        self._packs = [pack for pack in self._packs if pack not in packs]
+        self._outputs = tuple(item for item in self._outputs if item not in packs)
+        for pack in packs:
+            pack._graph = None
 
     def remove_operation(self, operation, unlink=False):
         # type: (Operation, bool)->None

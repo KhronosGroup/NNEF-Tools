@@ -7,15 +7,21 @@ import six
 import os
 
 
-def _remap(tensor, tensor_map):
-    def fetch(tensor):
-        return tensor_map[tensor.name] if tensor is not None else None
+def _remap(item, tensor_map):
+    def fetch(item):
+        return tensor_map[item.name] if item is not None else None
 
-    return [fetch(t) for t in tensor] if isinstance(tensor, (list, nd.TensorPack)) else fetch(tensor)
+    return [fetch(x) for x in item] if isinstance(item, list) and not isinstance(item, TensorPack) else fetch(item)
 
 
 def _build_model(model):
-    tensor_map = {tensor.name: _build_tensor(tensor) for graph in model.graphs for tensor in graph.tensors}
+    tensor_map = {}
+    for graph in model.graphs:
+        for tensor in graph.tensors:
+            tensor_map[tensor.name] = _build_tensor(tensor)
+        for pack in graph.packs:
+            tensor_map[pack.name] = _build_tensor_pack(pack, tensor_map)
+
     graph_map = {graph.name: _build_graph(graph, tensor_map) for graph in model.graphs}
 
     ts_model = nd.Model(name=model.name, graphs=[graph_map[graph.name] for graph in model.graphs])
@@ -41,6 +47,15 @@ def _build_tensor(tensor):
                      quant=tensor.quant,
                      value=tensor.data,
                      variable=tensor.is_variable)
+
+
+def _build_tensor_pack(pack, tensor_map):
+    return nd.TensorPack(name=pack.name,
+                         shape=pack.shape,
+                         max_shape=pack.shape,
+                         dtype=nd.DtypeFromNumpy[pack.dtype] if pack.dtype else None,
+                         size=pack.size,
+                         items=[_remap(item, tensor_map) for item in pack])
 
 
 def _build_graph(graph, tensor_map):

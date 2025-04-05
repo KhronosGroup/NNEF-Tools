@@ -109,21 +109,31 @@ def replace_tensor_in_graph_outputs(graph, old_tensor, new_tensor):
 def replace_tensor_in_consumers(old_tensor, new_tensor):
     for consumer in list(old_tensor.consumers):     # copy list to avoid changes during iteration
         assert isinstance(consumer.inputs, tuple)
-        consumer.inputs = replace_tensor_in_sequence_nested(consumer.inputs, old_tensor, new_tensor)
+        inputs = consumer.inputs
+        consumer.inputs = ()    # unlink inputs so that they can be modified
+        consumer.inputs = replace_tensor_in_tuple(inputs, old_tensor, new_tensor)
 
 
 def replace_tensor_in_producers(old_tensor, new_tensor):
     producer = old_tensor.producer
     if producer is not None:
         assert isinstance(producer.outputs, tuple)
-        producer.outputs = replace_tensor_in_sequence_nested(producer.outputs, old_tensor, new_tensor)
+        outputs = producer.outputs
+        producer.outputs = ()   # unlink outputs so that they can be modified
+        producer.outputs = replace_tensor_in_tuple(outputs, old_tensor, new_tensor)
 
 
-def replace_tensor_in_sequence_nested(sequence, old_tensor, new_tensor):
-    type = tuple if isinstance(sequence, tuple) else list
-    return type((new_tensor if item is old_tensor else item) if isinstance(item, Tensor) or item is None
-                else replace_tensor_in_sequence_nested(item, old_tensor, new_tensor)
-                for item in sequence)
+def replace_tensor_in_tuple(items, old_tensor, new_tensor):
+    return tuple((new_tensor if item is old_tensor else item) if isinstance(item, Tensor) or item is None
+                 else replace_tensor_in_pack(item, old_tensor, new_tensor)
+                 for item in items)
+
+
+def replace_tensor_in_pack(items, old_tensor, new_tensor):
+    for i, item in enumerate(items):
+        if item is old_tensor:
+            items[i] = new_tensor
+    return items
 
 
 def bypass_and_remove(graph, op, remove_input_not_output=False, input_index=None):

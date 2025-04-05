@@ -51,7 +51,7 @@ class Printer:
                 return self._make_id(value.name)
         elif isinstance(value, _nd.TensorPack):
             if not value.name.startswith('.'):
-                return value.name
+                return self._make_id(value.name)
             else:
                 return "[" + ", ".join(self._format_value(v) for v in value) + "]"
         elif isinstance(value, _nd.Graph):
@@ -157,7 +157,7 @@ class Printer:
             for result in results[nvars:]:
                 if len(text) != 0:
                     text += ", "
-                if isinstance(result, _nd.Tensor):
+                if isinstance(result, (_nd.Tensor, _nd.TensorPack)):
                     text += self._make_id(result.name) + repeats
                 else:
                     text += self._format_result(result)
