@@ -77,13 +77,27 @@ class Optimizer:
         for graph in model.graphs:
             for op in graph.operations:
                 for key, value in op.attribs.items():
-                    if isinstance(value, nd.Expr):
-                        for expr in nd.recursive_enumerate_expr(value):
-                            if isinstance(expr, nd.ShapeAccess):
-                                tensors.add(expr.tensor.name)
-                            if isinstance(expr, nd.SizeAccess):
-                                tensors.add(expr.pack.name)
+                    Optimizer._collect_shape_referenced_tensors_from_expr(value, tensors)
+            for tensor in graph.tensors:
+                for item in tensor.shape:
+                    Optimizer._collect_shape_referenced_tensors_from_expr(item, tensors)
+            for pack in graph.packs:
+                for item in pack.shape:
+                    Optimizer._collect_shape_referenced_tensors_from_expr(item, tensors)
+                Optimizer._collect_shape_referenced_tensors_from_expr(pack.size, tensors)
         return tensors
+
+    @staticmethod
+    def _collect_shape_referenced_tensors_from_expr(value, tensors):
+        if isinstance(value, nd.Expr):
+            for expr in nd.recursive_enumerate_expr(value):
+                if isinstance(expr, nd.ShapeAccess):
+                    tensors.add(expr.tensor.name)
+                if isinstance(expr, nd.SizeAccess):
+                    tensors.add(expr.pack.name)
+
+    def _is_referenced(self, tensor):
+        return tensor.name in self._referenced_tensors
 
     @staticmethod
     def _match_op_type(type, types):
@@ -100,9 +114,6 @@ class Optimizer:
     @staticmethod
     def _is_uniform(array, value):
         return all(item == value for item in array)
-
-    def _is_referenced(self, tensor):
-        return tensor.name in self._referenced_tensors
 
     def _remove_identity_ops(self, graph, type, cond, input_index=None):
         changed = False
