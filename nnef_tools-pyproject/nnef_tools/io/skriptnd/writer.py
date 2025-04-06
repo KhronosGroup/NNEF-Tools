@@ -1,17 +1,11 @@
 import skriptnd as nd
 from ...model import *
+from .utils import *
 from ...utils.tgz import compress
 import tempfile
 import shutil
 import six
 import os
-
-
-def _remap(item, tensor_map):
-    def fetch(item):
-        return tensor_map[item.name] if item is not None else None
-
-    return [fetch(x) for x in item] if isinstance(item, list) and not isinstance(item, TensorPack) else fetch(item)
 
 
 def _build_model(model):
@@ -21,6 +15,11 @@ def _build_model(model):
             tensor_map[tensor.name] = _build_tensor(tensor)
         for pack in graph.packs:
             tensor_map[pack.name] = _build_tensor_pack(pack, tensor_map)
+
+    for name, tensor in tensor_map.items():
+        remap_tensors_in_expr(tensor.shape, tensor_map)
+        if isinstance(tensor, TensorPack):
+            remap_tensors_in_expr(tensor.size, tensor_map)
 
     graph_map = {graph.name: _build_graph(graph, tensor_map) for graph in model.graphs}
 
@@ -55,13 +54,13 @@ def _build_tensor_pack(pack, tensor_map):
                          max_shape=pack.shape,
                          dtype=nd.DtypeFromNumpy[pack.dtype] if pack.dtype else None,
                          size=pack.size,
-                         items=[_remap(item, tensor_map) for item in pack])
+                         items=[remap_tensor(item, tensor_map) for item in pack])
 
 
 def _build_graph(graph, tensor_map):
     nd_graph = nd.Graph(name=graph.name,
-                        inputs=tuple(_remap(input, tensor_map) for input in graph.inputs),
-                        outputs=tuple(_remap(output, tensor_map) for output in graph.outputs),
+                        inputs=tuple(remap_tensor(input, tensor_map) for input in graph.inputs),
+                        outputs=tuple(remap_tensor(output, tensor_map) for output in graph.outputs),
                         operations=[_build_operation(op, tensor_map) for op in graph.operations],
                         tensors=[tensor_map[tensor.name] for tensor in graph.tensors],
                         packs=[])
@@ -87,9 +86,12 @@ def _build_operation(operation, tensor_map):
     else:
         dtypes = {}
 
+    for key, value in attribs.items():
+        remap_tensors_in_expr(value, tensor_map)
+
     return nd.Operation(name=operation.type, dtypes=dtypes, attribs=attribs,
-                        inputs=tuple(_remap(input, tensor_map) for input in operation.inputs),
-                        outputs=tuple(_remap(output, tensor_map) for output in operation.outputs),
+                        inputs=tuple(remap_tensor(input, tensor_map) for input in operation.inputs),
+                        outputs=tuple(remap_tensor(output, tensor_map) for output in operation.outputs),
                         contractions=[],
                         asserts=[])
 

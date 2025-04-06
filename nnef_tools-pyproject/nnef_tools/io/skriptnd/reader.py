@@ -1,12 +1,6 @@
 import skriptnd as nd
 from ...model import *
-
-
-def _remap(item, tensor_map):
-    def fetch(item):
-        return tensor_map[item.name] if item is not None else None
-
-    return [fetch(x) for x in item] if isinstance(item, list) and not isinstance(item, nd.TensorPack) else fetch(item)
+from .utils import *
 
 
 def _build_tensor(graph, ts_tensor):
@@ -25,7 +19,7 @@ def _build_tensor_pack(graph, ts_pack, tensor_map):
                       shape=ts_pack.shape,
                       dtype=nd.DtypeToNumpy[ts_pack.dtype],
                       size=ts_pack.size,
-                      items=[_remap(item, tensor_map) for item in ts_pack])
+                      items=[remap_tensor(item, tensor_map) for item in ts_pack])
 
 
 def _build_operation(graph, ts_operation, tensor_map):
@@ -33,11 +27,14 @@ def _build_operation(graph, ts_operation, tensor_map):
     if ts_operation.dtypes:
         attribs['dtypes'] = {k: nd.DtypeToNumpy[t] for k, t in ts_operation.dtypes.items()}
 
+    for key, value in attribs.items():
+        remap_tensors_in_expr(value, tensor_map)
+
     return Operation(graph,
                      type=ts_operation.name,
                      attribs=attribs,
-                     inputs=tuple(_remap(input, tensor_map) for input in ts_operation.inputs),
-                     outputs=tuple(_remap(output, tensor_map) for output in ts_operation.outputs))
+                     inputs=tuple(remap_tensor(input, tensor_map) for input in ts_operation.inputs),
+                     outputs=tuple(remap_tensor(output, tensor_map) for output in ts_operation.outputs))
 
 
 def _build_graph(model, ts_graph):
@@ -50,8 +47,13 @@ def _build_graph(model, ts_graph):
     for pack in ts_graph.packs:
         tensor_map[pack.name] = _build_tensor_pack(graph, pack, tensor_map)
 
-    graph.inputs = tuple(_remap(input, tensor_map) for input in ts_graph.inputs)
-    graph.outputs = tuple(_remap(output, tensor_map) for output in ts_graph.outputs)
+    for name, tensor in tensor_map.items():
+        remap_tensors_in_expr(tensor.shape, tensor_map)
+        if isinstance(tensor, TensorPack):
+            remap_tensors_in_expr(tensor.size, tensor_map)
+
+    graph.inputs = tuple(remap_tensor(input, tensor_map) for input in ts_graph.inputs)
+    graph.outputs = tuple(remap_tensor(output, tensor_map) for output in ts_graph.outputs)
 
     for operation in ts_graph.operations:
         _build_operation(graph, operation, tensor_map)
