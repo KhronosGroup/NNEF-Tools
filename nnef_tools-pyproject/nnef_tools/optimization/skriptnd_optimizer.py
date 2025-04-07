@@ -13,7 +13,7 @@ class Optimizer:
         self._dequantize = dequantize
 
     def __call__(self, model, only_required=False):
-        self._referenced_tensors = self._collect_shape_referenced_tensors(model)
+        self._tensor_references = self._collect_shape_referenced_tensors(model)
 
         for graph in model.graphs:
             changed = True
@@ -73,31 +73,45 @@ class Optimizer:
 
     @staticmethod
     def _collect_shape_referenced_tensors(model):
-        tensors = set()
+        references = {}
         for graph in model.graphs:
             for op in graph.operations:
                 for key, value in op.attribs.items():
-                    Optimizer._collect_shape_referenced_tensors_from_expr(value, tensors)
+                    Optimizer._collect_shape_referenced_tensors_from_expr(value, references, op)
             for tensor in graph.tensors:
                 for item in tensor.shape:
-                    Optimizer._collect_shape_referenced_tensors_from_expr(item, tensors)
+                    Optimizer._collect_shape_referenced_tensors_from_expr(item, references, tensor)
             for pack in graph.packs:
                 for item in pack.shape:
-                    Optimizer._collect_shape_referenced_tensors_from_expr(item, tensors)
-                Optimizer._collect_shape_referenced_tensors_from_expr(pack.size, tensors)
-        return tensors
+                    Optimizer._collect_shape_referenced_tensors_from_expr(item, references, pack)
+                Optimizer._collect_shape_referenced_tensors_from_expr(pack.size, references, pack)
+        return references
 
     @staticmethod
-    def _collect_shape_referenced_tensors_from_expr(value, tensors):
+    def _collect_shape_referenced_tensors_from_expr(value, references, referrer):
         if isinstance(value, nd.Expr):
             for expr in nd.recursive_enumerate_expr(value):
                 if isinstance(expr, nd.ShapeAccess):
-                    tensors.add(expr.tensor.name)
+                    Optimizer._add_referenced_tensor(references, expr.tensor.name, referrer)
                 if isinstance(expr, nd.SizeAccess):
-                    tensors.add(expr.pack.name)
+                    Optimizer._add_referenced_tensor(references, expr.pack.name, referrer)
+
+    @staticmethod
+    def _add_referenced_tensor(references, name, referrer):
+        referrers = references.get(name)
+        if referrers is None:
+            references[name] = [referrer]
+        elif referrers[-1] is not referrer:
+            referrers.append(referrer)
 
     def _is_referenced(self, tensor):
-        return tensor.name in self._referenced_tensors
+        return tensor.name in self._tensor_references
+
+    def _is_referenced_except(self, tensor, referrer):
+        referrers = self._tensor_references.get(tensor.name)
+        if not referrers:
+            return False
+        return any(item is not referrer for item in referrers)
 
     @staticmethod
     def _match_op_type(type, types):
@@ -233,7 +247,7 @@ class Optimizer:
         offset = 2 if sliding.type == 'nn.conv' or sliding.type == 'nn.deconv' else 0
         padding = Optimizer._interleave(pad.attribs['padding'])
 
-        if self._is_referenced(pad.output):
+        if self._is_referenced_except(pad.output, sliding.output):
             return False
 
         if not all(p == 0 and q == 0 for p, q in Optimizer._interleave(sliding.attribs['padding'])) or \
@@ -254,7 +268,7 @@ class Optimizer:
         return np.squeeze(data, axis=(0,) + tuple(i for i in range(2, len(data.shape))))
 
     def _merge_mul_linear(self, mul, linear):
-        if self._is_referenced(mul.output):
+        if self._is_referenced_except(mul.output, linear.output):
             return False
 
         which = 0 if mul.inputs[0].data is not None else 1
@@ -282,7 +296,7 @@ class Optimizer:
         linear.copy_with(inputs=(mul.inputs[other], weights, *linear.inputs[2:]), outputs=linear.detach_output())
 
     def _merge_linear_add(self, linear, add, type=None):
-        if self._is_referenced(linear.output):
+        if self._is_referenced_except(linear.output, add.output):
             return False
 
         bias = add.inputs[1] if add.inputs[0] == linear.output else add.inputs[0]
@@ -312,7 +326,7 @@ class Optimizer:
                          outputs=add.detach_output())
 
     def _merge_linear_mul(self, linear, mul):
-        if self._is_referenced(linear.output):
+        if self._is_referenced_except(linear.output, mul.output):
             return False
 
         variable = mul.inputs[1] if mul.inputs[0] == linear.output else mul.inputs[0]
