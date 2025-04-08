@@ -5,6 +5,7 @@ from .parser import *
 from .printer import *
 from .binary import *
 from .execution import *
+import copy
 import os
 
 
@@ -428,11 +429,13 @@ def recursive_enumerate_expr(expr, preorder=True, follow_references=False):
     elif isinstance(expr, ConcatExpr):
         for item in expr.items:
             yield from recursive_enumerate_expr(item)
+        yield from recursive_enumerate_expr(expr.size)
     elif isinstance(expr, SliceExpr):
         yield from recursive_enumerate_expr(expr.pack)
         yield from recursive_enumerate_expr(expr.first)
         yield from recursive_enumerate_expr(expr.last)
         yield from recursive_enumerate_expr(expr.stride)
+        yield from recursive_enumerate_expr(expr.size)
     elif isinstance(expr, SubscriptExpr):
         yield from recursive_enumerate_expr(expr.pack)
         yield from recursive_enumerate_expr(expr.index)
@@ -443,6 +446,7 @@ def recursive_enumerate_expr(expr, preorder=True, follow_references=False):
         yield from recursive_enumerate_expr(expr.first)
         yield from recursive_enumerate_expr(expr.last)
         yield from recursive_enumerate_expr(expr.stride)
+        yield from recursive_enumerate_expr(expr.size)
     elif isinstance(expr, ShapeAccess):
         yield from recursive_enumerate_expr(expr.item)
     elif isinstance(expr, TensorAccess):
@@ -452,6 +456,89 @@ def recursive_enumerate_expr(expr, preorder=True, follow_references=False):
 
     if not preorder:
         yield expr
+
+
+def transform_expr(expr, func, preorder=True):
+    if preorder:
+        transformed = func(expr)
+        if transformed is not None:
+            return transformed
+
+    if isinstance(expr, PlaceholderExpr):
+        expr = PlaceholderExpr(expr.id, expr.max_value)
+    elif isinstance(expr, IdentifierExpr):
+        expr = IdentifierExpr(expr.name, expr.kind, expr.dtype)
+    elif isinstance(expr, ReferenceExpr):
+        expr = ReferenceExpr(expr.name, expr.target, expr.dtype)
+    elif isinstance(expr, CastExpr):
+        arg = transform_expr(expr.arg, func)
+        expr = CastExpr(arg, expr.dtype, expr.max_size)
+    elif isinstance(expr, UnaryExpr):
+        arg = transform_expr(expr.arg, func)
+        expr = UnaryExpr(expr.op, arg, expr.dtype, expr.max_size)
+    elif isinstance(expr, BinaryExpr):
+        left = transform_expr(expr.left, func)
+        right = transform_expr(expr.right, func)
+        expr = BinaryExpr(expr.op, left, right, expr.dtype, expr.max_size)
+    elif isinstance(expr, SelectExpr):
+        cond = transform_expr(expr.cond, func)
+        left = transform_expr(expr.left, func)
+        right = transform_expr(expr.right, func)
+        expr = SelectExpr(cond, left, right, expr.dtype, expr.max_size)
+    elif isinstance(expr, BoundedExpr):
+        arg = transform_expr(expr.arg, func)
+        lower = transform_expr(expr.lower, func)
+        upper = transform_expr(expr.upper, func)
+        expr = BoundedExpr(arg, lower, upper, expr.dtype)
+    elif isinstance(expr, FoldExpr):
+        pack = transform_expr(expr.pack, func)
+        expr = FoldExpr(expr.op, pack, expr.dtype, expr.max_size)
+    elif isinstance(expr, ListExpr):
+        items = [transform_expr(item, func) for item in expr]
+        expr = ListExpr(items, expr.dtype)
+    elif isinstance(expr, ConcatExpr):
+        items = [transform_expr(item, func) for item in expr.items]
+        size = transform_expr(expr.size, func)
+        return ConcatExpr(items, expr.dtype, size, expr.max_size)
+    elif isinstance(expr, SliceExpr):
+        pack = transform_expr(expr.pack, func)
+        first = transform_expr(expr.first, func)
+        last = transform_expr(expr.last, func)
+        stride = transform_expr(expr.stride, func)
+        size = transform_expr(expr.size, func)
+        expr = SliceExpr(pack, first, last, stride, expr.dtype, size, expr.max_size)
+    elif isinstance(expr, SubscriptExpr):
+        pack = transform_expr(expr.pack, func)
+        index = transform_expr(expr.index, func)
+        expr = SubscriptExpr(pack, index, expr.dtype, expr.max_size)
+    elif isinstance(expr, UniformExpr):
+        value = transform_expr(expr.value, func)
+        size = transform_expr(expr.size, func)
+        expr = UniformExpr(value, size, expr.dtype, expr.max_size)
+    elif isinstance(expr, RangeExpr):
+        first = transform_expr(expr.first, func)
+        last = transform_expr(expr.last, func)
+        stride = transform_expr(expr.stride, func)
+        size = transform_expr(expr.size, func)
+        expr = RangeExpr(first, last, stride, expr.dtype, size, expr.max_size)
+    elif isinstance(expr, SizeAccess):
+        expr = SizeAccess(expr.pack)
+    elif isinstance(expr, ShapeAccess):
+        item = transform_expr(expr.item, func)
+        expr = ShapeAccess(expr.tensor, expr.dim, item, expr.max_size)
+    elif isinstance(expr, TensorAccess):
+        item = transform_expr(expr.item, func)
+        indices = [transform_expr(item, func) for item in expr.indices]
+        expr = TensorAccess(expr.tensor, indices, item)
+    else:
+        expr = copy.copy(expr)
+
+    if not preorder:
+        transformed = func(expr)
+        if transformed is not None:
+            return transformed
+
+    return expr
 
 
 def collect_index_guards(contraction):

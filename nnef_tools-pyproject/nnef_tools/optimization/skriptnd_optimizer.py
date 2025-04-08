@@ -20,8 +20,12 @@ class Optimizer:
             while changed:
                 changed = False
 
-                changed |= self._remove_identity_ops(graph, ('layout.reshape', 'layout.flatten', 'layout.unflatten'),
-                                                     lambda op: op.output.shape == op.input.shape)
+                changed |= self._remove_identity_ops(graph, 'layout.reshape',
+                                                     lambda op: self._resolve_shape_references(op.output.shape, op.input) == op.input.shape)
+                changed |= self._remove_identity_ops(graph, 'layout.flatten',
+                                                     lambda op: op.attribs['rank'] <= 1)
+                changed |= self._remove_identity_ops(graph, 'layout.unflatten',
+                                                     lambda op: len(op.attribs['shape']) == 1)
                 changed |= self._remove_identity_ops(graph, 'layout.transpose',
                                                      lambda op: self._is_range(op.attribs['perm'], op.attribs['axis']))
                 changed |= self._remove_identity_ops(graph, ('layout.squeeze', 'layout.unsqueeze'),
@@ -214,6 +218,11 @@ class Optimizer:
         for axis in axes:
             shape = shape[:axis] + (1,) + shape[axis:]
         return shape
+
+    @staticmethod
+    def _resolve_shape_references(shape, target):
+        return tuple(nd.transform_expr(expr, lambda x: x.tensor.shape[x.dim] if isinstance(x, nd.ShapeAccess) and x.tensor is target else None)
+                     for expr in shape)
 
     def _merge_reshape_sequence(self, graph):
         changed = False
