@@ -266,6 +266,8 @@ class Optimizer:
         attribs = dict(sliding.attribs)
         attribs['padding'] = Optimizer._uninterleave(padding[offset:])
 
+        sliding.output.shape = self._resolve_shape_references(sliding.output.shape, pad.output)
+
         sliding.copy_with(inputs=(pad.input, *sliding.inputs[1:]), outputs=sliding.detach_outputs(), attribs=attribs)
 
     @staticmethod
@@ -302,6 +304,8 @@ class Optimizer:
 
         weights.data = weights.data * scale if mul.type != 'math.div' else weights.data / scale
 
+        linear.output.shape = self._resolve_shape_references(linear.output.shape, mul.output)
+
         linear.copy_with(inputs=(mul.inputs[other], weights, *linear.inputs[2:]), outputs=linear.detach_output())
 
     def _merge_linear_add(self, linear, add, type=None):
@@ -328,6 +332,8 @@ class Optimizer:
 
         if len(linear.inputs) > 2 and linear.inputs[2] is not None:
             bias.data = linear.inputs[2].data - bias.data if add.type == 'math.sub' else linear.inputs[2].data + bias.data
+
+        add.output.shape = self._resolve_shape_references(add.output.shape, linear.output)
 
         linear.copy_with(type=type or linear.type,
                          attribs=linear.attribs if type != 'nn.linear' else {},
@@ -366,5 +372,7 @@ class Optimizer:
         scale = np.reshape(scale, newshape=shape)
 
         weights.data = weights.data * scale if not negate else weights.data / scale
+
+        mul.output.shape = self._resolve_shape_references(mul.output.shape, linear.output)
 
         linear.copy_with(inputs=(linear.inputs[0], weights, *linear.inputs[2:]), outputs=mul.detach_output())
