@@ -13,7 +13,7 @@ class Optimizer:
         self._dequantize = dequantize
 
     def __call__(self, model, only_required=False):
-        self._tensor_references = self._collect_shape_referenced_tensors(model)
+        self._collect_shape_referenced_tensors(model)
 
         for graph in model.graphs:
             changed = True
@@ -75,37 +75,33 @@ class Optimizer:
                 changed |= replace_chain(graph, [{'nn.conv', 'nn.deconv', 'nn.linear'}, {'math.mul', 'math.div'}],
                                          self._merge_linear_mul)
 
-    @staticmethod
-    def _collect_shape_referenced_tensors(model):
-        references = {}
+    def _collect_shape_referenced_tensors(self, model):
+        self._tensor_references = {}
         for graph in model.graphs:
             for op in graph.operations:
                 for key, value in op.attribs.items():
-                    Optimizer._collect_shape_referenced_tensors_from_expr(value, references, op)
+                    self._collect_shape_referenced_tensors_from_expr(value, op)
             for tensor in graph.tensors:
                 for item in tensor.shape:
-                    Optimizer._collect_shape_referenced_tensors_from_expr(item, references, tensor)
+                    self._collect_shape_referenced_tensors_from_expr(item, tensor)
             for pack in graph.packs:
                 for item in pack.shape:
-                    Optimizer._collect_shape_referenced_tensors_from_expr(item, references, pack)
-                Optimizer._collect_shape_referenced_tensors_from_expr(pack.size, references, pack)
-        return references
+                    self._collect_shape_referenced_tensors_from_expr(item, pack)
+                self._collect_shape_referenced_tensors_from_expr(pack.size, pack)
 
-    @staticmethod
-    def _collect_shape_referenced_tensors_from_expr(value, references, referrer):
+    def _collect_shape_referenced_tensors_from_expr(self, value, referrer):
         if isinstance(value, nd.Expr):
             for expr in nd.recursive_enumerate_expr(value):
                 if isinstance(expr, nd.ShapeAccess):
-                    Optimizer._add_referenced_tensor(references, expr.tensor.name, referrer)
+                    self._add_referenced_tensor(expr.tensor.name, referrer)
                 if isinstance(expr, nd.SizeAccess):
-                    Optimizer._add_referenced_tensor(references, expr.pack.name, referrer)
+                    self._add_referenced_tensor(expr.pack.name, referrer)
 
-    @staticmethod
-    def _add_referenced_tensor(references, name, referrer):
-        referrers = references.get(name)
+    def _add_referenced_tensor(self, name, referrer):
+        referrers = self._tensor_references.get(name)
         if referrers is None:
-            references[name] = [referrer]
-        elif referrers[-1] is not referrer:
+            self._tensor_references[name] = [referrer]
+        elif referrer not in referrers:
             referrers.append(referrer)
 
     def _is_referenced(self, tensor):
@@ -116,6 +112,36 @@ class Optimizer:
         if not referrers:
             return False
         return any(item is not referrer for item in referrers)
+
+    def _resolve_shape_references(self, shape, target, referrer=None):
+        def func(x):
+            return x.tensor.shape[x.dim] if isinstance(x, nd.ShapeAccess) and x.tensor is target else \
+                x.size if isinstance(x, nd.SizeAccess) and x.pack is target else None
+
+        if isinstance(shape, tuple):
+            resolved = tuple(nd.transform_expr(expr, func) for expr in shape)
+            if referrer:
+                for item in resolved:
+                    self._collect_shape_referenced_tensors_from_expr(item, referrer)
+        else:
+            resolved = nd.transform_expr(shape, func)
+            if referrer:
+                self._collect_shape_referenced_tensors_from_expr(shape, referrer)
+        return resolved
+
+    def _resolve_shape_references_to(self, target):
+        references = self._tensor_references.get(target.name)
+        if references is not None:
+            for reference in references:
+                if isinstance(reference, Tensor):
+                    reference.shape = self._resolve_shape_references(reference.shape, target, reference)
+                elif isinstance(reference, TensorPack):
+                    reference.shape = self._resolve_shape_references(reference.shape, target, reference)
+                    reference.size = self._resolve_shape_references(reference.size, target, reference)
+                elif isinstance(reference, Operation):
+                    for key, value in reference.attribs.items():
+                        reference.attribs[key] = self._resolve_shape_references(value, target, reference)
+            del self._tensor_references[target.name]
 
     @staticmethod
     def _match_op_type(type, types):
@@ -133,12 +159,11 @@ class Optimizer:
     def _is_uniform(array, value):
         return all(item == value for item in array)
 
-    def _remove_identity_ops(self, graph, type, cond, input_index=None):
+    def _remove_identity_ops(self, graph, type, cond, input_index=0):
         changed = False
         for op in graph.operations:
             if self._match_op_type(op.type, type) and cond(op):
-                input = op.input if input_index is None else op.inputs[input_index]
-                if not self._is_referenced(op.output) and input.quant == op.output.quant:
+                if op.inputs[input_index].quant == op.output.quant:
                     changed |= self._bypass_and_remove(graph, op, input_index=input_index)
 
         return changed
@@ -148,8 +173,7 @@ class Optimizer:
         for op in graph.operations:
             if op.type == type1 and len(op.output.consumers) == 1:
                 consumer = op.output.consumer
-                if consumer.type == type2 and cond(op, consumer) and \
-                        not self._is_referenced(op.output) and not self._is_referenced(consumer.output):
+                if consumer.type == type2 and cond(op, consumer):
                     changed |= self._bypass_and_remove(graph, op)
                     changed |= self._bypass_and_remove(graph, consumer)
 
@@ -162,14 +186,16 @@ class Optimizer:
             permuted[i] = items[perm[i]]
         return type(items)(permuted)
 
-    def _bypass_and_remove(self, graph, op, input_index=None):
-        input = op.input if input_index is None else op.inputs[input_index]
+    def _bypass_and_remove(self, graph, op, input_index=0):
+        input = op.inputs[input_index]
         if op.output in graph.outputs and (input in graph.inputs or input in graph.outputs):
             self._insert_copy(input, op.detach_output())
             graph.remove_operation(op, unlink=True)
             return False
         else:
-            bypass_and_remove(graph, op, remove_input_not_output=op.output in graph.outputs, input_index=input_index)
+            remove_input_not_output = op.output in graph.outputs
+            self._resolve_shape_references_to(input if remove_input_not_output else op.output)
+            bypass_and_remove(graph, op, remove_input_not_output=remove_input_not_output, input_index=input_index)
             return True
 
     @staticmethod
@@ -219,11 +245,6 @@ class Optimizer:
             shape = shape[:axis] + (1,) + shape[axis:]
         return shape
 
-    @staticmethod
-    def _resolve_shape_references(shape, target):
-        return tuple(nd.transform_expr(expr, lambda x: x.tensor.shape[x.dim] if isinstance(x, nd.ShapeAccess) and x.tensor is target else None)
-                     for expr in shape)
-
     def _merge_reshape_sequence(self, graph):
         changed = False
         for op in graph.operations:
@@ -266,7 +287,7 @@ class Optimizer:
         attribs = dict(sliding.attribs)
         attribs['padding'] = Optimizer._uninterleave(padding[offset:])
 
-        sliding.output.shape = self._resolve_shape_references(sliding.output.shape, pad.output)
+        sliding.output.shape = self._resolve_shape_references(sliding.output.shape, pad.output, sliding.output)
 
         sliding.copy_with(inputs=(pad.input, *sliding.inputs[1:]), outputs=sliding.detach_outputs(), attribs=attribs)
 
@@ -304,7 +325,7 @@ class Optimizer:
 
         weights.data = weights.data * scale if mul.type != 'math.div' else weights.data / scale
 
-        linear.output.shape = self._resolve_shape_references(linear.output.shape, mul.output)
+        linear.output.shape = self._resolve_shape_references(linear.output.shape, mul.output, linear.output)
 
         linear.copy_with(inputs=(mul.inputs[other], weights, *linear.inputs[2:]), outputs=linear.detach_output())
 
@@ -333,7 +354,7 @@ class Optimizer:
         if len(linear.inputs) > 2 and linear.inputs[2] is not None:
             bias.data = linear.inputs[2].data - bias.data if add.type == 'math.sub' else linear.inputs[2].data + bias.data
 
-        add.output.shape = self._resolve_shape_references(add.output.shape, linear.output)
+        add.output.shape = self._resolve_shape_references(add.output.shape, linear.output, add.output)
 
         linear.copy_with(type=type or linear.type,
                          attribs=linear.attribs if type != 'nn.linear' else {},
@@ -373,6 +394,6 @@ class Optimizer:
 
         weights.data = weights.data * scale if not negate else weights.data / scale
 
-        mul.output.shape = self._resolve_shape_references(mul.output.shape, linear.output)
+        mul.output.shape = self._resolve_shape_references(mul.output.shape, linear.output, mul.output)
 
         linear.copy_with(inputs=(linear.inputs[0], weights, *linear.inputs[2:]), outputs=mul.detach_output())

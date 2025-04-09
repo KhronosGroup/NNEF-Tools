@@ -136,10 +136,8 @@ def replace_tensor_in_pack(items, old_tensor, new_tensor):
     return items
 
 
-def bypass_and_remove(graph, op, remove_input_not_output=False, input_index=None):
-    assert len(op.outputs) == 1 and (len(op.inputs) == 1 or input_index is not None)
-
-    op_input = op.input if input_index is None else op.inputs[input_index]
+def bypass_and_remove(graph, op, remove_input_not_output=False, input_index=0):
+    op_input = op.inputs[input_index]
     op_output = op.output
 
     graph.remove_operation(op, unlink=True)
