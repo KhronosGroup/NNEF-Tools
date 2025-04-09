@@ -104,15 +104,6 @@ class Optimizer:
         elif referrer not in referrers:
             referrers.append(referrer)
 
-    def _is_referenced(self, tensor):
-        return tensor.name in self._tensor_references
-
-    def _is_referenced_except(self, tensor, referrer):
-        referrers = self._tensor_references.get(tensor.name)
-        if not referrers:
-            return False
-        return any(item is not referrer for item in referrers)
-
     def _resolve_shape_references(self, shape, target, referrer=None):
         def func(x):
             return x.tensor.shape[x.dim] if isinstance(x, nd.ShapeAccess) and x.tensor is target else \
@@ -129,7 +120,7 @@ class Optimizer:
                 self._collect_shape_referenced_tensors_from_expr(shape, referrer)
         return resolved
 
-    def _resolve_shape_references_to(self, target):
+    def _redirect_shape_references(self, target):
         references = self._tensor_references.get(target.name)
         if references is not None:
             for reference in references:
@@ -194,7 +185,7 @@ class Optimizer:
             return False
         else:
             remove_input_not_output = op.output in graph.outputs
-            self._resolve_shape_references_to(input if remove_input_not_output else op.output)
+            self._redirect_shape_references(input if remove_input_not_output else op.output)
             bypass_and_remove(graph, op, remove_input_not_output=remove_input_not_output, input_index=input_index)
             return True
 
@@ -250,7 +241,7 @@ class Optimizer:
         for op in graph.operations:
             if op.type == 'layout.reshape' and len(op.output.consumers) == 1:
                 consumer = op.output.consumer
-                if consumer.type == 'layout.reshape' and not self._is_referenced(op.output):
+                if consumer.type == 'layout.reshape':
                     new_shape = self._reshape_shape(consumer.input.shape, consumer.attribs)
                     if any(s == 0 for s in new_shape):
                         old_shape = self._reshape_shape(op.input.shape, op.attribs)
@@ -277,9 +268,6 @@ class Optimizer:
         offset = 2 if sliding.type == 'nn.conv' or sliding.type == 'nn.deconv' else 0
         padding = Optimizer._interleave(pad.attribs['padding'])
 
-        if self._is_referenced_except(pad.output, sliding.output):
-            return False
-
         if not all(p == 0 and q == 0 for p, q in Optimizer._interleave(sliding.attribs['padding'])) or \
                 len(padding) < offset or not all(p == 0 and q == 0 for p, q in padding[:offset]):
             return False
@@ -287,7 +275,7 @@ class Optimizer:
         attribs = dict(sliding.attribs)
         attribs['padding'] = Optimizer._uninterleave(padding[offset:])
 
-        sliding.output.shape = self._resolve_shape_references(sliding.output.shape, pad.output, sliding.output)
+        self._redirect_shape_references(pad.output)
 
         sliding.copy_with(inputs=(pad.input, *sliding.inputs[1:]), outputs=sliding.detach_outputs(), attribs=attribs)
 
@@ -300,9 +288,6 @@ class Optimizer:
         return np.squeeze(data, axis=(0,) + tuple(i for i in range(2, len(data.shape))))
 
     def _merge_mul_linear(self, mul, linear):
-        if self._is_referenced_except(mul.output, linear.output):
-            return False
-
         which = 0 if mul.inputs[0].data is not None else 1
         other = 1 - which
 
@@ -325,14 +310,11 @@ class Optimizer:
 
         weights.data = weights.data * scale if mul.type != 'math.div' else weights.data / scale
 
-        linear.output.shape = self._resolve_shape_references(linear.output.shape, mul.output, linear.output)
+        self._redirect_shape_references(mul.output)
 
         linear.copy_with(inputs=(mul.inputs[other], weights, *linear.inputs[2:]), outputs=linear.detach_output())
 
     def _merge_linear_add(self, linear, add, type=None):
-        if self._is_referenced_except(linear.output, add.output):
-            return False
-
         bias = add.inputs[1] if add.inputs[0] == linear.output else add.inputs[0]
         if bias.data is None or not Optimizer._is_channelwise_shape(bias.shape):
             return False
@@ -354,7 +336,7 @@ class Optimizer:
         if len(linear.inputs) > 2 and linear.inputs[2] is not None:
             bias.data = linear.inputs[2].data - bias.data if add.type == 'math.sub' else linear.inputs[2].data + bias.data
 
-        add.output.shape = self._resolve_shape_references(add.output.shape, linear.output, add.output)
+        self._redirect_shape_references(linear.output)
 
         linear.copy_with(type=type or linear.type,
                          attribs=linear.attribs if type != 'nn.linear' else {},
@@ -362,9 +344,6 @@ class Optimizer:
                          outputs=add.detach_output())
 
     def _merge_linear_mul(self, linear, mul):
-        if self._is_referenced_except(linear.output, mul.output):
-            return False
-
         variable = mul.inputs[1] if mul.inputs[0] == linear.output else mul.inputs[0]
         if variable.data is None or not Optimizer._is_channelwise_shape(variable.shape):
             return False
@@ -394,6 +373,6 @@ class Optimizer:
 
         weights.data = weights.data * scale if not negate else weights.data / scale
 
-        mul.output.shape = self._resolve_shape_references(mul.output.shape, linear.output, mul.output)
+        self._redirect_shape_references(linear.output)
 
         linear.copy_with(inputs=(linear.inputs[0], weights, *linear.inputs[2:]), outputs=mul.detach_output())
