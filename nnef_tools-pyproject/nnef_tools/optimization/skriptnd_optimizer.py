@@ -1,5 +1,4 @@
 from ..model.utils import bypass_and_remove, replace_chain
-from ..model.utils import generate_tensor_names_from_op_type, generate_missing_tensor_names_from_op_type
 from ..model import *
 import numpy as np
 import skriptnd as nd
@@ -7,8 +6,7 @@ import skriptnd as nd
 
 class Optimizer:
 
-    def __init__(self, keep_tensor_names=True, custom_optimizers=None, dequantize=False):
-        self._keep_tensor_names = keep_tensor_names
+    def __init__(self, custom_optimizers=None, dequantize=False):
         self._custom_optimizers = custom_optimizers or {}
         self._dequantize = dequantize
 
@@ -79,11 +77,17 @@ class Optimizer:
                 changed |= replace_chain(graph, [{'nn.conv', 'nn.deconv'}, 'nn.batch_norm'],
                                          self._merge_conv_batch_norm)
                 changed |= replace_chain(graph, ['nn.batch_norm'], self._split_batch_norm)
+                changed |= replace_chain(graph, ['layout.transpose', 'layout.squeeze'], self._merge_transpose_squeeze)
+                changed |= replace_chain(graph, ['layout.reshape'], self._substitute_squeeze)
 
                 for chain, replacer in self._custom_optimizers.items():
                     changed |= replace_chain(graph, chain, replacer)
 
                 changed |= self._remove_unused_variables_and_constants(graph)
+
+            if self._dequantize:
+                self._dequantize_variables_and_constants(graph)
+                self._remove_quantization_attribs(graph)
 
     def _collect_shape_referenced_tensors(self, model):
         self._tensor_references = {}
@@ -476,3 +480,83 @@ class Optimizer:
 
         Operation(graph=bn.graph, type='math.mul', inputs=(bn.inputs[0], scale), outputs=scaled, attribs={'rhs_align': 1})
         Operation(graph=bn.graph, type='math.add', inputs=(scaled, offset), outputs=bn.detach_output(), attribs={'rhs_align': 1})
+
+    def _merge_transpose_squeeze(self, transpose, squeeze):
+        transpose_axes = list(range(transpose.attribs['axis'])) + list(transpose.attribs['perm'])
+        squeeze_axes = squeeze.attribs['axes']
+
+        transposed_squeezed = [x for i, x in enumerate(transpose_axes) if i not in squeeze_axes]
+        merged_squeeze_axes = [transpose_axes[x] for x in squeeze_axes]
+        merged_squeezed = [i for i in range(len(transpose_axes)) if i not in merged_squeeze_axes]
+        if merged_squeezed != transposed_squeezed:
+            return False
+
+        attribs = dict(squeeze.attribs)
+        attribs['axes'] = merged_squeeze_axes
+
+        self._redirect_shape_references(transpose.output)
+
+        squeeze.copy_with(inputs=transpose.input, outputs=squeeze.detach_outputs(), attribs=attribs)
+
+    def _substitute_squeeze(self, reshape):
+        input_shape = reshape.input.shape
+        output_shape = reshape.output.shape
+
+        if not len(output_shape) < len(input_shape):
+            return False
+
+        k = 0
+        axes = []
+        for i in range(len(input_shape)):
+            if k < len(output_shape) and input_shape[i] == output_shape[k]:
+                k += 1
+            elif input_shape[i] == 1:
+                axes.append(i)
+            else:
+                return False
+
+        attribs = {'axes': axes}
+
+        Operation(reshape.graph, type='layout.squeeze', name=reshape.name, inputs=reshape.input, outputs=reshape.detach_output(),
+                  attribs=attribs)
+
+    def _dequantize_variables_and_constants(self, graph):
+        for tensor in graph.tensors:
+            if tensor.quant and tensor.data is not None:
+                rank = len(tensor.data.shape)
+                scale = self._make_quant_param(tensor.quant.get('scale'), rank)
+                zero_point = self._make_quant_param(tensor.quant.get('zero_point'), rank)
+                if isinstance(zero_point, np.ndarray):
+                    assert self._broadcastable(zero_point.shape, tensor.shape), \
+                        f"zero-point shape {zero_point.shape} cannot be broadcast to tensor shape {tensor.shape} " \
+                        f"for tensor '{tensor.name}'"
+                if isinstance(scale, np.ndarray):
+                    assert self._broadcastable(scale.shape, tensor.shape), \
+                        f"scale shape {scale.shape} cannot be broadcast to tensor shape {tensor.shape} " \
+                        f"for tensor '{tensor.name}'"
+                if scale is not None and not self._is_zero(scale):
+                    dequantized = (tensor.data - zero_point) * scale
+                    tensor.data = dequantized.astype(np.float32)
+                    tensor.quant = None
+
+    @staticmethod
+    def _remove_quantization_attribs(graph):
+        for tensor in graph.tensors:
+            tensor.quant = None
+
+    @staticmethod
+    def _make_quant_param(param, rank):
+        if isinstance(param, nd.UniformExpr):
+            return param.value
+        elif isinstance(param, nd.ListExpr):
+            return np.reshape(np.array(param.items), shape=(1, param.size) + (1,) * (rank - 2))
+        else:
+            return param
+
+    @staticmethod
+    def _broadcastable(x, y):
+        return all(xi == yi or xi == 1 for xi, yi in zip(x, y))
+
+    @staticmethod
+    def _is_zero(value):
+        return np.all(value == 0) if isinstance(value, np.ndarray) else value == 0
