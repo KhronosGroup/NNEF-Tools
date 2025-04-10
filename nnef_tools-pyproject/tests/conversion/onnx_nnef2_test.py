@@ -2046,7 +2046,7 @@ class NetworkTestCases(TestEnv):
         self._test_conversion_from_file(self._network_folder + 'resnext50.onnx')
 
     def test_ssd(self):
-        self._test_conversion_from_file(self._network_folder + 'ssd.onnx')
+        self._test_conversion_from_file(self._network_folder + 'ssd.onnx', epsilon=1e-4)
 
     def test_ssd_resnet34(self):
         self._test_conversion_from_file(self._network_folder + 'ssd_resnet34.fixed.onnx',

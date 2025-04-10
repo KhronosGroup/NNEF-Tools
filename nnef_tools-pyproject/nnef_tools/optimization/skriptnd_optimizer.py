@@ -74,6 +74,11 @@ class Optimizer:
                                          self._merge_linear_add)
                 changed |= replace_chain(graph, [{'nn.conv', 'nn.deconv', 'nn.linear'}, {'math.mul', 'math.div'}],
                                          self._merge_linear_mul)
+                changed |= replace_chain(graph, ['linalg.matmul', {'math.add', 'math.sub'}],
+                                         self._merge_matmul_bias)
+                changed |= replace_chain(graph, [{'nn.conv', 'nn.deconv'}, 'nn.batch_norm'],
+                                         self._merge_conv_batch_norm)
+                changed |= replace_chain(graph, ['nn.batch_norm'], self._split_batch_norm)
 
     def _collect_shape_referenced_tensors(self, model):
         self._tensor_references = {}
@@ -266,14 +271,14 @@ class Optimizer:
 
     def _merge_pad_with_sliding(self, pad, sliding):
         offset = 2 if sliding.type == 'nn.conv' or sliding.type == 'nn.deconv' else 0
-        padding = Optimizer._interleave(pad.attribs['padding'])
+        padding = self._interleave(pad.attribs['padding'])
 
         if not all(p == 0 and q == 0 for p, q in Optimizer._interleave(sliding.attribs['padding'])) or \
                 len(padding) < offset or not all(p == 0 and q == 0 for p, q in padding[:offset]):
             return False
 
         attribs = dict(sliding.attribs)
-        attribs['padding'] = Optimizer._uninterleave(padding[offset:])
+        attribs['padding'] = self._uninterleave(padding[offset:])
 
         self._redirect_shape_references(pad.output)
 
@@ -292,13 +297,13 @@ class Optimizer:
         other = 1 - which
 
         variable = mul.inputs[which]
-        if variable.data is None or not Optimizer._is_channelwise_shape(variable.shape):
+        if variable.data is None or not self._is_channelwise_shape(variable.shape):
             return False
 
         if len(variable.shape) == 0:
             scale = np.expand_dims(variable.data, axis=0)
         elif len(variable.shape) >= 2:
-            scale = Optimizer._squeeze_batch_and_spatial_dims(variable.data)
+            scale = self._squeeze_batch_and_spatial_dims(variable.data)
 
         weights = linear.inputs[1]
         if weights.data is None:
@@ -316,7 +321,7 @@ class Optimizer:
 
     def _merge_linear_add(self, linear, add, type=None):
         bias = add.inputs[1] if add.inputs[0] == linear.output else add.inputs[0]
-        if bias.data is None or not Optimizer._is_channelwise_shape(bias.shape):
+        if bias.data is None or not self._is_channelwise_shape(bias.shape):
             return False
 
         if len(linear.inputs) > 2 and linear.inputs[2] is not None and linear.inputs[2].data is None:
@@ -325,7 +330,7 @@ class Optimizer:
         if len(bias.shape) == 0:
             bias.data = np.expand_dims(bias.data, axis=0)
         elif len(bias.shape) >= 2:
-            bias.data = Optimizer._squeeze_batch_and_spatial_dims(bias.data)
+            bias.data = self._squeeze_batch_and_spatial_dims(bias.data)
 
         bias.shape = bias.data.shape
 
@@ -345,13 +350,13 @@ class Optimizer:
 
     def _merge_linear_mul(self, linear, mul):
         variable = mul.inputs[1] if mul.inputs[0] == linear.output else mul.inputs[0]
-        if variable.data is None or not Optimizer._is_channelwise_shape(variable.shape):
+        if variable.data is None or not self._is_channelwise_shape(variable.shape):
             return False
 
         if len(variable.shape) == 0:
             scale = np.expand_dims(variable.data, axis=0)
         elif len(variable.shape) >= 2:
-            scale = Optimizer._squeeze_batch_and_spatial_dims(variable.data)
+            scale = self._squeeze_batch_and_spatial_dims(variable.data)
 
         negate = mul.type == 'math.div'
 
@@ -376,3 +381,87 @@ class Optimizer:
         self._redirect_shape_references(linear.output)
 
         linear.copy_with(inputs=(linear.inputs[0], weights, *linear.inputs[2:]), outputs=mul.detach_output())
+
+    def _merge_matmul_bias(self, matmul, add):
+        if matmul.inputs[0].rank != 2:
+            return False
+
+        bias = add.inputs[1] if add.inputs[0] == matmul.output else add.inputs[0]
+        if not self._is_channelwise_shape(bias.shape):
+            return False
+
+        transposeA = matmul.attribs.get('transA') or False
+        transposeB = matmul.attribs.get('transB') or False
+
+        if transposeA:
+            return False
+
+        if not transposeB:
+            B = matmul.inputs[1]
+            if not B.is_variable:
+                return False
+
+            rank = len(B.data.shape)
+            B.data = np.transpose(B.data, axes=list(range(rank - 2)) + [rank - 1, rank - 2])
+            B.shape = B.data.shape
+            matmul.attribs['transB'] = True
+
+        return self._merge_linear_add(matmul, add, type='nn.linear')
+
+    @staticmethod
+    def _merged_conv_batch_norm_params(weights, bias, mean, variance, offset, scale, epsilon, axis):
+        std = np.sqrt(variance + epsilon)
+        factor = scale / std
+        new_weights = weights * np.reshape(factor, shape=(1,) * axis + factor.shape + (1,) * (len(weights.shape) - axis - 1))
+        new_bias = (bias - mean) * factor + offset
+        return new_weights, new_bias
+
+    def _merge_conv_batch_norm(self, conv, bn):
+        if any(tensor.quant for tensor in conv.inputs if tensor is not None) or \
+                any(tensor.quant for tensor in bn.inputs if tensor is not None):
+            return False
+
+        if conv.inputs[1].data is None:
+            return False
+
+        weights, bias = self._merged_conv_batch_norm_params(conv.inputs[1].data,
+                                                            conv.inputs[2].data if conv.inputs[2] else 0,
+                                                            bn.inputs[1].data,
+                                                            bn.inputs[2].data,
+                                                            bn.inputs[3].data if bn.inputs[3] else 0,
+                                                            bn.inputs[4].data if bn.inputs[4] else 1,
+                                                            bn.attribs['epsilon'],
+                                                            axis=1 if conv.type == 'nn.deconv' else 0)
+        conv.inputs[1].data = weights
+
+        if conv.inputs[2]:
+            conv.inputs[2].data = bias
+            conv.copy_with(outputs=bn.detach_output())
+        else:
+            bias = Tensor(conv.graph, name=conv.output.name + '_bias', shape=bias.shape, dtype=bias.dtype.type, data=bias)
+            conv.copy_with(inputs=(*conv.inputs[:2], bias), outputs=bn.detach_output())
+
+        self._redirect_shape_references(conv.output)
+
+    @staticmethod
+    def _merged_batch_norm_params(mean, variance, offset, scale, epsilon):
+        std = np.sqrt(variance + epsilon)
+        factor = scale / std
+        return factor, offset - factor * mean
+
+    def _split_batch_norm(self, bn):
+        if any(tensor.quant for tensor in bn.inputs if tensor is not None):
+            return False
+
+        scale, offset = self._merged_batch_norm_params(bn.inputs[1].data,
+                                                       bn.inputs[2].data,
+                                                       bn.inputs[3].data if bn.inputs[3] else 0,
+                                                       bn.inputs[4].data if bn.inputs[4] else 1,
+                                                       bn.attribs['epsilon'])
+
+        scale = Tensor(bn.graph, data=scale, name=bn.output.name + '_scale', shape=scale.shape, dtype=scale.dtype.type)
+        offset = Tensor(bn.graph, data=offset, name=bn.output.name + '_offset', shape=offset.shape, dtype=offset.dtype.type)
+        scaled = Tensor(graph=bn.graph, name=bn.output.name + '_scaled', shape=bn.output.shape, dtype=bn.output.dtype)
+
+        Operation(graph=bn.graph, type='math.mul', inputs=(bn.inputs[0], scale), outputs=scaled, attribs={'rhs_align': 1})
+        Operation(graph=bn.graph, type='math.add', inputs=(scaled, offset), outputs=bn.detach_output(), attribs={'rhs_align': 1})
