@@ -80,6 +80,11 @@ class Optimizer:
                                          self._merge_conv_batch_norm)
                 changed |= replace_chain(graph, ['nn.batch_norm'], self._split_batch_norm)
 
+                for chain, replacer in self._custom_optimizers.items():
+                    changed |= replace_chain(graph, chain, replacer)
+
+                changed |= self._remove_unused_variables_and_constants(graph)
+
     def _collect_shape_referenced_tensors(self, model):
         self._tensor_references = {}
         for graph in model.graphs:
@@ -212,6 +217,12 @@ class Optimizer:
                     for consumer in list(tensor.consumers):  # copy the list before removals!
                         changed |= self._bypass_and_remove(graph, consumer)
         return changed
+
+    @staticmethod
+    def _remove_unused_variables_and_constants(graph):
+        tensors = [tensor for tensor in graph.tensors if tensor.data is not None and len(tensor.consumers) == 0]
+        graph.remove_tensors(tensors)
+        return len(tensors) != 0
 
     @staticmethod
     def _all_consumers_same(tensor, type):
