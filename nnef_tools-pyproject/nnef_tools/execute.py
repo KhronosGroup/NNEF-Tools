@@ -1,6 +1,7 @@
 from .utils import stdio
 from .execution import Statistics
 from collections import namedtuple
+import skriptnd as sknd
 import importlib
 import argparse
 import numpy as np
@@ -29,6 +30,12 @@ _nnef_dtype_to_numpy = {
     'scalar': np.float32,
     'integer': np.int32,
     'logical': np.bool_,
+}
+
+_sknd_dtype_to_numpy = {
+    sknd.Dtype.Real: np.float32,
+    sknd.Dtype.Int: np.int32,
+    sknd.Dtype.Bool: np.bool_,
 }
 
 _numpy_dtype_remap = {
@@ -360,7 +367,36 @@ class NNEFExecutor(Executor):
             return self.interpreter(inputs, output_names, collect_statistics), None
 
 
-def get_executor(format, model_path, require_intermediates, custom_operators, decomposed):
+class SkriptNDExecutor(Executor):
+
+    def __init__(self, model_path, target=None, device=None, atomic=None):
+        import skriptnd as sknd
+        self.model = sknd.read_model(model_path, atomic=atomic)
+        if target == 'cpp':
+            self.runner = sknd.compile_model(self.model)
+        else:
+            from .execution.tvm import VirtualMachine
+            self.runner = VirtualMachine(self.model, target=target, device=device)
+
+    def input_info(self):
+        return [TensorInfo(tensor.name, tensor.shape, _sknd_dtype_to_numpy[tensor.dtype])
+                for tensor in self.model.graphs[0].inputs]
+
+    def output_info(self):
+        return [TensorInfo(tensor.name, tensor.shape, _sknd_dtype_to_numpy[tensor.dtype])
+                for tensor in self.model.graphs[0].outputs]
+
+    def tensor_info(self):
+        return [TensorInfo(tensor.name, tensor.shape, _sknd_dtype_to_numpy[tensor.dtype])
+                for graph in self.model.graphs for tensor in graph.tensors]
+
+    def __call__(self, inputs, output_names=None, collect_statistics=False):
+        inputs = [inputs[tensor.name] for tensor in self.input_info()]
+        outputs = self.runner(*inputs)
+        return {tensor.name: output for tensor, output in zip(self.output_info(), outputs)}, None
+
+
+def get_executor(format, model_path, require_intermediates, custom_operators, decomposed, atomic, target, device):
     if format == 'tf':
         return TFExecutor(model_path)
     elif format == 'tflite':
@@ -369,6 +405,8 @@ def get_executor(format, model_path, require_intermediates, custom_operators, de
         return ONNXExecutor(model_path, require_intermediates)
     elif format == 'nnef':
         return NNEFExecutor(model_path, custom_operators, decomposed)
+    elif format == 'sknd':
+        return SkriptNDExecutor(model_path, target=target, device=device, atomic=atomic)
     else:
         return None
 
@@ -452,7 +490,9 @@ def main(args):
     collect_statistics = args.statistics is not None
 
     try:
-        executor = get_executor(args.format, args.model, collect_statistics, custom_operators, args.decompose)
+        executor = get_executor(args.format, args.model, collect_statistics,
+                                custom_operators, args.decompose, args.atomics,
+                                args.target, args.device)
 
         if isinstance(output_names, dict):
             fetch_names = output_names.keys()
@@ -543,7 +583,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('model', type=str,
                         help='The model to execute')
-    parser.add_argument('--format', type=str, required=True, choices=['tf', 'tflite', 'onnx', 'nnef'],
+    parser.add_argument('--format', type=str, required=True, choices=['tf', 'tflite', 'onnx', 'nnef', 'sknd'],
                         help='The format of the model')
     parser.add_argument('--random', type=str, default=None,
                         help='Random distribution for input generation')
@@ -560,6 +600,8 @@ if __name__ == '__main__':
                         help='The inputs/outputs to transpose from channels last to channels first dimension order')
     parser.add_argument('--decompose', type=str, nargs='*', default=None,
                         help='Names of operators to be decomposed by NNEF parser')
+    parser.add_argument('--atomics', type=str, nargs='*', default=None,
+                        help='Names of operators not to be decomposed by parser')
     parser.add_argument('--statistics', type=str, nargs='?', default=None, const='stats.json',
                         help='Calculate activations statistics and save to output path in json format')
     parser.add_argument('--custom-operators', type=str, nargs='+', default=None,
@@ -568,4 +610,8 @@ if __name__ == '__main__':
                         help='Specify batch-size for single-batch models')
     parser.add_argument('--tensor-mapping', type=str, default=None,
                         help='Use mapping of tensor names for statistics')
+    parser.add_argument('--target', type=str, default=None,
+                        help='Compiler target')
+    parser.add_argument('--device', type=str, default=None,
+                        help='Compiler device')
     exit(main(parser.parse_args()))
