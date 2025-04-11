@@ -17,7 +17,7 @@ if os.path.exists("skriptnd.egg-info"):
 setup(
     ext_modules=[
         Extension(
-            "_skriptnd",
+            name="_skriptnd",
             sources=["skriptnd/skriptnd.cpp", "skriptnd/cpp/src/skriptnd.cpp"],
             include_dirs=["skriptnd/cpp/include", "skriptnd/cpp/include/core",
                           "skriptnd/cpp/include/frontend", "skriptnd/cpp/include/composer",
@@ -28,4 +28,5 @@ setup(
                                ["-std=c++17"] if os_name != "nt" else [],
         )
     ],
+    package_data={"skriptnd.stdlib": ["*.nds"]}
 )

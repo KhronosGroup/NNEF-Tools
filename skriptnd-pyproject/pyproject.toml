@@ -35,6 +35,7 @@ readme = { file = ["package_info.md"], content-type = "text/markdown"  }
 
 [tool.setuptools.package-data]
 "skriptnd.cpp" = ["**/*"]
+"skriptnd.stdlib" = ["*.nds"]
 
 [tool.cibuildwheel]
 # Skip PyPy wheels
