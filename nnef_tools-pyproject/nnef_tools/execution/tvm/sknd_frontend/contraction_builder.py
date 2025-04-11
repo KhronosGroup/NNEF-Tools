@@ -2,12 +2,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .graph_converter import OperationInfo, TensorInfo
+    from .graph_builder import OperationInfo, TensorInfo
 
-import skriptnd as nd
+import skriptnd as sknd
 from tvm import tir, ir
 
-from .expr_converter import Environment, ExprConverter
+from .expression_builder import Environment, ExprBuilder
 
 
 class NotExpressibleError(Exception):
@@ -15,7 +15,7 @@ class NotExpressibleError(Exception):
     pass
 
 
-def _separate_contractions(contrs) -> dict[str, list[nd.Contraction]]:
+def _separate_contractions(contrs) -> dict[str, list[sknd.Contraction]]:
     """
     Separate contractions by output tensor and return a dict with output tensor name as key
     """
@@ -29,14 +29,14 @@ def _separate_contractions(contrs) -> dict[str, list[nd.Contraction]]:
     return output_contractions
 
 
-def convert_contraction(contractions: list[nd.Contraction],
-                        inputs: list[TensorInfo],
-                        outputs: list[TensorInfo],
-                        attribs: OperationInfo,
-                        backward_map: dict[nd.Expr, str],
-                        rx_dyn_shape_vars: dict[str, Any],
-                        return_stmt=False
-                        ) -> tuple[tir.Stmt, list[Any]] | tir.PrimFunc:
+def build_contraction(contractions: list[sknd.Contraction],
+                      inputs: list[TensorInfo],
+                      outputs: list[TensorInfo],
+                      attribs: OperationInfo,
+                      backward_map: dict[sknd.Expr, str],
+                      rx_dyn_shape_vars: dict[str, Any],
+                      return_stmt=False
+                      ) -> tuple[tir.Stmt, list[Any]] | tir.PrimFunc:
     """
     Convert a list of SkriptND contractions to a TIR PrimFunc
 
@@ -73,7 +73,7 @@ def convert_contraction(contractions: list[nd.Contraction],
         stmts = []
         for name, contr_list in output_contractions.items():
             env = Environment(buffers, backward_map)
-            exp_converter = ExprConverter(env)
+            exp_converter = ExprBuilder(env)
 
             # single contraction, no init block
             if len(contr_list) == 1:
@@ -183,11 +183,11 @@ def convert_contraction(contractions: list[nd.Contraction],
     )
 
 
-def _collect_ins_outs(contr: nd.Contraction, buffers) -> tuple[dict[str, nd.TensorAccess], dict[str, nd.TensorAccess]]:
+def _collect_ins_outs(contr: sknd.Contraction, buffers) -> tuple[dict[str, sknd.TensorAccess], dict[str, sknd.TensorAccess]]:
     # inputs: on rhs of contr
     ins = {}
-    for i, exp in enumerate(nd.recursive_enumerate_expr(contr.right)):
-        if isinstance(exp, nd.TensorAccess):
+    for i, exp in enumerate(sknd.recursive_enumerate_expr(contr.right)):
+        if isinstance(exp, sknd.TensorAccess):
             ins[exp.tensor.name] = exp
 
     # outputs: on lhs of contr
@@ -196,7 +196,7 @@ def _collect_ins_outs(contr: nd.Contraction, buffers) -> tuple[dict[str, nd.Tens
     return ins, outs
 
 
-def _contr_to_stmt(contr: nd.Contraction, ins, outs, buffers, env: Environment, exp_converter: ExprConverter,
+def _contr_to_stmt(contr: sknd.Contraction, ins, outs, buffers, env: Environment, exp_converter: ExprBuilder,
                    init_value=None) -> tir.Stmt:
     it_vars = {}
     it_itvars = {}

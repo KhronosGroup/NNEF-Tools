@@ -1,4 +1,4 @@
-from .sknd_tvm_converter import from_sknd, convert_dtype
+from .sknd_frontend import from_sknd
 import tvm
 
 

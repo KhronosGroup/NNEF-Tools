@@ -10,24 +10,24 @@ import numpy as np
 import tvm
 from tvm import relax, tir
 
-import skriptnd as nd
+import skriptnd as sknd
 
 from . import convert_dtype, _atomics
-from .expr_converter import ExprConverter, Environment
+from .expression_builder import ExprBuilder, Environment
 from .high_level_op_lib import convert_map, NotInMapError, DimensionError, UnsupportedAttr
-from .contr_converter import convert_contraction, NotExpressibleError
+from .contraction_builder import build_contraction, NotExpressibleError
 
 UNEXPRESSIBLE_OPERATIONS = ["top_k", "nonmax_suppress"]
 
 
-def from_sknd(model: str | nd.Model | PathLike,
-            keep_params_in_input: bool = False,
-            keep_ts_names: bool = False,
-            contr_only: bool = False,
-            atomics: dict[str, Callable[[...], bool] | bool] = None,
-            keep_intrin: dict[str, Callable[[...], bool] | bool] = None,
-            custom_converter_map: dict[str, Callable] = None,
-            ) -> tvm.IRModule:
+def from_sknd(model: str | sknd.Model | PathLike,
+              keep_params_in_input: bool = False,
+              keep_ts_names: bool = False,
+              contr_only: bool = False,
+              atomics: dict[str, Callable[[...], bool] | bool] = None,
+              keep_intrin: dict[str, Callable[[...], bool] | bool] = None,
+              custom_converter_map: dict[str, Callable] = None,
+              ) -> tvm.IRModule:
     """
     Convert a SkriptND model to a TVM IRModule
 
@@ -46,17 +46,17 @@ def from_sknd(model: str | nd.Model | PathLike,
     # if input is str, try to resolve it
     if isinstance(model, (str, PathLike)):
         if isinstance(model, PathLike) or path.isfile(model):
-            model = nd.read_model(model, unroll=True,
-                                  atomic={**_atomics, **(atomics or {})} if not contr_only else False)
+            model = sknd.read_model(model, unroll=True,
+                                    atomic={**_atomics, **(atomics or {})} if not contr_only else False)
         else:
             # raise ValueError("TO DO")   # TODO
             try:
-                model = nd.parse_string(model, unroll=True,
-                                        atomic={**_atomics, **(atomics or {})} if not contr_only else False)
+                model = sknd.parse_string(model, unroll=True,
+                                          atomic={**_atomics, **(atomics or {})} if not contr_only else False)
             except Exception as e:
                 raise ValueError(f"Invalid model string: {model}") from e
 
-    if not isinstance(model, nd.Model):
+    if not isinstance(model, sknd.Model):
         raise ValueError(f"Invalid model: {model}")
 
     return ModuleBuilder(custom_converter_map, keep_ts_names, contr_only,
@@ -65,13 +65,13 @@ def from_sknd(model: str | nd.Model | PathLike,
 
 def _get_shape_var_name(shape_elem, idx, info):
     # todo rewrite with expr_converter?
-    if isinstance(shape_elem, nd.PlaceholderExpr):
+    if isinstance(shape_elem, sknd.PlaceholderExpr):
         return shape_elem.id
 
     # Currently the support only needs PlaceholderExpr, these are deprecated
-    if isinstance(shape_elem, nd.ShapeAccess):
+    if isinstance(shape_elem, sknd.ShapeAccess):
         return shape_elem.tensor.shape[shape_elem.dim].id
-    elif isinstance(shape_elem, nd.UnaryExpr):
+    elif isinstance(shape_elem, sknd.UnaryExpr):
         if shape_elem.op == "~":
             return f"{info.name}:{idx}"
     else:
@@ -99,14 +99,14 @@ class ModuleBuilder:
         # Subgraphs need to be either tPrimFunc or rFunction save them for starters
         self.subgraphs = {}
 
-    def convert_model(self, module: nd.Model):
+    def convert_model(self, module: sknd.Model):
         """
         Convert a SkriptND module to a TVM Relax IRModule
         """
         for graph in module.graphs[1:]:
-            self.subgraphs[graph.name] = GraphConverter(self, graph, self.use_contractions)
+            self.subgraphs[graph.name] = GraphBuilder(self, graph, self.use_contractions)
 
-        main = GraphConverter(self, module.graphs[0], self.use_contractions)
+        main = GraphBuilder(self, module.graphs[0], self.use_contractions)
         main.subgraphs = self.subgraphs
 
         main.to_relax_func(name=module.graphs[0].name if self.keep_ts_names else "main")
@@ -114,12 +114,12 @@ class ModuleBuilder:
         return self.block_builder.get()
 
 
-class GraphConverter:
+class GraphBuilder:
     """
     Convert a SkriptND graph to a TVM Relax function (or PrimFunc)
     """
 
-    def __init__(self, outer, graph: nd.Graph, force_tir):
+    def __init__(self, outer, graph: sknd.Graph, force_tir):
         # Graph level attributes
         self.module_builder: ModuleBuilder = outer
         self.graph = graph
@@ -161,7 +161,7 @@ class GraphConverter:
                     op_attribs = OperationInfo(op.name,
                                                op.outputs,
                                                op.attribs,
-                                               ExprConverter(self.env, namespace=relax.op))
+                                               ExprBuilder(self.env, namespace=relax.op))
 
                     # convert operation, the result will be a relax.Call or a tir.PrimFunc
                     output = self._convert_op(op, internals, op_attribs)
@@ -184,7 +184,7 @@ class GraphConverter:
 
                         i = 0
                         for o in op.outputs:
-                            if isinstance(o, nd.TensorPack):
+                            if isinstance(o, sknd.TensorPack):
                                 pack_out = []
                                 for item in o.items:
                                     internals[item.name] = output[i]
@@ -199,7 +199,7 @@ class GraphConverter:
                 outputs = []
                 for o in self.graph.outputs:
                     # bundle TensorPack into Tuple
-                    if isinstance(o, nd.TensorPack):
+                    if isinstance(o, sknd.TensorPack):
                         outputs.append(relax.Tuple([internals[t.name] for t in o.items]))
                     else:
                         outputs.append(internals[o.name])
@@ -229,7 +229,7 @@ class GraphConverter:
             op_attribs = OperationInfo(op.name,
                                        op.outputs,
                                        op.attribs,
-                                       ExprConverter(namespace=relax.op),
+                                       ExprBuilder(namespace=relax.op),
                                        use_handles=True)
             stmt, op_pars = self._convert_op(op, internals, op_attribs, True)
 
@@ -271,7 +271,7 @@ class GraphConverter:
     def _load_tensors(self):
         # todo check TP enumerate?
         for t in self.graph.inputs:
-            if isinstance(t, nd.TensorPack):
+            if isinstance(t, sknd.TensorPack):
                 # flattened
                 # for i, o in enumerate(t.items):
                 #     inner.inputs[o.name] = inner.module_builder.TensorInfo(o)
@@ -286,7 +286,7 @@ class GraphConverter:
                 self.inputs[t.name] = TensorInfo(t)
 
         for t in self.graph.outputs:
-            if isinstance(t, nd.TensorPack):
+            if isinstance(t, sknd.TensorPack):
                 for i, o in enumerate(t.items):
                     self.outputs[o.name] = TensorInfo(o)
             else:
@@ -306,7 +306,7 @@ class GraphConverter:
                 for j, shape in enumerate(shapes):
                     shape = list(shape)
                     for i, s in enumerate(shape):
-                        if isinstance(s, nd.Expr):
+                        if isinstance(s, sknd.Expr):
                             var_name = _get_shape_var_name(s, i, info)
                             if var_name not in self.env:
                                 var = tvm.te.var(var_name, "int64")
@@ -314,7 +314,7 @@ class GraphConverter:
                             shape[i] = self.env[var_name]
                     shapes[j] = tuple(shape)
 
-                assert not any([isinstance(s, nd.Expr) for shape in shapes for s in shape]), \
+                assert not any([isinstance(s, sknd.Expr) for shape in shapes for s in shape]), \
                     "Invalid shape, at least one shape is still ts.Expr"
 
                 tens_struct_infos = [relax.TensorStructInfo(shape, i.dtype) for shape, i in zip(shapes, info)]
@@ -329,21 +329,21 @@ class GraphConverter:
                     shape = list(info.shape)
                     # Change dynamic SkND shapes to TVM vars
                     for i, s in enumerate(shape):
-                        if isinstance(s, nd.Expr):
+                        if isinstance(s, sknd.Expr):
                             var_name = _get_shape_var_name(s, i, info)
                             if var_name not in self.env:
                                 var = tvm.te.var(var_name, "int64")
                                 self.env.vars[var_name] = var
                             shape[i] = self.env[var_name]
 
-                    assert not any([isinstance(s, nd.Expr) for s in shape]), \
+                    assert not any([isinstance(s, sknd.Expr) for s in shape]), \
                         "Invalid shape, at least one shape is still ts.Expr"
                     pass
 
                     if info.const_value is not None:
                         if isinstance(info.const_value, (int, float, bool, str)):
                             rx_tensors[name] = relax.const(np.full(info.shape, info.const_value, dtype=info.dtype))
-                        elif isinstance(info.const_value, nd.ListExpr):
+                        elif isinstance(info.const_value, sknd.ListExpr):
                             rx_tensors[name] = relax.const(np.array(info.const_value.items).reshape(info.shape),
                                                            dtype=info.dtype)
                         else:  # todo check uniform expr?
@@ -364,21 +364,21 @@ class GraphConverter:
                 shape = list(info.shape)
                 # Change dynamic SkND shapes to TVM vars
                 for i, s in enumerate(shape):
-                    if isinstance(s, nd.Expr):
+                    if isinstance(s, sknd.Expr):
                         var_name = _get_shape_var_name(s, i, info)
                         if var_name not in self.env:
                             var = tvm.te.var(var_name, "int32")
                             self.env.vars[var_name] = var
                         shape[i] = self.env[var_name]
 
-                assert not any([isinstance(s, nd.Expr) for s in shape]), \
+                assert not any([isinstance(s, sknd.Expr) for s in shape]), \
                     "Invalid shape, at least one shape is still ts.Expr"
 
                 tir_tensors[name] = tir.decl_buffer(tuple(shape), info.dtype, name)
 
         return tir_tensors
 
-    def _convert_op(self, op: nd.Operation, internals: dict, op_attribs, get_stmt=False) -> relax.Call | tir.PrimFunc:
+    def _convert_op(self, op: sknd.Operation, internals: dict, op_attribs, get_stmt=False) -> relax.Call | tir.PrimFunc:
 
         if op.name in ["if", "do"]:
             # TODO
@@ -416,7 +416,7 @@ class GraphConverter:
 
         return output
 
-    def __contraction(self, op: nd.Operation, op_attribs, internals: ChainMap, get_stmt):
+    def __contraction(self, op: sknd.Operation, op_attribs, internals: ChainMap, get_stmt):
         """ Create a PrimFunc from a list of Contractions, then call_tir to create a Relax Tensor function """
 
         # todo check if tensorpack
@@ -425,9 +425,9 @@ class GraphConverter:
         for i in op.inputs:
             if i is None:  # input is optional
                 continue
-            if isinstance(i, nd.Tensor):
+            if isinstance(i, sknd.Tensor):
                 input_infos.append(self.tensors[i.name])
-            elif isinstance(i, nd.TensorPack):
+            elif isinstance(i, sknd.TensorPack):
                 input_infos.extend([self.tensors[t.name] for t in i.items])
             else:
                 raise ValueError(f"Invalid input type {type(i)}")
@@ -441,10 +441,10 @@ class GraphConverter:
         # save backward mapping from expr to name
         backward_map = {}
         # collect SubscriptExprs in the op, as they can be constants that need to be inputs
-        sub_exprs = self._collect_expr_of_type(op, nd.SubscriptExpr)
+        sub_exprs = self._collect_expr_of_type(op, sknd.SubscriptExpr)
         if sub_exprs:
             for name, expr in sub_exprs.items():
-                if isinstance(expr.pack, nd.ListExpr):
+                if isinstance(expr.pack, sknd.ListExpr):
                     # todo check if list elements are ts expr?
                     rx_const = relax.const(expr.pack.items, convert_dtype(expr.dtype))
                     internals[name] = rx_const
@@ -464,46 +464,46 @@ class GraphConverter:
         # output infos
         output_infos = []
         for o in op.outputs:
-            if isinstance(o, nd.TensorPack):
+            if isinstance(o, sknd.TensorPack):
                 output_infos.extend([self.tensors[t.name] for t in o.items])
             else:
                 output_infos.append(self.tensors[o.name])
 
-        primfunc = convert_contraction(op.contractions,
-                                       input_infos,
-                                       output_infos,
-                                       op_attribs,
-                                       backward_map,  # TODO remeve redundant
-                                       self.env.vars,
-                                       get_stmt,
-                                       )
+        primfunc = build_contraction(op.contractions,
+                                     input_infos,
+                                     output_infos,
+                                     op_attribs,
+                                     backward_map,  # TODO remeve redundant
+                                     self.env.vars,
+                                     get_stmt,
+                                     )
 
         if isinstance(primfunc, tir.PrimFunc):
             return primfunc.without_attr("global_symbol")
 
         return primfunc
 
-    def _collect_expr_of_type(self, op: nd.Operation, expr_type, name="internal"):
+    def _collect_expr_of_type(self, op: sknd.Operation, expr_type, name="internal"):
         exprs = {}
         for contr in op.contractions:
             root_expr_list = [contr.right, contr.left] + [t[1] for t in contr.locals]
-            expr_list = [e for re in root_expr_list for e in nd.recursive_enumerate_expr(re)]
+            expr_list = [e for re in root_expr_list for e in sknd.recursive_enumerate_expr(re)]
             for i, exp in enumerate(expr_list):
                 if isinstance(exp, expr_type):
                     exprs[f"{name}_{i}"] = exp
 
         return exprs
 
-    def __hlop(self, op: nd.Operation, op_attribs, internals: dict):
+    def __hlop(self, op: sknd.Operation, op_attribs, internals: dict):
 
         inputs = []  # [internals[i.name] for i in op.inputs]
         for i in op.inputs:
             if i is None:  # input is optional save None
                 inputs.append(None)
                 continue
-            if isinstance(i, nd.Tensor):
+            if isinstance(i, sknd.Tensor):
                 inputs.append(internals[i.name])
-            elif isinstance(i, nd.TensorPack):
+            elif isinstance(i, sknd.TensorPack):
                 inputs.append([internals[t.name] for t in i.items])
             else:
                 raise ValueError(f"Invalid input type {type(i)}")
@@ -511,14 +511,14 @@ class GraphConverter:
         call = self.module_builder.convert_map[op.name](*inputs, attribs=op_attribs)
         return call
 
-    def _call_tir(self, gv: tvm.ir.GlobalVar, op: nd.Operation, internals: dict):
+    def _call_tir(self, gv: tvm.ir.GlobalVar, op: sknd.Operation, internals: dict):
         inputs = []
         for i in op.inputs:
             if i is None:  # input is optional
                 continue
-            if isinstance(i, nd.Tensor):
+            if isinstance(i, sknd.Tensor):
                 inputs.append(internals[i.name])
-            elif isinstance(i, nd.TensorPack):
+            elif isinstance(i, sknd.TensorPack):
                 inputs.extend([internals[t.name] for t in i.items])
             else:
                 raise ValueError(f"Invalid input type {type(i)}")
@@ -530,14 +530,14 @@ class GraphConverter:
 
         return tir.call_tir(gv, *inputs)
 
-    def _call_relax(self, gv: tvm.ir.GlobalVar, op: nd.Operation, internals: dict, op_attribs):
+    def _call_relax(self, gv: tvm.ir.GlobalVar, op: sknd.Operation, internals: dict, op_attribs):
 
         # todo check TensorPack
         # todo nicer than this
         # create relax tensor info
         out_sinfo = []
         for i, o in enumerate(op.outputs):
-            if isinstance(o, nd.TensorPack):
+            if isinstance(o, sknd.TensorPack):
                 out_shape = [self.tensors[o_it.name].get_shape_values(self.env) for o_it in
                              o.items]
                 out_sinfo.extend([relax.TensorStructInfo(s, op_attribs.output_dtype[i]) for s in out_shape])
@@ -550,9 +550,9 @@ class GraphConverter:
         for i in op.inputs:
             if i is None:  # input is optional
                 continue
-            if isinstance(i, nd.Tensor):
+            if isinstance(i, sknd.Tensor):
                 inputs.append(internals[i.name])
-            elif isinstance(i, nd.TensorPack):
+            elif isinstance(i, sknd.TensorPack):
                 inputs.extend([internals[t.name] for t in i.items])
             else:
                 raise ValueError(f"Invalid input type {type(i)}")
@@ -567,7 +567,7 @@ class GraphConverter:
         call = relax.call_tir(gv, inputs, out_sinfo)
         return call
 
-    def _handle_subgraph_op(self, op: nd.Operation, op_attribs, internals):
+    def _handle_subgraph_op(self, op: sknd.Operation, op_attribs, internals):
         if op.name == "if":
             assert len(op.attribs["cond_graphs"]) == 1, "Multiple conditions not supported"
             assert len(op.attribs["branch_graphs"]) == 2, "Exactly 2 (true&false) branches are supported"
@@ -609,7 +609,7 @@ class GraphConverter:
             else:
                 return self.__for_count_loop(op, op_attribs, internals)
 
-    def __for_count_loop(self, op: nd.Operation, op_attribs, internals: dict):
+    def __for_count_loop(self, op: sknd.Operation, op_attribs, internals: dict):
 
         for n, g in self.subgraphs.items():
             g.to_tir_primfunc(n)
@@ -619,9 +619,9 @@ class GraphConverter:
         for i in op.inputs:
             if i is None:
                 continue
-            if isinstance(i, nd.Tensor):
+            if isinstance(i, sknd.Tensor):
                 params[i.name] = tir.decl_buffer(i.shape, convert_dtype(i.dtype), i.name)
-            elif isinstance(i, nd.TensorPack):
+            elif isinstance(i, sknd.TensorPack):
                 for t in i.items:
                     params[t.name] = (tir.decl_buffer(t.shape, convert_dtype(t.dtype), t.name))
             else:
@@ -693,7 +693,7 @@ class GraphConverter:
         internals[op.outputs[0].name] = self.module_builder.block_builder.normalize(call)  # todo?
         return call
 
-    def __while_loop(self, op: nd.Operation, op_attribs, internals: dict):
+    def __while_loop(self, op: sknd.Operation, op_attribs, internals: dict):
         # todo check scoping for CUDA or other threading backends
 
         # assert len(op.attribs["cond_graph"]) == 1, "Multiple conditions not supported"
@@ -714,9 +714,9 @@ class GraphConverter:
         for i in op.inputs:
             if i is None:
                 continue
-            if isinstance(i, nd.Tensor):
+            if isinstance(i, sknd.Tensor):
                 params[i.name] = tir.decl_buffer(i.shape, convert_dtype(i.dtype), i.name)
-            elif isinstance(i, nd.TensorPack):
+            elif isinstance(i, sknd.TensorPack):
                 for t in i.items:
                     params[t.name] = (tir.decl_buffer(t.shape, convert_dtype(t.dtype), t.name))
             else:
@@ -823,7 +823,7 @@ class TensorInfo:
     dtype: str
     const_value: Union[int, float, bool, str]
 
-    def __init__(self, tensor: nd.Tensor, name=None, shape=None, max_shape=None, dtype=None, const_value=None):
+    def __init__(self, tensor: sknd.Tensor, name=None, shape=None, max_shape=None, dtype=None, const_value=None):
         self.name = tensor.name if name is None else name
         self.shape = tensor.shape if shape is None else shape
         self.max_shape = tensor.max_shape if max_shape is None else max_shape
@@ -832,7 +832,7 @@ class TensorInfo:
 
     def get_shape_values(self, env):
         def _handle_dyn(s, i):
-            if isinstance(s, nd.Expr):
+            if isinstance(s, sknd.Expr):
                 var_name = _get_shape_var_name(s, i, self)
                 if var_name in env:
                     return env[var_name]
@@ -852,7 +852,7 @@ class OperationInfo:
     backward_map: dict = field(default_factory=dict)
     use_handles = False
 
-    def __init__(self, name: str, outs: list[nd.Tensor], attrs: dict, exp_converter: ExprConverter,
+    def __init__(self, name: str, outs: list[sknd.Tensor], attrs: dict, exp_converter: ExprBuilder,
                  use_handles=False):
         self.op_name = name
         self.output_shape = [o.shape if not o == [] else [()] for o in outs]
