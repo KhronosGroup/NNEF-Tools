@@ -9,20 +9,20 @@ BASE_FOLDER = os.path.normpath(os.path.join(os.path.dirname(__file__), 'skriptnd
 
 def roundtrip_test():
     print('Reading model...')
-    model = sknd.read_model(BASE_FOLDER + '/test.nds')
+    model = sknd.read_model(BASE_FOLDER + '/test.sknd')
     if not model:
         exit(-1)
 
     print('Writing model back...')
     sknd.print_model(model, file=sys.stdout)
-    sknd.write_model(model, BASE_FOLDER + '/test_round_trip.nds')
+    sknd.write_model(model, BASE_FOLDER + '/test_round_trip.sknd')
     print('Reading model again...')
-    sknd.read_model(BASE_FOLDER + '/test_round_trip.nds')
+    sknd.read_model(BASE_FOLDER + '/test_round_trip.sknd')
 
 
 def compile_test():
     print('Reading model...')
-    model = sknd.read_model(BASE_FOLDER + '/test.nds')
+    model = sknd.read_model(BASE_FOLDER + '/test.sknd')
     if not model:
         exit(-1)
 
@@ -35,7 +35,7 @@ def compile_test():
 
 def execution_test():
     print('Reading model...')
-    model = sknd.read_model(BASE_FOLDER + '/../../alexnet.nds')
+    model = sknd.read_model(BASE_FOLDER + '/../../alexnet.sknd')
     if not model:
         exit(-1)
 

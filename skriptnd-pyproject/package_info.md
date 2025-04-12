@@ -10,14 +10,14 @@ Using the module
 In the python interpreter, type
 
     import skriptnd as sknd
-    graph = sknd.read_model('/model/folder/main.nds')
+    graph = sknd.read_model('/model/folder/main.sknd')
 
-The path `'/model/folder/main.nds'` should point to the main .nds source file of the model, which may reference other
-.nds files that it includes and .dat files for model weights.
+The path `'/model/folder/main.sknd'` should point to the main .sknd source file of the model, which may reference other
+.sknd files that it includes and .dat files for model weights.
 
 Alternatively, the methods
 
-    graph = sknd.parse_file('/model/folder/main.nds')
+    graph = sknd.parse_file('/model/folder/main.sknd')
 
 and
 

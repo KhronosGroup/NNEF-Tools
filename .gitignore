@@ -10,4 +10,4 @@ __pycache__
 **/.DS_Store
 *.xcodeproj
 unittest/
-skriptnd-pyproject/skriptnd/test/test.nds
+skriptnd-pyproject/skriptnd/test/test.*

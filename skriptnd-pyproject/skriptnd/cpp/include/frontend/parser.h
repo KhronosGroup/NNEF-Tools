@@ -31,7 +31,7 @@ namespace sknd
             AllowTilde = 0x10,
         };
 
-        static constexpr const char* FileExtension = ".nds";
+        static constexpr const char* FileExtension = ".sknd";
         
     public:
         

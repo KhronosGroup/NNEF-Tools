@@ -59,10 +59,10 @@ namespace sknd
     {
         const std::string folder = path.back() != '\\' && path.back() != '/' ? path + "/" : path;
         
-        std::ifstream is(folder + "main.nds");
+        std::ifstream is(folder + "main.sknd");
         if ( !is )
         {
-            error(Position(), "Could not open main.nds in model folder '" + folder + "'", {}, false);
+            error(Position(), "Could not open main.sknd in model folder '" + folder + "'", {}, false);
             return std::nullopt;
         }
         

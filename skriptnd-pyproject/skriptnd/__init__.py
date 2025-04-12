@@ -339,7 +339,7 @@ def write_model(model, path, operators=None, imports=None, inline_subgraphs=Fals
     if not os.path.exists(path):
         os.makedirs(path)
 
-    filename = os.path.join(path, 'main.nds')
+    filename = os.path.join(path, 'main.sknd')
     with open(filename, 'w') as file:
         for module in imported:
             if module != 'main':

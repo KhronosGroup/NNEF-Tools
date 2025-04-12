@@ -28,5 +28,5 @@ setup(
                                ["-std=c++17"] if os_name != "nt" else [],
         )
     ],
-    package_data={"skriptnd.stdlib": ["*.nds"]}
+    package_data={"skriptnd.stdlib": ["*.sknd"]}
 )
