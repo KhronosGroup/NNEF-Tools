@@ -13,7 +13,7 @@
 #include <set>
 
 
-namespace nd
+namespace sknd
 {
 
     class Parser
@@ -40,10 +40,10 @@ namespace nd
         {
         }
         
-        std::pair<std::map<std::string,nd::Operator>,std::vector<std::string>> operator()( std::istream& is, const std::string& module )
+        std::pair<std::map<std::string,sknd::Operator>,std::vector<std::string>> operator()( std::istream& is, const std::string& module )
         {
             std::set<std::string> imports;
-            std::map<std::string,nd::Operator> operators;
+            std::map<std::string,sknd::Operator> operators;
             std::vector<std::string> graphs;
             
             Lexer lexer(is, module);
@@ -54,7 +54,7 @@ namespace nd
         
     private:
         
-        bool import_module( const std::string& module, std::set<std::string>& imports, std::map<std::string,nd::Operator>& operators,
+        bool import_module( const std::string& module, std::set<std::string>& imports, std::map<std::string,sknd::Operator>& operators,
                            std::vector<std::string>& graphs )
         {
             auto insert = imports.insert(module);
@@ -79,7 +79,7 @@ namespace nd
             return true;
         }
         
-        void parse_module( Lexer& lexer, std::set<std::string>& imports, std::map<std::string,nd::Operator>& operators, 
+        void parse_module( Lexer& lexer, std::set<std::string>& imports, std::map<std::string,sknd::Operator>& operators, 
                           std::vector<std::string>& graphs, const bool main )
         {
             while ( lexer.is_token(Keyword::Import) )
@@ -119,7 +119,7 @@ namespace nd
             }
         }
         
-        Result<void> parse_import( Lexer& lexer, std::set<std::string>& imports, std::map<std::string,nd::Operator>& operators,
+        Result<void> parse_import( Lexer& lexer, std::set<std::string>& imports, std::map<std::string,sknd::Operator>& operators,
                                   std::vector<std::string>& graphs )
         {
             TRY_CALL(lexer.accept())
@@ -143,7 +143,7 @@ namespace nd
             return Result<void>();
         }
         
-        Result<nd::Operator> parse_operator( Lexer& lexer, bool allow_graph )
+        Result<sknd::Operator> parse_operator( Lexer& lexer, bool allow_graph )
         {
             auto position = lexer.position();
             
@@ -310,7 +310,7 @@ namespace nd
             
             lexer.unregister_type_aliases();
             
-            return nd::Operator
+            return sknd::Operator
             {
                 position,
                 graph,
@@ -1761,6 +1761,6 @@ namespace nd
         const ErrorCallback _error;
     };
 
-}   // namespace nd
+}   // namespace sknd
 
 #endif

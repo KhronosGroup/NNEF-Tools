@@ -5,7 +5,7 @@
 #include <algorithm>
 
 
-namespace nd
+namespace sknd
 {
     namespace rt
     {
@@ -307,7 +307,7 @@ namespace nd
         }
     
     }   // namespace rt
-}   // namespace nd
+}   // namespace sknd
 
 
 #endif

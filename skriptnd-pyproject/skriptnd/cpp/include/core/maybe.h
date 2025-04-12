@@ -2,7 +2,7 @@
 #define _TS_MAYBE_H_
 
 
-namespace nd
+namespace sknd
 {
 
     template<typename T>
@@ -129,7 +129,7 @@ namespace nd
         value_type* _value;
     };
 
-}   // namespace nd
+}   // namespace sknd
 
 
 #endif

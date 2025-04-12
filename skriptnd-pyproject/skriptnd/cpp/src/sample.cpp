@@ -5,7 +5,7 @@
 
 int main( int argc, const char * argv[] )
 {
-    auto error_handler = [&]( const nd::Position& position, const std::string& message, const nd::StackTrace& stacktrace, const bool warning )
+    auto error_handler = [&]( const sknd::Position& position, const std::string& message, const sknd::StackTrace& stacktrace, const bool warning )
     {
         std::cout << (warning ? "⚠️ Warning" : "🛑 Error") << " in module '" << position.module << "'";
         if ( position.line )
@@ -29,8 +29,8 @@ int main( int argc, const char * argv[] )
     
     bool all = false;
     bool verbose = false;
-    nd::OperationCallback atomic = nd::FalseOperationCallback;
-    nd::OperationCallback unroll = nd::FalseOperationCallback;
+    sknd::OperationCallback atomic = sknd::FalseOperationCallback;
+    sknd::OperationCallback unroll = sknd::FalseOperationCallback;
     for ( size_t i = 2; i < argc; ++i )
     {
         const std::string arg = argv[i];
@@ -44,11 +44,11 @@ int main( int argc, const char * argv[] )
         }
         else if ( arg == "--atomic" )
         {
-            atomic = nd::TrueOperationCallback;
+            atomic = sknd::TrueOperationCallback;
         }
         else if ( arg == "--unroll" )
         {
-            unroll = nd::TrueOperationCallback;
+            unroll = sknd::TrueOperationCallback;
         }
     }
     
@@ -64,13 +64,13 @@ int main( int argc, const char * argv[] )
         return -1;
     }
     
-    auto graph_names = nd::enum_graph_names(is);
+    auto graph_names = sknd::enum_graph_names(is);
     for ( auto& graph_name : graph_names )
     {
         is.close();
         is.open(fn);
         
-        auto model = nd::read_model(is, module.c_str(), graph_name, "skriptnd/stdlib/", "", error_handler, atomic, unroll);
+        auto model = sknd::read_model(is, module.c_str(), graph_name, "skriptnd/stdlib/", "", error_handler, atomic, unroll);
         if ( model )
         {
             std::cout << "✅ Succesfully parsed graph '" + graph_name + "'" << std::endl;

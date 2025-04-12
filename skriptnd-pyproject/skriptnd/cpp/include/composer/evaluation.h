@@ -21,7 +21,7 @@ inline bool endswith( const std::string& str, const std::string& suffix )
 }
 
 
-namespace nd
+namespace sknd
 {
 
     class Evaluation : public Simplification
@@ -3169,7 +3169,7 @@ namespace nd
         }
     };
 
-}   // namespace nd
+}   // namespace sknd
 
 
 #endif

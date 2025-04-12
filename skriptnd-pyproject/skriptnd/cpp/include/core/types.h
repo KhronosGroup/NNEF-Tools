@@ -7,7 +7,7 @@
 #include <map>
 
 
-namespace nd
+namespace sknd
 {
     
     typedef float real_t;
@@ -134,7 +134,7 @@ namespace nd
         {
             str += "optional ";
         }
-        str += nd::str(type.name);
+        str += sknd::str(type.name);
         if ( type.tensor )
         {
             str += "[]";
@@ -193,7 +193,7 @@ namespace nd
         }
     };
     
-}   // namespace nd
+}   // namespace sknd
 
 
 #endif

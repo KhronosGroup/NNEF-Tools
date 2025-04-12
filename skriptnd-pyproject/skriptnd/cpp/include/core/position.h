@@ -4,7 +4,7 @@
 #include <string>
 
 
-namespace nd
+namespace sknd
 {
     
     struct Position
@@ -14,7 +14,7 @@ namespace nd
         unsigned column = 0;
     };
     
-}   // namespace nd
+}   // namespace sknd
 
 
 #endif

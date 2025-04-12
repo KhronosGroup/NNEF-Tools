@@ -7,7 +7,7 @@
 #include <sstream>
 
 
-namespace nd
+namespace sknd
 {
 
     class Value;
@@ -646,13 +646,13 @@ namespace nd
         return os;
     }
     
-}   // namespace nd
+}   // namespace sknd
 
 
 namespace std
 {
     
-    inline string to_string( const nd::Value& value )
+    inline string to_string( const sknd::Value& value )
     {
         std::stringstream ss;
         ss << value;

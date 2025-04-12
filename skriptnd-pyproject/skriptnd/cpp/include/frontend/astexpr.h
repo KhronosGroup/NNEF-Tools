@@ -11,7 +11,7 @@
 #include <vector>
 
 
-namespace nd
+namespace sknd
 {
     
     template<typename T>
@@ -542,7 +542,7 @@ namespace nd
             os << '"';
             for ( auto& sub : subs )
             {
-                os << str.substr(offset, sub.first - offset) << '{' << nd::str(*sub.second) << '}';
+                os << str.substr(offset, sub.first - offset) << '{' << sknd::str(*sub.second) << '}';
                 offset = sub.first;
             }
             os << str.substr(offset) << '"';
@@ -993,7 +993,7 @@ namespace nd
         return expr.kind == Expr::Fold && as_fold(expr).op == op;
     }
     
-}   // namespace nd
+}   // namespace sknd
 
 
 #endif

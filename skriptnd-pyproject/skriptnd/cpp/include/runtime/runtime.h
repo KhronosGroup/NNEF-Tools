@@ -10,7 +10,7 @@
 #include "print.h"
 
 
-namespace nd
+namespace sknd
 {
 
     template<typename ... Args>
@@ -36,7 +36,7 @@ namespace nd
         template<typename T>
         static T ceil_div( const T x, const T y )
         {
-            return nd::ceil_div(x, y);
+            return sknd::ceil_div(x, y);
         }
     
         
@@ -1179,7 +1179,7 @@ namespace nd
             constexpr size_t concat_max_size()
             {
                 size_t size = 0;
-                if constexpr( nd::is_typename<Arg> )
+                if constexpr( sknd::is_typename<Arg> )
                 {
                     size = 1;
                 }
@@ -1197,7 +1197,7 @@ namespace nd
             template<typename T, size_t N, typename Arg, typename... Args>
             inline void concat( ValuePack<T,N>& result, const Arg& first, const Args& ...rest )
             {
-                if constexpr( nd::is_typename<Arg> )
+                if constexpr( sknd::is_typename<Arg> )
                 {
                     result.append(first);
                 }
@@ -1264,14 +1264,14 @@ namespace nd
     
         
     }   // namespace rt
-}   // namespace nd
+}   // namespace sknd
 
 
 namespace std
 {
     
     template<size_t N, typename T>
-    void swap( nd::rt::Tensor<N,T>& left, nd::rt::Tensor<N,T>& right )
+    void swap( sknd::rt::Tensor<N,T>& left, sknd::rt::Tensor<N,T>& right )
     {
         left.swap(right);
     }
@@ -1279,7 +1279,7 @@ namespace std
 
 
 template<typename T, size_t N>
-std::ostream& operator<<( std::ostream& os, const nd::rt::ValuePack<T,N>& pack )
+std::ostream& operator<<( std::ostream& os, const sknd::rt::ValuePack<T,N>& pack )
 {
     os << '[';
     for ( size_t i = 0; i < pack.size(); ++i )

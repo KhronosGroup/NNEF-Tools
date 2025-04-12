@@ -15,7 +15,7 @@
 
 
 
-namespace nd
+namespace sknd
 {
     
     class Typing
@@ -2101,7 +2101,7 @@ namespace nd
                 {
                     str += ',';
                 }
-                str += nd::str(types[i]);
+                str += sknd::str(types[i]);
             }
             str += ')';
             return str;
@@ -3582,7 +3582,7 @@ namespace nd
         const ErrorCallback _error;
     };
     
-}   // namespace nd
+}   // namespace sknd
 
 
 #endif

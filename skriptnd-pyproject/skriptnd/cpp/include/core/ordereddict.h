@@ -6,7 +6,7 @@
 #include <string>
 
 
-namespace nd
+namespace sknd
 {
 
     template<typename T>
@@ -207,18 +207,18 @@ namespace nd
             }
             str += it->first;
             str += entry_sep;
-            str += nd::str(it->second);
+            str += sknd::str(it->second);
         }
         str += '}';
         
         return str;
     }
 
-}   // namespace nd
+}   // namespace sknd
 
 
 template<typename T>
-std::ostream& operator<<( std::ostream& os, const nd::OrderedDict<T>& dict )
+std::ostream& operator<<( std::ostream& os, const sknd::OrderedDict<T>& dict )
 {
     os << "{ ";
     for ( auto it = dict.begin(); it != dict.end(); ++it )

@@ -8,7 +8,7 @@
 #include <sstream>
 
 
-namespace nd
+namespace sknd
 {
 
     template<typename T, typename S = size_t>
@@ -383,13 +383,13 @@ namespace nd
         return ss.str();
     }
     
-}   // namespace nd
+}   // namespace sknd
 
 
 template<typename T>
-struct std::hash<nd::Packable<T>>
+struct std::hash<sknd::Packable<T>>
 {
-    std::size_t operator()( const nd::Packable<T>& p ) const noexcept
+    std::size_t operator()( const sknd::Packable<T>& p ) const noexcept
     {
         std::hash<T> hasher;
         if ( p.packed() )
@@ -413,7 +413,7 @@ namespace std
 {
 
     template<typename T>
-    std::string to_string( const nd::Packable<T>& packable )
+    std::string to_string( const sknd::Packable<T>& packable )
     {
         std::stringstream ss;
         ss << packable;

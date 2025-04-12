@@ -5,7 +5,7 @@
 #include <type_traits>
 
 
-namespace nd
+namespace sknd
 {
 
     namespace detail
@@ -450,7 +450,7 @@ namespace nd
         size_t _data;
     };
 
-}   // namespace nd
+}   // namespace sknd
 
 
 #endif

@@ -5,7 +5,7 @@
 #include "polynom.h"
 
 
-namespace nd
+namespace sknd
 {
 
     class Simplification
@@ -1438,7 +1438,7 @@ namespace nd
             static const Dict<int_builtin_t> int_builtins =
             {
                 { "abs", std::abs },
-                { "sign", nd::sign },
+                { "sign", sknd::sign },
             };
             
             auto func = int_builtins.at(name);
@@ -1451,7 +1451,7 @@ namespace nd
             static const Dict<real_builtin_t> real_builtins =
             {
                 { "abs", std::abs },
-                { "sign", nd::sign },
+                { "sign", sknd::sign },
                 { "exp", std::exp },
                 { "log", std::log },
                 { "sqrt", std::sqrt },
@@ -1471,7 +1471,7 @@ namespace nd
                 { "round", std::round },
                 { "floor", std::floor },
                 { "ceil", std::ceil },
-                { "frac", nd::frac },
+                { "frac", sknd::frac },
             };
             
             auto func = real_builtins.at(name);
@@ -1501,7 +1501,7 @@ namespace nd
         }
     };
 
-}   // namespace nd
+}   // namespace sknd
 
 
 #endif

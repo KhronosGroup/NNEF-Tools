@@ -4,7 +4,7 @@
 #include <typeinfo>
 
 
-namespace nd
+namespace sknd
 {
 
     template<typename Left, typename Right>
@@ -267,13 +267,13 @@ namespace nd
         return os;
     }
 
-}   // namespace nd
+}   // namespace sknd
 
 
 template<typename L, typename R>
-struct std::hash<nd::Either<L,R>>
+struct std::hash<sknd::Either<L,R>>
 {
-    std::size_t operator()( const nd::Either<L,R>& x ) const noexcept
+    std::size_t operator()( const sknd::Either<L,R>& x ) const noexcept
     {
         if ( x.template is<L>() )
         {

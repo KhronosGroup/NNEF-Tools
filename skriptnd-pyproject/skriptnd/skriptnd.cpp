@@ -74,9 +74,9 @@ static PyObject* EmptyDictDefault = (PyObject*)&PyDict_Type;
 
 struct BuildContext
 {
-    std::map<const nd::Tensor*,PyObject*> tensors;
-    std::map<const nd::TensorPack*,PyObject*> packs;
-    std::map<const nd::ValueExpr*,PyObject*> subexprs;
+    std::map<const sknd::Tensor*,PyObject*> tensors;
+    std::map<const sknd::TensorPack*,PyObject*> packs;
+    std::map<const sknd::ValueExpr*,PyObject*> subexprs;
 };
 
 static BuildContext EmptyBuildContext = BuildContext();
@@ -213,7 +213,7 @@ static PyObject* makeEmptyNumpyArray( int dtype = NPY_FLOAT32 )
 }
 
 
-static PyObject* buildPyBoolean( const nd::bool_t& value )
+static PyObject* buildPyBoolean( const sknd::bool_t& value )
 {
     if ( value )
     {
@@ -225,17 +225,17 @@ static PyObject* buildPyBoolean( const nd::bool_t& value )
     }
 }
 
-static PyObject* buildPyInt( const nd::int_t& value )
+static PyObject* buildPyInt( const sknd::int_t& value )
 {
     return Py_BuildValue("i", (int)value);
 }
 
-static PyObject* buildPyReal( const nd::real_t& value )
+static PyObject* buildPyReal( const sknd::real_t& value )
 {
     return Py_BuildValue("f", (float)value);
 }
 
-static PyObject* buildPyStr( const nd::str_t& value )
+static PyObject* buildPyStr( const sknd::str_t& value )
 {
     return PY_STRING_FROM_CSTR(value.c_str());
 }
@@ -245,27 +245,27 @@ static PyObject* buildPyNone()
     Py_RETURN_NONE;
 }
 
-static PyObject* buildPyDtype( const nd::Typename dtype )
+static PyObject* buildPyDtype( const sknd::Typename dtype )
 {
     PyObject* value = buildPyInt((int)dtype);
     return makePyObject(Dtype, value);
 }
 
-static PyObject* buildPyIdentifierKind( const nd::ValueExpr::IdentifierKind kind )
+static PyObject* buildPyIdentifierKind( const sknd::ValueExpr::IdentifierKind kind )
 {
     PyObject* value = buildPyInt((int)kind);
     return makePyObject(IdentifierKind, value);
 }
 
-static nd::Typename dtypeFromPyObject( PyObject* obj )
+static sknd::Typename dtypeFromPyObject( PyObject* obj )
 {
     PyObject* value = PyObject_GetAttrString(obj, "value");
-    auto dtype = (nd::Typename)PY_INTEGER_AS_LONG(value);
+    auto dtype = (sknd::Typename)PY_INTEGER_AS_LONG(value);
     Py_DECREF(value);
     return dtype;
 }
 
-static PyObject* buildPyTensorRef( const nd::TensorRef& ref, const BuildContext& context )
+static PyObject* buildPyTensorRef( const sknd::TensorRef& ref, const BuildContext& context )
 {
     if ( ref == nullptr )
     {
@@ -273,63 +273,63 @@ static PyObject* buildPyTensorRef( const nd::TensorRef& ref, const BuildContext&
     }
     else if ( ref.packed() )
     {
-        PyObject* pack = context.packs.at(ref.as<nd::TensorPack*>());
+        PyObject* pack = context.packs.at(ref.as<sknd::TensorPack*>());
         Py_INCREF(pack);
         return pack;
     }
     else
     {
-        PyObject* tensor = context.tensors.at(ref.as<nd::Tensor*>());
+        PyObject* tensor = context.tensors.at(ref.as<sknd::Tensor*>());
         Py_INCREF(tensor);
         return tensor;
     }
 }
 
-static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext& context )
+static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildContext& context )
 {
     switch ( expr.kind() )
     {
-        case nd::ValueExpr::Null:
+        case sknd::ValueExpr::Null:
         {
             return buildPyNone();
         }
-        case nd::ValueExpr::Literal:
+        case sknd::ValueExpr::Literal:
         {
             switch ( expr.dtype() )
             {
-                case nd::Typename::Type:
-                case nd::Typename::Arith:
-                case nd::Typename::Num:
+                case sknd::Typename::Type:
+                case sknd::Typename::Arith:
+                case sknd::Typename::Num:
                 {
                     assert(false);
                     return buildPyNone();
                 }
-                case nd::Typename::Int:
+                case sknd::Typename::Int:
                 {
                     return buildPyInt(expr.as_int());
                 }
-                case nd::Typename::Real:
+                case sknd::Typename::Real:
                 {
                     return buildPyReal(expr.as_real());
                 }
-                case nd::Typename::Bool:
+                case sknd::Typename::Bool:
                 {
                     return buildPyBoolean(expr.as_bool());
                 }
-                case nd::Typename::Str:
+                case sknd::Typename::Str:
                 {
                     return buildPyStr(expr.as_str());
                 }
             }
         }
-        case nd::ValueExpr::Placeholder:
+        case sknd::ValueExpr::Placeholder:
         {
             auto& placeholder = expr.as_placeholder();
             PyObject* id = buildPyStr(placeholder.id);
             PyObject* max_value = buildPyValueExpr(placeholder.max_value, context);
             return makePyObject(PlaceholderExpr, id, max_value);
         }
-        case nd::ValueExpr::Identifier:
+        case sknd::ValueExpr::Identifier:
         {
             auto& identifier = expr.as_identifier();
             PyObject* name = buildPyStr(identifier.name);
@@ -337,7 +337,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* dtype = buildPyDtype(expr.dtype());
             return makePyObject(IdentifierExpr, name, kind, dtype);
         }
-        case nd::ValueExpr::Reference:
+        case sknd::ValueExpr::Reference:
         {
             auto& reference = expr.as_reference();
             PyObject* name = buildPyStr(reference.name);
@@ -345,13 +345,13 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* dtype = buildPyDtype(expr.dtype());
             return makePyObject(ReferenceExpr, name, target, dtype);
         }
-        case nd::ValueExpr::SizeAccess:
+        case sknd::ValueExpr::SizeAccess:
         {
             auto& access = expr.as_size_access();
             PyObject* pack = buildPyTensorRef(access.pack, context);
             return makePyObject(SizeAccess, pack);
         }
-        case nd::ValueExpr::ShapeAccess:
+        case sknd::ValueExpr::ShapeAccess:
         {
             auto& access = expr.as_shape_access();
             PyObject* tensor = buildPyTensorRef(access.tensor, context);
@@ -360,7 +360,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
             return makePyObject(ShapeAccess, tensor, dim, item, max_size);
         }
-        case nd::ValueExpr::TensorAccess:
+        case sknd::ValueExpr::TensorAccess:
         {
             auto& access = expr.as_tensor_access();
             PyObject* tensor = buildPyTensorRef(access.tensor, context);
@@ -375,7 +375,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             }
             return makePyObject(TensorAccess, tensor, indices, item);
         }
-        case nd::ValueExpr::Unary:
+        case sknd::ValueExpr::Unary:
         {
             auto& unary = expr.as_unary();
             PyObject* op = buildPyStr(unary.op);
@@ -384,7 +384,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
             return makePyObject(UnaryExpr, op, arg, dtype, max_size);
         }
-        case nd::ValueExpr::Binary:
+        case sknd::ValueExpr::Binary:
         {
             auto& binary = expr.as_binary();
             PyObject* op = buildPyStr(binary.op);
@@ -394,7 +394,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
             return makePyObject(BinaryExpr, op, left, right, dtype, max_size);
         }
-        case nd::ValueExpr::Select:
+        case sknd::ValueExpr::Select:
         {
             auto& select = expr.as_select();
             PyObject* cond = buildPyValueExpr(select.cond, context);
@@ -404,7 +404,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
             return makePyObject(SelectExpr, cond, left, right, dtype, max_size);
         }
-        case nd::ValueExpr::Fold:
+        case sknd::ValueExpr::Fold:
         {
             auto& fold = expr.as_fold();
             PyObject* op = buildPyStr(fold.op);
@@ -413,7 +413,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
             return makePyObject(FoldExpr, op, pack, dtype, max_size);
         }
-        case nd::ValueExpr::Cast:
+        case sknd::ValueExpr::Cast:
         {
             auto& cast = expr.as_cast();
             PyObject* arg = buildPyValueExpr(cast.arg, context);
@@ -421,7 +421,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
             return makePyObject(CastExpr, arg, dtype, max_size);
         }
-        case nd::ValueExpr::List:
+        case sknd::ValueExpr::List:
         {
             PyObject* items = PyList_New(expr.max_size());
             for ( size_t i = 0; i < expr.max_size(); ++i )
@@ -431,7 +431,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* dtype = buildPyDtype(expr.dtype());
             return makePyObject(ListExpr, items, dtype);
         }
-        case nd::ValueExpr::Bounded:
+        case sknd::ValueExpr::Bounded:
         {
             auto& bounded = expr.as_bounded();
             PyObject* arg = buildPyValueExpr(bounded.arg, context);
@@ -440,7 +440,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* dtype = buildPyDtype(expr.dtype());
             return makePyObject(BoundedExpr, arg, lower, upper, dtype);
         }
-        case nd::ValueExpr::Concat:
+        case sknd::ValueExpr::Concat:
         {
             auto& concat = expr.as_concat();
             PyObject* items = PyList_New(concat.items.size());
@@ -453,7 +453,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
             return makePyObject(ConcatExpr, items, dtype, size, max_size);
         }
-        case nd::ValueExpr::Slice:
+        case sknd::ValueExpr::Slice:
         {
             auto& slice = expr.as_slice();
             PyObject* pack = buildPyValueExpr(slice.pack, context);
@@ -465,7 +465,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
             return makePyObject(SliceExpr, pack, first, last, stride, dtype, size, max_size);
         }
-        case nd::ValueExpr::Subscript:
+        case sknd::ValueExpr::Subscript:
         {
             auto& subscript = expr.as_subscript();
             PyObject* pack = buildPyValueExpr(subscript.pack, context);
@@ -474,7 +474,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
             return makePyObject(SubscriptExpr, pack, index, dtype, max_size);
         }
-        case nd::ValueExpr::Uniform:
+        case sknd::ValueExpr::Uniform:
         {
             auto& uniform = expr.as_uniform();
             PyObject* value = buildPyValueExpr(uniform.value, context);
@@ -483,7 +483,7 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
             PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
             return makePyObject(UniformExpr, value, size, dtype, max_size);
         }
-        case nd::ValueExpr::Range:
+        case sknd::ValueExpr::Range:
         {
             auto& range = expr.as_range();
             PyObject* first = buildPyValueExpr(range.first, context);
@@ -499,65 +499,65 @@ static PyObject* buildPyValueExpr( const nd::ValueExpr& expr, const BuildContext
     return buildPyNone();
 }
 
-static nd::ValueExpr valueFromPyObject( PyObject* obj )
+static sknd::ValueExpr valueFromPyObject( PyObject* obj )
 {
     if ( PyList_Check(obj) )
     {
         size_t size = PyList_Size(obj);
         if ( !size )
         {
-            return nd::ValueExpr::empty();
+            return sknd::ValueExpr::empty();
         }
-        std::vector<nd::ValueExpr> items(size);
+        std::vector<sknd::ValueExpr> items(size);
         for ( int i = 0; i < size; ++i )
         {
             auto item = PyList_GetItem(obj, i);
             items[i] = valueFromPyObject(item);
         }
         auto dtype = items.front().dtype();
-        return nd::ValueExpr::list(std::move(items), dtype);
+        return sknd::ValueExpr::list(std::move(items), dtype);
     }
     else if ( PY_INTEGER_CHECK(obj) )
     {
-        return nd::ValueExpr((nd::int_t)PY_INTEGER_AS_LONG(obj));
+        return sknd::ValueExpr((sknd::int_t)PY_INTEGER_AS_LONG(obj));
     }
     else if ( PyFloat_Check(obj) )
     {
-        return nd::ValueExpr((nd::real_t)PyFloat_AsDouble(obj));
+        return sknd::ValueExpr((sknd::real_t)PyFloat_AsDouble(obj));
     }
     else if ( PyBool_Check(obj) )
     {
-        return nd::ValueExpr((nd::bool_t)(obj == Py_True));
+        return sknd::ValueExpr((sknd::bool_t)(obj == Py_True));
     }
     else if ( PY_STRING_CHECK(obj) )
     {
-        return nd::ValueExpr((nd::str_t)PY_STRING_AS_CSTR(obj));
+        return sknd::ValueExpr((sknd::str_t)PY_STRING_AS_CSTR(obj));
     }
     else if ( obj == Py_None )
     {
-        return nd::ValueExpr(nullptr);
+        return sknd::ValueExpr(nullptr);
     }
     else if ( PyObject_TypeCheck(obj, (PyTypeObject*)IdentifierExpr) )
     {
         PyObject* pyName = PyObject_GetAttrString(obj, "name");
         PyObject* pyDtype = PyObject_GetAttrString(obj, "dtype");
 
-        auto name = (nd::str_t)PY_STRING_AS_CSTR(pyName);
+        auto name = (sknd::str_t)PY_STRING_AS_CSTR(pyName);
         auto dtype = dtypeFromPyObject(pyDtype);
 
         Py_DECREF(pyName);
         Py_DECREF(pyDtype);
 
-        return nd::ValueExpr(nd::ValueExpr::IdentifierExpr{ name }, dtype);
+        return sknd::ValueExpr(sknd::ValueExpr::IdentifierExpr{ name }, dtype);
     }
     else
     {
         assert(false);
-        return nd::ValueExpr(nullptr);
+        return sknd::ValueExpr(nullptr);
     }
 }
 
-static PyObject* buildPyPosition( const nd::Position& position )
+static PyObject* buildPyPosition( const sknd::Position& position )
 {
     return makePyObject(Position,
         buildPyStr(position.module),
@@ -576,7 +576,7 @@ static PyObject* buildPyList( const std::vector<size_t>& values )
     return list;
 }
 
-static PyObject* buildPyValueExprs( const std::vector<nd::ValueExpr>& exprs, const BuildContext& context )
+static PyObject* buildPyValueExprs( const std::vector<sknd::ValueExpr>& exprs, const BuildContext& context )
 {
     PyObject* items = PyList_New(exprs.size());
     for ( size_t i = 0; i < exprs.size(); ++i )
@@ -587,7 +587,7 @@ static PyObject* buildPyValueExprs( const std::vector<nd::ValueExpr>& exprs, con
     return items;
 }
 
-static PyObject* buildPyShape( const std::vector<nd::int_t>& shape )
+static PyObject* buildPyShape( const std::vector<sknd::int_t>& shape )
 {
     PyObject* tuple = PyTuple_New(shape.size());
     for ( size_t i = 0; i < shape.size(); ++i )
@@ -597,7 +597,7 @@ static PyObject* buildPyShape( const std::vector<nd::int_t>& shape )
     return tuple;
 }
 
-static PyObject* buildPyShape( const std::vector<nd::ValueExpr>& shape, const BuildContext& context,
+static PyObject* buildPyShape( const std::vector<sknd::ValueExpr>& shape, const BuildContext& context,
                                const bool static_only = false )
 {
     PyObject* items = PyTuple_New(shape.size());
@@ -609,7 +609,7 @@ static PyObject* buildPyShape( const std::vector<nd::ValueExpr>& shape, const Bu
     return items;
 }
 
-static PyObject* buildPyAttribs( const std::map<std::string,nd::ValueExpr>& items, const BuildContext& context,
+static PyObject* buildPyAttribs( const std::map<std::string,sknd::ValueExpr>& items, const BuildContext& context,
                                  const bool static_only = false )
 {
     PyObject* dict = PyDict_New();
@@ -622,7 +622,7 @@ static PyObject* buildPyAttribs( const std::map<std::string,nd::ValueExpr>& item
     return dict;
 }
 
-static PyObject* buildPySubexprs( const nd::OrderedDict<nd::ValueExpr>& items, BuildContext& context )
+static PyObject* buildPySubexprs( const sknd::OrderedDict<sknd::ValueExpr>& items, BuildContext& context )
 {
     PyObject* dict = PyDict_New();
     for ( auto& [key, value] : items )
@@ -635,7 +635,7 @@ static PyObject* buildPySubexprs( const nd::OrderedDict<nd::ValueExpr>& items, B
     return dict;
 }
 
-static PyObject* buildPyDtypes( const std::map<std::string,nd::Typename>& dtypes )
+static PyObject* buildPyDtypes( const std::map<std::string,sknd::Typename>& dtypes )
 {
     PyObject* dict = PyDict_New();
     for ( auto& [key, dtype] : dtypes )
@@ -647,7 +647,7 @@ static PyObject* buildPyDtypes( const std::map<std::string,nd::Typename>& dtypes
     return dict;
 }
 
-static PyObject* buildPyShapes( const std::vector<nd::TensorRef>& tensors, const BuildContext& context,
+static PyObject* buildPyShapes( const std::vector<sknd::TensorRef>& tensors, const BuildContext& context,
                                 const bool static_only = false )
 {
     PyObject* shapes = PyList_New(tensors.size());
@@ -659,7 +659,7 @@ static PyObject* buildPyShapes( const std::vector<nd::TensorRef>& tensors, const
     return shapes;
 }
 
-static PyObject* buildPyTensor( const nd::Tensor& tensor, const BuildContext& context )
+static PyObject* buildPyTensor( const sknd::Tensor& tensor, const BuildContext& context )
 {
     PyObject* name = buildPyStr(tensor.name);
     PyObject* dtype = buildPyDtype(tensor.dtype);
@@ -672,7 +672,7 @@ static PyObject* buildPyTensor( const nd::Tensor& tensor, const BuildContext& co
     return makePyObject(Tensor, name, dtype, shape, max_shape, quant, value, variable);
 }
 
-static PyObject* buildPyTensorPack( const nd::TensorPack& pack, const BuildContext& context )
+static PyObject* buildPyTensorPack( const sknd::TensorPack& pack, const BuildContext& context )
 {
     PyObject* name = buildPyStr(pack.name);
     PyObject* dtype = buildPyDtype(pack.dtype);
@@ -691,7 +691,7 @@ static PyObject* buildPyTensorPack( const nd::TensorPack& pack, const BuildConte
     return makePyObject(TensorPack, name, dtype, shape, max_shape, size, items);
 }
 
-static PyObject* buildPyContraction( const nd::Contraction& contraction, const BuildContext& context )
+static PyObject* buildPyContraction( const sknd::Contraction& contraction, const BuildContext& context )
 {
     PyObject* left = buildPyValueExpr(contraction.left, context);
     PyObject* right = buildPyValueExpr(contraction.right, context);
@@ -719,7 +719,7 @@ static PyObject* buildPyContraction( const nd::Contraction& contraction, const B
     return makePyObject(Contraction, left, right, cond, assignment, locals, bounds, subscripts, axes);
 }
 
-static PyObject* buildPyAssertion( const nd::Assertion& assert, BuildContext& context )
+static PyObject* buildPyAssertion( const sknd::Assertion& assert, BuildContext& context )
 {
     PyObject* condition = buildPyValueExpr(assert.condition, context);
     PyObject* message = buildPyStr(assert.message);
@@ -728,7 +728,7 @@ static PyObject* buildPyAssertion( const nd::Assertion& assert, BuildContext& co
     return makePyObject(Assertion, condition, message, args);
 }
 
-static PyObject* buildPyOperation( const nd::Operation& op, BuildContext& context )
+static PyObject* buildPyOperation( const sknd::Operation& op, BuildContext& context )
 {
     PyObject* name = buildPyStr(op.name);
     PyObject* dtypes = buildPyDtypes(op.dtypes);
@@ -768,7 +768,7 @@ static PyObject* buildPyOperation( const nd::Operation& op, BuildContext& contex
     return makePyObject(Operation, name, dtypes, attribs, inputs, outputs, internals, contractions, asserts, subexprs);
 }
 
-static PyObject* buildPyGraph( const nd::Graph& graph )
+static PyObject* buildPyGraph( const sknd::Graph& graph )
 {
     BuildContext context;
 
@@ -831,7 +831,7 @@ static PyObject* buildPyGraph( const nd::Graph& graph )
     return makePyObject(Graph, name, operations, inputs, outputs, tensors, packs, asserts);
 }
 
-static PyObject* buildPyModel( const nd::Model& model )
+static PyObject* buildPyModel( const sknd::Model& model )
 {
     PyObject* name = buildPyStr(model.name);
 
@@ -876,30 +876,30 @@ static size_t function_arg_count( PyObject* pyFunc )
     return length;
 }
 
-static nd::OperationCallback make_operation_callback()
+static sknd::OperationCallback make_operation_callback()
 {
 }
 
-static nd::OperationCallback make_operation_callback( PyObject* obj, const std::string& key )
+static sknd::OperationCallback make_operation_callback( PyObject* obj, const std::string& key )
 {
     if ( obj == Py_None )
     {
-        return nd::FalseOperationCallback;
+        return sknd::FalseOperationCallback;
     }
     else if ( PyBool_Check(obj) )
     {
-        return (bool)PyObject_IsTrue(obj) ? nd::TrueOperationCallback : nd::FalseOperationCallback;
+        return (bool)PyObject_IsTrue(obj) ? sknd::TrueOperationCallback : sknd::FalseOperationCallback;
     }
     else if ( PyList_Check(obj) || PyTuple_Check(obj) || PySet_Check(obj) )
     {
-        return nd::make_operation_callback(make_string_set_from_iterable(obj));
+        return sknd::make_operation_callback(make_string_set_from_iterable(obj));
     }
     else if ( PyDict_Check(obj) )
     {
         return [=]( const std::string& name,
-                    const std::map<std::string,nd::Typename>& dtypes,
-                    const std::map<std::string,nd::ValueExpr>& attribs,
-                    const std::vector<nd::TensorRef>& inputs )
+                    const std::map<std::string,sknd::Typename>& dtypes,
+                    const std::map<std::string,sknd::ValueExpr>& attribs,
+                    const std::vector<sknd::TensorRef>& inputs )
         {
             PyObject* func = PyDict_GetItemString(obj, name.c_str());
             if ( !func )
@@ -938,9 +938,9 @@ static nd::OperationCallback make_operation_callback( PyObject* obj, const std::
         if ( argc == 1 )
         {
             return [=]( const std::string& name,
-                        const std::map<std::string,nd::Typename>& dtypes,
-                        const std::map<std::string,nd::ValueExpr>& attribs,
-                        const std::vector<nd::TensorRef>& inputs )
+                        const std::map<std::string,sknd::Typename>& dtypes,
+                        const std::map<std::string,sknd::ValueExpr>& attribs,
+                        const std::vector<sknd::TensorRef>& inputs )
             {
                 PyObject* pyName = buildPyStr(name.c_str());
                 PyObject* ret = callPyFunc(obj, { pyName });
@@ -950,9 +950,9 @@ static nd::OperationCallback make_operation_callback( PyObject* obj, const std::
         else if ( argc == 4 )
         {
             return [=]( const std::string& name,
-                        const std::map<std::string,nd::Typename>& dtypes,
-                        const std::map<std::string,nd::ValueExpr>& attribs,
-                        const std::vector<nd::TensorRef>& inputs )
+                        const std::map<std::string,sknd::Typename>& dtypes,
+                        const std::map<std::string,sknd::ValueExpr>& attribs,
+                        const std::vector<sknd::TensorRef>& inputs )
             {
                 PyObject* pyName = buildPyStr(name.c_str());
                 PyObject* pyDtypes = buildPyDtypes(dtypes);
@@ -1007,7 +1007,7 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
         return NULL;
     }
 
-    auto error_callback = [&]( const nd::Position& position, const std::string& message, const nd::StackTrace& trace,
+    auto error_callback = [&]( const sknd::Position& position, const std::string& message, const sknd::StackTrace& trace,
                                 const bool warning )
     {
         PyObject* py_position = buildPyPosition(position);
@@ -1024,7 +1024,7 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
         makePyObject(error, py_position, py_message, py_trace, py_warning);
     };
 
-    std::map<std::string, nd::ValueExpr> attributes;
+    std::map<std::string, sknd::ValueExpr> attributes;
 
     PyObject *key, *value;
     for ( Py_ssize_t ppos = 0; PyDict_Next(attribs, &ppos, &key, &value); )
@@ -1038,7 +1038,7 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
         attributes[PY_STRING_AS_CSTR(key)] = valueFromPyObject(value);
     }
 
-    std::optional<nd::Model> model;
+    std::optional<sknd::Model> model;
 
     if ( isFile )
     {
@@ -1055,16 +1055,16 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
             PyErr_SetString(PyExc_FileNotFoundError, message.c_str());
             return NULL;
         }
-        model = nd::read_model(fs, module, "", stdlib, import_path, error_callback, atomic_callback, unroll_callback, attributes);
+        model = sknd::read_model(fs, module, "", stdlib, import_path, error_callback, atomic_callback, unroll_callback, attributes);
         if ( model )
         {
-            model->name = nd::model_name_from_path(path);
+            model->name = sknd::model_name_from_path(path);
         }
     }
     else
     {
         std::stringstream ss(input);
-        model = nd::read_model(ss, "main", "", stdlib, "", error_callback, atomic_callback, unroll_callback, attributes);
+        model = sknd::read_model(ss, "main", "", stdlib, "", error_callback, atomic_callback, unroll_callback, attributes);
     }
 
     return model ? buildPyModel(*model) : buildPyNone();

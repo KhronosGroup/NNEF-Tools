@@ -6,7 +6,7 @@
 #include <map>
 
 
-namespace nd
+namespace sknd
 {
     
     template<typename T>
@@ -75,7 +75,7 @@ namespace nd
         return std::to_string(arg) + ((", " + std::to_string(args)) + ... + "");
     }
     
-}   // namespace nd
+}   // namespace sknd
 
 
 #endif

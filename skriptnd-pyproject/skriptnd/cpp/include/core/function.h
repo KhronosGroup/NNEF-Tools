@@ -4,7 +4,7 @@
 #include <type_traits>
 
 
-namespace nd
+namespace sknd
 {
 
     template <typename Signature>
@@ -38,6 +38,6 @@ namespace nd
         Result (*_erased_fn)(void*, Args...);
     };
 
-}   // namespace nd
+}   // namespace sknd
 
 #endif

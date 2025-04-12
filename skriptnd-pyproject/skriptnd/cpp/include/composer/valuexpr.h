@@ -13,7 +13,7 @@
 #include <cmath>
 
 
-namespace nd
+namespace sknd
 {
 
     class ValueExpr;
@@ -2096,7 +2096,7 @@ namespace nd
     {
         if ( arg.is_literal() )
         {
-            return arg.dtype() == nd::Typename::Real ? ValueExpr(-arg.as_real()) : ValueExpr(-arg.as_int());
+            return arg.dtype() == sknd::Typename::Real ? ValueExpr(-arg.as_real()) : ValueExpr(-arg.as_int());
         }
         else
         {
@@ -2113,7 +2113,7 @@ namespace nd
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == nd::Typename::Real ? ValueExpr(left.as_real() + right.as_real()) : ValueExpr(left.as_int() + right.as_int());
+            return left.dtype() == sknd::Typename::Real ? ValueExpr(left.as_real() + right.as_real()) : ValueExpr(left.as_int() + right.as_int());
         }
         else if ( left == (real_t)0 || left == (int_t)0 )
         {
@@ -2133,7 +2133,7 @@ namespace nd
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == nd::Typename::Real ? ValueExpr(left.as_real() - right.as_real()) : ValueExpr(left.as_int() - right.as_int());
+            return left.dtype() == sknd::Typename::Real ? ValueExpr(left.as_real() - right.as_real()) : ValueExpr(left.as_int() - right.as_int());
         }
         else if ( left == (real_t)0 || left == (int_t)0 )
         {
@@ -2153,7 +2153,7 @@ namespace nd
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == nd::Typename::Real ? ValueExpr(left.as_real() * right.as_real()) : ValueExpr(left.as_int() * right.as_int());
+            return left.dtype() == sknd::Typename::Real ? ValueExpr(left.as_real() * right.as_real()) : ValueExpr(left.as_int() * right.as_int());
         }
         else if ( left == (real_t)1 || left == (int_t)1 )
         {
@@ -2181,7 +2181,7 @@ namespace nd
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == nd::Typename::Real ? ValueExpr(left.as_real() / right.as_real()) : ValueExpr(left.as_int() / right.as_int());
+            return left.dtype() == sknd::Typename::Real ? ValueExpr(left.as_real() / right.as_real()) : ValueExpr(left.as_int() / right.as_int());
         }
         else if ( right == (real_t)1 || right == (int_t)1 )
         {
@@ -2201,7 +2201,7 @@ namespace nd
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == nd::Typename::Real ? ValueExpr(std::fmod(left.as_real(), right.as_real())) : ValueExpr(left.as_int() % right.as_int());
+            return left.dtype() == sknd::Typename::Real ? ValueExpr(std::fmod(left.as_real(), right.as_real())) : ValueExpr(left.as_int() % right.as_int());
         }
         else if ( right == (real_t)1 )
         {
@@ -2221,7 +2221,7 @@ namespace nd
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == nd::Typename::Real ? ValueExpr(ceil_div(left.as_real(), right.as_real())) :
+            return left.dtype() == sknd::Typename::Real ? ValueExpr(ceil_div(left.as_real(), right.as_real())) :
                                                         ValueExpr(ceil_div(left.as_int(), right.as_int()));
         }
         else if ( right == (real_t)1 || right == (int_t)1 )
@@ -2242,7 +2242,7 @@ namespace nd
     {
         if ( left.is_literal() && right.is_literal() )
         {
-            return left.dtype() == nd::Typename::Real ? ValueExpr(std::pow(left.as_real(), right.as_real())) :
+            return left.dtype() == sknd::Typename::Real ? ValueExpr(std::pow(left.as_real(), right.as_real())) :
                                                        ValueExpr((int_t)std::pow(left.as_int(), right.as_int()));
         }
         else if ( left == (real_t)1 || left == (int_t)1 )
@@ -2332,20 +2332,20 @@ namespace nd
         }
     }
 
-}   // namespace nd
+}   // namespace sknd
 
 
 namespace std
 {
 
-    inline string to_string( const nd::ValueExpr& expr )
+    inline string to_string( const sknd::ValueExpr& expr )
     {
         std::stringstream ss;
         ss << expr;
         return ss.str();
     }
 
-    inline void swap( nd::ValueExpr& a, nd::ValueExpr& b )
+    inline void swap( sknd::ValueExpr& a, sknd::ValueExpr& b )
     {
         a.swap(b);
     }
