@@ -1,6 +1,6 @@
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
-import skriptnd as nd
+import skriptnd as sknd
 import numpy as np
 import itertools
 import importlib
@@ -260,7 +260,7 @@ PYBIND11_MODULE(MODULE_NAME, m) {
 
 
 def _recursive_itemize(arg):
-    if type(arg) is list or type(arg) is tuple or type(arg) is nd.TensorPack:
+    if type(arg) is list or type(arg) is tuple or type(arg) is sknd.TensorPack:
         for item in arg:
             yield from _recursive_itemize(item)
     else:
@@ -276,7 +276,7 @@ def _ensure_positive_axis(axis, rank):
 
 
 def _format_tensor_access(access, idx=None):
-    packed = isinstance(access.tensor, nd.TensorPack)
+    packed = isinstance(access.tensor, sknd.TensorPack)
     if not packed and _can_inline_tensor(access.tensor):
         return _format_value_expr(access.tensor.value)
 
@@ -290,11 +290,11 @@ def _format_tensor_access(access, idx=None):
 
 
 def _has_tensor_access(expr):
-    return any(isinstance(x, nd.TensorAccess) for x in nd.recursive_enumerate_expr(expr))
+    return any(isinstance(x, sknd.TensorAccess) for x in sknd.recursive_enumerate_expr(expr))
 
 
 def _format_nested_loops(contraction, indent):
-    tuple_assign = isinstance(contraction.left.tensor, nd.TensorPack) and contraction.left.item is None
+    tuple_assign = isinstance(contraction.left.tensor, sknd.TensorPack) and contraction.left.item is None
 
     if isinstance(contraction.right, (int, float, bool)) and len(contraction.locals) == 0:
         value = _format_value_expr(contraction.right)
@@ -310,7 +310,7 @@ def _format_nested_loops(contraction, indent):
 
     indent += len(contraction.bounds) * "\t"
 
-    index_guards = nd.collect_index_guards(contraction)
+    index_guards = sknd.collect_index_guards(contraction)
 
     if index_guards:
         index_locals = list()
@@ -388,7 +388,7 @@ def _format_contraction_assignment(contraction, indent, idx=None):
 
 def _format_guard(index, tensor, dim):
     lhs = _format_value_expr(index)
-    rhs = f"(unsigned){_valid_id(tensor.name)}.shape({dim})" if isinstance(tensor.shape[dim], nd.Expr) \
+    rhs = f"(unsigned){_valid_id(tensor.name)}.shape({dim})" if isinstance(tensor.shape[dim], sknd.Expr) \
         else _format_value_expr(tensor.shape[dim])
     return f"(unsigned)({lhs}) < {rhs}"
 
@@ -400,14 +400,14 @@ def _format_dtype(dtype):
 def _format_decl_type(tensor):
     rank = len(tensor.shape)
     dtype = _format_dtype(tensor.dtype)
-    if isinstance(tensor, nd.TensorPack):
+    if isinstance(tensor, sknd.TensorPack):
         return f"nd::rt::TensorPack<{rank},{dtype},{tensor.max_size}>"
     else:
         return f"nd::rt::Tensor<{rank},{dtype}>"
 
 
 def _format_dynamic_mask(tensor):
-    return '0b' + ''.join('1' if isinstance(s, nd.Expr) else '0' for s in reversed(tensor.shape))
+    return '0b' + ''.join('1' if isinstance(s, sknd.Expr) else '0' for s in reversed(tensor.shape))
 
 
 def _format_tensor_declaration(tensor, indent):
@@ -472,28 +472,28 @@ def _format_value_expr(expr, bracket=True, extent=None):
         return f"{expr}f"
     elif isinstance(expr, str):
         return f'"{expr}"'
-    elif isinstance(expr, nd.IdentifierExpr):
+    elif isinstance(expr, sknd.IdentifierExpr):
         return _valid_id(expr.name)
-    elif isinstance(expr, nd.ReferenceExpr):
+    elif isinstance(expr, sknd.ReferenceExpr):
         return _valid_id(expr.name)
-    elif isinstance(expr, nd.SizeAccess):
+    elif isinstance(expr, sknd.SizeAccess):
         iden = _valid_id(expr.pack.name)
         return f"{iden}.size()"
-    elif isinstance(expr, nd.ShapeAccess):
+    elif isinstance(expr, sknd.ShapeAccess):
         name = _valid_id(expr.tensor.name)
         dim = _format_value_expr(expr.dim)
         if expr.item is not None:
             item = _format_value_expr(expr.item)
             return f"{name}[{item}].shape({dim})"
-        elif isinstance(expr.tensor, nd.TensorPack) and expr.packed:
+        elif isinstance(expr.tensor, sknd.TensorPack) and expr.packed:
             return f"{name}.shapes({dim})"
         else:
             return f"{name}.shape({dim})"
-    elif isinstance(expr, nd.TensorAccess):
+    elif isinstance(expr, sknd.TensorAccess):
         return _format_tensor_access(expr)
-    elif isinstance(expr, nd.CastExpr):
+    elif isinstance(expr, sknd.CastExpr):
         if not expr.packed:
-            if expr.dtype == nd.Dtype.Int:
+            if expr.dtype == sknd.Dtype.Int:
                 if expr.arg == float('inf'):
                     return "std::numeric_limits<nd::int_t>::max()"
                 elif expr.arg == float('-inf'):
@@ -505,7 +505,7 @@ def _format_value_expr(expr, bracket=True, extent=None):
             arg = _format_value_expr(expr.arg, bracket=False)
             dtype = expr.dtype.name.lower()
             return f"nd::rt::unary<nd::rt::to_{dtype}>({arg})"
-    elif isinstance(expr, nd.UnaryExpr):
+    elif isinstance(expr, sknd.UnaryExpr):
         if not expr.packed:
             if len(expr.op) < 3:
                 return expr.op + _format_value_expr(expr.arg)
@@ -523,13 +523,13 @@ def _format_value_expr(expr, bracket=True, extent=None):
 
             arg = _format_value_expr(expr.arg, bracket=False)
             return "nd::rt::unary<{op}>({arg})".format(op=op, arg=arg)
-    elif isinstance(expr, nd.BinaryExpr):
+    elif isinstance(expr, sknd.BinaryExpr):
         if not expr.packed:
             left = _format_value_expr(expr.left)
             right = _format_value_expr(expr.right)
             if expr.op == "**":
                 return f"std::pow({left}, {right})"
-            elif expr.op == "%" and nd.expr_dtype(expr) == nd.Dtype.Real:
+            elif expr.op == "%" and sknd.expr_dtype(expr) == sknd.Dtype.Real:
                 return f"std::fmod({left}, {right})"
             elif expr.op == "<<":
                 return f"std::min({left}, {right})"
@@ -578,25 +578,25 @@ def _format_value_expr(expr, bracket=True, extent=None):
                 op = expr.op
 
             left = _format_value_expr(expr.left, bracket=False)
-            if not nd.expr_is_packed(expr.left):
+            if not sknd.expr_is_packed(expr.left):
                 left = _format_uniform(left, expr.max_size)
             right = _format_value_expr(expr.right, bracket=False)
-            if not nd.expr_is_packed(expr.right):
+            if not sknd.expr_is_packed(expr.right):
                 right = _format_uniform(right, expr.max_size)
             return f"nd::rt::binary<{op}>({left}, {right})"
-    elif isinstance(expr, nd.SelectExpr):
+    elif isinstance(expr, sknd.SelectExpr):
         cond = _format_value_expr(expr.cond, bracket=False)
         left = _format_value_expr(expr.left, bracket=False)
         right = _format_value_expr(expr.right, bracket=False)
         if not expr.packed or isinstance(expr.cond, bool):
             return lb + cond + " ? " + left + " : " + right + rb
         else:
-            if not nd.expr_is_packed(expr.left):
+            if not sknd.expr_is_packed(expr.left):
                 left = _format_uniform(left, expr.max_size)
-            if not nd.expr_is_packed(expr.right):
+            if not sknd.expr_is_packed(expr.right):
                 right = _format_uniform(right, expr.max_size)
             return f"nd::rt::select({cond}, {left}, {right})"
-    elif isinstance(expr, nd.FoldExpr):
+    elif isinstance(expr, sknd.FoldExpr):
         if expr.op == "+":
             op = "std::plus"
         elif expr.op == "*":
@@ -617,7 +617,7 @@ def _format_value_expr(expr, bracket=True, extent=None):
             return f"nd::rt::reduce<{op}>({arg})"
         else:
             return f"nd::rt::accum<{op}>({arg})"
-    elif isinstance(expr, nd.BoundedExpr):
+    elif isinstance(expr, sknd.BoundedExpr):
         arg = _format_value_expr(expr.arg, bracket=False)
         if expr.lower is not None and expr.upper is not None:
             lower = _format_value_expr(expr.lower, bracket=False)
@@ -625,11 +625,11 @@ def _format_value_expr(expr, bracket=True, extent=None):
             return arg + " < 0 ? " + lower + " : " + arg + " >= " + str(extent) + " ? " + upper + " : " + arg
         else:
             return arg
-    elif isinstance(expr, nd.ListExpr):
+    elif isinstance(expr, sknd.ListExpr):
         return "nd::rt::list({})".format(", ".join(_format_value_expr(item, bracket=False) for item in expr))
-    elif isinstance(expr, nd.ConcatExpr):
+    elif isinstance(expr, sknd.ConcatExpr):
         return "nd::rt::concat({})".format(", ".join(_format_value_expr(item, bracket=False) for item in expr.items))
-    elif isinstance(expr, nd.SliceExpr):
+    elif isinstance(expr, sknd.SliceExpr):
         pack = _format_value_expr(expr.pack)
         first = _format_value_expr(expr.first)
         last = _format_value_expr(expr.last)
@@ -638,15 +638,15 @@ def _format_value_expr(expr, bracket=True, extent=None):
         else:
             stride = _format_value_expr(expr.stride)
             return f"nd::rt::slice({pack}, {first}, {last}, {stride})"
-    elif isinstance(expr, nd.SubscriptExpr):
+    elif isinstance(expr, sknd.SubscriptExpr):
         pack = _format_value_expr(expr.pack)
         index = _format_value_expr(expr.index)
         return f"{pack}[{index}]"
-    elif isinstance(expr, nd.UniformExpr):
+    elif isinstance(expr, sknd.UniformExpr):
         value = _format_value_expr(expr.value)
         size = _format_value_expr(expr.size)
         return f"nd::rt::uniform<{expr.max_size}>({value}, {size})"
-    elif isinstance(expr, nd.RangeExpr):
+    elif isinstance(expr, sknd.RangeExpr):
         first = _format_value_expr(expr.first)
         last = _format_value_expr(expr.last)
         if expr.stride == 1:
@@ -667,14 +667,14 @@ def _format_value_exprs(expr, bracket=True):
 
 def _format_shape_propagation(output, indent):
     text = ""
-    if isinstance(output, nd.TensorPack) and _is_dynamic_size(output.size) and not _is_placeholder(output.size):
+    if isinstance(output, sknd.TensorPack) and _is_dynamic_size(output.size) and not _is_placeholder(output.size):
         length = _format_value_expr(output.size, bracket=False)
         text += indent + f"{_valid_id(output.name)}.resize({length});\n"
     if _is_dynamic_shape(output.shape) and all(not _is_placeholder(item) for item in output.shape):
-        shape = ", ".join(_format_value_expr(expr, bracket=False) if not nd.expr_is_packed(expr) else "-1"
+        shape = ", ".join(_format_value_expr(expr, bracket=False) if not sknd.expr_is_packed(expr) else "-1"
                           for expr in output.shape)
         text += indent + f"{_valid_id(output.name)}.reshape({shape});\n"
-    if isinstance(output, nd.TensorPack):
+    if isinstance(output, sknd.TensorPack):
         text += "".join(_format_shape_propagation(item, indent) for item in output)
     return text
 
@@ -688,35 +688,35 @@ def _is_dynamic_shape(shape):
 
 
 def _is_placeholder(expr):
-    return isinstance(expr, nd.PlaceholderExpr)
+    return isinstance(expr, sknd.PlaceholderExpr)
 
 
 def _format_packable_tensor_in_comment(tensor):
     if tensor is None:
         return "~"
-    elif not isinstance(tensor, nd.TensorPack) and _can_inline_tensor(tensor):
+    elif not isinstance(tensor, sknd.TensorPack) and _can_inline_tensor(tensor):
         return _format_value_in_comment(tensor.value)
     else:
         return tensor.name
 
 
 def _format_attrib_in_comment(attrib):
-    if isinstance(attrib, nd.ListExpr):
+    if isinstance(attrib, sknd.ListExpr):
         return "[" + ",".join(_format_attrib_in_comment(item) for item in attrib) + "]"
-    elif isinstance(attrib, nd.UniformExpr):
+    elif isinstance(attrib, sknd.UniformExpr):
         return _format_attrib_in_comment(attrib.value)
-    elif isinstance(attrib, nd.Graph):
+    elif isinstance(attrib, sknd.Graph):
         return attrib.name
-    elif isinstance(attrib, list) and all(isinstance(item, nd.Graph) for item in attrib):
+    elif isinstance(attrib, list) and all(isinstance(item, sknd.Graph) for item in attrib):
         return "[" + ",".join(item.name for item in attrib) + "]"
     else:
         return _format_value_expr(attrib)
 
 
 def _format_value_in_comment(value):
-    if isinstance(value, nd.ListExpr):
+    if isinstance(value, sknd.ListExpr):
         return "[" + ",".join(_format_value_in_comment(item) for item in value) + "]"
-    elif isinstance(value, nd.UniformExpr):
+    elif isinstance(value, sknd.UniformExpr):
         return _format_value_in_comment(value.value)
     elif isinstance(value, bool):
         return "true" if value else "false"
@@ -740,15 +740,15 @@ def _format_operation(op, indent, context):
     deferred_packs = context['deferred_packs']
 
     text = "".join(_format_pack_shape_update(input, indent) for input in op.inputs
-                   if isinstance(input, nd.TensorPack) and _is_dynamic_shape(input.shape))
+                   if isinstance(input, sknd.TensorPack) and _is_dynamic_shape(input.shape))
 
     text += indent + "// " + _format_invocation_in_comment(op.name, op.attribs, op.inputs, op.outputs) + "\n"
 
     for iden, expr in op.subexprs.items():
         iden = _valid_id(iden)
-        size = nd.expr_max_size(expr)
-        dtype = _format_dtype(nd.expr_dtype(expr))
-        value = _format_value_expr(expr, bracket=False) if not isinstance(expr, nd.ListExpr) \
+        size = sknd.expr_max_size(expr)
+        dtype = _format_dtype(sknd.expr_dtype(expr))
+        value = _format_value_expr(expr, bracket=False) if not isinstance(expr, sknd.ListExpr) \
             else "{ " + ", ".join(_format_value_expr(item, bracket=False) for item in expr) + " }"
         if size is not None:
             text += indent + f"const nd::rt::ValuePack<{dtype},{size}> {iden} = {value};\n"
@@ -792,11 +792,11 @@ def _format_checks_code(graphs, indent, context):
     placeholders = {}
     for arg, input in enumerate(main.inputs):
         for dim, s in enumerate(input.shape):
-            if isinstance(s, nd.PlaceholderExpr):
+            if isinstance(s, sknd.PlaceholderExpr):
                 if s.id not in placeholders:
                     placeholders[s.id] = []
                 placeholders[s.id].append((arg, dim))
-        if isinstance(input, nd.TensorPack) and isinstance(input.size, nd.PlaceholderExpr):
+        if isinstance(input, sknd.TensorPack) and isinstance(input.size, sknd.PlaceholderExpr):
             if input.size.id not in placeholders:
                 placeholders[input.size.id] = []
             placeholders[input.size.id].append((arg, None))
@@ -893,10 +893,10 @@ def _format_intrinsic(op, indent, context):
 def _format_call(block, args, is_condition=False):
     if is_condition and _is_trivial_block(block):
         cond = args[0]
-        iden = _valid_id(cond.name)
-        return iden + "({})".format(",".join("0" for _ in cond.shape))
+        iden = _valid_id(cosknd.name)
+        return iden + "({})".format(",".join("0" for _ in cosknd.shape))
     else:
-        return _valid_id(block.name) + "({})".format(", ".join(_valid_id(arg.name) + '[$]' if isinstance(arg, nd.TensorPack) else
+        return _valid_id(block.name) + "({})".format(", ".join(_valid_id(arg.name) + '[$]' if isinstance(arg, sknd.TensorPack) else
                                                      _format_value_expr(arg.value) if _can_inline_tensor(arg) else
                                                      _valid_id(arg.name) for arg in args))
 
@@ -947,7 +947,7 @@ def _format_do(op, indent, context):
     dynamic_iters = op.inputs[nvars+nscans]
 
     auxiliaries = context['auxiliaries']
-    index = nd.Tensor(name='$', dtype=nd.Dtype.Int, shape=(), max_shape=())
+    index = sknd.Tensor(name='$', dtype=sknd.Dtype.Int, shape=(), max_shape=())
     vars = tuple(auxiliaries[output] for output in op.outputs[:nvars])
     subgraph_inputs = vars + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
     body_inputs = tuple(subgraph_inputs[idx] for idx in op.attribs['body_inputs'])
@@ -1023,7 +1023,7 @@ def _format_nms(op, indent):
 
 
 def _format_tensor_declarations(model, indent, context):
-    auxiliaries = {contraction.left.tensor: _make_auxiliary_tensor(contraction.left.tensor, nd.expr_dtype(contraction.right))
+    auxiliaries = {contraction.left.tensor: _make_auxiliary_tensor(contraction.left.tensor, sknd.expr_dtype(contraction.right))
                    for op in model.graphs[0].operations for contraction in op.contractions
                    if contraction.assignment == '<!' or contraction.assignment == '>!'}
 
@@ -1082,7 +1082,7 @@ def _valid_id(name):
 
 
 def _make_auxiliary_tensor(tensor, dtype=None):
-    return nd.Tensor(name='$'+tensor.name, dtype=dtype or tensor.dtype, shape=tensor.shape, max_shape=tensor.max_shape)
+    return sknd.Tensor(name='$'+tensor.name, dtype=dtype or tensor.dtype, shape=tensor.shape, max_shape=tensor.max_shape)
 
 
 def _generate_model_source(model):
@@ -1117,7 +1117,7 @@ def compile_model(model, keep_generated_code=False):
     model_name = _valid_id(model.name)
     model_fn = model_name.replace('$', '_')
     hdr_name = model_fn + "_model.h"
-    cpp_name = model_fn + "_pybind.cpp"
+    cpp_name = model_fn + "_pybisknd.cpp"
     module_name = model_fn + "_module"
 
     _save_to_file(_generate_model_source(model), hdr_name)
@@ -1137,15 +1137,15 @@ def compile_model(model, keep_generated_code=False):
                           ),
     ]
 
-    import distutils.command.build
+    import distutils.commasknd.build
 
     parent_dir = os.path.normpath(os.path.join(__file__, '../'))
     build_dir = os.path.join(parent_dir, 'build_' + model_fn)
 
     # Override build command
-    class BuildCommand(distutils.command.build.build):
+    class BuildCommand(distutils.commasknd.build.build):
         def initialize_options(self):
-            distutils.command.build.build.initialize_options(self)
+            distutils.commasknd.build.build.initialize_options(self)
             self.build_base = build_dir
 
     setup(

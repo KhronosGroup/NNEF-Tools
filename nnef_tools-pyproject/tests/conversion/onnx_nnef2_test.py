@@ -123,14 +123,14 @@ class TestEnv(unittest.TestCase):
 
     @staticmethod
     def _exec_skriptnd_model(path, input_shape=None, input_range=None):
-        import skriptnd as nd
+        import skriptnd as sknd
         np.random.seed(0)
 
-        model = nd.read_model(path)
+        model = sknd.read_model(path)
         if not model:
             return None
 
-        compiled_model = nd.compile_model(model, keep_generated_code=False)
+        compiled_model = sknd.compile_model(model, keep_generated_code=False)
 
         if not isinstance(input_shape, list):
             input_shape = [input_shape] * len(model.graphs[0].inputs)
@@ -144,13 +144,13 @@ class TestEnv(unittest.TestCase):
         return compiled_model(*inputs)
 
     def _compile_skriptnd_model(self, path):
-        import skriptnd as nd
+        import skriptnd as sknd
 
-        model = nd.read_model(path)
+        model = sknd.read_model(path)
         if not model:
             return None
 
-        return nd.compile_model(model)
+        return sknd.compile_model(model)
 
     @staticmethod
     def _create_tensor(value_info, data, range=None):

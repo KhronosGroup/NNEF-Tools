@@ -1,4 +1,4 @@
-import _skriptnd as _nd
+import _skriptnd as _sknd
 import collections.abc
 
 from .parser import *
@@ -9,15 +9,15 @@ import copy
 import os
 
 
-Dtype = _nd.Dtype
-Position = _nd.Position
+Dtype = _sknd.Dtype
+Position = _sknd.Position
 
 
-Model = _nd.Model               # dataclass('Model', {
+Model = _sknd.Model             # dataclass('Model', {
                                 #   'name': str,
                                 #   'graphs': List[Graph],
                                 # }),
-Graph = _nd.Graph               # dataclass('Graph', {
+Graph = _sknd.Graph             # dataclass('Graph', {
                                 #   'name': str,
                                 #   'operations': List[Operation],
                                 #   'inputs': Tuple[Tensor],
@@ -26,7 +26,7 @@ Graph = _nd.Graph               # dataclass('Graph', {
                                 #   'packs': List[TensorPack],
                                 #   'asserts': List[Assertion],
                                 # })
-Tensor = _nd.Tensor             # dataclass('Tensor', {
+Tensor = _sknd.Tensor           # dataclass('Tensor', {
                                 #   'name': str,
                                 #   'dtype': Dtype,
                                 #   'shape': Tuple[Expr],
@@ -34,7 +34,7 @@ Tensor = _nd.Tensor             # dataclass('Tensor', {
                                 #   'quant': Dict[str, object]},
                                 #   'value': object,
                                 # })
-TensorPack = _nd.TensorPack     # dataclass('TensorPack', {
+TensorPack = _sknd.TensorPack   # dataclass('TensorPack', {
                                 #   'name': str,
                                 #   'dtype': Dtype,
                                 #   'shape': Tuple[Expr],
@@ -42,7 +42,7 @@ TensorPack = _nd.TensorPack     # dataclass('TensorPack', {
                                 #   'length': Expr,
                                 #   'items': List[Tensor],
                                 # })
-Operation = _nd.Operation       # dataclass('Operation', {
+Operation = _sknd.Operation     # dataclass('Operation', {
                                 #   'name': str,
                                 #   'dtypes': OrderedDict[str, Dtype],
                                 #   'attribs': OrderedDict[str, Expr],
@@ -53,7 +53,7 @@ Operation = _nd.Operation       # dataclass('Operation', {
                                 #   'subexprs': Dict[Expr],
                                 # }))
 
-Contraction = _nd.Contraction   # dataclass('Contraction', {
+Contraction = _sknd.Contraction # dataclass('Contraction', {
                                 #   'left': TensorAccess,
                                 #   'right': Expr,
                                 #   'assignment': str,
@@ -63,32 +63,32 @@ Contraction = _nd.Contraction   # dataclass('Contraction', {
                                 #   'axes': List[int],
                                 # }))
 
-Assertion = _nd.Assertion       # dataclass('Assertion', {
+Assertion = _sknd.Assertion     # dataclass('Assertion', {
                                 #   'condition': Expr,
                                 #   'message': str,
                                 #   'args': List[Expr],
                                 # }))
 
 # expression sub-types (Expr)
-Expr = _nd.Expr
-SizeAccess = _nd.SizeAccess
-ShapeAccess = _nd.ShapeAccess
-TensorAccess = _nd.TensorAccess
-PlaceholderExpr = _nd.PlaceholderExpr
-IdentifierExpr = _nd.IdentifierExpr
-ReferenceExpr = _nd.ReferenceExpr
-UnaryExpr = _nd.UnaryExpr
-BinaryExpr = _nd.BinaryExpr
-SelectExpr = _nd.SelectExpr
-FoldExpr = _nd.FoldExpr
-ListExpr = _nd.ListExpr
-CastExpr = _nd.CastExpr
-BoundedExpr = _nd.BoundedExpr
-ConcatExpr = _nd.ConcatExpr
-SliceExpr = _nd.SliceExpr
-SubscriptExpr = _nd.SubscriptExpr
-UniformExpr = _nd.UniformExpr
-RangeExpr = _nd.RangeExpr
+Expr = _sknd.Expr
+SizeAccess = _sknd.SizeAccess
+ShapeAccess = _sknd.ShapeAccess
+TensorAccess = _sknd.TensorAccess
+PlaceholderExpr = _sknd.PlaceholderExpr
+IdentifierExpr = _sknd.IdentifierExpr
+ReferenceExpr = _sknd.ReferenceExpr
+UnaryExpr = _sknd.UnaryExpr
+BinaryExpr = _sknd.BinaryExpr
+SelectExpr = _sknd.SelectExpr
+FoldExpr = _sknd.FoldExpr
+ListExpr = _sknd.ListExpr
+CastExpr = _sknd.CastExpr
+BoundedExpr = _sknd.BoundedExpr
+ConcatExpr = _sknd.ConcatExpr
+SliceExpr = _sknd.SliceExpr
+SubscriptExpr = _sknd.SubscriptExpr
+UniformExpr = _sknd.UniformExpr
+RangeExpr = _sknd.RangeExpr
 
 
 SizeAccess.dtype = property(lambda access: Dtype.Int)
@@ -103,7 +103,7 @@ PlaceholderExpr.size = property(lambda expr: None)
 IdentifierExpr.size = property(lambda expr: None)
 BoundedExpr.size = property(lambda expr: None)
 ReferenceExpr.size = property(lambda expr: expr.target.size)
-ShapeAccess.size = property(lambda access: access.tensor.length if isinstance(access.tensor, nd.TensorPack) else None)
+ShapeAccess.size = property(lambda access: access.tensor.length if isinstance(access.tensor, sknd.TensorPack) else None)
 CastExpr.size = property(lambda expr: expr.arg.size)
 UnaryExpr.size = property(lambda expr: expr.arg.size)
 BinaryExpr.size = property(lambda expr: expr.left.size or expr.right.size)
@@ -231,15 +231,15 @@ collections.abc.Sequence.register(RangeExpr)
 
 def expr_dtype(expr):
     if expr is None:
-        return nd.Dtype.Type
+        return sknd.Dtype.Type
     elif isinstance(expr, bool):
-        return nd.Dtype.Bool
+        return sknd.Dtype.Bool
     elif isinstance(expr, int):
-        return nd.Dtype.Int
+        return sknd.Dtype.Int
     elif isinstance(expr, float):
-        return nd.Dtype.Real
+        return sknd.Dtype.Real
     elif isinstance(expr, str):
-        return nd.Dtype.Str
+        return sknd.Dtype.Str
     else:
         return expr.dtype
 
@@ -257,11 +257,11 @@ def expr_is_packed(expr):
 
 
 def expr_is_dynamic(expr):
-    if isinstance(expr, nd.ListExpr):
+    if isinstance(expr, sknd.ListExpr):
         return any(isinstance(item, Expr) for item in expr)
-    elif isinstance(expr, nd.UniformExpr):
+    elif isinstance(expr, sknd.UniformExpr):
         return isinstance(expr.value, Expr) or isinstance(expr.size, Expr)
-    elif isinstance(expr, nd.RangeExpr):
+    elif isinstance(expr, sknd.RangeExpr):
         return not isinstance(expr.size, int)
     else:
         return isinstance(expr, Expr)
@@ -382,7 +382,7 @@ def _init_tensor_data(tensors, path):
                 tensor.value = np.full(tensor.shape, dtype=DtypeToNumpy[tensor.dtype],
                                        fill_value='' if tensor.dtype == Dtype.Str else 0, )
         elif tensor.is_constant:
-            if isinstance(tensor.value, nd.ListExpr):
+            if isinstance(tensor.value, sknd.ListExpr):
                 tensor.value = np.array(tensor.value.items, dtype=DtypeToNumpy[tensor.dtype]).reshape(tensor.shape)
 
 
@@ -549,12 +549,12 @@ def collect_index_guards(contraction):
 
 
 def _collect_index_guards_expr(expr, guards):
-    for item in nd.recursive_enumerate_expr(expr):
-        if isinstance(item, nd.TensorAccess):
+    for item in sknd.recursive_enumerate_expr(expr):
+        if isinstance(item, sknd.TensorAccess):
             _collect_index_guards_access(item, guards)
 
 
 def _collect_index_guards_access(access, guards):
     for dim, index in enumerate(access.indices):
-        if isinstance(index, nd.BoundedExpr) and index.lower is None and index.upper is None:
+        if isinstance(index, sknd.BoundedExpr) and index.lower is None and index.upper is None:
             guards.append((access, dim))

@@ -1,4 +1,4 @@
-import _skriptnd as _nd
+import _skriptnd as _sknd
 from collections.abc import Callable
 
 
@@ -45,10 +45,10 @@ def parse_file(path, attribs=None, atomic=None, unroll=None,  error=None):
     _check_operation_callback(atomic, 'atomic_callback')
     _check_operation_callback(atomic, 'unroll_callback')
 
-    model = _nd.parse_file(path, stdlib=_StdlibPath, attribs=attribs or {},
-                           error_callback=error or _default_error_callback,
-                           atomic_callback=atomic,
-                           unroll_callback=unroll)
+    model = _sknd.parse_file(path, stdlib=_StdlibPath, attribs=attribs or {},
+                             error_callback=error or _default_error_callback,
+                             atomic_callback=atomic,
+                             unroll_callback=unroll)
     if model is not None:
         _resolve_control_flow_attribs(model)
     return model
@@ -58,10 +58,10 @@ def parse_string(text, attribs=None, atomic=None, unroll=None,  error=None):
     _check_operation_callback(atomic, 'atomic_callback')
     _check_operation_callback(atomic, 'unroll_callback')
 
-    model = _nd.parse_string(text, stdlib=_StdlibPath, attribs=attribs or {},
-                             error_callback=error or _default_error_callback,
-                             atomic_callback=atomic,
-                             unroll_callback=unroll)
+    model = _sknd.parse_string(text, stdlib=_StdlibPath, attribs=attribs or {},
+                               error_callback=error or _default_error_callback,
+                               atomic_callback=atomic,
+                               unroll_callback=unroll)
     if model is not None:
         _resolve_control_flow_attribs(model)
     return model

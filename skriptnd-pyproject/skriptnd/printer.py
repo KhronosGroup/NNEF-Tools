@@ -1,4 +1,4 @@
-import _skriptnd as _nd
+import _skriptnd as _sknd
 import numpy as np
 import re
 
@@ -41,7 +41,7 @@ class Printer:
     def _format_value(self, value):
         if value is None:
             return "~"  # null tensor
-        elif isinstance(value, _nd.Tensor):
+        elif isinstance(value, _sknd.Tensor):
             if self._can_inline(value):
                 if isinstance(value.value, bool):
                     return "true" if value.value else "false"
@@ -49,12 +49,12 @@ class Printer:
                     return str(value.value)
             else:
                 return self._make_id(value.name)
-        elif isinstance(value, _nd.TensorPack):
+        elif isinstance(value, _sknd.TensorPack):
             if not value.name.startswith('.'):
                 return self._make_id(value.name)
             else:
                 return "[" + ", ".join(self._format_value(v) for v in value) + "]"
-        elif isinstance(value, _nd.Graph):
+        elif isinstance(value, _sknd.Graph):
             return value.name
         elif isinstance(value, np.ndarray):
             return "[" + ", ".join(self._format_value(v.item()) for v in value.flat) + "]"
@@ -85,9 +85,9 @@ class Printer:
     def _format_result(self, result):
         if result is None:
             return "~"
-        elif isinstance(result, _nd.Tensor):
+        elif isinstance(result, _sknd.Tensor):
             return self._make_id(result.name)
-        elif isinstance(result, _nd.TensorPack):
+        elif isinstance(result, _sknd.TensorPack):
             if not result.name.startswith('.'):
                 return result.name + "..(" + str(len(result)) + ")"
             else:
@@ -100,7 +100,7 @@ class Printer:
             assert False
 
     def _format_subgraph(self, target, inputs):
-        if isinstance(target, _nd.Tensor):
+        if isinstance(target, _sknd.Tensor):
             return self._format_value(target)
         elif self._inline_subgraphs:
             if len(target.operations) == 0:
@@ -122,8 +122,8 @@ class Printer:
         else:
             args = list(inputs)
             args = [item for item in args
-                    if (isinstance(item, _nd.TensorPack) and len(item) > 0)
-                    or (isinstance(item, _nd.Tensor) and not self._can_inline(item))]
+                    if (isinstance(item, _sknd.TensorPack) and len(item) > 0)
+                    or (isinstance(item, _sknd.Tensor) and not self._can_inline(item))]
             name = self._make_id(self._strip_scope(target.name, self._module_scope))
             return self._format_invocation(name, args)
 
@@ -157,7 +157,7 @@ class Printer:
             for result in results[nvars:]:
                 if len(text) != 0:
                     text += ", "
-                if isinstance(result, (_nd.Tensor, _nd.TensorPack)):
+                if isinstance(result, (_sknd.Tensor, _sknd.TensorPack)):
                     text += self._make_id(result.name) + repeats
                 else:
                     text += self._format_result(result)
@@ -174,17 +174,17 @@ class Printer:
             branch_input_offset = 0
             for i, (condition, branch) in enumerate(zip(conditions, branches)):
                 cond_inputs = [args[idx] for idx in cond_input_indices[cond_input_offset:cond_input_offset + len(condition.inputs)]] \
-                    if isinstance(condition, _nd.Graph) else None
+                    if isinstance(condition, _sknd.Graph) else None
                 branch_inputs = [args[idx] for idx in branch_input_indices[branch_input_offset:branch_input_offset + len(branch.inputs)]] \
-                    if isinstance(branch, _nd.Graph) else None
+                    if isinstance(branch, _sknd.Graph) else None
                 text += (('if ' if i == 0 else ' elif ') + self._format_subgraph(condition, cond_inputs) +
                          ' then ' + self._format_subgraph(branch, branch_inputs))
-                cond_input_offset += 1 if isinstance(condition, _nd.Tensor) else len(condition.inputs)
-                branch_input_offset += 1 if isinstance(branch, _nd.Tensor) else len(branch.inputs)
+                cond_input_offset += 1 if isinstance(condition, _sknd.Tensor) else len(condition.inputs)
+                branch_input_offset += 1 if isinstance(branch, _sknd.Tensor) else len(branch.inputs)
 
             branch = branches[-1]
             branch_inputs = [args[idx] for idx in branch_input_indices[branch_input_offset:branch_input_offset + len(branch.inputs)]] \
-                if isinstance(branch, _nd.Graph) else None
+                if isinstance(branch, _sknd.Graph) else None
             text += ' else ' + self._format_subgraph(branch, branch_inputs)
         elif name == 'do':
             condition = attribs.get('cond_graph')
@@ -198,14 +198,14 @@ class Printer:
             index_name = attribs.get('index')
             pretest = attribs.get('pretest', False)
 
-            index = _nd.Tensor(name=index_name, dtype=_nd.Dtype.Int, shape=(), max_shape=()) if index_name else None
+            index = _sknd.Tensor(name=index_name, dtype=_sknd.Dtype.Int, shape=(), max_shape=()) if index_name else None
 
             subgraph_inputs = body.inputs[:nvars + nscans] + (index,) + args[nvars + nscans + 1:]
             cond_inputs = [subgraph_inputs[idx] for idx in cond_input_indices] \
-                if condition and isinstance(condition, _nd.Graph) else None
+                if condition and isinstance(condition, _sknd.Graph) else None
 
             body_inputs = [subgraph_inputs[idx] for idx in body_input_indices] \
-                if isinstance(body, _nd.Graph) else None
+                if isinstance(body, _sknd.Graph) else None
             body_inputs[:nvars] = body.inputs[:nvars]
 
             if nvars > 0:
@@ -258,7 +258,7 @@ class Printer:
 
         print("\t@input {", file=file)
         for input in graph.inputs:
-            if isinstance(input, _nd.TensorPack):
+            if isinstance(input, _sknd.TensorPack):
                 print("\t\t" + self._format_param(input.name, input.dtype, input.shape,
                                                   packed=True, repeats=len(input)) + ";", file=file)
             elif not self._can_inline(input):
@@ -268,8 +268,8 @@ class Printer:
 
         print("\t@output {", file=file)
         for output in graph.outputs:
-            shape = tuple(s if not isinstance(s, _nd.Expr) else None for s in output.shape)
-            if isinstance(output, _nd.TensorPack):
+            shape = tuple(s if not isinstance(s, _sknd.Expr) else None for s in output.shape)
+            if isinstance(output, _sknd.TensorPack):
                 print("\t\t" + self._format_param(output.name, output.dtype, shape,
                                                   packed=True, repeats=len(output)) + ";", file=file)
             else:
