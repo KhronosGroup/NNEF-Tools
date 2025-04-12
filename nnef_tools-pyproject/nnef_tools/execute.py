@@ -372,7 +372,7 @@ class SkriptNDExecutor(Executor):
     def __init__(self, model_path, target=None, device=None, atomic=None):
         import skriptnd as sknd
         self.model = sknd.read_model(model_path, atomic=atomic)
-        if target == 'cpp':
+        if target is None or target == 'cpp':
             self.runner = sknd.compile_model(self.model)
         else:
             from .execution.tvm import VirtualMachine
