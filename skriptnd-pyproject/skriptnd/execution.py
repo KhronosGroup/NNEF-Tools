@@ -893,8 +893,8 @@ def _format_intrinsic(op, indent, context):
 def _format_call(block, args, is_condition=False):
     if is_condition and _is_trivial_block(block):
         cond = args[0]
-        iden = _valid_id(cosknd.name)
-        return iden + "({})".format(",".join("0" for _ in cosknd.shape))
+        iden = _valid_id(cond.name)
+        return iden + "({})".format(",".join("0" for _ in cond.shape))
     else:
         return _valid_id(block.name) + "({})".format(", ".join(_valid_id(arg.name) + '[$]' if isinstance(arg, sknd.TensorPack) else
                                                      _format_value_expr(arg.value) if _can_inline_tensor(arg) else
@@ -1137,15 +1137,15 @@ def compile_model(model, keep_generated_code=False):
                           ),
     ]
 
-    import distutils.commasknd.build
+    import distutils.command.build
 
     parent_dir = os.path.normpath(os.path.join(__file__, '../'))
     build_dir = os.path.join(parent_dir, 'build_' + model_fn)
 
     # Override build command
-    class BuildCommand(distutils.commasknd.build.build):
+    class BuildCommand(distutils.command.build.build):
         def initialize_options(self):
-            distutils.commasknd.build.build.initialize_options(self)
+            distutils.command.build.build.initialize_options(self)
             self.build_base = build_dir
 
     setup(
