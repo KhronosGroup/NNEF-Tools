@@ -1,5 +1,5 @@
-#ifndef _TS_RESULT_H_
-#define _TS_RESULT_H_
+#ifndef _SKND_RESULT_H_
+#define _SKND_RESULT_H_
 
 #include <string>
 #include "error.h"

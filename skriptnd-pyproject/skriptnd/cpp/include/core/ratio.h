@@ -1,5 +1,5 @@
-#ifndef _TS_RATIO_H_
-#define _TS_RATIO_H_
+#ifndef _SKND_RATIO_H_
+#define _SKND_RATIO_H_
 
 #include <numeric>
 

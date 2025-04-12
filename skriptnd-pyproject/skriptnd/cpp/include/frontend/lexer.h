@@ -1,5 +1,5 @@
-#ifndef _TS_LEXER_H_
-#define _TS_LEXER_H_
+#ifndef _SKND_LEXER_H_
+#define _SKND_LEXER_H_
 
 #include "result.h"
 #include <iostream>

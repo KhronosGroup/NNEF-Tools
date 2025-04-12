@@ -1,5 +1,5 @@
-#ifndef _TS_EXPR_H_
-#define _TS_EXPR_H_
+#ifndef _SKND_EXPR_H_
+#define _SKND_EXPR_H_
 
 #include "position.h"
 #include "function.h"

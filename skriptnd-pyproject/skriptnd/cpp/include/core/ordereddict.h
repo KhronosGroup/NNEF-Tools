@@ -1,5 +1,5 @@
-#ifndef _TS_ORDERED_DICT_H_
-#define _TS_ORDERED_DICT_H_
+#ifndef _SKND_ORDERED_DICT_H_
+#define _SKND_ORDERED_DICT_H_
 
 #include <list>
 #include <iostream>

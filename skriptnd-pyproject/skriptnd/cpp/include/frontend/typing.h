@@ -1,5 +1,5 @@
-#ifndef _TS_TYPING_H_
-#define _TS_TYPING_H_
+#ifndef _SKND_TYPING_H_
+#define _SKND_TYPING_H_
 
 #include "operator.h"
 #include "function.h"

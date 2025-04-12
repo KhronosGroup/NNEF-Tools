@@ -1,5 +1,5 @@
-#ifndef _TS_TENSORREF_H_
-#define _TS_TENSORREF_H_
+#ifndef _SKND_TENSORREF_H_
+#define _SKND_TENSORREF_H_
 
 #include "either.h"
 #include "types.h"

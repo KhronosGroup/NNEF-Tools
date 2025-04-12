@@ -1,5 +1,5 @@
-#ifndef _TS_EVALUATION_H_
-#define _TS_EVALUATION_H_
+#ifndef _SKND_EVALUATION_H_
+#define _SKND_EVALUATION_H_
 
 #include "astexpr.h"
 #include "result.h"

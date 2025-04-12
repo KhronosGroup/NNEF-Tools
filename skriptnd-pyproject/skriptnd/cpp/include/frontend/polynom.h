@@ -1,5 +1,5 @@
-#ifndef _TS_POLYNOM_H_
-#define _TS_POLYNOM_H_
+#ifndef _SKND_POLYNOM_H_
+#define _SKND_POLYNOM_H_
 
 #include <functional>
 #include <iostream>

@@ -1,5 +1,5 @@
-#ifndef _TS_MAYBE_H_
-#define _TS_MAYBE_H_
+#ifndef _SKND_MAYBE_H_
+#define _SKND_MAYBE_H_
 
 
 namespace sknd

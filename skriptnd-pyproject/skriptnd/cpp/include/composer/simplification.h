@@ -1,5 +1,5 @@
-#ifndef _TS_SIMPLIFICATION_H_
-#define _TS_SIMPLIFICATION_H_
+#ifndef _SKND_SIMPLIFICATION_H_
+#define _SKND_SIMPLIFICATION_H_
 
 #include "valuexpr.h"
 #include "polynom.h"

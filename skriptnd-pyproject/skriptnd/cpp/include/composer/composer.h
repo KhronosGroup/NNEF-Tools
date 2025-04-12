@@ -1,5 +1,5 @@
-#ifndef _TS_COMPOSER_H_
-#define _TS_COMPOSER_H_
+#ifndef _SKND_COMPOSER_H_
+#define _SKND_COMPOSER_H_
 
 #include <stack>
 #include <unordered_set>

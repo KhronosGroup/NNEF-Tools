@@ -1,5 +1,5 @@
-#ifndef _TS_PARSER_H_
-#define _TS_PARSER_H_
+#ifndef _SKND_PARSER_H_
+#define _SKND_PARSER_H_
 
 #include "lexer.h"
 #include "operator.h"

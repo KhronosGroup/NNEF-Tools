@@ -1,5 +1,5 @@
-#ifndef _TS_PRINT_H_
-#define _TS_PRINT_H_
+#ifndef _SKND_PRINT_H_
+#define _SKND_PRINT_H_
 
 #include <string>
 #include <vector>

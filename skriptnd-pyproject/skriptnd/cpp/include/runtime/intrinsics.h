@@ -1,5 +1,5 @@
-#ifndef _TS_INTRINSICS_H_
-#define _TS_INTRINSICS_H_
+#ifndef _SKND_INTRINSICS_H_
+#define _SKND_INTRINSICS_H_
 
 #include "runtime.h"
 #include <algorithm>

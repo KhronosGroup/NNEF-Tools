@@ -1,5 +1,5 @@
-#ifndef _TS_OPERATOR_H_
-#define _TS_OPERATOR_H_
+#ifndef _SKND_OPERATOR_H_
+#define _SKND_OPERATOR_H_
 
 #include "astexpr.h"
 #include <vector>

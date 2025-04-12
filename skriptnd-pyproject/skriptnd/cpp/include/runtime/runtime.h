@@ -1,5 +1,5 @@
-#ifndef _TS_RUNTIME_H_
-#define _TS_RUNTIME_H_
+#ifndef _SKND_RUNTIME_H_
+#define _SKND_RUNTIME_H_
 
 #include <array>
 #include <vector>

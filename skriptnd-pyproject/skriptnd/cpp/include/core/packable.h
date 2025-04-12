@@ -1,5 +1,5 @@
-#ifndef _TS_PACKABLE_H_
-#define _TS_PACKABLE_H_
+#ifndef _SKND_PACKABLE_H_
+#define _SKND_PACKABLE_H_
 
 #include <algorithm>
 #include <type_traits>

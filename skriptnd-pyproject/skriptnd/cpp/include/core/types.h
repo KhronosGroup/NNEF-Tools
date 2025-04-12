@@ -1,5 +1,5 @@
-#ifndef _TS_TYPES_H_
-#define _TS_TYPES_H_
+#ifndef _SKND_TYPES_H_
+#define _SKND_TYPES_H_
 
 #include <vector>
 #include <string>

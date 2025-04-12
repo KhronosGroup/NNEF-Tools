@@ -1,5 +1,5 @@
-#ifndef _TS_POSITION_H_
-#define _TS_POSITION_H_
+#ifndef _SKND_POSITION_H_
+#define _SKND_POSITION_H_
 
 #include <string>
 

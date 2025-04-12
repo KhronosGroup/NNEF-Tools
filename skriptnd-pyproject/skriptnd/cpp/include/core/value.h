@@ -1,5 +1,5 @@
-#ifndef _TS_VALUE_H_
-#define _TS_VALUE_H_
+#ifndef _SKND_VALUE_H_
+#define _SKND_VALUE_H_
 
 #include "packable.h"
 #include "types.h"

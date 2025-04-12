@@ -1,5 +1,5 @@
-#ifndef _TS_ERROR_H_
-#define _TS_ERROR_H_
+#ifndef _SKND_ERROR_H_
+#define _SKND_ERROR_H_
 
 #include "position.h"
 #include <functional>

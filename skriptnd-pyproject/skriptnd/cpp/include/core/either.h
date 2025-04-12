@@ -1,5 +1,5 @@
-#ifndef _TS_EITHER_H_
-#define _TS_EITHER_H_
+#ifndef _SKND_EITHER_H_
+#define _SKND_EITHER_H_
 
 #include <typeinfo>
 

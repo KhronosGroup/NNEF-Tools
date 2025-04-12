@@ -1,5 +1,5 @@
-#ifndef _TS_FUNCTION_H_
-#define _TS_FUNCTION_H_
+#ifndef _SKND_FUNCTION_H_
+#define _SKND_FUNCTION_H_
 
 #include <type_traits>
 

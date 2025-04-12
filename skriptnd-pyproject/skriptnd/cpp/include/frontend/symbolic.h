@@ -1,5 +1,5 @@
-#ifndef _TS_SYMBOLIC_H_
-#define _TS_SYMBOLIC_H_
+#ifndef _SKND_SYMBOLIC_H_
+#define _SKND_SYMBOLIC_H_
 
 #include "astexpr.h"
 #include "polynom.h"

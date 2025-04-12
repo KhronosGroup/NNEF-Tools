@@ -1,5 +1,5 @@
-#ifndef _TS_VARIANT_H_
-#define _TS_VARIANT_H_
+#ifndef _SKND_VARIANT_H_
+#define _SKND_VARIANT_H_
 
 #include <algorithm>
 #include <type_traits>

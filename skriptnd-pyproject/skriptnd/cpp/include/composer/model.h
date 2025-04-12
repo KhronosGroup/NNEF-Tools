@@ -1,5 +1,5 @@
-#ifndef _TS_MODEL_H_
-#define _TS_MODEL_H_
+#ifndef _SKND_MODEL_H_
+#define _SKND_MODEL_H_
 
 #include <string>
 #include <vector>
