@@ -1,11 +1,11 @@
-from .sknd_frontend import from_sknd
+from .skriptnd_frontend import from_skriptnd
 import tvm
 
 
 class VirtualMachine:
 
     def __init__(self, model, target=None, device=None):
-        model = from_sknd(model)
+        model = from_skriptnd(model)
         target = tvm.target.Target(target or 'llvm')
         exe = tvm.compile(model, target=target)
         self.device = tvm.device(device) if device else tvm.cpu()

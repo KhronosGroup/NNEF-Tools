@@ -58,7 +58,7 @@ _atomics = {
     "nn.local_response_norm": lrn_callback,
 }
 
-from .graph_builder import from_sknd
+from .graph_builder import from_skriptnd
 
 # limit import
-__all__ = ["from_sknd", "ConverterError", "convert_dtype", "LOGGING_LEVEL", "_atomics"]
+__all__ = ["from_skriptnd", "ConverterError", "convert_dtype", "LOGGING_LEVEL", "_atomics"]

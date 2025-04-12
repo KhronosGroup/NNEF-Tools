@@ -20,14 +20,14 @@ from .contraction_builder import build_contraction, NotExpressibleError
 UNEXPRESSIBLE_OPERATIONS = ["top_k", "nonmax_suppress"]
 
 
-def from_sknd(model: str | sknd.Model | PathLike,
-              keep_params_in_input: bool = False,
-              keep_ts_names: bool = False,
-              contr_only: bool = False,
-              atomics: dict[str, Callable[[...], bool] | bool] = None,
-              keep_intrin: dict[str, Callable[[...], bool] | bool] = None,
-              custom_converter_map: dict[str, Callable] = None,
-              ) -> tvm.IRModule:
+def from_skriptnd(model: str | sknd.Model | PathLike,
+                  keep_params_in_input: bool = False,
+                  keep_ts_names: bool = False,
+                  contr_only: bool = False,
+                  atomics: dict[str, Callable[[...], bool] | bool] = None,
+                  keep_intrin: dict[str, Callable[[...], bool] | bool] = None,
+                  custom_converter_map: dict[str, Callable] = None,
+                  ) -> tvm.IRModule:
     """
     Convert a SkriptND model to a TVM IRModule
 
