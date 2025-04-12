@@ -1,50 +1,50 @@
-import skriptnd as nd
+import skriptnd as sknd
 from ...model import *
 from .utils import *
 
 
-def _build_tensor(graph, ts_tensor):
+def _build_tensor(graph, sknd_tensor):
     return Tensor(graph,
-                  name=ts_tensor.name,
-                  shape=ts_tensor.shape,
-                  dtype=nd.DtypeToNumpy[ts_tensor.dtype],
-                  data=ts_tensor.value,
-                  quant=ts_tensor.quant,
-                  variable=ts_tensor.variable)
+                  name=sknd_tensor.name,
+                  shape=sknd_tensor.shape,
+                  dtype=sknd.DtypeToNumpy[sknd_tensor.dtype],
+                  data=sknd_tensor.value,
+                  quant=sknd_tensor.quant,
+                  variable=sknd_tensor.variable)
 
 
-def _build_tensor_pack(graph, ts_pack, tensor_map):
+def _build_tensor_pack(graph, sknd_pack, tensor_map):
     return TensorPack(graph,
-                      name=ts_pack.name,
-                      shape=ts_pack.shape,
-                      dtype=nd.DtypeToNumpy[ts_pack.dtype],
-                      size=ts_pack.size,
-                      items=[remap_tensor(item, tensor_map) for item in ts_pack])
+                      name=sknd_pack.name,
+                      shape=sknd_pack.shape,
+                      dtype=sknd.DtypeToNumpy[sknd_pack.dtype],
+                      size=sknd_pack.size,
+                      items=[remap_tensor(item, tensor_map) for item in sknd_pack])
 
 
-def _build_operation(graph, ts_operation, tensor_map):
-    attribs = dict(ts_operation.attribs)
-    if ts_operation.dtypes:
-        attribs['dtypes'] = {k: nd.DtypeToNumpy[t] for k, t in ts_operation.dtypes.items()}
+def _build_operation(graph, sknd_operation, tensor_map):
+    attribs = dict(sknd_operation.attribs)
+    if sknd_operation.dtypes:
+        attribs['dtypes'] = {k: sknd.DtypeToNumpy[t] for k, t in sknd_operation.dtypes.items()}
 
     for key, value in attribs.items():
         remap_tensors_in_expr(value, tensor_map)
 
     return Operation(graph,
-                     type=ts_operation.name,
+                     type=sknd_operation.name,
                      attribs=attribs,
-                     inputs=tuple(remap_tensor(input, tensor_map) for input in ts_operation.inputs),
-                     outputs=tuple(remap_tensor(output, tensor_map) for output in ts_operation.outputs))
+                     inputs=tuple(remap_tensor(input, tensor_map) for input in sknd_operation.inputs),
+                     outputs=tuple(remap_tensor(output, tensor_map) for output in sknd_operation.outputs))
 
 
-def _build_graph(model, ts_graph):
-    graph = Graph(model, name=ts_graph.name)
+def _build_graph(model, sknd_graph):
+    graph = Graph(model, name=sknd_graph.name)
 
     tensor_map = {}
-    for tensor in ts_graph.tensors:
+    for tensor in sknd_graph.tensors:
         tensor_map[tensor.name] = _build_tensor(graph, tensor)
 
-    for pack in ts_graph.packs:
+    for pack in sknd_graph.packs:
         tensor_map[pack.name] = _build_tensor_pack(graph, pack, tensor_map)
 
     for name, tensor in tensor_map.items():
@@ -52,18 +52,18 @@ def _build_graph(model, ts_graph):
         if isinstance(tensor, TensorPack):
             remap_tensors_in_expr(tensor.size, tensor_map)
 
-    graph.inputs = tuple(remap_tensor(input, tensor_map) for input in ts_graph.inputs)
-    graph.outputs = tuple(remap_tensor(output, tensor_map) for output in ts_graph.outputs)
+    graph.inputs = tuple(remap_tensor(input, tensor_map) for input in sknd_graph.inputs)
+    graph.outputs = tuple(remap_tensor(output, tensor_map) for output in sknd_graph.outputs)
 
-    for operation in ts_graph.operations:
+    for operation in sknd_graph.operations:
         _build_operation(graph, operation, tensor_map)
 
     return graph
 
 
-def _build_model(ts_model):
-    model = Model(name=ts_model.name)
-    for graph in ts_model.graphs:
+def _build_model(sknd_model):
+    model = Model(name=sknd_model.name)
+    for graph in sknd_model.graphs:
         _build_graph(model, graph)
     return model
 
@@ -74,7 +74,7 @@ class Reader(object):
         self._atomics = atomics
 
     def __call__(self, filename, attribs=None):
-        ts_model = nd.read_model(filename, atomic=self._atomics, attribs=attribs)
-        if ts_model is None:
+        sknd_model = sknd.read_model(filename, atomic=self._atomics, attribs=attribs)
+        if sknd_model is None:
             raise IOError('could not read model')
-        return _build_model(ts_model)
+        return _build_model(sknd_model)
