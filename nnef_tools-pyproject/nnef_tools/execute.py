@@ -583,7 +583,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('model', type=str,
                         help='The model to execute')
-    parser.add_argument('--format', type=str, required=True, choices=['tf', 'tflite', 'onnx', 'nnef', 'sknd'],
+    parser.add_argument('--format', type=str, required=True, choices=['tf', 'tflite', 'onnx', 'nnef', 'nnef2', 'sknd'],
                         help='The format of the model')
     parser.add_argument('--random', type=str, default=None,
                         help='Random distribution for input generation')
@@ -614,4 +614,9 @@ if __name__ == '__main__':
                         help='Compiler target')
     parser.add_argument('--device', type=str, default=None,
                         help='Compiler device')
-    exit(main(parser.parse_args()))
+    args = parser.parse_args()
+
+    if args.format == 'nnef2':
+        args.format = 'sknd'
+
+    exit(main(args))

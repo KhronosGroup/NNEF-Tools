@@ -9,7 +9,7 @@ import six
 
 
 def get_reader(input_format, atomics, decomposed, fold_constants, custom_shapes):
-    if input_format == 'nnef2':
+    if input_format == 'sknd':
         from .io.skriptnd import Reader
         return Reader(atomics=atomics)
     elif input_format == 'nnef':
@@ -29,7 +29,7 @@ def get_reader(input_format, atomics, decomposed, fold_constants, custom_shapes)
 
 
 def get_writer(output_format, compression, operators, dependencies, generate_operators, annotate_shapes):
-    if output_format == 'nnef2':
+    if output_format == 'sknd':
         from .io.skriptnd import Writer
         return Writer(compression=compression, operators=operators)
     elif output_format == 'nnef':
@@ -60,7 +60,7 @@ def get_converter(input_format, output_format, io_transforms, custom_transforms,
                          mirror_unsupported=mirror_unsupported,
                          keep_io_names=keep_io_names,
                          io_transpose=io_transforms)
-    elif (input_format == 'onnx' or input_format == 'caffe2' or input_format == 'caffe') and output_format == 'nnef2':
+    elif (input_format == 'onnx' or input_format == 'caffe2' or input_format == 'caffe') and output_format == 'sknd':
         from .conversion.onnx_to_nnef2 import Converter
         return Converter(custom_transforms=custom_transforms,
                          custom_functions=custom_functions,
@@ -104,7 +104,7 @@ def get_optimizer(format, custom_optimizers=None, dequantize=False):
     if format == 'nnef':
         from .optimization.nnef_optimizer import Optimizer
         return Optimizer(custom_optimizers=custom_optimizers, dequantize=dequantize)
-    elif format == 'nnef2':
+    elif format == 'sknd':
         from .optimization.skriptnd_optimizer import Optimizer
         return Optimizer(custom_optimizers=custom_optimizers, dequantize=dequantize)
     elif format == 'onnx':
@@ -372,10 +372,10 @@ if __name__ == '__main__':
     parser.add_argument('--output-model', type=str, default=None,
                         help='The output model')
     parser.add_argument('--input-format', type=str, required=True,
-                        choices=['tf', 'tflite', 'onnx', 'nnef', 'nnef2', 'caffe2', 'caffe'],
+                        choices=['tf', 'tflite', 'onnx', 'nnef', 'nnef2', 'sknd', 'caffe2', 'caffe'],
                         help='The format of the input model')
     parser.add_argument('--output-format', type=str, required=True,
-                        choices=['tf', 'tflite', 'onnx', 'nnef', 'nnef2', 'caffe2'],
+                        choices=['tf', 'tflite', 'onnx', 'nnef', 'nnef2', 'sknd', 'caffe2'],
                         help='The format of the output model')
     parser.add_argument('--input-shapes', type=str, default=None,
                         help='The (dict of) shape(s) to use for input(s).')
@@ -417,4 +417,11 @@ if __name__ == '__main__':
                         help='Add tensor shapes as annotation to NNEF output model')
     parser.add_argument('--compress', type=int, nargs='?', default=None, const=1,
                         help='Compress output NNEF folder at the given compression level')
-    exit(main(parser.parse_args()))
+    args = parser.parse_args()
+
+    if args.input_format == 'nnef2':
+        args.input_format = 'sknd'
+    if args.output_format == 'nnef2':
+        args.output_format = 'sknd'
+
+    exit(main(args))
