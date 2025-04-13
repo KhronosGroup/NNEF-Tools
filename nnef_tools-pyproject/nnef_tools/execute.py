@@ -1,6 +1,6 @@
 from .utils import stdio
 from .execution import Statistics
-from collections import namedtuple
+from dataclasses import dataclass
 import skriptnd as sknd
 import importlib
 import argparse
@@ -136,7 +136,11 @@ class FileInputSource:
                               transpose=needs_transpose(self._io_transpose, name))
 
 
-TensorInfo = namedtuple('TensorInfo', ['name', 'shape', 'dtype'])
+@dataclass
+class TensorInfo:
+    name: str
+    shape: tuple[int | sknd.Expr]
+    dtype: np.dtype
 
 
 class Executor:
