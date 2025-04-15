@@ -1117,7 +1117,7 @@ def compile_model(model, keep_generated_code=False):
     model_name = _valid_id(model.name)
     model_fn = model_name.replace('$', '_')
     hdr_name = model_fn + "_model.h"
-    cpp_name = model_fn + "_pybisknd.cpp"
+    cpp_name = model_fn + "_pybind.cpp"
     module_name = model_fn + "_module"
 
     _save_to_file(_generate_model_source(model), hdr_name)
