@@ -47,6 +47,7 @@ namespace sknd
             Position position;
             Type type;
             Shared<Expr> repeats;
+            Shared<Expr> cond;
             unsigned flags;
         };
         
@@ -69,6 +70,8 @@ namespace sknd
         void check_operator( const Operator& op, const Dict<Operator>& operators, const bool main ) const
         {
             Dict<Declaration> decls;
+            std::vector<bool> checked(op.asserts.size(), false);
+            std::vector<bool> declared(op.usings.size(), false);
             
             for ( auto& param : op.dtypes )
             {
@@ -85,12 +88,26 @@ namespace sknd
                 }
             }
             
-            auto order = deduction_order(op.attribs, op.inputs, op.name);
+            check_asserts(op.asserts, decls, checked);
+            
+            for ( size_t i = 0; i < op.usings.size(); ++i )
+            {
+                auto& usage = op.usings[i];
+                if ( !has_unknown_symbols(*usage.expr, decls) )
+                {
+                    declare_using(decls, usage);
+                    check_asserts(op.asserts, decls, checked);
+                    declared[i] = true;
+                }
+            }
+            
+            auto order = deduction_order(op.attribs, op.inputs, op.usings, op.name);
             if ( !order )
             {
                 report_error(order.error());
                 return;
             }
+            
             for ( size_t i = 0; i < op.inputs.size(); ++i )
             {
                 auto& param = op.inputs[(*order)[i]];
@@ -112,7 +129,6 @@ namespace sknd
                         check_shape_component_bounds(decls, shape);
                     }
                     declare_shape_components(decls, shape, param.repeats, param.type.optional);
-                    check_shape_components(decls, *param.shape, param.repeats, false);
                     if ( uses_shape_symbols(shape) )
                     {
                         report_error(param.position, "implicitly defined shape/rank symbols are not allowed in input shape declaration");
@@ -123,6 +139,15 @@ namespace sknd
                     report_error(param.position, "input shape can only be omitted for graphs");
                 }
             }
+            for ( auto& [iden, decl] : decls )
+            {
+                if ( decl.cond && is_always_true(*decl.cond, decls) )
+                {
+                    decl.type.optional = false;
+                    decl.cond = nullptr;
+                }
+            }
+            
             for ( auto& param : op.attribs )
             {
                 check_param(param, decls, Lexer::Block::Attrib);
@@ -131,6 +156,10 @@ namespace sknd
             {
                 auto& param = op.inputs[(*order)[i]];
                 check_param(param, decls, Lexer::Block::Input);
+                if ( param.shape )
+                {
+                    check_shape_components(decls, *param.shape, param.repeats, false);
+                }
                 if ( main )
                 {
                     if ( param.type.packed && !param.repeats )
@@ -151,42 +180,16 @@ namespace sknd
                     }
                 }
             }
-            std::vector<bool> checked(op.asserts.size(), false);
-            for ( auto& usage : op.usings )
+            for ( size_t i = 0; i < op.usings.size(); ++i )
             {
-                for ( size_t i = 0; i < op.asserts.size(); ++i )
+                if ( !declared[i] )
                 {
-                    if ( !checked[i] && can_check(op.asserts[i], decls) )
-                    {
-                        check_assert(op.asserts[i], decls);
-                        checked[i] = true;
-                    }
-                }
-                
-                auto [type, rank] = check_expr(*usage.expr, decls);
-                if ( type && rank )
-                {
-                    if ( usage.rank )
-                    {
-                        if ( !*rank )
-                        {
-                            report_error(usage.position, "identifier is declared packed but the right hand side expression is not packed");
-                        }
-                        else if ( check_repeat(*usage.rank, decls) )
-                        {
-                            *rank = usage.rank; // overwrite with hint
-                        }
-                    }
-                    declare_using(decls, usage, *type, *rank);
+                    declare_using(decls, op.usings[i]);
+                    check_asserts(op.asserts, decls, checked);
+                    declared[i] = true;
                 }
             }
-            for ( size_t i = 0; i < op.asserts.size(); ++i )
-            {
-                if ( !checked[i] )
-                {
-                    check_assert(op.asserts[i], decls);
-                }
-            }
+            check_asserts(op.asserts, decls, checked, true);
             for ( auto& param : op.constants )
             {
                 check_param(param, decls, Lexer::Block::Constant);
@@ -290,15 +293,15 @@ namespace sknd
     private:
         
         void declare_symbol( Dict<Declaration>& decls, const Position& position, const std::string& name, const Type& type,
-                            const Shared<Expr>& repeats, const unsigned flags ) const
+                            const Shared<Expr>& repeats, const unsigned flags, const Shared<Expr>& cond = nullptr ) const
         {
-            auto ins = decls.emplace(name, Declaration{ position, type, repeats, flags });
+            auto ins = decls.emplace(name, Declaration{ position, type, repeats, cond, flags });
             if ( !ins.second )
             {
                 Declaration& decl = ins.first->second;
                 if ( (decl.flags & Declaration::Inherited) || (flags & Declaration::AllowShadowing) )
                 {
-                    decl = Declaration{ position, type, repeats, flags };
+                    decl = Declaration{ position, type, repeats, cond, flags };
                 }
                 else
                 {
@@ -318,9 +321,24 @@ namespace sknd
                     }
                     else
                     {
-                        if ( decl.type.optional && !type.optional )
+                        if ( decl.type.optional )
                         {
-                            decl.type.optional = false;
+                            if ( !type.optional )
+                            {
+                                decl.type.optional = false;
+                                decl.cond = nullptr;
+                            }
+                            else if ( cond )
+                            {
+                                if ( !decl.cond )
+                                {
+                                    decl.cond = cond;
+                                }
+                                else
+                                {
+                                    decl.cond = std::make_shared<BinaryExpr>(cond->position, decl.cond, cond, Lexer::Operator::Or);
+                                }
+                            }
                         }
                         if ( as_non_optional(decl.type) != as_non_optional(type) && type.name != Typename::Type )
                         {
@@ -365,7 +383,7 @@ namespace sknd
                 bool dynamic = shape.bounds[idx] != nullptr;
                 bool spread = shape.spreads & (1 << idx++);
                 
-                Shared<Expr> count;
+                Shared<Expr> count, cond;
                 
                 if ( spread )
                 {
@@ -380,19 +398,22 @@ namespace sknd
                     
                     if ( count )
                     {
-                        auto& iden = find_affine_id(*count);
-                        if ( !iden.empty() )
-                        {
-                            auto type = make_type(Typename::Int, optional, false, false);
-                            declare_symbol(decls, count->position, iden, type, nullptr, Declaration::Shape);
-                        }
-                        
                         auto type = eval_type(*count, decls);
                         if ( type && type->name == Typename::Bool )
                         {
+                            cond = count;
                             count = nullptr;
                             packed = false;
                             optnal = true;
+                        }
+                        else
+                        {
+                            auto& iden = find_affine_id(*count);
+                            if ( !iden.empty() )
+                            {
+                                auto type = make_type(Typename::Int, optional, false, false);
+                                declare_symbol(decls, count->position, iden, type, nullptr, Declaration::Shape);
+                            }
                         }
                     }
                 }
@@ -412,7 +433,7 @@ namespace sknd
                         }
                     }
                     auto type = make_type(Typename::Int, optnal, false, packed);
-                    declare_symbol(decls, item->position, iden, type, count, Declaration::Shape);
+                    declare_symbol(decls, item->position, iden, type, count, Declaration::Shape, cond);
                 }
             }
         }
@@ -724,11 +745,29 @@ namespace sknd
             }
         }
         
-        void declare_using( Dict<Declaration>& decls, const Using& usage, const Type& type, const Shared<Expr> rank ) const
+        void declare_using( Dict<Declaration>& decls, const Using& usage ) const
         {
+            auto [type, rank] = check_expr(*usage.expr, decls);
+            if ( !type || !rank )
+            {
+                return;
+            }
+            
+            if ( usage.rank )
+            {
+                if ( !*rank )
+                {
+                    report_error(usage.position, "identifier is declared packed but the right hand side expression is not packed");
+                }
+                else if ( check_repeat(*usage.rank, decls) )
+                {
+                    *rank = usage.rank; // overwrite with hint
+                }
+            }
+            
             if ( usage.identifier->kind == Expr::List )
             {
-                if ( !type.packed )
+                if ( !type->packed )
                 {
                     report_error(usage.position, "left-hand-side must be a packed expression");
                 }
@@ -750,13 +789,13 @@ namespace sknd
                             {
                                 report_error(item->position, "declared list can have at most one flexible item");
                             }
-                            count = flexible_item_rank(as_list(*usage.identifier), rank);
+                            count = flexible_item_rank(as_list(*usage.identifier), *rank);
                             assert(count);
                             has_undeclared_rank = true;
                         }
                         item = as_expand(*item).item;
                     }
-                    auto item_type = expand ? as_packed(type) : as_non_packed(type);
+                    auto item_type = expand ? as_packed(*type) : as_non_packed(*type);
                     
                     bool unzip = item->kind == Expr::Zip;
                     if ( unzip )
@@ -782,7 +821,7 @@ namespace sknd
             }
             else
             {
-                declare_symbol(decls, usage.position, as_identifier(*usage.identifier).name, type, rank, Declaration::Using);
+                declare_symbol(decls, usage.position, as_identifier(*usage.identifier).name, *type, *rank, Declaration::Using);
             }
         }
         
@@ -1606,6 +1645,18 @@ namespace sknd
             for ( auto& item : assert.prints )
             {
                 check_expr(*item.second, decls);
+            }
+        }
+        
+        void check_asserts( const std::vector<Assert>& asserts, const Dict<Declaration>& decls, std::vector<bool>& checked, bool enforce = false ) const
+        {
+            for ( size_t i = 0; i < asserts.size(); ++i )
+            {
+                if ( !checked[i] && (enforce || can_check(asserts[i], decls)) )
+                {
+                    check_assert(asserts[i], decls);
+                    checked[i] = true;
+                }
             }
         }
         
@@ -3234,10 +3285,18 @@ namespace sknd
 #endif
         }
         
+        static bool is_always_true( const Expr& expr, const Dict<Declaration>& decls )
+        {
+            Symbolic symbolic;
+            SymbolTypes types = symbol_types(decls);
+            auto poly = symbolic.eval_polynom<bool_t>(expr, types);
+            return poly == true;
+        }
+        
     public:
         
         static Result<std::vector<size_t>> deduction_order( const std::vector<Param>& attribs, const std::vector<Param>& inputs,
-                                                           const std::string& op_name )
+                                                           const std::vector<Using>& usings, const std::string& op_name )
         {
             std::set<std::string> symbols;
             for ( auto& attrib : attribs )
@@ -3246,6 +3305,14 @@ namespace sknd
                 if ( !attrib.repeats && !attrib.type.optional && !deferred_default_value )
                 {
                     symbols.insert(attrib.name);
+                }
+            }
+            
+            for ( auto& usage : usings )
+            {
+                if ( !has_unknown_symbols(*usage.expr, symbols) )
+                {
+                    symbols.insert(as_identifier(*usage.identifier).name);
                 }
             }
             

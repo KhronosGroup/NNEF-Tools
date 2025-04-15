@@ -1227,7 +1227,19 @@ namespace sknd
             std::vector<bool> checked(op.asserts.size(), false);
             TRY_CALL(check_asserts(op.asserts, locals, invocation.position, checked, asserts))
             
-            TRY_DECL(order, Typing::deduction_order(op.attribs, op.inputs, op.name))
+            std::vector<bool> declared(op.usings.size(), false);
+            for ( size_t i = 0; i < op.usings.size(); ++i )
+            {
+                auto& usage = op.usings[i];
+                if ( !has_undefined_symbols(*usage.expr, locals) )
+                {
+                    TRY_CALL(check_asserts(op.asserts, locals, invocation.position, checked, asserts))
+                    TRY_CALL(eval_using(usage, locals))
+                    declared[i] = true;
+                }
+            }
+            
+            TRY_DECL(order, Typing::deduction_order(op.attribs, op.inputs, op.usings, op.name))
             
             for ( size_t k = 0; k < order.size(); ++k )
             {
@@ -1285,10 +1297,14 @@ namespace sknd
                 }
             }
             
-            for ( const Using& usage : op.usings )
+            for ( size_t i = 0; i < op.usings.size(); ++i )
             {
-                TRY_CALL(check_asserts(op.asserts, locals, invocation.position, checked, asserts))
-                TRY_CALL(eval_using(usage, locals))
+                if ( !declared[i] )
+                {
+                    TRY_CALL(check_asserts(op.asserts, locals, invocation.position, checked, asserts))
+                    TRY_CALL(eval_using(op.usings[i], locals))
+                    declared[i] = true;
+                }
             }
             TRY_CALL(check_asserts(op.asserts, locals, invocation.position, checked, asserts, true))
             
