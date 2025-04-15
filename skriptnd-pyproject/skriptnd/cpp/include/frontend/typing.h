@@ -81,10 +81,9 @@ namespace sknd
             
             for ( auto& param : op.attribs )
             {
-                declare_symbol(decls, param.position, param.name, param.type, param.repeats, Declaration::Attrib);
-                if ( param.repeats )
+                if ( !is_deferred_attrib(param) )
                 {
-                    declare_repeats(decls, param);
+                    declare_symbol(decls, param.position, param.name, param.type, param.repeats, Declaration::Attrib);
                 }
             }
             
@@ -98,6 +97,18 @@ namespace sknd
                     declare_using(decls, usage);
                     check_asserts(op.asserts, decls, checked);
                     declared[i] = true;
+                }
+            }
+            
+            for ( auto& param : op.attribs )
+            {
+                if ( is_deferred_attrib(param) )
+                {
+                    declare_symbol(decls, param.position, param.name, param.type, param.repeats, Declaration::Attrib);
+                    if ( param.repeats )
+                    {
+                        declare_repeats(decls, param);
+                    }
                 }
             }
             
@@ -3295,16 +3306,20 @@ namespace sknd
         
     public:
         
+        static bool is_deferred_attrib( const Param& param )
+        {
+            return param.repeats || param.type.optional || (param.default_value && !is_const_expr(*param.default_value));
+        }
+        
         static Result<std::vector<size_t>> deduction_order( const std::vector<Param>& attribs, const std::vector<Param>& inputs,
                                                            const std::vector<Using>& usings, const std::string& op_name )
         {
             std::set<std::string> symbols;
-            for ( auto& attrib : attribs )
+            for ( auto& param : attribs )
             {
-                bool deferred_default_value = attrib.default_value && !is_const_expr(*attrib.default_value);
-                if ( !attrib.repeats && !attrib.type.optional && !deferred_default_value )
+                if ( !is_deferred_attrib(param) )
                 {
-                    symbols.insert(attrib.name);
+                    symbols.insert(param.name);
                 }
             }
             
