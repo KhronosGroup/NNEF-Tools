@@ -453,6 +453,16 @@ namespace sknd
             return poly<bool_t>(make_symbol(str(expr) + "=="));
         }
         
+        poly<bool_t> eval_equality( const poly<bool_t>& lhs, const poly<bool_t>& rhs )
+        {
+            if ( lhs == rhs )
+            {
+                return poly<bool_t>(true);
+            }
+            auto expr = lhs ^ rhs;
+            return poly<bool_t>(make_symbol(str(expr) + "=="));
+        }
+        
         template<typename T>
         poly<bool_t> eval_inequality( const Operator op, const poly<T>& lhs, const poly<T>& rhs )
         {
@@ -483,6 +493,7 @@ namespace sknd
                     auto rhs = eval_polynom<int_t>(right, types, subs);
                     return eval_equality(lhs, rhs);
                 }
+                case Typename::Num:
                 case Typename::Real:
                 {
                     auto lhs = eval_polynom<real_t>(left, types, subs);
@@ -494,6 +505,16 @@ namespace sknd
                     auto lhs = eval_polynom<real_t>(left, types, subs);
                     auto rhs = eval_polynom<real_t>(right, types, subs);
                     return eval_equality(lhs, rhs);
+                }
+                case Typename::Str:
+                {
+                    auto lhs = str(left);
+                    auto rhs = str(right);
+                    if ( lhs == rhs )
+                    {
+                        return poly<bool_t>(true);
+                    }
+                    return poly<bool_t>(make_symbol(lhs + "==" + rhs));
                 }
                 default:
                 {
@@ -514,6 +535,7 @@ namespace sknd
                     auto rhs = eval_polynom<int_t>(right, types, subs);
                     return eval_inequality(op, lhs, rhs);
                 }
+                case Typename::Num:
                 case Typename::Real:
                 {
                     auto lhs = eval_polynom<real_t>(left, types, subs);
@@ -537,18 +559,22 @@ namespace sknd
                 {
                     auto lhs = eval_polynom<int_t>(left, types, subs);
                     auto rhs = eval_polynom<int_t>(right, types, subs);
-                    return poly<bool_t>(make_symbol(str(left) + " is " + str(right)));
+                    return poly<bool_t>(make_symbol(str(lhs) + " is " + str(rhs)));
                 }
                 case Typename::Real:
                 {
                     auto lhs = eval_polynom<real_t>(left, types, subs);
                     auto rhs = eval_polynom<real_t>(right, types, subs);
-                    return poly<bool_t>(make_symbol(str(left) + " is " + str(right)));
+                    return poly<bool_t>(make_symbol(str(lhs) + " is " + str(rhs)));
                 }
                 case Typename::Bool:
                 {
                     auto lhs = eval_polynom<real_t>(left, types, subs);
                     auto rhs = eval_polynom<real_t>(right, types, subs);
+                    return poly<bool_t>(make_symbol(str(lhs) + " is " + str(rhs)));
+                }
+                case Typename::Str:
+                {
                     return poly<bool_t>(make_symbol(str(left) + " is " + str(right)));
                 }
                 default:
@@ -561,26 +587,60 @@ namespace sknd
         
         poly<bool_t> eval_contain( const Expr& left, const Expr& right, const SymbolTypes& types, const Dict<Shared<Expr>>& subs )
         {
+            const Expr& items = right.kind == Expr::Identifier ? *subs.at(as_identifier(right).name) : right;
+            assert(items.kind == Expr::List);
+            auto& list = as_list(items);
+            
             const Typename type = eval_type(left, types);
             switch ( type )
             {
                 case Typename::Int:
                 {
+                    poly<bool_t> result;
                     auto lhs = eval_polynom<int_t>(left, types, subs);
-                    auto rhs = eval_polynom<int_t>(right, types, subs);
-                    return boolean_poly(make_symbol(str(left) + " in " + str(right)));
+                    for ( auto& item : list.items )
+                    {
+                        auto rhs = eval_polynom<int_t>(*item, types, subs);
+                        result |= eval_equality(lhs, rhs);
+                    }
+                    return result;
                 }
                 case Typename::Real:
                 {
+                    poly<bool_t> result;
                     auto lhs = eval_polynom<real_t>(left, types, subs);
-                    auto rhs = eval_polynom<real_t>(right, types, subs);
-                    return boolean_poly(make_symbol(str(left) + " in " + str(right)));
+                    for ( auto& item : list.items )
+                    {
+                        auto rhs = eval_polynom<real_t>(*item, types, subs);
+                        result |= eval_equality(lhs, rhs);
+                    }
+                    return result;
                 }
                 case Typename::Bool:
                 {
-                    auto lhs = eval_polynom<real_t>(left, types, subs);
-                    auto rhs = eval_polynom<real_t>(right, types, subs);
-                    return boolean_poly(make_symbol(str(left) + " in " + str(right)));
+                    poly<bool_t> result;
+                    auto lhs = eval_polynom<bool_t>(left, types, subs);
+                    for ( auto& item : list.items )
+                    {
+                        auto rhs = eval_polynom<bool_t>(*item, types, subs);
+                        result |= eval_equality(lhs, rhs);
+                    }
+                    return result;
+                }
+                case Typename::Str:
+                {
+                    poly<bool_t> result;
+                    auto lhs = str(left);
+                    for ( auto& item : list.items )
+                    {
+                        auto rhs = str(*item);
+                        if ( lhs == rhs )
+                        {
+                            return poly<bool_t>(true);
+                        }
+                        result |= poly<bool_t>(make_symbol(lhs + "==" + rhs));
+                    }
+                    return result;
                 }
                 default:
                 {
