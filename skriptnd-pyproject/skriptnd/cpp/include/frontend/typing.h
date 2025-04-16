@@ -3029,6 +3029,14 @@ namespace sknd
                                 }
                             }
                             auto last = range.last ? range.last : minus_one;
+                            if ( range.last && is_const_expr(*last) )
+                            {
+                                TRY_DECL(value, Evaluation::eval(*last, {}))
+                                if ( value.as_int() < 0 )
+                                {
+                                    last = std::make_shared<BinaryExpr>(range.position, array_rank, last, Lexer::Operator::Plus);
+                                }
+                            }
                             auto expr = (Shared<Expr>)std::make_shared<BinaryExpr>(range.position, first, last, Lexer::Operator::Minus);
                             if ( stride_value == -1 )
                             {
@@ -3039,17 +3047,26 @@ namespace sknd
                         }
                         else
                         {
+                            auto first = range.first;
+                            if ( range.first && is_const_expr(*first) )
+                            {
+                                TRY_DECL(value, Evaluation::eval(*first, {}))
+                                if ( value.as_int() < 0 )
+                                {
+                                    first = std::make_shared<BinaryExpr>(range.position, first, array_rank, Lexer::Operator::Plus);
+                                }
+                            }
                             auto last = range.last ? range.last : array_rank;
                             if ( range.last && is_const_expr(*last) )
                             {
                                 TRY_DECL(value, Evaluation::eval(*last, {}))
                                 if ( value.as_int() < 0 )
                                 {
-                                    last = std::make_shared<BinaryExpr>(range.position, array_rank, last, Lexer::Operator::Plus);
+                                    last = std::make_shared<BinaryExpr>(range.position, last, array_rank, Lexer::Operator::Plus);
                                 }
                             }
-                            auto expr = !range.first ? last :
-                                std::make_shared<BinaryExpr>(range.position, last, range.first, Lexer::Operator::Minus);
+                            auto expr = !first ? last :
+                                std::make_shared<BinaryExpr>(range.position, last, first, Lexer::Operator::Minus);
                             return stride_value == 1 ? expr :
                                 std::make_shared<BinaryExpr>(range.position, expr, range.stride, Lexer::Operator::Divide);
                         }

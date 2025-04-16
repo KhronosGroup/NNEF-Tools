@@ -1985,7 +1985,7 @@ namespace sknd
                     else if ( index.index->kind == Expr::Range )
                     {
                         auto& range = as_range(*index.index);
-                        TRY_DECL(length, eval_max_rank(*index.array, symbols))
+                        TRY_DECL(length, eval_dynamic_rank(*index.array, symbols))
                         
                         TRY_DECL(stride, range.stride ? eval_item(*range.stride, symbols) : ValueExpr(1))
                         if ( !stride.is_literal() && (!range.first || !range.last) )
@@ -1994,9 +1994,17 @@ namespace sknd
                         }
                         
                         TRY_DECL(first, range.first ? eval_item(*range.first, symbols) :
-                                        ValueExpr(stride.as_int() < 0 ? (int_t)*length - 1 : 0))
+                                        ValueExpr(stride.as_int() < 0 ? length - 1 : 0))
                         TRY_DECL(last, range.last ? eval_item(*range.last, symbols) :
-                                        ValueExpr(stride.as_int() < 0 ? -1 : (int_t)*length))
+                                        ValueExpr(stride.as_int() < 0 ? -1 : length))
+                        if ( range.first && first.is_int() && first.as_int() < 0 )
+                        {
+                            first = first + length;
+                        }
+                        if ( range.last && last.is_int() && last.as_int() < 0 )
+                        {
+                            last = last + length;
+                        }
                         
                         return stride.is_literal() && stride.as_int() < 0 ? ceil_div(first - last, -stride) : ceil_div(last - first, stride);
                     }
