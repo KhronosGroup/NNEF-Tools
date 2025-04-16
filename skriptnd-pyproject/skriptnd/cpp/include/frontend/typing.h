@@ -2989,7 +2989,6 @@ namespace sknd
                 {
                     auto& index = as_index(expr);
                     TRY_DECL(array_rank, eval_rank(*index.array, decls))
-                    TRY_DECL(index_rank, eval_rank(*index.index, decls))
                     if ( !array_rank )  // string indexing
                     {
                         return Shared<Expr>();
@@ -2997,6 +2996,7 @@ namespace sknd
                     TRY_DECL(index_type, eval_type(*index.index, decls))
                     if ( index_type.name == Typename::Bool )
                     {
+                        TRY_DECL(index_rank, eval_rank(*index.index, decls))
                         if ( !ranks_equal(*index_rank, *array_rank, decls) )
                         {
                             return Error(expr.position, "incompatible mask length and pack length (%s vs %s)",
@@ -3005,7 +3005,7 @@ namespace sknd
                         auto as_int = (Shared<Expr>)std::make_shared<CastExpr>(index.position, Typename::Int, index.index);
                         return (Shared<Expr>)std::make_shared<FoldExpr>(index.position, as_int, Lexer::Operator::Plus);
                     }
-                    else if ( !index_rank && index.index->kind == Expr::Range )
+                    else if ( index.index->kind == Expr::Range )
                     {
                         auto& range = as_range(*index.index);
                         
@@ -3020,6 +3020,14 @@ namespace sknd
                             auto minus_one = std::make_shared<IntExpr>(range.position, -1);
                             auto first = range.first ? range.first :
                                 std::make_shared<BinaryExpr>(range.position, array_rank, minus_one, Lexer::Operator::Plus);
+                            if ( range.first && is_const_expr(*first) )
+                            {
+                                TRY_DECL(value, Evaluation::eval(*first, {}))
+                                if ( value.as_int() < 0 )
+                                {
+                                    first = std::make_shared<BinaryExpr>(range.position, array_rank, first, Lexer::Operator::Plus);
+                                }
+                            }
                             auto last = range.last ? range.last : minus_one;
                             auto expr = (Shared<Expr>)std::make_shared<BinaryExpr>(range.position, first, last, Lexer::Operator::Minus);
                             if ( stride_value == -1 )
@@ -3032,13 +3040,21 @@ namespace sknd
                         else
                         {
                             auto last = range.last ? range.last : array_rank;
+                            if ( range.last && is_const_expr(*last) )
+                            {
+                                TRY_DECL(value, Evaluation::eval(*last, {}))
+                                if ( value.as_int() < 0 )
+                                {
+                                    last = std::make_shared<BinaryExpr>(range.position, array_rank, last, Lexer::Operator::Plus);
+                                }
+                            }
                             auto expr = !range.first ? last :
                                 std::make_shared<BinaryExpr>(range.position, last, range.first, Lexer::Operator::Minus);
                             return stride_value == 1 ? expr :
                                 std::make_shared<BinaryExpr>(range.position, expr, range.stride, Lexer::Operator::Divide);
                         }
                     }
-                    return index_rank;
+                    return eval_rank(*index.index, decls);
                 }
                 case Expr::Access:
                 {
