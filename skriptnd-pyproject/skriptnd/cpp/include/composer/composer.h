@@ -3482,18 +3482,18 @@ namespace sknd
                     auto count = as_expand(*item).count;
                     if ( count )
                     {
-                        auto& iden = Typing::find_affine_id(*count);
+                        TRY_DECL(iden, value, eval_affine_id(*count, excess))
                         if ( !iden.empty() )
                         {
                             auto it = symbols.find(iden);
                             if ( it == symbols.end() )
                             {
-                                symbols.emplace(iden, Symbol(ValueExpr(excess), Typename::Int));
+                                symbols.emplace(iden, Symbol(ValueExpr(value), Typename::Int));
                                 excess = 0;
                             }
                             else if ( it->second.as<ValueExpr>() == nullptr )
                             {
-                                it->second = Symbol(ValueExpr(excess), Typename::Int);
+                                it->second = Symbol(ValueExpr(value), Typename::Int);
                                 excess = 0;
                             }
                         }
