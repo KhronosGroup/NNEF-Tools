@@ -1288,7 +1288,7 @@ namespace sknd
             
             for ( auto& [iden, expr] : lowering.locals )
             {
-                auto [type, rank] = check_expr(*expr, decls, AllowTensorOperators);
+                auto [type, rank] = check_expr(*expr, decls, AllowTensorOperators | AllowBounded);
                 if ( type && rank )
                 {
                     check_tensor_expr(*expr, decls);
