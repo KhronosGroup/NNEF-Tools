@@ -543,18 +543,21 @@ def transform_expr(expr, func, preorder=True):
 
 def collect_index_guards(contraction):
     guards = []
-    _collect_index_guards_access(contraction.left, guards)
-    _collect_index_guards_expr(contraction.right, guards)
+    locals = {name: value for name, value in contraction.locals}
+    _collect_index_guards_access(contraction.left, locals, guards)
+    _collect_index_guards_expr(contraction.right, locals, guards)
     return guards
 
 
-def _collect_index_guards_expr(expr, guards):
+def _collect_index_guards_expr(expr, locals, guards):
     for item in sknd.recursive_enumerate_expr(expr):
         if isinstance(item, sknd.TensorAccess):
-            _collect_index_guards_access(item, guards)
+            _collect_index_guards_access(item, locals, guards)
 
 
-def _collect_index_guards_access(access, guards):
+def _collect_index_guards_access(access, locals, guards):
     for dim, index in enumerate(access.indices):
+        if isinstance(index, sknd.IdentifierExpr) and index.name in locals:
+            index = locals[index.name]
         if isinstance(index, sknd.BoundedExpr) and index.lower is None and index.upper is None:
             guards.append((access, dim))
