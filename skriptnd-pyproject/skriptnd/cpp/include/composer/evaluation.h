@@ -906,6 +906,64 @@ namespace sknd
         template<typename T = ValueExpr>
         static Result<T> eval_item( const IndexExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
         {
+            if constexpr( std::is_same_v<T,ValueExpr> )
+            {
+                auto array_type = eval_type(*expr.array, symbols);
+                if ( array_type == Typename::Str )
+                {
+                    TRY_DECL(array, eval_item(*expr.array, symbols))
+                    auto& str = array.as_str();
+                    auto length = (int_t)str.length();
+                    
+                    if ( expr.index->kind == Expr::Range )
+                    {
+                        auto& range = as_range(*expr.index);
+                        
+                        TRY_DECL(stride, range.stride ? eval_item(*range.stride, symbols) : ValueExpr(1))
+                        if ( !stride.is_literal() )
+                        {
+                            return Error(expr.position, "index stride must not depend on dynamic shapes");
+                        }
+                        
+                        TRY_DECL(first, range.first ? eval_item(*range.first, symbols) :
+                                        ValueExpr(stride.as_int() < 0 ? length - 1 : 0))
+                        TRY_DECL(last, range.last ? eval_item(*range.last, symbols) :
+                                        ValueExpr(stride.as_int() < 0 ? -1 : length))
+                        
+                        if ( !first.is_literal() || !last.is_literal() )
+                        {
+                            return Error(expr.position, "index range must not depend on dynamic shapes");
+                        }
+                        
+                        if ( range.first && first.is_int() && first.as_int() < 0 )
+                        {
+                            first = first + length;
+                        }
+                        if ( range.last && last.is_int() && last.as_int() < 0 )
+                        {
+                            last = last + length;
+                        }
+                        
+                        return ValueExpr((str_t)str.substr(first.as_int(), last.as_int() - first.as_int()));
+                    }
+                    else
+                    {
+                        TRY_DECL(idx, eval_item(*expr.index, symbols, idx))
+                        if ( !idx.is_literal() )
+                        {
+                            return Error(expr.position, "index must not depend on dynamic shapes");
+                        }
+                        
+                        if ( idx.as_int() < 0 )
+                        {
+                            idx = idx + length;
+                        }
+                        
+                        return ValueExpr((str_t)str.substr(idx.as_int(), 1));
+                    }
+                }
+            }
+            
             auto index_type = eval_type(*expr.index, symbols);
             if ( index_type == Typename::Bool )
             {
@@ -1964,8 +2022,13 @@ namespace sknd
                 case Expr::Index:
                 {
                     auto& index = as_index(expr);
+                    auto array_type = eval_type(*index.array, symbols);
                     auto index_type = eval_type(*index.index, symbols);
-                    if ( index_type == Typename::Bool )
+                    if ( array_type == Typename::Str )
+                    {
+                        return ValueExpr(nullptr);
+                    }
+                    else if ( index_type == Typename::Bool )
                     {
                         TRY_DECL(array_length, eval_static_rank(*index.array, symbols))
                         TRY_DECL(index_length, eval_static_rank(*index.index, symbols))

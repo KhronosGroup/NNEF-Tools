@@ -2546,7 +2546,7 @@ namespace sknd
                 array_type.name,
                 array_type.optional || index_type.optional,
                 array_type.tensor,
-                index_type.packed,
+                index_type.packed && array_type.name != Typename::Str,
             };
         }
         
