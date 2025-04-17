@@ -1,7 +1,7 @@
 from nnef_tools.io import onnx as onnx_io
 from nnef_tools.io import skriptnd as skriptnd_io
-from nnef_tools.conversion import onnx_to_nnef2
-from nnef_tools.conversion.onnx_to_nnef2 import ShapeExpr
+from nnef_tools.conversion import onnx_to_sknd
+from nnef_tools.conversion.onnx_to_sknd import ShapeExpr
 from nnef_tools.optimization import skriptnd_optimizer
 from nnef_tools.optimization import onnx_optimizer
 from skriptnd import DtypeToNumpy
@@ -47,10 +47,10 @@ class TestEnv(unittest.TestCase):
     def setUp(self) -> None:
         self._onnx_reader = onnx_io.Reader(simplify=False, enforce_output_shapes=True)
         self._onnx_writer = onnx_io.Writer()
-        self._onnx_to_skriptnd_converter = onnx_to_nnef2.Converter()
+        self._onnx_to_sknd_converter = onnx_to_sknd.Converter()
         self._skriptnd_reader = skriptnd_io.Reader(atomics=lambda name: not name.startswith('main.'))
-        self._skriptnd_writer = skriptnd_io.Writer(operators=onnx_to_nnef2.Converter.defined_operations(),
-                                                   imports=onnx_to_nnef2.Converter.defined_imports(),
+        self._skriptnd_writer = skriptnd_io.Writer(operators=onnx_to_sknd.Converter.defined_operations(),
+                                                   imports=onnx_to_sknd.Converter.defined_imports(),
                                                    inline_subgraphs=False)
         self._skriptnd_optimizer = skriptnd_optimizer.Optimizer()
         self._onnx_optimizer = onnx_optimizer.Optimizer()
@@ -62,7 +62,7 @@ class TestEnv(unittest.TestCase):
         onnx_model = self._onnx_reader(filename)
         if self._optimize:
             self._onnx_optimizer(onnx_model)
-        nnef_model = self._onnx_to_skriptnd_converter(onnx_model)
+        nnef_model = self._onnx_to_sknd_converter(onnx_model)
         if input_shape is not None:
             self._set_max_input_shapes(nnef_model, input_shape)
         output_filename = filename + '.nnef2'

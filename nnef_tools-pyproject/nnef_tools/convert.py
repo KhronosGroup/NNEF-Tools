@@ -61,7 +61,7 @@ def get_converter(input_format, output_format, io_transforms, custom_transforms,
                          keep_io_names=keep_io_names,
                          io_transpose=io_transforms)
     elif (input_format == 'onnx' or input_format == 'caffe2' or input_format == 'caffe') and output_format == 'sknd':
-        from .conversion.onnx_to_nnef2 import Converter
+        from .conversion.onnx_to_sknd import Converter
         return Converter(custom_transforms=custom_transforms,
                          custom_functions=custom_functions,
                          mirror_unsupported=mirror_unsupported)
