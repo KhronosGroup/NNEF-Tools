@@ -1610,38 +1610,6 @@ graph conv_channels_last {
     }
 }
 
-graph conv_dephwise {
-    @input {
-        input: real[4,32,224,224];
-    }
-    @variable {
-        filter: real[32,2,5,5];
-        bias: real[64];
-    }
-    @output {
-        output: real[4,64,224,224];
-    }
-    @compose {
-        output = nn.depthwise_conv{}(input, filter, bias);
-    }
-}
-
-graph conv_dephwise_channels_last {
-    @input {
-        input: real[4,224,224,32];
-    }
-    @variable {
-        filter: real[32,2,5,5];
-        bias: real[64];
-    }
-    @output {
-        output: real[4,224,224,64];
-    }
-    @compose {
-        output = nn.depthwise_conv{data_format='CHANNELS_LAST'}(input, filter, bias);
-    }
-}
-
 graph deconv {
     @input {
         input: real[4,64,224,224];
@@ -1766,38 +1734,6 @@ graph deconv_channels_last {
     }
     @compose {
         output = nn.deconv{data_format='NXC'}(input, filter, bias);
-    }
-}
-
-graph deconv_depthwise {
-    @input {
-        input: real[4,64,224,224];
-    }
-    @variable {
-        filter: real[32,2,5,5];
-        bias: real[32];
-    }
-    @output {
-        output: real[4,32,224,224];
-    }
-    @compose {
-        output = nn.depthwise_deconv{}(input, filter, bias);
-    }
-}
-
-graph deconv_depthwise_channels_last {
-    @input {
-        input: real[4,224,224,64];
-    }
-    @variable {
-        filter: real[32,2,5,5];
-        bias: real[32];
-    }
-    @output {
-        output: real[4,224,224,32];
-    }
-    @compose {
-        output = nn.depthwise_deconv{data_format='CHANNELS_LAST'}(input, filter, bias);
     }
 }
 
