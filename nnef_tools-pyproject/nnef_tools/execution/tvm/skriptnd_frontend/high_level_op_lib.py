@@ -21,12 +21,12 @@ def _map_data_format(data_format: str, ndim: int) -> str:
     """
     Map SkriptND channel position format specifier to general data format
 
-    :param data_format: CHANNELS_FIRST or CHANNELS_LAST
+    :param data_format: NCX / NXC / XCN
     :param ndim: Num of spatial dimensions
     :return: N[C]S..[C] format string
     """
     spatials = "HWD"[:ndim]
-    ch_first = data_format == "CHANNELS_FIRST"
+    ch_first = data_format == "NCX"
     return f"N{'C' if ch_first else ''}{spatials}{'' if ch_first else 'C'}"
 
 
@@ -729,7 +729,7 @@ class convert_map:
         # Legalize for deconv is only partially supported in TVM currently
         intrin_check = self.use_intrinsic.get("deconv", lambda *_: False)
         if not intrin_check([input, filter, bias], attribs):
-            if data_format == "CHANNELS_LAST":
+            if data_format != "NCX":
                 raise UnsupportedAttr("deconv", "data_format", data_format)
             if dilation != [1] * ndim:
                 raise UnsupportedAttr("deconv", "dilation", dilation)
@@ -826,7 +826,7 @@ class convert_map:
         # Legalize for deconv is only partially supported in TVM currently
         intrin_check = self.use_intrinsic.get("depthwise_deconv", lambda *_: False)
         if not intrin_check([input, filter, bias], attribs):
-            if data_format == "CHANNELS_LAST":
+            if data_format != "NCX":
                 raise UnsupportedAttr("depthwise_deconv", "data_format", data_format)
             if dilation != [1] * ndim:
                 raise UnsupportedAttr("depthwise_deconv", "dilation", dilation)
@@ -1162,7 +1162,7 @@ class convert_map:
 
     def _add_bias(self, op, bias, data_format, ndim):
         # broadcast bias to the correct shape
-        if data_format == "CHANNELS_FIRST":
+        if data_format == "NCX":
             if isinstance(bias, relax.Constant):
                 # if the bias is a constant, reshape it in compile time to 1B1..(spatial dims)
                 new_data = tvm.nd.array(np.array(bias.data.numpy()).reshape([1, -1] + [1] * ndim))
