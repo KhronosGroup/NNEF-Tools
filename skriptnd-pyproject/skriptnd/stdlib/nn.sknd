@@ -624,27 +624,30 @@ operator erf {
 operator batch_norm {
     @attrib {
         epsilon: real = 1e-5;
+        channel_axis: int = 1;
     }
     @input {
-        input: real[b,c,s..];
+        input: real[s..];
         mean: real[c];
         variance: real[c];
         bias: optional real[c];
         scale: optional real[c];
     }
     @output {
-        output: real[b,c,s..];
+        output: real[s..];
     }
     @assert {
         epsilon >= 0.0: "'epsilon' must be non-negative", epsilon;
+        s[channel_axis] == c: "input shape at channel axis must match size of mean and variance",
+                              'input-shape': s, channel_axis, 'channels': c;
     }
     @compose {
-        centered = math.sub{rhs_align=1}(input, mean);
+        centered = math.sub{rhs_align=channel_axis}(input, mean);
         stabilized = math.add(variance, epsilon);
         std = math.sqrt(stabilized);
-        normalized = math.div{rhs_align=1}(centered, std);
-        scaled = if ?scale then math.mul{rhs_align=1}(normalized, scale) else normalized;
-        output = if ?bias then math.add{rhs_align=1}(scaled, bias) else scaled;
+        normalized = math.div{rhs_align=channel_axis}(centered, std);
+        scaled = if ?scale then math.mul{rhs_align=channel_axis}(normalized, scale) else normalized;
+        output = if ?bias then math.add{rhs_align=channel_axis}(scaled, bias) else scaled;
     }
 }
 
