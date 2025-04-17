@@ -1606,7 +1606,7 @@ graph conv_channels_last {
         output: real[4,224,224,64];
     }
     @compose {
-        output = nn.conv{data_format='CHANNELS_LAST'}(input, filter, bias);
+        output = nn.conv{data_format='NXC'}(input, filter, bias);
     }
 }
 
@@ -1639,40 +1639,6 @@ graph conv_dephwise_channels_last {
     }
     @compose {
         output = nn.depthwise_conv{data_format='CHANNELS_LAST'}(input, filter, bias);
-    }
-}
-
-graph conv_separable {
-    @input {
-        input: real[4,32,224,224];
-    }
-    @variable {
-        depthwise_filter: real[32,2,5,5];
-        pointwise_filter: real[16,64,1,1];
-        bias: real[16];
-    }
-    @output {
-        output: real[4,16,224,224];
-    }
-    @compose {
-        output = nn.separable_conv{}(input, depthwise_filter, pointwise_filter, bias);
-    }
-}
-
-graph conv_separable_channels_last {
-    @input {
-        input: real[4,224,224,32];
-    }
-    @variable {
-        depthwise_filter: real[32,2,5,5];
-        pointwise_filter: real[16,64,1,1];
-        bias: real[16];
-    }
-    @output {
-        output: real[4,224,224,16];
-    }
-    @compose {
-        output = nn.separable_conv{data_format='CHANNELS_LAST'}(input, depthwise_filter, pointwise_filter, bias);
     }
 }
 
@@ -1799,7 +1765,7 @@ graph deconv_channels_last {
         output: real[4,224,224,32];
     }
     @compose {
-        output = nn.deconv{data_format='CHANNELS_LAST'}(input, filter, bias);
+        output = nn.deconv{data_format='NXC'}(input, filter, bias);
     }
 }
 

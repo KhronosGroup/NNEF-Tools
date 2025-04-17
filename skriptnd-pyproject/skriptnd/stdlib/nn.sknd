@@ -34,53 +34,77 @@ operator conv {
         padding_align: str = 'UPPER';
         ceil_mode: bool = false;
         groups: int = 1;
-        data_format: str = 'CHANNELS_FIRST';
+        data_format: str = 'NCX';
+        filter_format: str = 'NCX';
     }
     @input {
-        input: real[b,c * groups..(data_format == 'CHANNELS_FIRST'),s..(d),c * groups..(data_format == 'CHANNELS_LAST')];
-        filter: real[n,c,fs..(d)];
-        bias: optional real[n];
-    }
-    @using {
-        fd = (fs - 1) * dilation + 1;
-        paddings = padding[:d] + padding[d:] ??
-                   ((ceil_mode ? s \ stride : s / stride) - 1) * stride + fd - s;
-        offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
-        os = ceil_mode ? (s + paddings - fd) \ stride + 1 :
-                         (s + paddings - fd) / stride + 1;
-        m = n / groups;
-        padding_aligns = ['LOWER', 'UPPER'];
-        data_formats = ['CHANNELS_FIRST', 'CHANNELS_LAST'];
-        channels_first = data_format == 'CHANNELS_FIRST';
-        channels_last = data_format == 'CHANNELS_LAST';
+        input: real[s..(d+2)];
+        filter: real[fs..(d+2)];
+        bias: optional real[bs];
     }
     @output {
-        output: real[b,n..(channels_first),os..,n..(channels_last)];
+        output: real[os..];
+    }
+    @using {
+        b = data_format == 'XCN' ? s[-1] : s[0];
+        ic = data_format == 'NCX' ? s[1] : data_format == 'NXC' ? s[-1] : s[-2];
+        ix = data_format == 'NCX' ? s[2:] : data_format == 'NXC' ? s[1:-1] : s[:-2];
+        n = filter_format == 'XCN' ? fs[-1] : fs[0];
+        fc = filter_format == 'NCX' ? fs[1] : filter_format == 'NXC' ? fs[-1] : fs[-2];
+        fx = filter_format == 'NCX' ? fs[2:] : filter_format == 'NXC' ? fs[1:-1] : fs[:-2];
+        fd = (fx - 1) * dilation + 1;
+        paddings = padding[:d] + padding[d:] ??
+                   ((ceil_mode ? ix \ stride : ix / stride) - 1) * stride + fd - ix;
+        offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
+        ox = ceil_mode ? (ix + paddings - fd) \ stride + 1 :
+                         (ix + paddings - fd) / stride + 1;
+        os = data_format == 'NCX' ? [b,n,ox..] : data_format == 'NXC' ? [b,ox..,n] : [ox..,n,b];
+        m = n / groups;
+        padding_aligns = ['LOWER', 'UPPER'];
+        data_formats = ['NCX', 'NXC', 'XCN'];
+        filter_formats = ['NCX', 'NXC', 'XCN'];
     }
     @assert {
         stride > 0: "'stride' must be positive", stride;
         dilation > 0: "'dilation' must be positive", dilation;
         groups > 0: "'groups' must be positive", groups;
-        s + paddings >= fd:
+        ix + paddings >= fd:
             "padded input-size must be greater than (dilated) filter-size",
-            'input.size': s, 'filter.size': fs, dilation, 'total-padding': paddings;
+            'input.size': ix, 'filter.size': fx, dilation, 'total-padding': paddings;
         n % groups == 0:
             "output-channels must be divisible by groups",
             'output-channels': n, groups;
+        ic == fc * groups:
+            "input-channels must equal filter-channels * groups",
+            'input-channels': ic, 'filter-channels': fc, groups;
+        bs == n:
+            "bias-size must equal output-channels of filter",
+            "bias-size": bs, "output-channels": n;
         padding_align in padding_aligns:
             "'padding_align' must be one of {padding_aligns}", padding_align;
         data_format in data_formats:
             "'data_format' must be one of {data_formats}", data_format;
+        filter_format in filter_formats:
+            "'filter_format' must be one of {filter_formats}", filter_format;
     }
     @lower {
-        output[bi,ni..(channels_first),i..,ni..(channels_last)] = bias[ni,] ?? 0.0,
-            bi < b, ni < n, i < os;
-        output[bi,gi * m + mi..(channels_first),i..,gi * m + mi..(channels_last)]
-            += input[bi,gi * c + ci..(channels_first),
-                     |stride * i + dilation * j - offset|..,
-                     gi * c + ci..(channels_last)]
-            * filter[gi * m + mi,ci,j..],
-                bi < b, gi < groups, mi < m, ci < c, i < os, j < fs;
+        oi = data_format == 'NCX' ? [bi,ni,i..] :
+             data_format == 'NXC' ? [bi,i..,ni] :
+                                    [i..,ni,bi],
+        output[oi..] = bias[ni,] ?? 0.0,
+            bi < b, ni < n, i < ox;
+        
+        oi = data_format == 'NCX' ? [bi,gi * m + mi,i..] :
+             data_format == 'NXC' ? [bi,i..,gi * m + mi] :
+                                    [i..,gi * m + mi,bi],
+        ii = data_format == 'NCX' ? [bi,gi * fc + ci,|stride * i + dilation * j - offset|..] :
+             data_format == 'NXC' ? [bi,|stride * i + dilation * j - offset|..,gi * fc + ci] :
+                                    [|stride * i + dilation * j - offset|..,gi * fc + ci,bi],
+        fi = filter_format == 'NCX' ? [gi * m + mi,ci,j..] :
+             filter_format == 'NXC' ? [gi * m + mi,j..,ci] :
+                                      [j..,ci,gi * m + mi],
+        output[oi..] += input[ii..] * filter[fi..],
+            bi < b, gi < groups, mi < m, ci < fc, i < ox, j < fx;
     }
 }
 
@@ -94,35 +118,43 @@ operator deconv {
         padding_align: str = 'UPPER';
         output_size: optional int..(d);
         groups: int = 1;
-        data_format: str = 'CHANNELS_FIRST';
+        data_format: str = 'NCX';
+        filter_format: str = 'NCX';
     }
     @input {
-        input: real[b,n..(data_format == 'CHANNELS_FIRST'),s..(d),n..(data_format == 'CHANNELS_LAST')];
-        filter: real[n,c,fs..(d)];
-        bias: optional real[c * groups];
-    }
-    @using {
-        fd = (fs - 1) * dilation + 1;
-        paddings = padding[:d] + padding[d:] ?? (s - 1) * stride + fd - s * stride;
-        offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
-        os = output_size ?? (s - 1) * stride + fd - paddings;
-        m = n / groups;
-        padding_aligns = ['LOWER', 'UPPER'];
-        data_formats = ['CHANNELS_FIRST', 'CHANNELS_LAST'];
-        channels_first = data_format == 'CHANNELS_FIRST';
-        channels_last = data_format == 'CHANNELS_LAST';
+        input: real[s..(d+2)];
+        filter: real[fs..(d+2)];
+        bias: optional real[bs];
     }
     @output {
-        output: real[b,c * groups..(channels_first),os..,c * groups..(channels_last)];
+        output: real[os..];
+    }
+    @using {
+        b = data_format == 'XCN' ? s[-1] : s[0];
+        ic = data_format == 'NCX' ? s[1] : data_format == 'NXC' ? s[-1] : s[-2];
+        ix = data_format == 'NCX' ? s[2:] : data_format == 'NXC' ? s[1:-1] : s[:-2];
+        n = filter_format == 'XCN' ? fs[-1] : fs[0];
+        fc = filter_format == 'NCX' ? fs[1] : filter_format == 'NXC' ? fs[-1] : fs[-2];
+        fx = filter_format == 'NCX' ? fs[2:] : filter_format == 'NXC' ? fs[1:-1] : fs[:-2];
+        fd = (fx - 1) * dilation + 1;
+        paddings = padding[:d] + padding[d:] ?? (ix - 1) * stride + fd - ix * stride;
+        offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
+        ox = output_size ?? (ix - 1) * stride + fd - paddings;
+        oc = fc * groups;
+        os = data_format == 'NCX' ? [b,oc,ox..] : data_format == 'NXC' ? [b,ox..,oc] : [ox..,oc,b];
+        m = n / groups;
+        padding_aligns = ['LOWER', 'UPPER'];
+        data_formats = ['NCX', 'NXC', 'XCN'];
+        filter_formats = ['NCX', 'NXC', 'XCN'];
     }
     @assert {
         stride > 0: "'stride' must be positive", stride;
         dilation > 0: "'dilation' must be positive", dilation;
         groups > 0: "'groups' must be positive", groups;
-        (output_size + paddings - fd) / stride + 1 == s:
+        (output_size + paddings - fd) / stride + 1 == ix:
             "'output_size' must be compatible with what would be calculated from "
             "input-size, filter-size, 'stride', 'dilation' and 'padding'",
-            'output.size': os, 'input.size': s, 'filter.size': fs,
+            output_size, 'output.size': ox, 'input.size': ix, 'filter.size': fx,
             stride, dilation, 'total-padding': paddings;
         n % groups == 0:
             "input-channels must be divisible by 'groups'", 'input-channels': n, groups;
@@ -130,15 +162,27 @@ operator deconv {
             "'padding_align' must be one of {padding_aligns}", padding_align;
         data_format in data_formats:
             "'data_format' must be one of {data_formats}", data_format;
+        filter_format in data_formats:
+            "'filter_format' must be one of {data_formats}", filter_format;
     }
     @lower {
-        output[bi,zi..(channels_first),k..,zi..(channels_last)] = bias[zi,] ?? 0.0,
-            bi < b, zi < c * groups, k < os;
-        output[bi,gi * c + ci..(channels_first),|stride * i + dilation * j - offset|..,
-               gi * c + ci..(channels_last)]
-            += input[bi,gi * m + mi..(channels_first),i..,gi * m + mi..(channels_last)]
-            * filter[gi * m + mi,ci,j..],
-                bi < b, ci < c, gi < groups, mi < m, i < s, j < fs;
+        oi = data_format == 'NCX' ? [bi,ci,i..] :
+             data_format == 'NXC' ? [bi,i..,ci] :
+                                    [i..,ci,bi],
+        output[oi..] = bias[ci,] ?? 0.0,
+            bi < b, ci < oc, i < ox;
+            
+        oi = data_format == 'NCX' ? [bi,gi * fc + ci,|stride * i + dilation * j - offset|..] :
+             data_format == 'NXC' ? [bi,|stride * i + dilation * j - offset|..,gi * fc + ci] :
+                                    [|stride * i + dilation * j - offset|..,gi * fc + ci,bi],
+        ii = data_format == 'NCX' ? [bi,gi * m + mi,i..] :
+             data_format == 'NXC' ? [bi,i..,gi * m + mi] :
+                                    [i..,gi * m + mi,bi],
+        fi = filter_format == 'NCX' ? [gi * m + mi,ci,j..] :
+             filter_format == 'NXC' ? [gi * m + mi,j..,ci] :
+                                      [j..,ci,gi * m + mi],
+        output[oi..] += input[ii..] * filter[fi..],
+            bi < b, ci < fc, gi < groups, mi < m, i < ix, j < fx;
     }
 }
 
@@ -245,66 +289,6 @@ operator depthwise_deconv {
             += input[bi,m * ci + mi..(channels_first),i..,m * ci + mi..(channels_last)]
             * filter[ci,mi,j..],
                 bi < b, ci < c, mi < m, i < s, j < fs;
-    }
-}
-
-# @item Separable convolution
-
-operator separable_conv {
-    @attrib {
-        stride: int..(d) = 1;
-        dilation: int..(d) = 1;
-        padding: optional int..(2 * d);
-        padding_align: str = 'UPPER';
-        ceil_mode: bool = false;
-        groups: int = 1;
-        data_format: str = 'CHANNELS_FIRST';
-    }
-    @input {
-        input: real[b,c..(data_format == 'CHANNELS_FIRST'),s..(d),c..(data_format == 'CHANNELS_LAST')];
-        depthwise_filter: real[c,m,fs..(d)];
-        pointwise_filter: real[n,c * m / groups,1 ..(d)];
-        bias: optional real[n];
-    }
-    @using {
-        fd = (fs - 1) * dilation + 1;
-        paddings = padding[:d] + padding[d:] ??
-                   ((ceil_mode ? s \ stride : s / stride) - 1) * stride + fd - s;
-        offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
-        os = ceil_mode ? (s + paddings - fd) \ stride + 1 :
-                         (s + paddings - fd) / stride + 1;
-        padding_aligns = ['LOWER', 'UPPER'];
-        data_formats = ['CHANNELS_FIRST', 'CHANNELS_LAST'];
-        channels_first = data_format == 'CHANNELS_FIRST';
-        channels_last = data_format == 'CHANNELS_LAST';
-    }
-    @output {
-        output: real[b,n..(channels_first),os..,n..(channels_last)];
-    }
-    @assert {
-        stride > 0: "'stride' must be positive", stride;
-        dilation > 0: "'dilation' must be positive", dilation;
-        groups > 0: "'groups' must be positive", groups;
-        s + paddings >= fd:
-            "padded input-size must be greater than (dilated) filter-size",
-            'input.size': s, 'filter.size': fs, dilation, 'total-padding': paddings;
-        (c * m) % groups == 0:
-            "input-channels times depthwise filter channels must be divisible by 'groups'",
-            'input-channels': c, 'depthwise-channels': m, groups;
-        n % groups == 0:
-            "output-channels must be divisible by 'groups'",
-            'output-channels': n, groups;
-        padding_align in padding_aligns:
-            "'padding_align' must be one of {padding_aligns}", padding_align;
-        data_format in data_formats:
-            "'data_format' must be one of {data_formats}", data_format;
-    }
-    @compose {
-        intermediate = depthwise_conv{stride=stride, dilation=dilation, padding=padding,
-                                      padding_align=padding_align, data_format=data_format}
-                                     (input, depthwise_filter);
-        output = conv{groups=groups, data_format=data_format}
-                     (intermediate, pointwise_filter, bias);
     }
 }
 
