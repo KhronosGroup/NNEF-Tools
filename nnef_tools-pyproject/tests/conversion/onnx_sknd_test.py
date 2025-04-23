@@ -1,10 +1,9 @@
 from nnef_tools.io import onnx as onnx_io
 from nnef_tools.io import skriptnd as skriptnd_io
 from nnef_tools.conversion import onnx_to_sknd
-from nnef_tools.conversion.onnx_to_sknd import ShapeExpr
 from nnef_tools.optimization import skriptnd_optimizer
 from nnef_tools.optimization import onnx_optimizer
-from skriptnd import DtypeToNumpy
+from skriptnd import DtypeToNumpy, PlaceholderExpr
 import numpy as np
 import unittest
 import tempfile
@@ -79,12 +78,12 @@ class TestEnv(unittest.TestCase):
         for idx, input in enumerate(model.main.inputs):
             shape = input_shape[idx]
             assert all(s is None or s == shape[i] for i, s in enumerate(input.shape))
-            input.shape = tuple(s if s is not None else ShapeExpr(ShapeExpr.Op.Tilde, [shape[i]])
+            input.shape = tuple(s if s is not None else PlaceholderExpr(None, shape[i])
                                 for i, s in enumerate(input.shape))
 
     @staticmethod
     def _random_data(dtype, shape, range=None):
-        if dtype == np.bool_:
+        if dtype == np.bool or dtype == np.bool_:
             return np.array(np.random.random(shape) > 0.5)
         elif dtype == np.float32 or dtype == np.float64:
             data = np.random.random(shape).astype(dtype)
