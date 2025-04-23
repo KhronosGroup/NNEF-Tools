@@ -627,7 +627,7 @@ operator batch_norm {
         channel_axis: int = 1;
     }
     @input {
-        input: real[s..];
+        input: real[s..(d)];
         mean: real[c];
         variance: real[c];
         bias: optional real[c];
@@ -636,18 +636,21 @@ operator batch_norm {
     @output {
         output: real[s..];
     }
+    @using {
+        align = channel_axis < 0 ? d + channel_axis : channel_axis;
+    }
     @assert {
         epsilon >= 0.0: "'epsilon' must be non-negative", epsilon;
         s[channel_axis] == c: "input shape at channel axis must match size of mean and variance",
                               'input-shape': s, channel_axis, 'channels': c;
     }
     @compose {
-        centered = math.sub{rhs_align=channel_axis}(input, mean);
+        centered = math.sub{rhs_align=align}(input, mean);
         stabilized = math.add(variance, epsilon);
         std = math.sqrt(stabilized);
-        normalized = math.div{rhs_align=channel_axis}(centered, std);
-        scaled = if ?scale then math.mul{rhs_align=channel_axis}(normalized, scale) else normalized;
-        output = if ?bias then math.add{rhs_align=channel_axis}(scaled, bias) else scaled;
+        normalized = math.div{rhs_align=align}(centered, std);
+        scaled = if ?scale then math.mul{rhs_align=align}(normalized, scale) else normalized;
+        output = if ?bias then math.add{rhs_align=align}(scaled, bias) else scaled;
     }
 }
 
