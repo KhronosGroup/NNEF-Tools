@@ -168,7 +168,7 @@ def _get_output_shapes(attr_map_proto):
 
 def build_model(graph_def):
     model = Model()
-    graph = Graph(model=model)
+    graph = Graph(model=model, name='G')
 
     dtypes = _get_dtypes(graph_def)
 
