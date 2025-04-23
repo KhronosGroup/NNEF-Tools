@@ -675,13 +675,38 @@ class ConverterToTS(Converter):
         tensor.data = func(tensor.data)
         tensor.shape = tensor.data.shape
 
-    @staticmethod
-    def remove_unused_constants(model):
+    def _remove_unused_constants(self, model):
         for graph in model.graphs:
             removed = [tensor for tensor in graph.tensors
                        if tensor.data is not None and not tensor.has_consumer and not tensor in graph.outputs]
             graph.inputs = tuple(tensor for tensor in graph.inputs if tensor not in removed)
             graph.remove_tensors(removed)
+
+    def _add_zero_copy_for_constant_outputs(self, model):
+        for graph in model.graphs:
+            graph.outputs = tuple(self.zero_copy(tensor) if tensor.is_constant or tensor.is_variable else tensor
+                                  for tensor in graph.outputs)
+
+    def _eliminate_empty_subgraphs(self, model):
+        for graph in model.graphs:
+            for op in graph.operations:
+                for key, value in op.attribs.items():
+                    if isinstance(value, Graph) and len(value.operations) == 0 and len(value.outputs) == 1:
+                        op.attribs[key] = value = value.outputs[0]
+                        op.inputs = op.inputs + (value,)
+                    elif isinstance(value, list):
+                        for idx, item in enumerate(value):
+                            if isinstance(item, Graph) and len(item.operations) == 0 and len(item.outputs) == 1:
+                                op.attribs[key][idx] = item = item.outputs[0]
+                                op.inputs = op.inputs + (item,)
+
+        removed = [graph for graph in model.graphs[1:] if len(graph.operations) == 0 and len(graph.outputs) == 1]
+        model.remove_graphs(removed)
+
+    def zero_copy(self, tensor):
+        result = Tensor(tensor.graph, dtype=tensor.dtype, shape=tensor.shape, quant=copy.deepcopy(tensor.quant))
+        self._zero_copy_operation(tensor, result)
+        return result
 
     def ts_dtype(self, dtype):
         return ConverterToTS._DtypeFromNumpy[dtype]

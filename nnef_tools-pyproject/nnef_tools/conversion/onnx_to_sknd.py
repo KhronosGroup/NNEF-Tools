@@ -141,7 +141,7 @@ class Converter(_Converter):
         model = _Converter.__call__(self, model)
         self._add_zero_copy_for_constant_outputs(model)
         self._eliminate_empty_subgraphs(model)
-        self.remove_unused_constants(model)
+        self._remove_unused_constants(model)
         self._fix_constant_names(model)
         ensure_valid_ids(model)
         self._fix_loops(model)
@@ -167,27 +167,6 @@ class Converter(_Converter):
                     removed.append(op)
 
             graph.remove_operations(removed, unlink=True)
-
-    def _add_zero_copy_for_constant_outputs(self, model):
-        for graph in model.graphs:
-            graph.outputs = tuple(self.zero_copy(tensor) if tensor.is_constant or tensor.is_variable else tensor
-                                  for tensor in graph.outputs)
-
-    def _eliminate_empty_subgraphs(self, model):
-        for graph in model.graphs:
-            for op in graph.operations:
-                for key, value in op.attribs.items():
-                    if isinstance(value, Graph) and len(value.operations) == 0 and len(value.outputs) == 1:
-                        op.attribs[key] = value = value.outputs[0]
-                        op.inputs = op.inputs + (value,)
-                    elif isinstance(value, list):
-                        for idx, item in enumerate(value):
-                            if isinstance(item, Graph) and len(item.operations) == 0 and len(item.outputs) == 1:
-                                op.attribs[key][idx] = item = item.outputs[0]
-                                op.inputs = op.inputs + (item,)
-
-        removed = [graph for graph in model.graphs[1:] if len(graph.operations) == 0 and len(graph.outputs) == 1]
-        model.remove_graphs(removed)
 
     def _collect_shape_ops(self, model):
         self._shape_ops = set()
@@ -342,11 +321,6 @@ class Converter(_Converter):
         input = Tensor(output.graph, dtype=output.dtype, shape=output.shape, quant=copy.deepcopy(output.quant))
         self._stack_operation(input, output, axis)
         return input
-
-    def zero_copy(self, tensor):
-        result = Tensor(tensor.graph, dtype=tensor.dtype, shape=tensor.shape, quant=copy.deepcopy(tensor.quant))
-        self._zero_copy_operation(tensor, result)
-        return result
 
     def ensure_list(self, arg):
         return [arg] if not isinstance(arg, list) else arg
