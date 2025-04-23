@@ -162,7 +162,7 @@ def _tensor_access_str(x):
     return s
 
 
-PlaceholderExpr.__str__ = lambda x: '~|' + str(x.max_value)
+PlaceholderExpr.__str__ = lambda x: (x.id or '~') + '|' + str(x.max_value)
 IdentifierExpr.__str__ = lambda x: _local_name(x.name)
 ReferenceExpr.__str__ = lambda x: _local_name(x.name)
 SizeAccess.__str__ = lambda x: _local_name(x.pack.name) + '.size'
