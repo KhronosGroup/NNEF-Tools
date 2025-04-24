@@ -624,7 +624,7 @@ class ConverterToTS(Converter):
         pass
 
     def _transpose_operation(self, input, output, perm):
-        Operation(self._graph, type='layout.transpose', inputs=input, outputs=output, attribs={'axes': perm})
+        Operation(self._graph, type='layout.transpose', inputs=input, outputs=output, attribs={'perm': perm})
 
     def _reshape_operation(self, input, output, shape):
         Operation(self._graph, type='layout.reshape', inputs=input, outputs=output, attribs={'shape': list(shape)})
