@@ -59,7 +59,8 @@ operator conv {
         ox = ceil_mode ? (ix + paddings - fd) \ stride + 1 :
                          (ix + paddings - fd) / stride + 1;
         os = data_format == 'NCX' ? [b,n,ox..] : data_format == 'NXC' ? [b,ox..,n] : [ox..,n,b];
-        m = n / groups;
+        g = groups == 0 ? ic : groups;
+        m = n / g;
         padding_aligns = ['LOWER', 'UPPER'];
         data_formats = ['NCX', 'NXC', 'XCN'];
         filter_formats = ['NCX', 'NXC', 'XCN'];
@@ -67,16 +68,16 @@ operator conv {
     @assert {
         stride > 0: "'stride' must be positive", stride;
         dilation > 0: "'dilation' must be positive", dilation;
-        groups > 0: "'groups' must be positive", groups;
+        groups >= 0: "'groups' must not be negative", groups;
         ix + paddings >= fd:
             "padded input-size must be greater than (dilated) filter-size",
             'input.size': ix, 'filter.size': fx, dilation, 'total-padding': paddings;
-        n % groups == 0:
+        n % g == 0:
             "output-channels must be divisible by groups",
-            'output-channels': n, groups;
-        ic == fc * groups:
+            'output-channels': n, 'groups': g;
+        ic == fc * g:
             "input-channels must equal filter-channels * groups",
-            'input-channels': ic, 'filter-channels': fc, groups;
+            'input-channels': ic, 'filter-channels': fc, 'groups' : g;
         bs == n:
             "bias-size must equal output-channels of filter",
             "bias-size": bs, "output-channels": n;
@@ -104,7 +105,7 @@ operator conv {
              filter_format == 'NXC' ? [gi * m + mi,j..,ci] :
                                       [j..,ci,gi * m + mi],
         output[oi..] += input[ii..] * filter[fi..],
-            bi < b, gi < groups, mi < m, ci < fc, i < ox, j < fx;
+            bi < b, gi < g, mi < m, ci < fc, i < ox, j < fx;
     }
 }
 
@@ -140,9 +141,10 @@ operator deconv {
         paddings = padding[:d] + padding[d:] ?? (ix - 1) * stride + fd - ix * stride;
         offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
         ox = output_size ?? (ix - 1) * stride + fd - paddings;
-        oc = fc * groups;
+        g = groups == 0 ? ic : groups;
+        oc = fc * g;
         os = data_format == 'NCX' ? [b,oc,ox..] : data_format == 'NXC' ? [b,ox..,oc] : [ox..,oc,b];
-        m = n / groups;
+        m = n / g;
         padding_aligns = ['LOWER', 'UPPER'];
         data_formats = ['NCX', 'NXC', 'XCN'];
         filter_formats = ['NCX', 'NXC', 'XCN'];
@@ -150,14 +152,14 @@ operator deconv {
     @assert {
         stride > 0: "'stride' must be positive", stride;
         dilation > 0: "'dilation' must be positive", dilation;
-        groups > 0: "'groups' must be positive", groups;
+        groups >= 0: "'groups' must not be negative", groups;
         (output_size + paddings - fd) / stride + 1 == ix:
             "'output_size' must be compatible with what would be calculated from "
             "input-size, filter-size, 'stride', 'dilation' and 'padding'",
             output_size, 'output.size': ox, 'input.size': ix, 'filter.size': fx,
             stride, dilation, 'total-padding': paddings;
-        n % groups == 0:
-            "input-channels must be divisible by 'groups'", 'input-channels': n, groups;
+        n % g == 0:
+            "input-channels must be divisible by 'groups'", 'input-channels': n, 'groups' : g;
         padding_align in padding_aligns:
             "'padding_align' must be one of {padding_aligns}", padding_align;
         data_format in data_formats:
@@ -182,7 +184,7 @@ operator deconv {
              filter_format == 'NXC' ? [gi * m + mi,j..,ci] :
                                       [j..,ci,gi * m + mi],
         output[oi..] += input[ii..] * filter[fi..],
-            bi < b, ci < fc, gi < groups, mi < m, i < ix, j < fx;
+            bi < b, ci < fc, gi < g, mi < m, i < ix, j < fx;
     }
 }
 
