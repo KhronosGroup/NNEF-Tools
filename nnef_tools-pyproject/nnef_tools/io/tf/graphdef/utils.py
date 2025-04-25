@@ -251,24 +251,29 @@ def fold_constant_tensors(graph_def):
 
 def set_input_shapes(graph_def, input_shapes):
     graph = import_graph_def(graph_def)
-    placeholders = {op.name: (op.outputs[0].shape, op.outputs[0].dtype)
-                    for op in graph.get_operations() if op.type == 'Placeholder'}
+    placeholders = [op for op in graph.get_operations() if op.type == 'Placeholder']
+    placeholder_info = {op.name: (op.outputs[0].shape, op.outputs[0].dtype) for op in placeholders}
+
+    if not isinstance(input_shapes, dict):
+        if not isinstance(input_shapes, list):
+            input_shapes = [input_shapes]
+        input_shapes = {tensor.name: input_shapes[idx] for idx, tensor in enumerate(placeholders)}
 
     graph = tf.Graph()
     with graph.as_default():
         input_map = {}
         for name, shape in six.iteritems(input_shapes):
-            if name not in placeholders:
+            if name not in placeholder_info:
                 raise IOError("Model has no input named '{}'".format(name))
 
-            orig_shape, dtype = placeholders[name]
+            orig_shape, dtype = placeholder_info[name]
             if orig_shape.rank is not None and len(shape) != orig_shape.rank:
                 raise IOError("Shape rank for input '{}' does not match that of the model ({} vs {})"
                               .format(name, len(shape), orig_shape.rank))
 
             input_map[name] = tf.placeholder(shape=shape, dtype=dtype, name=name)
 
-        for name, (shape, dtype) in placeholders.items():
+        for name, (shape, dtype) in placeholder_info.items():
             if name not in input_map:
                 input_map[name] = tf.placeholder(shape=shape, dtype=dtype, name=name)
 
