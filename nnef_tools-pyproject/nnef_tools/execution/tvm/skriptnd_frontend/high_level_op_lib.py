@@ -13,8 +13,7 @@ from tvm.relax import op as _op
 from . import ConverterError
 
 def _gen_shape_list(var: relax.Var):
-    # todo-- check for dynamic - should work
-    return [s.value for s in var.struct_info.shape.values]
+    return [s.value if not isinstance(s, tvm.tir.Var) else s for s in var.struct_info.shape.values]
 
 
 def _map_data_format(data_format: str, ndim: int) -> str:

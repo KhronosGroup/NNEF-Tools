@@ -45,11 +45,10 @@ def from_skriptnd(model: str | sknd.Model | PathLike,
 
     # if input is str, try to resolve it
     if isinstance(model, (str, PathLike)):
-        if isinstance(model, PathLike) or path.isfile(model):
+        if isinstance(model, PathLike) or path.isfile(model) or path.isdir(model):
             model = sknd.read_model(model, unroll=True,
                                     atomic={**_atomics, **(atomics or {})} if not contr_only else False)
         else:
-            # raise ValueError("TO DO")   # TODO
             try:
                 model = sknd.parse_string(model, unroll=True,
                                           atomic={**_atomics, **(atomics or {})} if not contr_only else False)
@@ -63,17 +62,15 @@ def from_skriptnd(model: str | sknd.Model | PathLike,
                          keep_intrin).convert_model(model)
 
 
-def _get_shape_var_name(shape_elem, idx, info):
-    # todo rewrite with expr_converter?
+def _get_shape_var_name(shape_elem) -> str:
     if isinstance(shape_elem, sknd.PlaceholderExpr):
         return shape_elem.id
 
-    # Currently the support only needs PlaceholderExpr, these are deprecated
     if isinstance(shape_elem, sknd.ShapeAccess):
-        return shape_elem.tensor.shape[shape_elem.dim].id
-    elif isinstance(shape_elem, sknd.UnaryExpr):
-        if shape_elem.op == "~":
-            return f"{info.name}:{idx}"
+        return _get_shape_var_name(shape_elem.tensor.shape[shape_elem.dim])
+    # elif isinstance(shape_elem, sknd.UnaryExpr): # todo possibly deprecated with PlaceholderExpr
+    #     if shape_elem.op == "~":
+    #         return f"{info.name}:{idx}"
     else:
         raise ValueError(f"Invalid shape expression {type(shape_elem)}")
 
@@ -155,7 +152,7 @@ class GraphBuilder:
                 # create flattened relax tensors from TensorInfo,
                 internals = ChainMap(self._create_rx_vars(self.tensors.maps[0], params), params)
 
-                self.env.update(buffers=internals)
+                # self.env.update(buffers=internals)
 
                 for op in self.graph.operations:
                     op_attribs = OperationInfo(op.name,
@@ -307,7 +304,7 @@ class GraphBuilder:
                     shape = list(shape)
                     for i, s in enumerate(shape):
                         if isinstance(s, sknd.Expr):
-                            var_name = _get_shape_var_name(s, i, info)
+                            var_name = _get_shape_var_name(s)
                             if var_name not in self.env:
                                 var = tvm.te.var(var_name, "int64")
                                 self.env.vars[var_name] = var
@@ -330,7 +327,7 @@ class GraphBuilder:
                     # Change dynamic SkND shapes to TVM vars
                     for i, s in enumerate(shape):
                         if isinstance(s, sknd.Expr):
-                            var_name = _get_shape_var_name(s, i, info)
+                            var_name = _get_shape_var_name(s)
                             if var_name not in self.env:
                                 var = tvm.te.var(var_name, "int64")
                                 self.env.vars[var_name] = var
@@ -352,6 +349,9 @@ class GraphBuilder:
                         struct_info = relax.TensorStructInfo(shape, info.dtype)
                         rx_tensors[name] = relax.Var(info.name, struct_info)
 
+            # update env here, to handle dyn vars
+            self.env.buffers[name] = rx_tensors[name]
+
         return rx_tensors
 
     def _create_tir_vars(self, tensors: dict):
@@ -365,7 +365,7 @@ class GraphBuilder:
                 # Change dynamic SkND shapes to TVM vars
                 for i, s in enumerate(shape):
                     if isinstance(s, sknd.Expr):
-                        var_name = _get_shape_var_name(s, i, info)
+                        var_name = _get_shape_var_name(s)
                         if var_name not in self.env:
                             var = tvm.te.var(var_name, "int32")
                             self.env.vars[var_name] = var
@@ -380,20 +380,14 @@ class GraphBuilder:
 
     def _convert_op(self, op: sknd.Operation, internals: dict, op_attribs, get_stmt=False) -> relax.Call | tir.PrimFunc:
 
+        # subgraph ops
         if op.name in ["if", "do"]:
-            # TODO
             call = self._handle_subgraph_op(op, op_attribs, internals)
-            # raise NotImplementedError("if/do not implemented")
-            return call  # TODO return fucntion.
+            return call
 
-        # TODO check if TensorPack
-        # assignment
         if op.name == "":
-            logging.warning(f"Empty operation in {op}")  # todo ??
-            # internals[op.outputs[0].name] = inputs[0]
+            # same as a copy, can return with the same internal object
             return internals[op.inputs[0].name]
-
-        ## TODO ?? prettify
 
         output = None
         if not self.force_tir or op.name in UNEXPRESSIBLE_OPERATIONS:
@@ -419,7 +413,6 @@ class GraphBuilder:
     def __contraction(self, op: sknd.Operation, op_attribs, internals: ChainMap, get_stmt):
         """ Create a PrimFunc from a list of Contractions, then call_tir to create a Relax Tensor function """
 
-        # todo check if tensorpack
         # collect TensorInfo of inputs to create TIR buffers
         input_infos = []  # [inner.tensors[i.name] for i in op.inputs]
         for i in op.inputs:
@@ -432,11 +425,8 @@ class GraphBuilder:
             else:
                 raise ValueError(f"Invalid input type {type(i)}")
 
-        # todo check if append intermediate neccessary
         # extend with constants
         input_infos.extend([self.tensors[i.name] for i in op.constants])
-
-        pass
 
         # save backward mapping from expr to name
         backward_map = {}
@@ -531,16 +521,14 @@ class GraphBuilder:
         return tir.call_tir(gv, *inputs)
 
     def _call_relax(self, gv: tvm.ir.GlobalVar, op: sknd.Operation, internals: dict, op_attribs):
-
-        # todo check TensorPack
-        # todo nicer than this
         # create relax tensor info
         out_sinfo = []
         for i, o in enumerate(op.outputs):
             if isinstance(o, sknd.TensorPack):
-                out_shape = [self.tensors[o_it.name].get_shape_values(self.env) for o_it in
-                             o.items]
-                out_sinfo.extend([relax.TensorStructInfo(s, op_attribs.output_dtype[i]) for s in out_shape])
+                out_shape = [self.tensors[o_it.name].get_shape_values(self.env)
+                             for o_it in o.items]
+                out_sinfo.extend([relax.TensorStructInfo(s, op_attribs.output_dtype[i])
+                                  for s in out_shape])
             else:
                 out_shape = self.tensors[o.name].get_shape_values(self.env)
                 out_sinfo.append(relax.TensorStructInfo(out_shape, op_attribs.output_dtype[i]))
@@ -563,7 +551,7 @@ class GraphBuilder:
         # Remove duplicates while keeping order
         inputs = list(dict.fromkeys(inputs))
 
-        # todo check tirvars param for dyn shape
+        # todo opt: check tirvars param for dyn shape
         call = relax.call_tir(gv, inputs, out_sinfo)
         return call
 
@@ -577,7 +565,6 @@ class GraphBuilder:
                 g.to_relax_func(issubgraph=True, name=n)
             pass
 
-            # TODO check how not 0th index
             c_graph = op.attribs["cond_graphs"][0]
             c_inputs = [op.inputs[i] for i in op.attribs["cond_inputs"]]
             _cond = relax.Call(
@@ -600,6 +587,7 @@ class GraphBuilder:
             )
             internals[op.outputs[0].name] = self.module_builder.block_builder.normalize(call)
             return call
+
         if op.name == "do":
             if op.attribs["nscans"] != 0:
                 raise NotImplementedError("Iterating over tuples with variables is not supported in TVM")
@@ -724,8 +712,6 @@ class GraphBuilder:
 
         c_graph = op.attribs["cond_graph"]
         c_inputs = [op.inputs[i] for i in op.attribs["cond_inputs"]]
-
-        # c_tir_inps = inner._create_tir_vars({k: v for k, v in inner.tensors.items() if k in [t.name for t in c_inputs] and k not in params})
         c_tir_inps = []
         for t in c_inputs:
             if t.name in params:
@@ -734,13 +720,11 @@ class GraphBuilder:
                 c_tir_inps.append(tir.decl_buffer(t.shape, convert_dtype(t.dtype), t.name))
 
         c_gv = self.module_builder.block_builder.get().get_global_var(c_graph.name.replace(".", "_"))
-        # c_pf = inner.module_builder.block_builder.get()[c_gv]
 
         c_out = tir.decl_buffer(cond_shape, "bool", "condition")
 
         b_graph = op.attribs["body_graph"]
         b_inputs = [op.inputs[i] for i in op.attribs["body_inputs"]]
-        # b_tir_inps = inner._create_tir_vars({k: v for k, v in inner.tensors.items() if k in [t.name for t in b_inputs] and k not in params})
         b_tir_inps = []
         for t in b_inputs:
             if t.name in params:
@@ -748,7 +732,6 @@ class GraphBuilder:
             else:
                 b_tir_inps.append(tir.decl_buffer(t.shape, convert_dtype(t.dtype), t.name))
         b_gv = self.module_builder.block_builder.get().get_global_var(b_graph.name.replace(".", "_"))
-        # b_pf = inner.module_builder.block_builder.get()[b_gv]
 
         b_out = []
 
@@ -758,16 +741,6 @@ class GraphBuilder:
             for i in range(0, op_attribs.ts_attrs["nvars"]):
                 b_out.append(list(params.values())[i])
 
-        # if len(b_out) == 1:
-        #     b_out = b_out[0]
-
-        # TODO should be list?
-        # b_out = tir.decl_buffer((), "int32", "body_out")
-
-        # add aditional stmt, where we handle the swap of variables
-        # swaps = []
-        # for i in range(0, op_attribs.ts_attrs["nvars"]):
-        #     swaps.append((list(params.values())[0], b_out))
 
         while_stmt = tir.While(
             tir.BufferLoad(c_out, cond_index),
@@ -833,7 +806,7 @@ class TensorInfo:
     def get_shape_values(self, env):
         def _handle_dyn(s, i):
             if isinstance(s, sknd.Expr):
-                var_name = _get_shape_var_name(s, i, self)
+                var_name = _get_shape_var_name(s)
                 if var_name in env:
                     return env[var_name]
                 raise ValueError(f"Dynamic shape variable {var_name} not found")
@@ -865,4 +838,3 @@ class OperationInfo:
                 self.ts_attrs[k] = v
             else:
                 self.ts_attrs[k] = exp_converter(v)
-            pass

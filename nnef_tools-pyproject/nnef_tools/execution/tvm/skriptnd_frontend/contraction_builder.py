@@ -93,7 +93,7 @@ def build_contraction(contractions: list[sknd.Contraction],
                 # TODO???? sth needed this before,
                 #  when the operation did more init, like upsampling(?)
                 if not contr.axes:
-                    print("No reduction axes, init block won't work properly")
+                    # print("No reduction axes, init block won't work properly")
                     raise ValueError("No reduction axes, init block won't work properly")
 
                 # check if init contraction is scalar
@@ -102,8 +102,7 @@ def build_contraction(contractions: list[sknd.Contraction],
                     env.vars[name] = exp_converter(expr)
                 env.curr_conds = []
                 init_value = exp_converter(contr.right)
-            except ValueError:  # ValueError from Environment's internal dict # todo custom error to make nice
-                pass
+            except ValueError:  # ValueError from Environment's internal dict # todo? custom error to make nice
                 # calculate init tensor manually and return indexing expression
                 ins, outs = _collect_ins_outs(contr, buffers)
 
