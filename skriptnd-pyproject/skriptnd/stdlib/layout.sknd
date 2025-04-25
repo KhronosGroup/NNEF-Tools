@@ -570,7 +570,7 @@ operator pad {
         output: T[before + s + after..];
     }
     @using {
-        methods = ['CONSTANT', 'REFLECT', 'REPLICATE'];
+        methods = ['CONSTANT', 'REFLECT', 'REPLICATE', 'SYMMETRIC'];
         before = [0 ..(d)][axes] <- padding[:k];
         after = [0 ..(d)][axes] <- padding[k:];
     }
@@ -589,6 +589,7 @@ operator pad {
         zi = si - before,
         output[si..] = method == 'REFLECT' ? input[|zi <> -zi : 2 * (s - 1) - zi|..] :
                        method == 'REPLICATE' ? input[|zi <> 0 : s - 1|..] :
+                       method == 'SYMMETRIC' ? input[|zi <> -zi - 1 : 2 * (s - 1) - zi + 1|..] :
                        (before + after == 0 || (zi >= 0 && zi < s)) && .. ? input[zi..] :
                        (value[] ?? T()),
             si < before + s + after;

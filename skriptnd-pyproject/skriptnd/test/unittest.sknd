@@ -1284,6 +1284,18 @@ graph reflect_pad {
     }
 }
 
+graph symmetric_pad {
+    @input {
+        input: real[4,16,10,10];
+    }
+    @output {
+        output: real[4,16,12,12];
+    }
+    @compose {
+        output = layout.pad{axes=[2,3], padding=[1,1,1,1], method='SYMMETRIC'}(input);
+    }
+}
+
 graph space_to_batch {
     @input {
         input: real[4,32,10,10];
