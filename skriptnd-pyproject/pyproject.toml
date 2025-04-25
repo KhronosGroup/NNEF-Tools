@@ -19,7 +19,7 @@ authors = [
 ]
 maintainers = [{ name = "Viktor Gyenes", email = "viktor.gyenes@aimotive.com" }]
 
-dependencies = ["numpy"]
+dependencies = ["numpy", "pybind11"]
 
 [build-system]
 requires = ["setuptools", "wheel", "numpy", "Cython"]
