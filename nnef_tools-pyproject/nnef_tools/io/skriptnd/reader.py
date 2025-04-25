@@ -24,14 +24,14 @@ def _build_tensor_pack(graph, sknd_pack, tensor_map):
 
 def _build_operation(graph, sknd_operation, tensor_map):
     attribs = dict(sknd_operation.attribs)
-    if sknd_operation.dtypes:
-        attribs['dtypes'] = {k: sknd.DtypeToNumpy[t] for k, t in sknd_operation.dtypes.items()}
+    dtypes = {k: sknd.DtypeToNumpy[t] for k, t in sknd_operation.dtypes.items()}
 
     for key, value in attribs.items():
         remap_tensors_in_expr(value, tensor_map)
 
     return Operation(graph,
                      type=sknd_operation.name,
+                     dtypes=dtypes,
                      attribs=attribs,
                      inputs=tuple(remap_tensor(input, tensor_map) for input in sknd_operation.inputs),
                      outputs=tuple(remap_tensor(output, tensor_map) for output in sknd_operation.outputs))

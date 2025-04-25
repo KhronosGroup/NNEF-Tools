@@ -1,5 +1,5 @@
 from __future__ import division, print_function, absolute_import
-from .converter import ConverterToTS as _Converter, Transform, ConversionError
+from .converter import ConverterToSkriptND as _Converter, Transform, ConversionError
 from ..model.utils import *
 from ..model import *
 from ..utils import types
@@ -334,12 +334,6 @@ class Converter(_Converter):
         original = self._tensor_map[tensor]
         return len(original.consumers) == 0
 
-    def leading_zeros(self, items):
-        for i, item in enumerate(items):
-            if item != 0:
-                return i
-        return len(items)
-
     def is_continuous_range(self, items):
         return items == list(range(items[0], items[0] + len(items)))
 
@@ -473,7 +467,7 @@ class Converter(_Converter):
                 axes = op.attribs.get('axes') or self.as_list(self.as_const(op.inputs[1]))
                 return ShapeExpr(ShapeExpr.Op.UpRank, args=[inputs[0], len(axes)])
             elif op.type == 'Cast':
-                output_type = self.ts_dtype(op.output.dtype)
+                output_type = self.sknd_dtype(op.output.dtype)
                 return ShapeExpr(ShapeExpr.Op.Cast, args=[inputs[0], output_type])
             elif op.type == 'Expand':
                 assert inputs[0].effective_rank == 0, f"Operation '{op.name}' of type 'Expand' must have input of singular dimensions"
@@ -1138,9 +1132,12 @@ _Transforms = Converter.unpack_transforms({
         ),
     'Cast':
         Transform(
-            type='!"layout.cast<" + ts_dtype(O[0].dtype) + ">"',
+            type='layout.cast',
             inputs='!I[0]',
             outputs='!O[0]',
+            dtypes={
+                'R': '!O[0].dtype',
+            },
         ),
     'If':
         Transform(

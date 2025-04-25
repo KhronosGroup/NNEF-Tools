@@ -79,12 +79,7 @@ def _build_graph(graph, tensor_map):
 
 def _build_operation(operation, tensor_map):
     attribs = {k: list(v) if isinstance(v, list) else v for k, v in operation.attribs.items() if v is not None}
-    dtypes = attribs.get('dtypes')
-    if dtypes is not None:
-        dtypes = {k: sknd.DtypeFromNumpy[t] for k, t in dtypes.items()}
-        del attribs['dtypes']
-    else:
-        dtypes = {}
+    dtypes = {k: sknd.DtypeFromNumpy[t] for k, t in operation.dtypes.items()}
 
     for key, value in attribs.items():
         remap_tensors_in_expr(value, tensor_map)

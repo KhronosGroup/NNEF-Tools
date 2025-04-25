@@ -16,13 +16,14 @@ import re
 
 class Transform:
 
-    def __init__(self, type, name=None, inputs=None, outputs=None, attribs=None,
+    def __init__(self, type, name=None, inputs=None, outputs=None, dtypes=None, attribs=None,
                  defaults=None, using=None, cond=None, custom=False):
         self.type = type
         self.name = name or '!_name_'
         self.inputs = inputs or ()
         self.outputs = outputs or ()
         self.attribs = attribs or {}
+        self.dtypes = dtypes or {}
         self.defaults = defaults
         self.using = using or {}
         self.cond = cond
@@ -30,7 +31,7 @@ class Transform:
 
     def with_type(self, type):
         return Transform(type=type, name=self.name, inputs=self.inputs, outputs=self.outputs, attribs=self.attribs,
-                         defaults=self.defaults, using=self.using, cond=self.cond, custom=self.custom)
+                         dtypes=self.dtypes, defaults=self.defaults, using=self.using, cond=self.cond, custom=self.custom)
 
 
 class ConversionError(Exception):
@@ -265,6 +266,15 @@ class Converter:
         for key, value in six.iteritems(attribs):
             self._check_value(value, 'attribute', key, op.type, op.name)
 
+        dtypes = {}
+        for key, item in six.iteritems(transform.dtypes):
+            value = self._evaluate(op_attribs, op_inputs, op_outputs, item, using)
+            if value is not None:
+                dtypes[key] = value
+
+        for key, value in six.iteritems(dtypes):
+            self._check_value(value, 'dtype', key, op.type, op.name)
+
         if isinstance(transform.inputs, tuple):
             inputs = tuple(self._filter_none(self._evaluate(op_attribs, op_inputs, op_outputs, item, using)
                                              for item in transform.inputs))
@@ -289,7 +299,7 @@ class Converter:
         for idx, item in enumerate(outputs):
             self._check_value(item, 'output', idx, op.type, op.name, tensor=True)
 
-        op = Operation(self._graph, type=type, name=name, attribs=attribs, inputs=inputs, outputs=outputs,
+        op = Operation(self._graph, type=type, name=name, dtypes=dtypes, attribs=attribs, inputs=inputs, outputs=outputs,
                        custom=transform.custom)
         self._graph.reverse(offset)
         return op
@@ -298,7 +308,7 @@ class Converter:
         op_inputs = tuple(self._map_tensor(tensor) for tensor in op.inputs)
         op_outputs = tuple(self._map_tensor(tensor) for tensor in op.outputs)
 
-        return Operation(self._graph, type=op.type, name=op.name, attribs=op.attribs,
+        return Operation(self._graph, type=op.type, name=op.name, dtypes=op.dtypes, attribs=op.attribs,
                          inputs=op_inputs, outputs=op_outputs, custom=True)
 
     def _remap_attribs(self, attribs, defaults, inputs, outputs, op_type, op_name, version):
@@ -591,8 +601,14 @@ class Converter:
     def fixed_batch(self, output_shape, batch):
         return [batch] + output_shape[1:] if output_shape[0] == 0 else output_shape
 
+    def leading_zeros(self, items):
+        for i, item in enumerate(items):
+            if item != 0:
+                return i
+        return len(items)
 
-class ConverterToTS(Converter):
+
+class ConverterToSkriptND(Converter):
 
     _DtypeFromNumpy = {
         np.float16: 'real',
@@ -708,11 +724,11 @@ class ConverterToTS(Converter):
         self._zero_copy_operation(tensor, result)
         return result
 
-    def ts_dtype(self, dtype):
-        return ConverterToTS._DtypeFromNumpy[dtype]
+    def sknd_dtype(self, dtype):
+        return ConverterToSkriptND._DtypeFromNumpy[dtype]
 
 
-class ConverterFromTS(Converter):
+class ConverterFromSkriptND(Converter):
 
     def __init__(self, transforms, functions=None, mirror_unsupported=False):
         Converter.__init__(self, transforms, functions, mirror_unsupported)

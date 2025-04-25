@@ -229,11 +229,12 @@ class TensorPack(list):
 class Operation:
 
     def __init__(self,
-                 graph,  # type: Graph
-                 type=None,  # type: typing.Optional[str]
-                 name=None,  # type: typing.Optional[str]
+                 graph,         # type: Graph
+                 type=None,     # type: typing.Optional[str]
+                 name=None,     # type: typing.Optional[str]
+                 dtypes=None,   # type: typind.Dict[str, np.dtype]
                  attribs=None,  # type: typing.Dict[str, typing.Any]
-                 inputs=None,  # type: typing.Union[None, Tensor, _TensorListOrTuple]
+                 inputs=None,   # type: typing.Union[None, Tensor, _TensorListOrTuple]
                  outputs=None,  # type: typing.Union[None, Tensor, _TensorListOrTuple]
                  custom=False,  # type: bool
                  ):
@@ -249,6 +250,7 @@ class Operation:
 
         self.type = type                # type: typing.Optional[str]
         self.name = name                # type: typing.Optional[str]
+        self.dtypes = dtypes or {}      # type: typing.Dict[str, np.dtype]
         self.attribs = attribs or {}    # type: typing.Dict[str, typing.Any]
         self.custom = custom            # type: bool
 
@@ -260,10 +262,11 @@ class Operation:
         if outputs is not None:
             self.outputs = outputs
 
-    def copy_with(self, graph=None, type=None, name=None, attribs=None, inputs=None, outputs=None, custom=None):
+    def copy_with(self, graph=None, type=None, name=None, dtypes=None, attribs=None, inputs=None, outputs=None, custom=None):
         return Operation(graph=graph if graph is not None else self.graph,
                          type=type if type is not None else self.type,
                          name=name if name is not None else self.name,
+                         dtypes=dtypes if dtypes is not None else self.dtypes,
                          attribs=attribs if attribs is not None else self.attribs,
                          inputs=inputs if inputs is not None else self.inputs,
                          outputs=outputs if outputs is not None else self.outputs,
