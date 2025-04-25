@@ -79,14 +79,21 @@ def transpose_channels_first_to_last(x):
 def read_input(file, name, shape, dtype, transpose):
     data = nnef.read_tensor(file)
 
+    if len(data.shape) != len(shape):
+        raise ValueError("Mismatch between declared and read shape for input '{}'; {} vs {}"
+                         .format(name, shape, data.shape))
+
     any_batch = shape[0] == 0
     offset = int(any_batch)
-    if tuple(data.shape[offset:]) != tuple(shape[offset:]):
+    if not all(data.shape[i] < shape[i].max_value if isinstance(shape[i], sknd.PlaceholderExpr)
+               else data.shape[i] == shape[i]
+               for i in range(offset, len(shape))):
         raise ValueError("Mismatch between declared and read shape for input '{}'; {} vs {}"
-                         .format(name, data.shape, shape))
+                         .format(name, shape, data.shape))
+
     if data.dtype != dtype:
         raise ValueError("Mismatch between declared and read dtype for input '{}'; {} vs {}"
-                         .format(name, data.dtype, dtype))
+                         .format(name, dtype, data.dtype))
 
     return transpose_channels_first_to_last(data) if transpose else data
 
@@ -104,13 +111,17 @@ def compute_statistics(array):
     )
 
 
+def max_shape(shape):
+    return tuple(s.max_value if isinstance(s, sknd.PlaceholderExpr) else s for s in shape)
+
+
 class RandomInputSource:
 
     def __init__(self, distribution):
         self._distribution = distribution
 
     def __call__(self, name, shape, dtype):
-        return self._distribution(shape).astype(dtype)
+        return self._distribution(max_shape(shape)).astype(dtype)
 
 
 class StreamInputSource:
