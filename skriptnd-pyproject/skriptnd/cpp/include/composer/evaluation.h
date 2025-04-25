@@ -351,18 +351,29 @@ namespace sknd
                     }
                     
                     TRY_DECL(value, eval_pack<T>(*substitute.pack, symbols, rank))
+                    auto length = value.size();
                     if ( index.packed() )
                     {
                         for ( size_t i = 0; i < index.max_size(); ++i )
                         {
                             TRY_DECL(item, eval_item<T>(*substitute.value, symbols, i))
-                            value[index[i].as_int()] = item;
+                            auto idx = index[i].as_int();
+                            if ( idx < 0 )
+                            {
+                                idx += length;
+                            }
+                            value[idx] = item;
                         }
                     }
                     else
                     {
                         TRY_DECL(item, eval_item<T>(*substitute.value, symbols))
-                        value[index.as_int()] = item;
+                        auto idx = index.as_int();
+                        if ( idx < 0 )
+                        {
+                            idx += length;
+                        }
+                        value[idx] = item;
                     }
                     return value;
                 }
@@ -1497,19 +1508,32 @@ namespace sknd
                 return Error(expr.position, "index must not depend on dynamic shapes in substitution expression");
             }
             
+            TRY_DECL(rank, eval_static_rank(*expr.pack, symbols))
+            auto length = *rank;
+            
             if ( index.packed() )
             {
-                for ( size_t i = 0; i < index.max_size(); ++i )
+                for ( size_t k = 0; k < index.max_size(); ++k )
                 {
-                    if ( index[i].as_int() == idx )
+                    auto i = index[k].as_int();
+                    if ( i < 0 )
                     {
-                        return eval_item<T>(*expr.value, symbols, i);
+                        i += length;
+                    }
+                    if ( i == idx )
+                    {
+                        return eval_item<T>(*expr.value, symbols, k);
                     }
                 }
             }
             else
             {
-                if ( idx == index.as_int() )
+                auto i = index.as_int();
+                if ( i < 0 )
+                {
+                    i += length;
+                }
+                if ( i == idx )
                 {
                     return eval_item<T>(*expr.value, symbols);
                 }
