@@ -916,7 +916,7 @@ namespace sknd
                 auto array_type = eval_type(*expr.array, symbols);
                 if ( array_type == Typename::Str )
                 {
-                    TRY_DECL(array, eval_item(*expr.array, symbols))
+                    TRY_DECL(array, eval_item(*expr.array, symbols, idx))
                     auto& str = array.as_str();
                     auto length = (int_t)str.length();
                     
@@ -924,33 +924,83 @@ namespace sknd
                     {
                         auto& range = as_range(*expr.index);
                         
-                        TRY_DECL(first, range.first ? eval_item(*range.first, symbols) : ValueExpr(0))
-                        TRY_DECL(last, range.last ? eval_item(*range.last, symbols) : ValueExpr(length))
+                        TRY_DECL(stride, range.stride ? eval_item(*range.stride, symbols) : ValueExpr(1))
+                        if ( !stride.is_literal() )
+                        {
+                            return Error(expr.index->position, "index stride must not depend on dynamic shapes");
+                        }
+                        
+                        auto stride_value = stride.as_int();
+                        
+                        TRY_DECL(first, range.first ? eval_item(*range.first, symbols) : 
+                                 ValueExpr(stride_value < 0 ? length - 1 : 0))
+                        TRY_DECL(last, range.last ? eval_item(*range.last, symbols) :
+                                 ValueExpr(stride_value < 0 ? -1 : length))
                         
                         if ( !first.is_literal() || !last.is_literal() )
                         {
-                            return Error(expr.position, "index range must not depend on dynamic shapes");
+                            return Error(expr.index->position, "index range must not depend on dynamic shapes");
                         }
                         
                         auto first_index = first.as_int();
                         auto last_index = last.as_int();
-                        TRY_CALL(check_index_range(first_index, length, expr.index->position))
-                        TRY_CALL(check_index_range(last_index, length, expr.index->position))
                         
-                        return ValueExpr((str_t)str.substr(first_index, last_index - first_index));
+                        if ( range.first )
+                        {
+                            TRY_CALL(check_index_range(first_index, length, expr.index->position))
+                        }
+                        if ( range.last )
+                        {
+                            TRY_CALL(check_index_range(last_index, length, expr.index->position))
+                        }
+                        
+                        if ( stride_value == 1 )
+                        {
+                            return ValueExpr((str_t)str.substr(first_index, last_index - first_index));
+                        }
+                        
+                        std::string result;
+                        const size_t count = (last_index - first_index) / stride_value;
+                        for ( size_t k = 0, i = first_index; k < count; ++k, i += stride_value )
+                        {
+                            result += str[i];
+                        }
+                        return ValueExpr((str_t)result);
                     }
                     else
                     {
-                        TRY_DECL(idx, eval_item(*expr.index, symbols, idx))
-                        if ( !idx.is_literal() )
+                        TRY_DECL(rank, eval_static_rank(*expr.index, symbols))
+                        if ( rank )
                         {
-                            return Error(expr.position, "index must not depend on dynamic shapes");
+                            std::string result;
+                            for ( size_t i = 0; i < *rank; ++i )
+                            {
+                                TRY_DECL(index_value, eval_item(*expr.index, symbols, i))
+                                if ( !index_value.is_literal() )
+                                {
+                                    return Error(expr.index->position, "index must not depend on dynamic shapes");
+                                }
+                                
+                                auto index = index_value.as_int();
+                                TRY_CALL(check_index_range(index, length, expr.index->position))
+                                
+                                result += str[index];
+                            }
+                            return ValueExpr((str_t)result);
                         }
-                        
-                        auto index = idx.as_int();
-                        TRY_CALL(check_index_range(index, length, expr.index->position))
-                        
-                        return ValueExpr((str_t)str.substr(index, 1));
+                        else
+                        {
+                            TRY_DECL(index_value, eval_item(*expr.index, symbols))
+                            if ( !index_value.is_literal() )
+                            {
+                                return Error(expr.index->position, "index must not depend on dynamic shapes");
+                            }
+                            
+                            auto index = index_value.as_int();
+                            TRY_CALL(check_index_range(index, length, expr.index->position))
+                            
+                            return ValueExpr((str_t)str.substr(index, 1));
+                        }
                     }
                 }
             }
