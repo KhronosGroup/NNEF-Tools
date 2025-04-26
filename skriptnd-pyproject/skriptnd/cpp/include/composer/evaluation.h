@@ -358,10 +358,7 @@ namespace sknd
                         {
                             TRY_DECL(item, eval_item<T>(*substitute.value, symbols, i))
                             auto idx = index[i].as_int();
-                            if ( idx < 0 )
-                            {
-                                idx += length;
-                            }
+                            TRY_CALL(check_index_range(idx, length, substitute.index->position))
                             value[idx] = item;
                         }
                     }
@@ -369,10 +366,7 @@ namespace sknd
                     {
                         TRY_DECL(item, eval_item<T>(*substitute.value, symbols))
                         auto idx = index.as_int();
-                        if ( idx < 0 )
-                        {
-                            idx += length;
-                        }
+                        TRY_CALL(check_index_range(idx, length, substitute.index->position))
                         value[idx] = item;
                     }
                     return value;
@@ -930,32 +924,20 @@ namespace sknd
                     {
                         auto& range = as_range(*expr.index);
                         
-                        TRY_DECL(stride, range.stride ? eval_item(*range.stride, symbols) : ValueExpr(1))
-                        if ( !stride.is_literal() )
-                        {
-                            return Error(expr.position, "index stride must not depend on dynamic shapes");
-                        }
-                        
-                        TRY_DECL(first, range.first ? eval_item(*range.first, symbols) :
-                                        ValueExpr(stride.as_int() < 0 ? length - 1 : 0))
-                        TRY_DECL(last, range.last ? eval_item(*range.last, symbols) :
-                                        ValueExpr(stride.as_int() < 0 ? -1 : length))
+                        TRY_DECL(first, range.first ? eval_item(*range.first, symbols) : ValueExpr(0))
+                        TRY_DECL(last, range.last ? eval_item(*range.last, symbols) : ValueExpr(length))
                         
                         if ( !first.is_literal() || !last.is_literal() )
                         {
                             return Error(expr.position, "index range must not depend on dynamic shapes");
                         }
                         
-                        if ( range.first && first.is_int() && first.as_int() < 0 )
-                        {
-                            first = first + length;
-                        }
-                        if ( range.last && last.is_int() && last.as_int() < 0 )
-                        {
-                            last = last + length;
-                        }
+                        auto first_index = first.as_int();
+                        auto last_index = last.as_int();
+                        TRY_CALL(check_index_range(first_index, length, expr.index->position))
+                        TRY_CALL(check_index_range(last_index, length, expr.index->position))
                         
-                        return ValueExpr((str_t)str.substr(first.as_int(), last.as_int() - first.as_int()));
+                        return ValueExpr((str_t)str.substr(first_index, last_index - first_index));
                     }
                     else
                     {
@@ -965,12 +947,10 @@ namespace sknd
                             return Error(expr.position, "index must not depend on dynamic shapes");
                         }
                         
-                        if ( idx.as_int() < 0 )
-                        {
-                            idx = idx + length;
-                        }
+                        auto index = idx.as_int();
+                        TRY_CALL(check_index_range(index, length, expr.index->position))
                         
-                        return ValueExpr((str_t)str.substr(idx.as_int(), 1));
+                        return ValueExpr((str_t)str.substr(index, 1));
                     }
                 }
             }
@@ -1039,14 +1019,8 @@ namespace sknd
                 }
                 
                 auto index = index_value.as_int();
-                if ( index < 0 )
-                {
-                    index += length;
-                }
-                if ( index < 0 || index >= length )
-                {
-                    return Error(expr.position, "index %d is out of bounds [0,%d)", (int)index, (int)length);
-                }
+                TRY_CALL(check_index_range(index, length, expr.index->position))
+                
                 return eval_item<T>(*expr.array, symbols, index);
             }
         }
@@ -1516,10 +1490,8 @@ namespace sknd
                 for ( size_t k = 0; k < index.max_size(); ++k )
                 {
                     auto i = index[k].as_int();
-                    if ( i < 0 )
-                    {
-                        i += length;
-                    }
+                    TRY_CALL(check_index_range(i, length, expr.index->position))
+                    
                     if ( i == idx )
                     {
                         return eval_item<T>(*expr.value, symbols, k);
@@ -1529,10 +1501,8 @@ namespace sknd
             else
             {
                 auto i = index.as_int();
-                if ( i < 0 )
-                {
-                    i += length;
-                }
+                TRY_CALL(check_index_range(i, length, expr.index->position))
+                
                 if ( i == idx )
                 {
                     return eval_item<T>(*expr.value, symbols);
@@ -3261,6 +3231,21 @@ namespace sknd
             {
                 return e.kind == Expr::Identifier && symbols.at(as_identifier(e).name).is<LoopIndex>();
             });
+        }
+        
+    private:
+        
+        static Result<void> check_index_range( int_t& index, const size_t length, const Position& position )
+        {
+            if ( index < 0 )
+            {
+                index += length;
+            }
+            if ( index < 0 || index >= length )
+            {
+                return Error(position, "index %d is out of bounds [0,%d)", (int)index, (int)length);
+            }
+            return {};
         }
     };
 
