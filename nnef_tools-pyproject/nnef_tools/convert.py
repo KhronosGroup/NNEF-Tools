@@ -77,6 +77,11 @@ def get_converter(input_format, output_format, io_transforms, custom_transforms,
                          custom_functions=custom_functions,
                          mirror_unsupported=mirror_unsupported,
                          keep_io_names=keep_io_names)
+    elif input_format == 'tf' and output_format == 'sknd':
+        from .conversion.tf_to_sknd import Converter
+        return Converter(custom_transforms=custom_transforms,
+                         custom_functions=custom_functions,
+                         mirror_unsupported=mirror_unsupported)
     elif input_format == 'nnef' and output_format == 'tf':
         from .conversion.nnef_to_tf import Converter
         return Converter(io_transpose=io_transforms,
