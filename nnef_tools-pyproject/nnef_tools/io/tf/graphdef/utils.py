@@ -224,6 +224,15 @@ def _retain_reachables_from_placeholders(graph_def):
     return _retain_nodes(graph_def, reachables)
 
 
+def _retain_reachables_from_outputs(graph_def, output_names):
+    graph = import_graph_def(graph_def)
+
+    reachables = set(output_names)
+    reachables = _find_reachables_backward(graph, reachables)
+
+    return _retain_nodes(graph_def, reachables)
+
+
 def _op_name_from_tensor(name):
     if name[0] == '^':
         name = name[1:]
@@ -322,3 +331,7 @@ def check_variables(session):
         value = session.run(variable)
         if np.issubdtype(value.dtype, np.number) and not np.all(np.isfinite(value)):
             raise ValueError("Variable '{}' contains nan or inf".format(variable.name))
+
+
+def retain_until(graph_def, output_names):
+    return _retain_reachables_from_outputs(graph_def, output_names)
