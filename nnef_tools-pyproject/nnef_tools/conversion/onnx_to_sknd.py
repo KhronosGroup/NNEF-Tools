@@ -590,7 +590,7 @@ _Transforms = Converter.unpack_transforms({
                 'dilation': '!dilations',
                 'padding': '!convert_padding(pads, auto_pad)',
                 'padding_align': '!"UPPER" if auto_pad == "SAME_UPPER" else None',
-                'ignore_border': '!count_include_pad == 0 if _type_ != "LpPool" else None',
+                'ignore_border': '!False if count_include_pad == 1 else None',
                 'ceil_mode': '!ceil_mode != 0',
                 'p': '!float(p) if _type_ == "LpPool" else None',
             }

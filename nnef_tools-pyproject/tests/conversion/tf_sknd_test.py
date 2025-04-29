@@ -216,6 +216,13 @@ class TestCases(TestEnv):
 
         self._test_conversion('conv3d')
 
+    def test_conv2d_strided(self):
+        input = tf.placeholder(shape=(16, 55, 55, 3), dtype=tf.float32)
+        filter = tf.constant(np.random.random(size=(5, 5, 3, 16)), dtype=tf.float32)
+        output = tf.nn.conv2d(input, filter, strides=2, padding='SAME')
+
+        self._test_conversion('conv2d-strided')
+
     def test_conv2d_valid(self):
         input = tf.placeholder(shape=(16, 32, 32, 3), dtype=tf.float32)
         filter = tf.constant(np.random.random(size=(5, 5, 3, 16)), dtype=tf.float32)
@@ -235,7 +242,7 @@ class TestCases(TestEnv):
         filter = tf.constant(np.random.random(size=(5, 5, 3, 16)), dtype=tf.float32)
         output = tf.nn.conv2d(input, filter, strides=1, dilations=2, padding='SAME')
 
-        self._test_conversion('conv2d_dilated')
+        self._test_conversion('conv2d-dilated')
 
     def test_conv2d_transpose(self):
         input = tf.placeholder(shape=(4, 32, 32, 16), dtype=tf.float32)
