@@ -5,6 +5,7 @@ from nnef_tools.optimization import skriptnd_optimizer
 from nnef_tools.optimization import tf_optimizer
 from skriptnd import DtypeToNumpy, PlaceholderExpr
 from nnef_tools.io.tf.graphdef.protobuf import GraphDef
+from nnef_tools.io.tf.graphdef.utils import retain_until
 import numpy as np
 import unittest
 import tempfile
@@ -91,6 +92,12 @@ class TestEnv(unittest.TestCase):
         with open(filename, 'rb') as file:
             graph_def.ParseFromString(file.read())
         return graph_def
+
+    @staticmethod
+    def _strip_graph_def(filename, modified_filename, output_names):
+        graph_def = TestEnv._load_graph_def(filename)
+        graph_def = retain_until(graph_def, output_names)
+        TestEnv._save_graph_def(graph_def, modified_filename)
 
     @staticmethod
     def _exec_tf_model(filename, input_shape=None, input_range=None, only_first_output=False):
@@ -966,8 +973,24 @@ class NetworkTestCases(TestEnv):
         self._test_conversion_from_file(self._network_folder + 'mobilenet_v1.pb',
                                         input_shape=(1, 224, 224, 3), only_first_output=True)
 
-    def test_inception_v1(self):
-        self._test_conversion_from_file(self._network_folder + 'inception_v1.pb',
+    def test_inception_v3(self):
+        self._test_conversion_from_file(self._network_folder + 'inception_v3.pb',
+                                        input_shape=(1, 299, 299, 3), only_first_output=True)
+
+    def test_inception_v4(self):
+        self._test_conversion_from_file(self._network_folder + 'inception_v4.pb',
+                                        input_shape=(1, 299, 299, 3), only_first_output=True)
+
+    def test_inception_resnet_v2(self):
+        self._test_conversion_from_file(self._network_folder + 'inception_resnet_v2.pb',
+                                        input_shape=(1, 299, 299, 3), only_first_output=True)
+
+    def test_squeezenet(self):
+        self._test_conversion_from_file(self._network_folder + 'squeezenet.pb',
+                                        input_shape=(1, 224, 224, 3), only_first_output=True)
+
+    def test_nasnet(self):
+        self._test_conversion_from_file(self._network_folder + 'nasnet.pb',
                                         input_shape=(1, 224, 224, 3), only_first_output=True)
 
 

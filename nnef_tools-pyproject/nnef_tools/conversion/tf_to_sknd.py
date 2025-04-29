@@ -181,7 +181,7 @@ _Transforms = Converter.unpack_transforms({
                 'groups': '!groups',
                 'data_format': '!"NXC" if is_nxc(data_format) else "NCX"',
                 'filter_format': "XCN",
-                'ceil_mode': True,
+                'ceil_mode': '!padding == "SAME"',
             }
         ),
     ('Conv2DBackpropInput', 'Conv3DBackpropInput', 'DepthwiseConv2dNativeBackpropInput'):
@@ -230,6 +230,7 @@ _Transforms = Converter.unpack_transforms({
                 'size': '!ksize[1:-1] if is_nxc(data_format) else ksize[2:]',
                 'stride': '!strides[1:-1] if is_nxc(data_format) else strides[2:]',
                 'padding': '!convert_padding(padding, I[0].rank - 2, explicit_paddings, data_format)',
+                'ceil_mode': '!padding == "SAME"',
             }
         ),
     'Concat':
