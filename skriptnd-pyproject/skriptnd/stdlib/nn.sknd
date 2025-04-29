@@ -199,7 +199,6 @@ operator max_pool {
         padding: optional int..(2 * k);
         padding_align: str = 'UPPER';
         ceil_mode: bool = false;
-        ignore_border: bool = true;
     }
     @input {
         input: real[s..(d)];
@@ -233,8 +232,6 @@ operator max_pool {
             "'padding_align' must be one of {padding_aligns}", padding_align;
     }
     @lower {
-        output[i..] = !ignore_border ? 0.0,
-            i < os;
         output[i..] >= input[i[axes] <- |stride * i[axes] + dilation * j - offset|..],
             i < os, j < size;
     }
