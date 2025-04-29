@@ -2,7 +2,7 @@
 
 # @item Linear Quantization
 
-operator linear {
+operator zero_point_linear_quantize {
     @attrib {
         zero_point: int..(c);
         scale: real..(c);

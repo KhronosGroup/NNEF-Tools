@@ -2369,7 +2369,7 @@ graph linear_quantize {
         output: real[4,32,224,224];
     }
     @compose {
-        output = quant.linear{bits=8, zero_point=0, scale=1.0}(input);
+        output = quant.zero_point_linear_quantize{bits=8, zero_point=0, scale=1.0}(input);
     }
 }
 
@@ -2381,7 +2381,7 @@ graph linear_quantize_per_channel {
         output: real[4,3,224,224];
     }
     @compose {
-        output = quant.linear{bits=8, zero_point=[1, 2, 3], scale=[1.0, 2.0, 3.0]}(input);
+        output = quant.zero_point_linear_quantize{bits=8, zero_point=[1, 2, 3], scale=[1.0, 2.0, 3.0]}(input);
     }
 }
 
