@@ -579,6 +579,9 @@ class Converter:
     def is_zero(self, tensor):
         return self.is_const(tensor) and len(tensor.shape) == 0 and self.as_const(tensor) == 0
 
+    def as_list(self, obj):
+        return obj.tolist() if isinstance(obj, np.ndarray) else list(obj)
+
     def as_tensor(self, arg, dtype, inline=None):
         return self._make_constant(self._graph, dtype=dtype, value=arg, inline=inline)
 

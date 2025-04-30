@@ -250,6 +250,9 @@ class Converter(_Converter):
                                                           f" by operation '{inputs[0].op.name}' of type '{inputs[0].op.type}'")
                 inputs[0].op = ShapeExpr.Op.CeilDiv
                 return inputs[0]
+            elif op.type == 'Gather' or op.type == 'GatherV2':
+                assert inputs[1].rank <= 1, f"Operation '{op.name}' of type '{op.type}' must have index of rank <= 1 in shape expression"
+                return ShapeExpr(ShapeExpr.Op.Subscript, args=[inputs[0], inputs[1]])
             elif op.type == 'Concat':
                 return ShapeExpr(ShapeExpr.Op.Concat, args=inputs[1:])
             elif op.type == 'Pack':
@@ -264,6 +267,52 @@ class Converter(_Converter):
                 squeeze = op.attribs.get('shrink_axis_mask', 0) != 0
                 expr = ShapeExpr(ShapeExpr.Op.Slice, args=[inputs[0], beg, end])
                 return ShapeExpr(ShapeExpr.Op.DownRank, args=[inputs[0], 1]) if squeeze else expr
+            elif op.type == 'Squeeze':
+                axes = op.attribs.get('squeeze_dims')
+                if axes is None:
+                    axes = [i for i, x in enumerate(op.inputs[0].shape) if x == 1]
+                return ShapeExpr(ShapeExpr.Op.DownRank, args=[inputs[0], len(axes)])
+            elif op.type == 'ExpandDims':
+                axes = self.as_list(self.as_const(op.inputs[1]))
+                return ShapeExpr(ShapeExpr.Op.UpRank, args=[inputs[0], len(axes)])
+            elif op.type == 'Cast':
+                output_type = self.sknd_dtype(op.output.dtype)
+                return ShapeExpr(ShapeExpr.Op.Cast, args=[inputs[0], output_type])
+            elif op.type == 'Tile':
+                assert inputs[0].effective_rank == 0, f"Operation '{op.name}' of type 'Tile' must have input of singular dimensions"
+                repeats = ShapeExpr(ShapeExpr.Op.DownRank, args=[inputs[1], 1])
+                return ShapeExpr(ShapeExpr.Op.Expand, args=[inputs[0], repeats])
+            elif op.type == 'Transpose':
+                return inputs[0]
+            elif op.type == 'Reshape':
+                shape = op.attribs.get('shape')
+                if shape is None and self._is_constant(op.inputs[1]):
+                    shape = self.as_list(self.as_const(op.inputs[1]))
+                if shape is None:
+                    raise ConversionError(f"Shape argument of operation '{op.name}' of type 'Reshape' must be constant in shape expression")
+
+                if len(shape) > inputs[0].rank:
+                    return ShapeExpr(ShapeExpr.Op.UpRank, args=[inputs[0], len(shape) - inputs[0].rank])
+                elif len(shape) < inputs[0].rank:
+                    return ShapeExpr(ShapeExpr.Op.DownRank, args=[inputs[0], inputs[0].rank - len(shape)])
+                else:
+                    return inputs[0]
+            elif op.type == 'Sum':
+                expr = ShapeExpr(ShapeExpr.Op.Sum, args=[inputs[0]])
+                return expr if op.attribs.get('keepdims') == 0 else \
+                    ShapeExpr(ShapeExpr.Op.UpRank, args=[expr, 1])
+            elif op.type == 'Prod':
+                expr = ShapeExpr(ShapeExpr.Op.Prod, args=[inputs[0]])
+                return expr if op.attribs.get('keepdims') == 0 else \
+                    ShapeExpr(ShapeExpr.Op.UpRank, args=[expr, 1])
+            elif op.type == 'Min':
+                expr = ShapeExpr(ShapeExpr.Op.Minimize, args=[inputs[0]])
+                return expr if op.attribs.get('keepdims') == 0 else \
+                    ShapeExpr(ShapeExpr.Op.UpRank, args=[expr, 1])
+            elif op.type == 'Max':
+                expr = ShapeExpr(ShapeExpr.Op.Maximize, args=[inputs[0]])
+                return expr if op.attribs.get('keepdims') == 0 else \
+                    ShapeExpr(ShapeExpr.Op.UpRank, args=[expr, 1])
             else:
                 raise ConversionError(f"Conversion of operator '{op.name}' of type '{op.type}' "
                                       f"as a symbolic shape expression is not implemented")
@@ -444,9 +493,10 @@ _Transforms = Converter.unpack_transforms({
                 'axis': '!axis',
             }
         ),
-    ('Min', 'Max', 'Mean', 'Sum', 'Any', 'All'):
+    ('Min', 'Max', 'Mean', 'Sum', 'Prod', 'Any', 'All'):
         Transform(
-            type=('math.min_reduce', 'math.max_reduce', 'math.mean_reduce', 'math.sum_reduce', 'math.any_reduce', 'math.all_reduce'),
+            type=('math.min_reduce', 'math.max_reduce', 'math.mean_reduce', 'math.sum_reduce', 'math.prod_reduce',
+                  'math.any_reduce', 'math.all_reduce'),
             using={
                 'axes': '!ensure_list(arg_as_attrib(I[1]))'
             },

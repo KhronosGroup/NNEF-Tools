@@ -308,10 +308,6 @@ class Converter(_Converter):
                'ASYMMETRIC' if coordinate_transformation_mode == 'asymmetric' else \
                'ALIGNED' if coordinate_transformation_mode == 'align_corners' else None
 
-    @staticmethod
-    def as_list(obj):
-        return obj.tolist() if isinstance(obj, np.ndarray) else list(obj)
-
     def _eval_symbolic_shape(self, tensor):
         op = tensor.producer
         if op is None and tensor.data is None:
