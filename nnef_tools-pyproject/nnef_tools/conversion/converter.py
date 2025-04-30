@@ -568,6 +568,14 @@ class Converter:
         except ConversionError:
             return False
 
+    def is_const_int_max(self, arg):
+        if not self.is_const(arg):
+            return False
+        value = self.as_const(arg)
+        if isinstance(value, list):
+            value = value[0]
+        return value >= _INT_MAX
+
     def is_zero(self, tensor):
         return self.is_const(tensor) and len(tensor.shape) == 0 and self.as_const(tensor) == 0
 
@@ -601,11 +609,11 @@ class Converter:
     def fixed_batch(self, output_shape, batch):
         return [batch] + output_shape[1:] if output_shape[0] == 0 else output_shape
 
-    def leading_zeros(self, items):
-        for i, item in enumerate(items):
-            if item != 0:
+    def leading_zeros(self, shape):
+        for i, s in enumerate(shape):
+            if s != 0:
                 return i
-        return len(items)
+        return len(shape)
 
 
 class ConverterToSkriptND(Converter):
@@ -625,6 +633,10 @@ class ConverterToSkriptND(Converter):
         np.bool_: 'bool',
         np.str_: 'str',
     }
+
+    @staticmethod
+    def shape_expr_args(op_type):
+        raise NotImplementedError()
 
     def __init__(self, transforms, functions=None, mirror_unsupported=False):
         Converter.__init__(self, transforms, functions, mirror_unsupported)
@@ -726,6 +738,91 @@ class ConverterToSkriptND(Converter):
 
     def sknd_dtype(self, dtype):
         return ConverterToSkriptND._DtypeFromNumpy[dtype]
+
+    def _collect_shape_ops(self, model, shape_op_type='Shape'):
+        self._shape_ops = set()
+        for graph in model.graphs:
+            for op in reversed(graph.operations):
+                if op in self._shape_ops:
+                    if op.type != shape_op_type:
+                        self._shape_ops.update({input.producer for input in op.inputs if input.producer is not None})
+                else:
+                    shape_args = self.shape_expr_args(op.type)
+                    for idx, input in enumerate(op.inputs):
+                        if input.producer is not None and idx in shape_args:
+                            self._shape_ops.add(input.producer)
+
+    def _is_shape_expr(self, tensor):
+        original = self._tensor_map.get(tensor)
+        return original.producer in self._shape_ops if original else False
+
+    def _fix_shape_expr_args(self, model):
+        for graph in model.graphs:
+            count = len(graph.operations)
+            for i in range(count):
+                op = graph.operations[i]
+                for input in op.inputs:
+                    if isinstance(input, list):
+                        for item in input:
+                            if item is not None and not item.has_producer and self._is_shape_expr(item):
+                                self._fix_shape_expr_arg(item, graph)
+                    else:
+                        if input is not None and not input.has_producer and self._is_shape_expr(input):
+                            self._fix_shape_expr_arg(input, graph)
+            graph.sort()
+
+    def _fix_shape_expr_arg(self, arg, graph):
+        expr = self.arg_as_attrib(arg)
+        if expr.op == ShapeExpr.Op.Const:
+            arg.set_data(expr.args[0], variable=False)
+        else:
+            Operation(graph, type="layout.constant", attribs={"shape": list(arg.shape), "value": expr}, inputs=(), outputs=(arg,))
+
+    @staticmethod
+    def _convert_int_inf(x):
+        return _INT_POS_INF if x > _INT_MAX else _INT_NEG_INF if x < -_INT_MAX else x
+
+    @staticmethod
+    def _non_singleton_rank(shape):
+        return sum(s != 1 for s in shape)
+
+    @staticmethod
+    def _ensure_zero_rank(expr):
+        if expr.rank == 0:
+            return expr
+        elif expr.op == ShapeExpr.Op.UpRank and expr.arg.rank == 0:
+            return expr.arg
+        else:
+            return ShapeExpr(ShapeExpr.Op.DownRank, expr.rank)
+
+    def _eval_symbolic_shape(self, tensor):
+        raise NotImplementedError()
+
+    def eval_symbolic_shape(self, tensor, as_scalar=False):
+        symbolic = self._eval_symbolic_shape(self._tensor_map[tensor])
+        if as_scalar:
+            subscript = ShapeExpr(ShapeExpr.Op.Const, args=[np.array(0)])
+            symbolic = ShapeExpr(ShapeExpr.Op.Subscript, args=[symbolic, subscript])
+        symbolic = optimize_shape_expr(symbolic)
+        check_shape_expr(symbolic)
+        return symbolic
+
+    def arg_as_attrib(self, arg, as_scalar=False, convert_int_inf=False, none_on_failure=False):
+        if isinstance(arg, list):
+            return [self.arg_as_attrib(item, as_scalar=as_scalar, convert_int_inf=convert_int_inf) for item in arg]
+
+        if self.is_const(arg):
+            value = self.as_const(arg)
+            if convert_int_inf:
+                value = [self._convert_int_inf(x) for x in value] if isinstance(value, list) else self._convert_int_inf(value)
+            return value[0] if as_scalar and isinstance(value, list) and len(value) == 1 else value
+        else:
+            try:
+                return self.eval_symbolic_shape(arg, as_scalar=as_scalar)
+            except AssertionError as e:
+                if none_on_failure:
+                    return None
+                raise ConversionError(f"Conversion of shape expression is not possible: " + str(e))
 
 
 class ConverterFromSkriptND(Converter):
@@ -920,7 +1017,7 @@ class ShapeExpr:
                      'Less', 'Greater', 'LessEqual', 'GreaterEqual', 'Equal', 'NotEqual',
                      'And', 'Or', 'Xor', 'Neg', 'Not', 'Tilde', 'Select',
                      'Sum', 'Prod', 'Minimize', 'Maximize', 'Any', 'All',
-                     'Concat', 'Slice', 'Subscript', 'Range', 'Cast', 'UpRank', 'DownRank', 'Expand'])
+                     'Pack', 'Concat', 'Slice', 'Subscript', 'Range', 'Cast', 'UpRank', 'DownRank', 'Expand'])
 
     def __init__(self, op, args):
         self.op = op
@@ -972,6 +1069,8 @@ class ShapeExpr:
             return f"!{self.args[0]}"
         elif self.op == ShapeExpr.Op.Tilde:
             return f"~|{self.args[0]}"
+        elif self.op == ShapeExpr.Op.Pack:
+            return "[" + ",".join(str(arg) for arg in self.args) + "]"
         elif self.op == ShapeExpr.Op.Concat:
             return "[" + ",".join(str(arg.arg) if arg.op == ShapeExpr.Op.UpRank else (str(arg) + '..') for arg in self.args) + "]"
         elif self.op == ShapeExpr.Op.Slice:
@@ -1021,6 +1120,8 @@ class ShapeExpr:
             return self.args[0].rank - self.args[1]
         elif self.op == ShapeExpr.Op.Expand:
             return 1
+        elif self.op == ShapeExpr.Op.Pack:
+            return 1
         elif self.op == ShapeExpr.Op.Cast:
             return self.args[0].rank
         elif self.op in [ShapeExpr.Op.Sum, ShapeExpr.Op.Prod,
@@ -1045,6 +1146,8 @@ class ShapeExpr:
         elif self.op == ShapeExpr.Op.DownRank:
             return self.args[0].rank - self.args[1]
         elif self.op == ShapeExpr.Op.Expand:
+            return 1
+        elif self.op == ShapeExpr.Op.Pack:
             return 1
         elif self.op == ShapeExpr.Op.Cast:
             return self.args[0].rank
@@ -1134,6 +1237,13 @@ def optimize_shape_expr(expr):
         return _optimize_reduce_shape_expr(expr, ShapeExpr.Op.Minimize, ShapeExpr.Op.Mul)
 
     return expr
+
+
+_INT_MAX = 2 ** 31 - 1
+_FLT_POS_INF = ShapeExpr(ShapeExpr.Op.Const, args=[float('inf')])
+_FLT_NEG_INF = ShapeExpr(ShapeExpr.Op.Const, args=[float('-inf')])
+_INT_POS_INF = ShapeExpr(ShapeExpr.Op.Cast, args=[_FLT_POS_INF, 'int'])
+_INT_NEG_INF = ShapeExpr(ShapeExpr.Op.Cast, args=[_FLT_NEG_INF, 'int'])
 
 
 def _optimize_reduce_shape_expr(expr, reduce_op, binary_op):

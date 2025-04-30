@@ -1,12 +1,9 @@
 from __future__ import division, print_function, absolute_import
-from .converter import ConverterToSkriptND as _Converter, Transform, ConversionError
+from .converter import ConverterToSkriptND as _Converter, Transform, ConversionError, ShapeExpr, _INT_MAX
 from ..model.utils import ensure_valid_ids, generate_missing_tensor_names_from_op_type
 from ..utils import types
 from collections import OrderedDict
 import numpy as np
-
-
-_INT_MAX = 2 ** 31 - 1
 
 
 class Converter(_Converter):
@@ -20,6 +17,40 @@ class Converter(_Converter):
     def defined_imports():
         return {'nn', 'math'}
 
+    @staticmethod
+    def shape_expr_args(op_type):
+        return Converter.ShapeExprArgs.get(op_type, [])
+
+    ShapeExprArgs = {
+        'Conv2DBackpropInput': [0],
+        'Conv3DBackpropInput': [0],
+        'DepthwiseConv2dNativeBackpropInput': [0],
+        'Concat': [0],
+        'ConcatV2': [-1],
+        'Split': [0],
+        'SplitV': [1, 2],
+        'Reshape': [1],
+        'Transpose': [1],
+        'ExpandDims': [1],
+        'Min': [1],
+        'Max': [1],
+        'Mean': [1],
+        'Sum': [1],
+        'Any': [1],
+        'All': [1],
+        'Pad': [1],
+        'MirrorPad': [1],
+        'Slice': [1],
+        'Tile': [1],
+        'ArgMin': [1],
+        'ArgMax': [1],
+        'ResizeArea': [1],
+        'ResizeBilinear': [1],
+        'ResizeNearestNeighbor': [1],
+        'Gather': [2],
+        'GatherV2': [2],
+    }
+
     def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
@@ -27,13 +58,18 @@ class Converter(_Converter):
     def __call__(self, model):
         self._eliminate_placeholder_ops(model)
         self._eliminate_constant_ops(model)
+        self._collect_shape_ops(model)
         model = _Converter.__call__(self, model)
         self._add_zero_copy_for_constant_outputs(model)
         self._eliminate_empty_subgraphs(model)
         self._remove_unused_constants(model)
+        self._fix_shape_expr_args(model)
         ensure_valid_ids(model)
         generate_missing_tensor_names_from_op_type(model)
         return model
+
+    def should_skip_conversion(self, op):
+        return op in self._shape_ops
 
     def _eliminate_placeholder_ops(self, model):
         for graph in model.graphs:
@@ -155,6 +191,83 @@ class Converter(_Converter):
     def end_index(self, stride):
         return _INT_MAX if stride > 0 else -_INT_MAX
 
+    def is_shape_expr(self, arg):
+        return isinstance(arg, ShapeExpr)
+
+    def _eval_symbolic_shape(self, tensor):
+        op = tensor.producer
+        if tensor.data is not None:
+            value = self._read_constant(tensor)
+            if not isinstance(value, np.ndarray):
+                value = np.array(value)
+            effective_rank = self._non_singleton_rank(value.shape)
+            if effective_rank > 1:
+                raise ConversionError(f"Symbolic shape must not contain constants with effective rank > 1; "
+                                      f"found tensor '{tensor.name}' of rank {effective_rank}")
+            rank = len(value.shape)
+            if rank > effective_rank:
+                expr = ShapeExpr(ShapeExpr.Op.Const, args=[np.squeeze(value)])
+                return ShapeExpr(ShapeExpr.Op.UpRank, args=[expr, rank - effective_rank])
+            else:
+                return ShapeExpr(ShapeExpr.Op.Const, args=[value])
+        elif op.type == 'Shape':
+            return ShapeExpr(ShapeExpr.Op.Shape, args=[self._map_tensor(op.input)])
+        else:
+            inputs = [self._eval_symbolic_shape(input) for input in op.inputs]
+            if op.type == 'Add' or op.type == 'AddV2':
+                return ShapeExpr(ShapeExpr.Op.Add, args=inputs)
+            elif op.type == 'Sub':
+                return ShapeExpr(ShapeExpr.Op.Sub, args=inputs)
+            elif op.type == 'Mul':
+                return ShapeExpr(ShapeExpr.Op.Mul, args=inputs)
+            elif op.type == 'RealDiv':
+                return ShapeExpr(ShapeExpr.Op.Div, args=inputs)
+            elif op.type == 'Minimum':
+                return ShapeExpr(ShapeExpr.Op.Min, args=inputs)
+            elif op.type == 'Maximum':
+                return ShapeExpr(ShapeExpr.Op.Max, args=inputs)
+            elif op.type == 'Less':
+                return ShapeExpr(ShapeExpr.Op.Less, args=inputs)
+            elif op.type == 'Greater':
+                return ShapeExpr(ShapeExpr.Op.Greater, args=inputs)
+            elif op.type == 'LessEqual':
+                return ShapeExpr(ShapeExpr.Op.LessEqual, args=inputs)
+            elif op.type == 'GreaterEqual':
+                return ShapeExpr(ShapeExpr.Op.GreaterEqual, args=inputs)
+            elif op.type == 'Equal':
+                return ShapeExpr(ShapeExpr.Op.Equal, args=inputs)
+            elif op.type == 'NotEqual':
+                return ShapeExpr(ShapeExpr.Op.NotEqual, args=inputs)
+            elif op.type == 'LogicalAnd':
+                return ShapeExpr(ShapeExpr.Op.And, args=inputs)
+            elif op.type == 'LogicalOr':
+                return ShapeExpr(ShapeExpr.Op.Or, args=inputs)
+            elif op.type == 'LogicalXor':
+                return ShapeExpr(ShapeExpr.Op.Xor, args=inputs)
+            elif op.type == 'Ceil':
+                assert inputs[0].op == ShapeExpr.Op.Div, (f"'Ceil' op can only be converted when preceded by 'Div'"
+                                                          f" op in shape expression; found operation '{op.name}' preceded"
+                                                          f" by operation '{inputs[0].op.name}' of type '{inputs[0].op.type}'")
+                inputs[0].op = ShapeExpr.Op.CeilDiv
+                return inputs[0]
+            elif op.type == 'Concat':
+                return ShapeExpr(ShapeExpr.Op.Concat, args=inputs[1:])
+            elif op.type == 'Pack':
+                return ShapeExpr(ShapeExpr.Op.Pack, args=inputs)
+            elif op.type == 'StridedSlice':
+                assert inputs[1].effective_rank == 0, f"Operation '{op.name}' of type 'StridedSlice' must have 'starts' of length 1"
+                assert inputs[2].effective_rank == 0, f"Operation '{op.name}' of type 'StridedSlice' must have 'ends' of length 1"
+                assert inputs[3].effective_rank == 0, f"Operation '{op.name}' of type 'StridedSlice' must have 'strides' of length 1"
+                assert self._ensure_zero_rank(inputs[3]).is_const(1)
+                beg = self._ensure_zero_rank(inputs[1])
+                end = self._ensure_zero_rank(inputs[2])
+                squeeze = op.attribs.get('shrink_axis_mask', 0) != 0
+                expr = ShapeExpr(ShapeExpr.Op.Slice, args=[inputs[0], beg, end])
+                return ShapeExpr(ShapeExpr.Op.DownRank, args=[inputs[0], 1]) if squeeze else expr
+            else:
+                raise ConversionError(f"Conversion of operator '{op.name}' of type '{op.type}' "
+                                      f"as a symbolic shape expression is not implemented")
+
 
 _Transforms = Converter.unpack_transforms({
     ('Conv1D', 'Conv2D', 'Conv3D', 'DepthwiseConv2dNative'):
@@ -193,7 +306,7 @@ _Transforms = Converter.unpack_transforms({
             },
             defaults={
                 'explicit_paddings': [],
-                'output_shape': '!as_const(I[0])',
+                'output_shape': '!arg_as_attrib(I[0])',
             },
             inputs=(
                 '!I[2]',
@@ -239,7 +352,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!list(I[1:])',
             outputs='!O[0]',
             attribs={
-                'axis': '!as_const(I[0])',
+                'axis': '!arg_as_attrib(I[0])',
             }
         ),
     'ConcatV2':
@@ -248,7 +361,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!list(I[:-1])',
             outputs='!O[0]',
             attribs={
-                'axis': '!as_const(I[-1])',
+                'axis': '!arg_as_attrib(I[-1])',
             }
         ),
     'Split':
@@ -257,7 +370,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[1]',
             outputs='!list(O)',
             attribs={
-                'axis': '!as_const(I[0])',
+                'axis': '!arg_as_attrib(I[0])',
                 'count': '!num_split if not _lite_ else num_splits',
             }
         ),
@@ -267,8 +380,8 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!list(O)',
             attribs={
-                'axis': '!as_const(I[2])',
-                'sizes': '!as_const(I[1])',
+                'axis': '!arg_as_attrib(I[2])',
+                'sizes': '!arg_as_attrib(I[1])',
             }
         ),
     'Reshape':
@@ -277,11 +390,11 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!O[0]',
             using={
-                'shape': '!as_const(I[1])',
-                'axis': '!leading_zeros(shape)',
+                'shape': '!arg_as_attrib(I[1])',
+                'axis': '!leading_zeros(shape) if not is_shape_expr(shape) else 0',
             },
             attribs={
-                'shape': '!shape[axis:]',
+                'shape': '!shape[axis:] if axis != 0 else shape',
                 'axis': '!axis if axis != 0 else None',
             }
         ),
@@ -291,7 +404,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
-                'perm': '!as_const(I[1])',
+                'perm': '!arg_as_attrib(I[1])',
             }
         ),
     'Squeeze':
@@ -310,7 +423,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
-                'axes': '!ensure_list(as_const(I[1]))',
+                'axes': '!ensure_list(arg_as_attrib(I[1]))',
             }
         ),
     'Pack':
@@ -335,7 +448,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type=('math.min_reduce', 'math.max_reduce', 'math.mean_reduce', 'math.sum_reduce', 'math.any_reduce', 'math.all_reduce'),
             using={
-                'axes': '!ensure_list(as_const(I[1]))'
+                'axes': '!ensure_list(arg_as_attrib(I[1]))'
             },
             inputs='!I[0]',
             outputs='!O[0]',
@@ -345,10 +458,10 @@ _Transforms = Converter.unpack_transforms({
             }
         ),
     ('Add', 'AddV2', 'Sub', 'Mul', 'RealDiv', 'Pow', 'Minimum', 'Maximum',
-     'LogicalAnd', 'LogicalOr', 'Less', 'Greater', 'LessEqual', 'GreaterEqual', 'Equal', 'NotEqual'):
+     'LogicalAnd', 'LogicalOr', 'LogicalXor', 'Less', 'Greater', 'LessEqual', 'GreaterEqual', 'Equal', 'NotEqual'):
         Transform(
             type=('math.add', 'math.add', 'math.sub', 'math.mul', 'math.div', 'math.pow', 'math.min', 'math.max',
-                  'math.and', 'math.or', 'math.lt', 'math.gt', 'math.le', 'math.ge', 'math.eq', 'math.ne'),
+                  'math.and', 'math.or', 'math.xor', 'math.lt', 'math.gt', 'math.le', 'math.ge', 'math.eq', 'math.ne'),
             inputs=(
                 '!I[0]',
                 '!I[1]',
@@ -457,7 +570,7 @@ _Transforms = Converter.unpack_transforms({
                 'mode': 'CONSTANT',
             },
             using={
-                'paddings': '!as_const(I[1])',
+                'paddings': '!arg_as_attrib(I[1])',
                 'before': '![p for p, q in paddings]',
                 'after': '![q for p, q in paddings]',
             },
@@ -472,7 +585,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='layout.slice',
             using={
-                'beg': '!as_const(I[1])',
+                'beg': '!arg_as_attrib(I[1])',
                 'end': '![x if s == -1 else b + s for b, s, x in zip(as_const(I[1]), as_const(I[2]), O[0].shape)]',
             },
             inputs='!I[0]',
@@ -525,7 +638,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type=('math.argmin', 'math.argmax'),
             using={
-                'axis': '!as_const(I[1])'
+                'axis': '!arg_as_attrib(I[1])'
             },
             inputs='!I[0]',
             outputs='!O[0]',
@@ -550,7 +663,7 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
-                'repeats': '!as_const(I[1])',
+                'repeats': '!arg_as_attrib(I[1])',
             }
         ),
     'ResizeArea':
@@ -558,7 +671,7 @@ _Transforms = Converter.unpack_transforms({
             type='image.area_downsample',
             using={
                 'old_size': '!I[0].shape[-3:-1]',
-                'new_size': '!as_const(I[1])',
+                'new_size': '!arg_as_attrib(I[1])',
             },
             cond={
                 '!is_integer_downsample(old_size, new_size)': 'area resize must be integer down-sample',
@@ -578,7 +691,7 @@ _Transforms = Converter.unpack_transforms({
             outputs='!O[0]',
             attribs={
                 'axes': '!list(range(I[0].rank - 3, I[0].rank - 1))',
-                'size': '!as_const(I[1])',
+                'size': '!arg_as_attrib(I[1])',
                 'coordinate_transform': '!"ALIGNED" if align_corners else "SYMMETRIC" if half_pixel_centers else "ASYMMETRIC"',
             }
         ),
@@ -614,7 +727,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='layout.gather',
             using={
-                'axis': '!as_const(I[2])'
+                'axis': '!arg_as_attrib(I[2])'
             },
             inputs=('!I[0]', '!I[1]'),
             outputs='!O[0]',

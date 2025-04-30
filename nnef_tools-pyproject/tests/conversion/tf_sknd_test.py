@@ -5,7 +5,7 @@ from nnef_tools.optimization import skriptnd_optimizer
 from nnef_tools.optimization import tf_optimizer
 from skriptnd import DtypeToNumpy, PlaceholderExpr
 from nnef_tools.io.tf.graphdef.protobuf import GraphDef
-from nnef_tools.io.tf.graphdef.utils import retain_until
+from nnef_tools.io.tf.graphdef.utils import retain_reachables_from_placeholders, retain_reachables_from_outputs
 import numpy as np
 import unittest
 import tempfile
@@ -30,7 +30,7 @@ class TestEnv(unittest.TestCase):
     _execute = True
 
     def setUp(self) -> None:
-        self._tf_reader = tf_io.Reader(fold_constants=True)
+        self._tf_reader = tf_io.Reader()
         self._tf_to_sknd_converter = tf_to_sknd.Converter()
         self._skriptnd_reader = skriptnd_io.Reader(atomics=lambda name: not name.startswith('main.'))
         self._skriptnd_writer = skriptnd_io.Writer(operators=tf_to_sknd.Converter.defined_operations(),
@@ -96,7 +96,7 @@ class TestEnv(unittest.TestCase):
     @staticmethod
     def _strip_graph_def(filename, modified_filename, output_names):
         graph_def = TestEnv._load_graph_def(filename)
-        graph_def = retain_until(graph_def, output_names)
+        graph_def = retain_reachables_from_outputs(graph_def, output_names)
         TestEnv._save_graph_def(graph_def, modified_filename)
 
     @staticmethod
@@ -166,6 +166,7 @@ class TestEnv(unittest.TestCase):
         filename = tempfile.mktemp() if self._output_folder is None else TestEnv._output_folder + name + '.pb'
 
         graph_def = tf.get_default_graph().as_graph_def(add_shapes=True)
+        graph_def = retain_reachables_from_placeholders(graph_def)
         self._save_graph_def(graph_def, filename)
 
         self._test_conversion_from_file(filename, input_range=input_range,
@@ -518,6 +519,13 @@ class TestCases(TestEnv):
         output = tf.logical_or(input1, input2)
 
         self._test_conversion('or')
+
+    def test_xor(self):
+        input1 = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.bool)
+        input2 = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.bool)
+        output = tf.logical_xor(input1, input2)
+
+        self._test_conversion('xor')
 
     def test_lt(self):
         input1 = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)

@@ -211,7 +211,7 @@ def _retain_nodes(graph_def, node_names):
     return new_graph_def
 
 
-def _retain_reachables_from_placeholders(graph_def):
+def retain_reachables_from_placeholders(graph_def):
     graph = import_graph_def(graph_def)
 
     reachables = {op.name for op in graph.get_operations() if op.type == 'Placeholder'}
@@ -224,7 +224,7 @@ def _retain_reachables_from_placeholders(graph_def):
     return _retain_nodes(graph_def, reachables)
 
 
-def _retain_reachables_from_outputs(graph_def, output_names):
+def retain_reachables_from_outputs(graph_def, output_names):
     graph = import_graph_def(graph_def)
 
     reachables = set(output_names)
@@ -253,7 +253,7 @@ def fold_constant_tensors(graph_def):
         if changed:
             graph_def, changed = _fold_constant_tensors(graph_def)
 
-    graph_def = _retain_reachables_from_placeholders(graph_def)
+    graph_def = retain_reachables_from_placeholders(graph_def)
 
     return reinfer_shapes(graph_def)
 
@@ -331,7 +331,3 @@ def check_variables(session):
         value = session.run(variable)
         if np.issubdtype(value.dtype, np.number) and not np.all(np.isfinite(value)):
             raise ValueError("Variable '{}' contains nan or inf".format(variable.name))
-
-
-def retain_until(graph_def, output_names):
-    return _retain_reachables_from_outputs(graph_def, output_names)

@@ -9,13 +9,6 @@ import numpy as np
 import copy
 
 
-_INT_MAX = 2 ** 31 - 1
-_FLT_POS_INF = ShapeExpr(ShapeExpr.Op.Const, args=[float('inf')])
-_FLT_NEG_INF = ShapeExpr(ShapeExpr.Op.Const, args=[float('-inf')])
-_INT_POS_INF = ShapeExpr(ShapeExpr.Op.Cast, args=[_FLT_POS_INF, 'int'])
-_INT_NEG_INF = ShapeExpr(ShapeExpr.Op.Cast, args=[_FLT_NEG_INF, 'int'])
-
-
 ONNX_SOFTMAX = """
 operator onnx_softmax {
     @attrib {
@@ -97,6 +90,10 @@ class Converter(_Converter):
     def defined_imports():
         return {'nn', 'math'}
 
+    @staticmethod
+    def shape_expr_args(op_type):
+        return Converter.ShapeExprArgs.get(op_type, [])
+
     ShapeExprArgs = {
         'ReduceMin': [1],
         'ReduceMax': [1],
@@ -120,16 +117,6 @@ class Converter(_Converter):
         'ConstantOfShape': [0],
         'Range': [0, 1, 2],
     }
-
-    OpsWithDistinguishedInput = [
-        'Slice',
-        'Gather',
-        'Squeeze',
-        'Unqueeze',
-        'Expand',
-        'Transpose',
-        'Reshape',
-    ]
 
     def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
@@ -167,19 +154,6 @@ class Converter(_Converter):
                     removed.append(op)
 
             graph.remove_operations(removed, unlink=True)
-
-    def _collect_shape_ops(self, model):
-        self._shape_ops = set()
-        for graph in model.graphs:
-            for op in reversed(graph.operations):
-                if op in self._shape_ops:
-                    if op.type != 'Shape':
-                        self._shape_ops.update({input.producer for input in op.inputs if input.producer is not None})
-                else:
-                    shape_args = self.ShapeExprArgs.get(op.type, [])
-                    for idx, input in enumerate(op.inputs):
-                        if input.producer is not None and idx in shape_args:
-                            self._shape_ops.add(input.producer)
 
     def _is_constant(self, tensor):
         return tensor.data is not None
@@ -228,32 +202,6 @@ class Converter(_Converter):
                     cond = op.attribs.get('cond_graph')
                     if cond is not None:
                         op.outputs = (Tensor(graph, name='', dtype=np.void, shape=()),) + op.outputs
-
-    def _is_shape_expr(self, tensor):
-        original = self._tensor_map.get(tensor)
-        return original.producer in self._shape_ops if original else False
-
-    def _fix_shape_expr_args(self, model):
-        for graph in model.graphs:
-            count = len(graph.operations)
-            for i in range(count):
-                op = graph.operations[i]
-                for input in op.inputs:
-                    if isinstance(input, list):
-                        for item in input:
-                            if item is not None and not item.has_producer and self._is_shape_expr(item):
-                                self._fix_shape_expr_arg(item, graph)
-                    else:
-                        if input is not None and not input.has_producer and self._is_shape_expr(input):
-                            self._fix_shape_expr_arg(input, graph)
-            graph.sort()
-
-    def _fix_shape_expr_arg(self, arg, graph):
-        expr = self.arg_as_attrib(arg)
-        if expr.op == ShapeExpr.Op.Const:
-            arg.set_data(expr.args[0], variable=False)
-        else:
-            Operation(graph, type="layout.constant", attribs={"shape": list(arg.shape), "value": expr}, inputs=(), outputs=(arg,))
 
     @staticmethod
     def _interleave(items):
@@ -325,9 +273,6 @@ class Converter(_Converter):
     def ensure_list(self, arg):
         return [arg] if not isinstance(arg, list) else arg
 
-    def _convert_int_inf(self, x):
-        return _INT_POS_INF if x > _INT_MAX else _INT_NEG_INF if x < -_INT_MAX else x
-
     def is_unused(self, tensor):
         if len(tensor.name) == 0:
             return True
@@ -343,14 +288,6 @@ class Converter(_Converter):
         cond_init = self._tensor_map[cond_init]
         return (cond_init.name == '' and cond_out.data is not None and self.from_numpy(cond_out.data) == True) or \
                (cond_out.producer.type == 'Identity' and cond_out.producer.input is cond_in and self.from_numpy(cond_init.data) == True)
-
-    def is_const_int_max(self, arg):
-        if not self.is_const(arg):
-            return False
-        value = self.as_const(arg)
-        if isinstance(value, list):
-            value = value[0]
-        return value >= _INT_MAX
 
     def tupled(self, x, c):
         return (x,) if c else ()
@@ -370,19 +307,6 @@ class Converter(_Converter):
                             coordinate_transformation_mode == 'pytorch_half_pixel' else \
                'ASYMMETRIC' if coordinate_transformation_mode == 'asymmetric' else \
                'ALIGNED' if coordinate_transformation_mode == 'align_corners' else None
-
-    @staticmethod
-    def _non_singleton_rank(shape):
-        return sum(s != 1 for s in shape)
-
-    @staticmethod
-    def _ensure_zero_rank(expr):
-        if expr.rank == 0:
-            return expr
-        elif expr.op == ShapeExpr.Op.UpRank and expr.arg.rank == 0:
-            return expr.arg
-        else:
-            return ShapeExpr(ShapeExpr.Op.DownRank, expr.rank)
 
     @staticmethod
     def as_list(obj):
@@ -509,32 +433,6 @@ class Converter(_Converter):
             else:
                 raise ConversionError(f"Conversion of operator '{op.name}' of type '{op.type}' "
                                       f"as a symbolic shape expression is not implemented")
-
-    def eval_symbolic_shape(self, tensor, as_scalar=False):
-        symbolic = self._eval_symbolic_shape(self._tensor_map[tensor])
-        if as_scalar:
-            subscript = ShapeExpr(ShapeExpr.Op.Const, args=[np.array(0)])
-            symbolic = ShapeExpr(ShapeExpr.Op.Subscript, args=[symbolic, subscript])
-        symbolic = optimize_shape_expr(symbolic)
-        check_shape_expr(symbolic)
-        return symbolic
-
-    def arg_as_attrib(self, arg, as_scalar=False, convert_int_inf=False, none_on_failure=False):
-        if isinstance(arg, list):
-            return [self.arg_as_attrib(item, as_scalar=as_scalar, convert_int_inf=convert_int_inf) for item in arg]
-
-        if self.is_const(arg):
-            value = self.as_const(arg)
-            if convert_int_inf:
-                value = [self._convert_int_inf(x) for x in value] if isinstance(value, list) else self._convert_int_inf(value)
-            return value[0] if as_scalar and isinstance(value, list) and len(value) == 1 else value
-        else:
-            try:
-                return self.eval_symbolic_shape(arg, as_scalar=as_scalar)
-            except AssertionError as e:
-                if none_on_failure:
-                    return None
-                raise ConversionError(f"Conversion of shape expression is not possible: " + str(e))
 
 
 _Transforms = Converter.unpack_transforms({
