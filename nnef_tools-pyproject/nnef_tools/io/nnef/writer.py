@@ -260,7 +260,7 @@ class Writer(object):
             for op in graph.operations:
                 if op.type == 'variable':
                     filename = op.attribs['label'] + ".dat"
-                    if filename.startswith(os.path.sep):
+                    if filename.startswith('/'):
                         filename = filename[1:]
                     _write_tensor(np.asarray(op.output.data, order='C'), os.path.join(folder, filename),
                                   quantized=True if op.output.quant else False)
