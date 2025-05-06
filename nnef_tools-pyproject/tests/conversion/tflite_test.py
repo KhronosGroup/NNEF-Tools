@@ -82,7 +82,8 @@ class TestEnv(unittest.TestCase):
     def _exec_model(model_path):
         np.random.seed(0)
 
-        interpreter = tf.lite.Interpreter(model_path=model_path)
+        interpreter = tf.lite.Interpreter(model_path=model_path,
+                                          experimental_op_resolver_type=tf.lite.experimental.OpResolverType.BUILTIN_WITHOUT_DEFAULT_DELEGATES)
         interpreter.allocate_tensors()
 
         for input in interpreter.get_input_details():
