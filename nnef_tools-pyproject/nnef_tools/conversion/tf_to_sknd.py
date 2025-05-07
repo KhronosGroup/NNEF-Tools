@@ -548,7 +548,7 @@ _Transforms = Converter.unpack_transforms({
                 'alpha': '!alpha',
             }
         ),
-    ('FusedBatchNorm', 'FusedBatchNormV3'):
+    ('FusedBatchNorm', 'FusedBatchNormV2', 'FusedBatchNormV3'):
         Transform(
             type='nn.batch_norm',
             inputs=(
