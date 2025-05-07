@@ -1,11 +1,12 @@
 from nnef_tools.io.tf import graphdef as tf_io
-from nnef_tools.io import skriptnd as skriptnd_io
+from nnef_tools.io import skriptnd as sknd_io
 from nnef_tools.conversion import tf_to_sknd
 from nnef_tools.optimization import skriptnd_optimizer
 from nnef_tools.optimization import tf_optimizer
-from skriptnd import DtypeToNumpy, PlaceholderExpr
+from skriptnd import PlaceholderExpr
 from nnef_tools.io.tf.graphdef.protobuf import GraphDef
 from nnef_tools.io.tf.graphdef.utils import retain_reachables_from_placeholders, retain_reachables_from_outputs
+import sknd_test
 import numpy as np
 import unittest
 import tempfile
@@ -20,41 +21,41 @@ except ImportError:
 UNITTEST_FOLDER = os.path.normpath(os.path.join(os.path.dirname(__file__), '../../../unittest/'))
 
 
-class TestEnv(unittest.TestCase):
-
-    _skriptnd_dtype_to_numpy = DtypeToNumpy
+class TestEnv(sknd_test.TestEnv):
 
     _network_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/tf/nets/') if UNITTEST_FOLDER else None
     _output_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/tf/ops/') if UNITTEST_FOLDER else None
-    _optimize = False
-    _execute = True
 
     def setUp(self) -> None:
         self._tf_reader = tf_io.Reader()
         self._tf_to_sknd_converter = tf_to_sknd.Converter()
-        self._skriptnd_reader = skriptnd_io.Reader(atomics=lambda name: not name.startswith('main.'))
-        self._skriptnd_writer = skriptnd_io.Writer(operators=tf_to_sknd.Converter.defined_operations(),
-                                                   imports=tf_to_sknd.Converter.defined_imports(),
-                                                   inline_subgraphs=False)
-        self._skriptnd_optimizer = skriptnd_optimizer.Optimizer()
+        self._sknd_reader = sknd_io.Reader(atomics=lambda name: not name.startswith('main.'))
+        self._sknd_writer = sknd_io.Writer(operators=tf_to_sknd.Converter.defined_operations(),
+                                           imports=tf_to_sknd.Converter.defined_imports(),
+                                           inline_subgraphs=False)
+        self._sknd_optimizer = skriptnd_optimizer.Optimizer()
         self._tf_optimizer = tf_optimizer.Optimizer()
+        self._optimize = False
+        self._execute = True
 
     def tearDown(self) -> None:
-        pass
+        tf.reset_default_graph()
 
-    def _convert_to_skriptnd(self, filename, input_shape=None):
+    def _convert_to_sknd(self, filename, input_shape=None):
         tf_model = self._tf_reader(filename, input_shapes=input_shape)
         if self._optimize:
             self._tf_optimizer(tf_model)
+
         sknd_model = self._tf_to_sknd_converter(tf_model)
         if input_shape is not None:
             self._set_max_input_shapes(sknd_model, input_shape)
+
         output_filename = filename + '.nnef2'
-        self._skriptnd_writer(sknd_model, output_filename)
+        self._sknd_writer(sknd_model, output_filename)
         if self._optimize:
-            sknd_model = self._skriptnd_reader(output_filename)
-            self._skriptnd_optimizer(sknd_model)
-            self._skriptnd_writer(sknd_model, output_filename)
+            sknd_model = self._sknd_reader(output_filename)
+            self._sknd_optimizer(sknd_model)
+            self._sknd_writer(sknd_model, output_filename)
 
     def _set_max_input_shapes(self, model, input_shape):
         if not isinstance(input_shape, list):
@@ -65,21 +66,6 @@ class TestEnv(unittest.TestCase):
             assert all(s is None or s == shape[i] for i, s in enumerate(input.shape))
             input.shape = tuple(s if s is not None else PlaceholderExpr(None, shape[i])
                                 for i, s in enumerate(input.shape))
-
-    @staticmethod
-    def _random_data(dtype, shape, range=None):
-        if dtype == np.bool or dtype == np.bool_:
-            return np.array(np.random.random(shape) > 0.5)
-        elif dtype == np.float32 or dtype == np.float64:
-            data = np.random.random(shape).astype(dtype)
-            if range:
-                lo, hi = range
-                data *= hi - lo
-                data += lo
-            return data
-        else:
-            lo, hi = range if range else (0, 100)
-            return np.random.randint(low=lo, high=hi, size=shape, dtype=dtype)
 
     @staticmethod
     def _save_graph_def(graph_def, filename):
@@ -100,7 +86,12 @@ class TestEnv(unittest.TestCase):
         TestEnv._save_graph_def(graph_def, modified_filename)
 
     @staticmethod
-    def _exec_tf_model(filename, input_shape=None, input_range=None, only_first_output=False):
+    def _list_outputs(op):
+        only_first_output = op.type.startswith('FusedBatchNorm')
+        return op.outputs[:1] if only_first_output else op.outputs
+
+    @staticmethod
+    def _exec_orig_model(filename, input_shape=None, input_range=None):
         np.random.seed(0)
 
         graph_def = TestEnv._load_graph_def(filename)
@@ -110,10 +101,7 @@ class TestEnv(unittest.TestCase):
 
         consumed = {tensor for op in ops for tensor in op.inputs}
         inputs = [op.outputs[0] for op in ops if op.type == 'Placeholder']
-        if only_first_output:
-            outputs = [op.outputs[0] for op in ops if len(op.inputs) and op.outputs[0] not in consumed]
-        else:
-            outputs = [tensor for op in ops if len(op.inputs) for tensor in op.outputs if tensor not in consumed]
+        outputs = [tensor for op in ops if len(op.inputs) for tensor in TestEnv._list_outputs(op) if tensor not in consumed]
 
         if not isinstance(input_shape, list):
             input_shape = [input_shape] * len(inputs)
@@ -128,77 +116,16 @@ class TestEnv(unittest.TestCase):
         with tf.Session() as sess:
             result = sess.run(outputs, feed_dict=feed_dict)
 
-        tf.reset_default_graph()
         return result
 
-    @staticmethod
-    def _exec_skriptnd_model(path, input_shape=None, input_range=None):
-        import skriptnd as sknd
-        np.random.seed(0)
-
-        model = sknd.read_model(path)
-        if not model:
-            return None
-
-        compiled_model = sknd.compile_model(model, keep_generated_code=False)
-
-        if not isinstance(input_shape, list):
-            input_shape = [input_shape] * len(model.graphs[0].inputs)
-        if not isinstance(input_range, list):
-            input_range = [input_range] * len(model.graphs[0].inputs)
-
-        inputs = [TestEnv._random_data(TestEnv._skriptnd_dtype_to_numpy[input.dtype],
-                                       input_shape[idx] or input.shape, input_range[idx])
-                  for idx, input in enumerate(model.graphs[0].inputs)]
-
-        return compiled_model(*inputs)
-
-    def _compile_skriptnd_model(self, path):
-        import skriptnd as sknd
-
-        model = sknd.read_model(path)
-        if not model:
-            return None
-
-        return sknd.compile_model(model)
-
-    def _test_conversion(self, name, only_first_output=False, epsilon=1e-5, input_range=None):
+    def _test_conversion(self, name, epsilon=1e-5, input_range=None):
         filename = tempfile.mktemp() if self._output_folder is None else TestEnv._output_folder + name + '.pb'
 
         graph_def = tf.get_default_graph().as_graph_def(add_shapes=True)
         graph_def = retain_reachables_from_placeholders(graph_def)
         self._save_graph_def(graph_def, filename)
 
-        self._test_conversion_from_file(filename, input_range=input_range,
-                                        only_first_output=only_first_output,
-                                        epsilon=epsilon)
-
-    def _test_conversion_from_file(self, filename, epsilon=1e-5, input_shape=None, input_range=None, only_first_output=False):
-        self._convert_to_skriptnd(filename, input_shape=input_shape)
-
-        if not self._execute:
-            assert self._compile_skriptnd_model(filename + '.nnef2') is not None
-            return
-
-        original_outputs = self._exec_tf_model(filename, input_shape=input_shape, input_range=input_range, only_first_output=only_first_output)
-        converted_outputs = self._exec_skriptnd_model(filename + '.nnef2', input_shape=input_shape, input_range=input_range)
-
-        self.assertTrue(original_outputs is not None)
-        self.assertTrue(converted_outputs is not None)
-
-        self.assertEqual(len(original_outputs), len(converted_outputs))
-        for idx, (original, converted) in enumerate(zip(original_outputs, converted_outputs)):
-            self.assertEqual(original.shape, converted.shape)
-            if all(s != 0 for s in original.shape):
-                if original.dtype != np.float32 and original.dtype != np.float64:
-                    self.assertTrue(np.all(original == converted))
-                else:
-                    max = np.max(np.abs(original))
-                    diff = np.max(np.abs(original - converted))
-                    print("Max absolute difference for output #{}: {}".format(idx, diff))
-                    if max != 0:
-                        print("Max relative difference for output #{}: {}".format(idx, diff / max))
-                    self.assertLess(diff / max if max != 0 else diff, epsilon)
+        self._test_conversion_from_file(filename, epsilon=epsilon, input_range=input_range)
 
 
 class TestCases(TestEnv):
@@ -789,7 +716,7 @@ class TestCases(TestEnv):
         output, _mean, _variance = tf.nn.fused_batch_norm(input, scale=scale, offset=offset, mean=mean, variance=variance,
                                                           is_training=False)
 
-        self._test_conversion('fused_batch_norm', only_first_output=True)
+        self._test_conversion('fused_batch_norm')
 
     def test_bias_add(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
@@ -825,7 +752,7 @@ class TestCases(TestEnv):
         relu = tf.nn.relu(normed)
         pooled = tf.nn.max_pool2d(relu, ksize=2, strides=2, padding='SAME')
 
-        self._test_conversion('conv_bias_relu_pool', epsilon=1e-4, only_first_output=True)
+        self._test_conversion('conv_bias_relu_pool', epsilon=1e-4)
 
     def test_conv_mul_add(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
@@ -985,27 +912,27 @@ class NetworkTestCases(TestEnv):
 
     def test_mobilenet_v1(self):
         self._test_conversion_from_file(self._network_folder + 'mobilenet_v1.pb',
-                                        input_shape=(1, 224, 224, 3), only_first_output=True)
+                                        input_shape=(1, 224, 224, 3))
 
     def test_inception_v3(self):
         self._test_conversion_from_file(self._network_folder + 'inception_v3.pb',
-                                        input_shape=(1, 299, 299, 3), only_first_output=True)
+                                        input_shape=(1, 299, 299, 3))
 
     def test_inception_v4(self):
         self._test_conversion_from_file(self._network_folder + 'inception_v4.pb',
-                                        input_shape=(1, 299, 299, 3), only_first_output=True)
+                                        input_shape=(1, 299, 299, 3))
 
     def test_inception_resnet_v2(self):
         self._test_conversion_from_file(self._network_folder + 'inception_resnet_v2.pb',
-                                        input_shape=(1, 299, 299, 3), only_first_output=True)
+                                        input_shape=(1, 299, 299, 3))
 
     def test_squeezenet(self):
         self._test_conversion_from_file(self._network_folder + 'squeezenet.pb',
-                                        input_shape=(1, 224, 224, 3), only_first_output=True)
+                                        input_shape=(1, 224, 224, 3))
 
     def test_nasnet(self):
         self._test_conversion_from_file(self._network_folder + 'nasnet.pb',
-                                        input_shape=(1, 224, 224, 3), only_first_output=True)
+                                        input_shape=(1, 224, 224, 3))
 
 
 if __name__ == '__main__':
