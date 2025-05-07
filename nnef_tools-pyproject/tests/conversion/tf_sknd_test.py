@@ -283,14 +283,12 @@ class TestCases(TestEnv):
     def test_argmin_reduce(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
         output = tf.argmin(input, axis=-1)
-        output = tf.expand_dims(output, axis=-1)
 
         self._test_conversion('argmin_reduce')
 
     def test_argmax_reduce(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
         output = tf.argmax(input, axis=-1)
-        output = tf.expand_dims(output, axis=-1)
 
         self._test_conversion('argmax_reduce')
 

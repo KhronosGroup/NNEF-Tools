@@ -694,7 +694,7 @@ _Transforms = Converter.unpack_transforms({
             outputs='!O[0]',
             attribs={
                 'axis': '!axis',
-                'squeeze': '!not _lite_',
+                'squeeze': True,
             }
         ),
     'Select':
