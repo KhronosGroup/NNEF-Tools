@@ -67,8 +67,8 @@ class Converter(_TFConverter):
     @staticmethod
     def defined_operations():
         return {
-            'RELU6': _TFLITE_RELU6,
-            'TFLite_Detection_PostProcess': _TFLITE_DETECTION_POSTPROCESS,
+            'relu6': _TFLITE_RELU6,
+            'tflite_detection_postprocess': _TFLITE_DETECTION_POSTPROCESS,
         }
 
     def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False):
@@ -90,9 +90,9 @@ class Converter(_TFConverter):
     def _is_constant(self, tensor):
         return tensor.producer is None and tensor.data is not None
 
-    def _read_constant(self, tensor, type=None):
+    def _read_constant(self, tensor, type=None, flat=False):
         if tensor.producer is None:
-            return types.from_numpy(tensor.data, type=type)
+            return types.from_numpy(tensor.data, type=type, flat=flat)
         else:
             raise ConversionError('trying to evaluate non-constant tensor')
 
@@ -170,9 +170,6 @@ class Converter(_TFConverter):
         Operation(output.graph, type=self._ActivationOpTypes[func], inputs=input, outputs=output)
         return input
 
-    def flat_list(self, array):
-        return [item for items in array for item in items] if len(array) and isinstance(array[0], (list, tuple)) else array
-
     def flatten(self, input):
         shape = (input.shape[0], int(np.prod(input.shape[1:])))
         output = Tensor(input.graph, dtype=input.dtype, shape=shape, quant=copy.deepcopy(input.quant))
@@ -240,7 +237,7 @@ _Transforms = Converter.unpack_transforms({
                 'axes': [1, 2],
                 'size': '![filter_height, filter_width]',
                 'stride': '![stride_h, stride_w]',
-                'padding': '!convert_padding(padding, I[0].rank)',
+                'padding': '!convert_padding(padding, I[0].rank - 2)',
                 'ceil_mode': '!padding == "SAME"',
                 'ignore_border': '!True if _type_ == "AVERAGE_POOL_2D" else None',
             }
@@ -317,7 +314,7 @@ _Transforms = Converter.unpack_transforms({
                 'mode': None,
             },
             using={
-                'paddings': '!arg_as_attrib(I[1])',
+                'paddings': '!arg_as_attrib(I[1], flat=False)',
                 'before': '![p for p, q in paddings]',
                 'after': '![q for p, q in paddings]',
             },

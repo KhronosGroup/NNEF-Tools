@@ -75,9 +75,9 @@ class Converter(_TFConverter):
     def _is_constant(self, tensor):
         return tensor.producer is None and tensor.data is not None
 
-    def _read_constant(self, tensor, type=None):
+    def _read_constant(self, tensor, type=None, flat=False):
         if tensor.producer is None:
-            return types.from_numpy(tensor.data, type=type)
+            return types.from_numpy(tensor.data, type=type, flat=flat)
         else:
             raise ConversionError('trying to evaluate non-constant tensor')
 

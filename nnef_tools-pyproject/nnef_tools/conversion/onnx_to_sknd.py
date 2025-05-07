@@ -158,12 +158,12 @@ class Converter(_Converter):
     def _is_constant(self, tensor):
         return tensor.data is not None
 
-    def _read_constant(self, tensor, type=None):
+    def _read_constant(self, tensor, type=None, flat=False):
         if tensor.data is None:
             raise ConversionError(f"trying to evaluate non-constant tensor '{tensor.name}'")
 
         value = tensor.data
-        return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else \
+        return types.from_numpy(value, type=type, flat=flat) if isinstance(value, np.ndarray) else \
                 types.cast(value, type=type) if type else value
 
     def _fix_constant_names(self, model):

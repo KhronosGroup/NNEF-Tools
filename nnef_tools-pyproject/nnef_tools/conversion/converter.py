@@ -350,7 +350,7 @@ class Converter:
                                   "but found {value_type}"
                                   .format(kind=kind, key=key, name=op_name, op_type=op_type, value_type=type(value)))
 
-    def _read_constant(self, tensor, type):
+    def _read_constant(self, tensor, type, flat):
         raise NotImplementedError()
 
     def _make_constant(self, graph, dtype, value, inline):
@@ -555,15 +555,15 @@ class Converter:
         else:
             return axis + rank if axis < 0 else axis
 
-    def as_const(self, tensor, type=None):
-        return self._read_constant(self._tensor_map[tensor], type=type)
+    def as_const(self, tensor, type=None, flat=False):
+        return self._read_constant(self._tensor_map[tensor], type=type, flat=flat)
 
-    def is_const(self, tensor, type=None):
+    def is_const(self, tensor):
         tensor = self._tensor_map[tensor]
         if tensor.data is not None:
             return True
         try:
-            self._read_constant(tensor, type=type)
+            self._read_constant(tensor, type=None, flat=True)
             return True
         except ConversionError:
             return False
@@ -811,12 +811,12 @@ class ConverterToSkriptND(Converter):
         check_shape_expr(symbolic)
         return symbolic
 
-    def arg_as_attrib(self, arg, as_scalar=False, convert_int_inf=False, none_on_failure=False):
+    def arg_as_attrib(self, arg, as_scalar=False, convert_int_inf=False, none_on_failure=False, flat=True):
         if isinstance(arg, list):
             return [self.arg_as_attrib(item, as_scalar=as_scalar, convert_int_inf=convert_int_inf) for item in arg]
 
         if self.is_const(arg):
-            value = self.as_const(arg)
+            value = self.as_const(arg, flat=flat)
             if convert_int_inf:
                 value = [self._convert_int_inf(x) for x in value] if isinstance(value, list) else self._convert_int_inf(value)
             return value[0] if as_scalar and isinstance(value, list) and len(value) == 1 else value
@@ -837,10 +837,10 @@ class ConverterFromSkriptND(Converter):
     def _is_constant(self, tensor):
         return tensor.data is not None
 
-    def _read_constant(self, tensor, type):
+    def _read_constant(self, tensor, type, flat):
         if tensor.data is not None:
             value = tensor.data
-            return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else \
+            return types.from_numpy(value, type=type, flat=flat) if isinstance(value, np.ndarray) else \
                 types.cast(value, type=type) if type is not None else value
         else:
             raise ConversionError('trying to evaluate non-constant tensor')
@@ -1003,7 +1003,7 @@ class ConverterFromNNEF(Converter):
         else:
             return tensor.data is not None
 
-    def _read_constant(self, tensor, type):
+    def _read_constant(self, tensor, type, flat):
         if tensor.data is not None:
             value = tensor.data
         elif tensor.producer and tensor.producer.type == 'constant':
@@ -1011,7 +1011,7 @@ class ConverterFromNNEF(Converter):
         else:
             raise ConversionError('trying to evaluate non-constant tensor')
 
-        return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else \
+        return types.from_numpy(value, type=type, flat=flat) if isinstance(value, np.ndarray) else \
             types.cast(value, type=type) if type is not None else value
 
 

@@ -76,12 +76,12 @@ class Converter(_Converter):
         else:
             return tensor.data is not None
 
-    def _read_constant(self, tensor, type=None):
+    def _read_constant(self, tensor, type=None, flat=False):
         if tensor.producer is None:
-            return types.from_numpy(tensor.data, type=type)
+            return types.from_numpy(tensor.data, type=type, flat=flat)
         elif tensor.producer.type == 'Const':
             value = tensor.producer.attribs['value']
-            return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else types.cast(value, type=type)
+            return types.from_numpy(value, type=type, flat=flat) if isinstance(value, np.ndarray) else types.cast(value, type=type)
         else:
             raise ConversionError('trying to evaluate non-constant tensor')
 

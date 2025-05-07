@@ -96,12 +96,12 @@ class Converter(_Converter):
         else:
             return tensor.data is not None
 
-    def _read_constant(self, tensor, type=None):
+    def _read_constant(self, tensor, type=None, flat=False):
         if tensor.producer is None:
-            return types.from_numpy(tensor.data, type=type)
+            return types.from_numpy(tensor.data, type=type, flat=flat)
         elif tensor.producer.type == 'Const':
             value = tensor.producer.attribs['value']
-            return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else types.cast(value, type=type)
+            return types.from_numpy(value, type=type, flat=flat) if isinstance(value, np.ndarray) else types.cast(value, type=type)
         else:
             raise ConversionError('trying to evaluate non-constant tensor')
 
@@ -129,7 +129,7 @@ class Converter(_Converter):
     def convert_size(self, value, format):
         return value[1:-1] if self.is_nxc(format) else value[2:]
 
-    def convert_padding(self, padding, rank, explicit_paddings=None, format=None):
+    def convert_padding(self, padding, rank, explicit_paddings=None, format='NXC'):
         padding = padding.upper()
         if padding == 'SAME':
             return None
@@ -620,7 +620,7 @@ _Transforms = Converter.unpack_transforms({
                 'mode': 'CONSTANT',
             },
             using={
-                'paddings': '!arg_as_attrib(I[1])',
+                'paddings': '!arg_as_attrib(I[1], flat=False)',
                 'before': '![p for p, q in paddings]',
                 'after': '![q for p, q in paddings]',
             },

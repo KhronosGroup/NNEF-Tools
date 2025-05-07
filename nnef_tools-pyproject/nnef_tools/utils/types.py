@@ -42,10 +42,10 @@ def cast(value, type):
     return _builtin_type(value)(cast(item, type) for item in value) if isinstance(value, Sequence) else type(value)
 
 
-def from_numpy(array, type=None):
+def from_numpy(array, type=None, flat=False):
     if type is None:
         type = PyTypeFromNumpyDtype[array.dtype.type]
-    return cast(array.tolist(), type)
+    return cast(list(array.flat) if flat and len(array.shape) != 0 else array.tolist(), type)
 
 
 def to_numpy(value, dtype=None):

@@ -174,7 +174,7 @@ class Converter(_Converter):
         else:
             return tensor.data is not None
 
-    def _read_constant(self, tensor, type=None):
+    def _read_constant(self, tensor, type=None, flat=False):
         if tensor.producer and tensor.producer.type == 'Constant':
             value = tensor.producer.attribs['value']
         elif not tensor.producer:
@@ -182,7 +182,7 @@ class Converter(_Converter):
         else:
             raise ConversionError('trying to evaluate non-constant tensor')
 
-        return types.from_numpy(value, type=type) if isinstance(value, np.ndarray) else types.cast(value, type=type)
+        return types.from_numpy(value, type=type, flat=flat) if isinstance(value, np.ndarray) else types.cast(value, type=type)
 
     def _needs_io_transpose(self, tensor):
         if tensor.rank <= 2:
