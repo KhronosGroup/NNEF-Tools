@@ -752,7 +752,8 @@ class ConverterToSkriptND(Converter):
                 else:
                     shape_args = self.shape_expr_args(op.type)
                     for idx, input in enumerate(op.inputs):
-                        if input.producer is not None and idx in shape_args:
+                        neg_idx = idx - len(op.inputs)
+                        if input.producer is not None and (idx in shape_args or neg_idx in shape_args):
                             self._shape_ops.add(input.producer)
 
     def _is_shape_expr(self, tensor):
