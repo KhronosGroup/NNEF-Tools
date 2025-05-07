@@ -49,9 +49,9 @@ operator conv {
         b = data_format == 'XCN' ? s[-1] : s[0];
         ic = data_format == 'NCX' ? s[1] : data_format == 'NXC' ? s[-1] : s[-2];
         ix = data_format == 'NCX' ? s[2:] : data_format == 'NXC' ? s[1:-1] : s[:-2];
-        n = filter_format == 'XCN' ? fs[-1] : fs[0];
-        fc = filter_format == 'NCX' ? fs[1] : filter_format == 'NXC' ? fs[-1] : fs[-2];
-        fx = filter_format == 'NCX' ? fs[2:] : filter_format == 'NXC' ? fs[1:-1] : fs[:-2];
+        n = filter_format == 'XCN' || filter_format == 'CXN' ? fs[-1] : fs[0];
+        fc = filter_format == 'NCX' ? fs[1] : filter_format == 'NXC' ? fs[-1] : filter_format == 'XCN' ? fs[-2] : fs[0];
+        fx = filter_format == 'NCX' ? fs[2:] : filter_format == 'NXC' ? fs[1:-1] : filter_format == 'XCN' ? fs[:-2] : fs[1:-1];
         fd = (fx - 1) * dilation + 1;
         paddings = padding[:d] + padding[d:] ??
                    ((ceil_mode ? ix \ stride : ix / stride) - 1) * stride + fd - ix;
@@ -63,7 +63,7 @@ operator conv {
         m = n / g;
         padding_aligns = ['LOWER', 'UPPER'];
         data_formats = ['NCX', 'NXC', 'XCN'];
-        filter_formats = ['NCX', 'NXC', 'XCN'];
+        filter_formats = ['NCX', 'NXC', 'XCN', 'CXN'];
     }
     @assert {
         stride > 0: "'stride' must be positive", stride;
@@ -103,7 +103,8 @@ operator conv {
                                     [|stride * i + dilation * j - offset|..,gi * fc + ci,bi],
         fi = filter_format == 'NCX' ? [gi * m + mi,ci,j..] :
              filter_format == 'NXC' ? [gi * m + mi,j..,ci] :
-                                      [j..,ci,gi * m + mi],
+             filter_format == 'XCN' ? [j..,ci,gi * m + mi] :
+                                      [ci,j..,gi * m + mi],
         output[oi..] += input[ii..] * filter[fi..],
             bi < b, gi < g, mi < m, ci < fc, i < ox, j < fx;
     }
@@ -134,9 +135,9 @@ operator deconv {
         b = data_format == 'XCN' ? s[-1] : s[0];
         ic = data_format == 'NCX' ? s[1] : data_format == 'NXC' ? s[-1] : s[-2];
         ix = data_format == 'NCX' ? s[2:] : data_format == 'NXC' ? s[1:-1] : s[:-2];
-        n = filter_format == 'XCN' ? fs[-1] : fs[0];
-        fc = filter_format == 'NCX' ? fs[1] : filter_format == 'NXC' ? fs[-1] : fs[-2];
-        fx = filter_format == 'NCX' ? fs[2:] : filter_format == 'NXC' ? fs[1:-1] : fs[:-2];
+        n = filter_format == 'XCN' || filter_format == 'CXN' ? fs[-1] : fs[0];
+        fc = filter_format == 'NCX' ? fs[1] : filter_format == 'NXC' ? fs[-1] : filter_format == 'XCN' ? fs[-2] : fs[0];
+        fx = filter_format == 'NCX' ? fs[2:] : filter_format == 'NXC' ? fs[1:-1] : filter_format == 'XCN' ? fs[:-2] : fs[1:-1];
         fd = (fx - 1) * dilation + 1;
         paddings = padding[:d] + padding[d:] ?? (ix - 1) * stride + fd - ix * stride;
         offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
@@ -147,7 +148,7 @@ operator deconv {
         m = n / g;
         padding_aligns = ['LOWER', 'UPPER'];
         data_formats = ['NCX', 'NXC', 'XCN'];
-        filter_formats = ['NCX', 'NXC', 'XCN'];
+        filter_formats = ['NCX', 'NXC', 'XCN', 'CXN'];
     }
     @assert {
         stride > 0: "'stride' must be positive", stride;
@@ -164,7 +165,7 @@ operator deconv {
             "'padding_align' must be one of {padding_aligns}", padding_align;
         data_format in data_formats:
             "'data_format' must be one of {data_formats}", data_format;
-        filter_format in data_formats:
+        filter_format in filter_formats:
             "'filter_format' must be one of {data_formats}", filter_format;
     }
     @lower {
@@ -182,7 +183,8 @@ operator deconv {
                                     [i..,gi * m + mi,bi],
         fi = filter_format == 'NCX' ? [gi * m + mi,ci,j..] :
              filter_format == 'NXC' ? [gi * m + mi,j..,ci] :
-                                      [j..,ci,gi * m + mi],
+             filter_format == 'XCN' ? [j..,ci,gi * m + mi] :
+                                      [ci,j..,gi * m + mi],
         output[oi..] += input[ii..] * filter[fi..],
             bi < b, ci < fc, gi < g, mi < m, i < ix, j < fx;
     }
