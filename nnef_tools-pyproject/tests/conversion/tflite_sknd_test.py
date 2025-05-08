@@ -611,12 +611,6 @@ class TestCases(TestEnv):
                  "no network test folder provided")
 class NetworkTestCases(TestEnv):
 
-    def test_inception_v1(self):
-        self._test_conversion_from_file(self._network_folder + 'inception_v1.tflite')
-
-    def test_inception_v2(self):
-        self._test_conversion_from_file(self._network_folder + 'inception_v2.tflite')
-
     def test_inception_v3(self):
         self._test_conversion_from_file(self._network_folder + 'inception_v3.tflite')
 
@@ -628,3 +622,15 @@ class NetworkTestCases(TestEnv):
 
     def test_mobilenet_v2(self):
         self._test_conversion_from_file(self._network_folder + 'mobilenet_v2.tflite')
+
+    def test_squeezenet(self):
+        self._test_conversion_from_file(self._network_folder + 'squeezenet.tflite')
+
+    def test_nasnet(self):
+        self._test_conversion_from_file(self._network_folder + 'nasnet.tflite')
+
+    def test_resnet_v2(self):
+        self._test_conversion_from_file(self._network_folder + 'resnet_v2.tflite')
+
+    def test_inception_resnet_v2(self):
+        self._test_conversion_from_file(self._network_folder + 'inception_resnet_v2.tflite')
