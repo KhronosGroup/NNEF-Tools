@@ -71,12 +71,39 @@ class Converter(_TFConverter):
             'tflite_detection_postprocess': _TFLITE_DETECTION_POSTPROCESS,
         }
 
+    @staticmethod
+    def shape_expr_args(op_type):
+        return Converter.ShapeExprArgs.get(op_type, [])
+
+    ShapeExprArgs = {
+        'TRANSPOSE_CONV': [0],
+        'SPLIT': [0],
+        'SPLIT_V': [1, 2],
+        'RESHAPE': [1],
+        'TRANSPOSE': [1],
+        'EXPAND_DIMS': [1],
+        'REDUCE_MIN': [1],
+        'REDUCE_MAX': [1],
+        'MEAN': [1],
+        'SUM': [1],
+        'REDUCE_ANY': [1],
+        'REDUCE_ALL': [1],
+        'PAD': [1],
+        'MIRROR_PAD': [1],
+        'SLICE': [1],
+        'TILE': [1],
+        'ARG_MIN': [1],
+        'ARG_MAX': [1],
+        'RESIZE_BILINEAR': [1],
+        'RESIZE_NEAREST_NEIGHBOR': [1],
+    }
+
     def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
 
     def __call__(self, model):
-        model = _TFConverter.__call__(self, model)
+        model = _TFConverter.__call__(self, model, lite=True)
         self._fix_custom_options(model)
         return model
 
@@ -388,6 +415,7 @@ _Transforms = Converter.unpack_transforms({
     'RSQRT': _TFTransforms['Rsqrt'],
     'LOGICAL_AND': _TFTransforms['LogicalAnd'],
     'LOGICAL_OR': _TFTransforms['LogicalOr'],
+    'LOGICAL_XOR': _TFTransforms['LogicalXor'],
     'LESS': _TFTransforms['Less'],
     'LESS_EQUAL': _TFTransforms['LessEqual'],
     'GREATER': _TFTransforms['Greater'],
@@ -399,6 +427,7 @@ _Transforms = Converter.unpack_transforms({
     'REDUCE_MAX': _TFTransforms['Max'],
     'MEAN': _TFTransforms['Mean'],
     'SUM': _TFTransforms['Sum'],
+    'REDUCE_PROD': _TFTransforms['Prod'],
     'REDUCE_ANY': _TFTransforms['Any'],
     'REDUCE_ALL': _TFTransforms['All'],
     'ARG_MIN': _TFTransforms['ArgMin'],

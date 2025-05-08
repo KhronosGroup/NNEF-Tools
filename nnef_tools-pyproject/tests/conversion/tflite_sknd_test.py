@@ -474,6 +474,12 @@ class TestCases(TestEnv):
 
         self._test_conversion('sum_reduce', [input], [output])
 
+    def test_prod_reduce(self):
+        input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
+        output = tf.reduce_prod(input, axis=3, keepdims=True)
+
+        self._test_conversion('prod_reduce', [input], [output])
+
     def test_any_reduce(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.bool)
         output = tf.reduce_any(input, axis=3, keepdims=True)

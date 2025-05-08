@@ -55,10 +55,11 @@ class Converter(_Converter):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
 
-    def __call__(self, model):
-        self._eliminate_placeholder_ops(model)
-        self._eliminate_constant_ops(model)
-        self._collect_shape_ops(model)
+    def __call__(self, model, lite=False):
+        if not lite:
+            self._eliminate_placeholder_ops(model)
+            self._eliminate_constant_ops(model)
+        self._collect_shape_ops(model, shape_op_type='SHAPE' if lite else 'Shape')
         model = _Converter.__call__(self, model)
         self._add_zero_copy_for_constant_outputs(model)
         self._eliminate_empty_subgraphs(model)
@@ -210,86 +211,88 @@ class Converter(_Converter):
                 return ShapeExpr(ShapeExpr.Op.UpRank, args=[expr, rank - effective_rank])
             else:
                 return ShapeExpr(ShapeExpr.Op.Const, args=[value])
-        elif op.type == 'Shape':
+        elif op.type == 'Shape' or op.type == 'SHAPE':
             return ShapeExpr(ShapeExpr.Op.Shape, args=[self._map_tensor(op.input)])
         else:
             inputs = [self._eval_symbolic_shape(input) for input in op.inputs]
-            if op.type == 'Add' or op.type == 'AddV2':
+            if op.type == 'Add' or op.type == 'AddV2' or op.type == 'ADD':
                 return ShapeExpr(ShapeExpr.Op.Add, args=inputs)
-            elif op.type == 'Sub':
+            elif op.type == 'Sub' or op.type == 'SUB':
                 return ShapeExpr(ShapeExpr.Op.Sub, args=inputs)
-            elif op.type == 'Mul':
+            elif op.type == 'Mul' or op.type == 'MUL':
                 return ShapeExpr(ShapeExpr.Op.Mul, args=inputs)
-            elif op.type == 'RealDiv':
+            elif op.type == 'RealDiv' or op.type == 'DIV':
                 return ShapeExpr(ShapeExpr.Op.Div, args=inputs)
-            elif op.type == 'Minimum':
+            elif op.type == 'Minimum' or op.type == 'MINIMUM':
                 return ShapeExpr(ShapeExpr.Op.Min, args=inputs)
-            elif op.type == 'Maximum':
+            elif op.type == 'Maximum' or op.type == 'MAXIMUM':
                 return ShapeExpr(ShapeExpr.Op.Max, args=inputs)
-            elif op.type == 'Less':
+            elif op.type == 'Less' or op.type == 'LESS':
                 return ShapeExpr(ShapeExpr.Op.Less, args=inputs)
-            elif op.type == 'Greater':
+            elif op.type == 'Greater' or op.type == 'GREATER':
                 return ShapeExpr(ShapeExpr.Op.Greater, args=inputs)
-            elif op.type == 'LessEqual':
+            elif op.type == 'LessEqual' or op.type == 'LESS_EQUAL':
                 return ShapeExpr(ShapeExpr.Op.LessEqual, args=inputs)
-            elif op.type == 'GreaterEqual':
+            elif op.type == 'GreaterEqual' or op.type == 'GREATER_EQUAL':
                 return ShapeExpr(ShapeExpr.Op.GreaterEqual, args=inputs)
-            elif op.type == 'Equal':
+            elif op.type == 'Equal' or op.type == 'EQUAL':
                 return ShapeExpr(ShapeExpr.Op.Equal, args=inputs)
-            elif op.type == 'NotEqual':
+            elif op.type == 'NotEqual' or op.type == 'NOT_EQUAL':
                 return ShapeExpr(ShapeExpr.Op.NotEqual, args=inputs)
-            elif op.type == 'LogicalAnd':
+            elif op.type == 'LogicalAnd' or op.type == 'LOGICAL_AND':
                 return ShapeExpr(ShapeExpr.Op.And, args=inputs)
-            elif op.type == 'LogicalOr':
+            elif op.type == 'LogicalOr' or op.type == 'LOGICAL_OR':
                 return ShapeExpr(ShapeExpr.Op.Or, args=inputs)
-            elif op.type == 'LogicalXor':
+            elif op.type == 'LogicalXor' or op.type == 'LOGICAL_XOR':
                 return ShapeExpr(ShapeExpr.Op.Xor, args=inputs)
-            elif op.type == 'Ceil':
-                assert inputs[0].op == ShapeExpr.Op.Div, (f"'Ceil' op can only be converted when preceded by 'Div'"
+            elif op.type == 'Ceil' or op.type == 'CEIL':
+                assert inputs[0].op == ShapeExpr.Op.Div, (f"'{op.type}' op can only be converted when preceded by 'Div'"
                                                           f" op in shape expression; found operation '{op.name}' preceded"
                                                           f" by operation '{inputs[0].op.name}' of type '{inputs[0].op.type}'")
                 inputs[0].op = ShapeExpr.Op.CeilDiv
                 return inputs[0]
-            elif op.type == 'Gather' or op.type == 'GatherV2':
+            elif op.type == 'Gather' or op.type == 'GatherV2' or op.type == 'GATHER':
                 assert inputs[1].rank <= 1, f"Operation '{op.name}' of type '{op.type}' must have index of rank <= 1 in shape expression"
                 return ShapeExpr(ShapeExpr.Op.Subscript, args=[inputs[0], inputs[1]])
             elif op.type == 'Concat':
                 return ShapeExpr(ShapeExpr.Op.Concat, args=inputs[1:])
-            elif op.type == 'Pack':
+            elif op.type == 'CONCATENATION':
+                return ShapeExpr(ShapeExpr.Op.Concat, args=inputs)
+            elif op.type == 'Pack' or op.type == 'PACK':
                 return ShapeExpr(ShapeExpr.Op.Pack, args=inputs)
-            elif op.type == 'StridedSlice':
-                assert inputs[1].effective_rank == 0, f"Operation '{op.name}' of type 'StridedSlice' must have 'starts' of length 1"
-                assert inputs[2].effective_rank == 0, f"Operation '{op.name}' of type 'StridedSlice' must have 'ends' of length 1"
-                assert inputs[3].effective_rank == 0, f"Operation '{op.name}' of type 'StridedSlice' must have 'strides' of length 1"
+            elif op.type == 'StridedSlice' or op.type == 'STRIDED_SLICE':
+                assert inputs[1].effective_rank == 0, f"Operation '{op.name}' of type '{op.type}' must have 'starts' of length 1"
+                assert inputs[2].effective_rank == 0, f"Operation '{op.name}' of type '{op.type}' must have 'ends' of length 1"
+                assert inputs[3].effective_rank == 0, f"Operation '{op.name}' of type '{op.type}' must have 'strides' of length 1"
                 assert self._ensure_zero_rank(inputs[3]).is_const(1)
                 beg = self._ensure_zero_rank(inputs[1])
                 end = self._ensure_zero_rank(inputs[2])
                 squeeze = op.attribs.get('shrink_axis_mask', 0) != 0
                 expr = ShapeExpr(ShapeExpr.Op.Slice, args=[inputs[0], beg, end])
                 return ShapeExpr(ShapeExpr.Op.DownRank, args=[inputs[0], 1]) if squeeze else expr
-            elif op.type == 'Squeeze':
+            elif op.type == 'Squeeze' or op.type == 'SQUEEZE':
                 axes = op.attribs.get('squeeze_dims')
                 if axes is None:
                     axes = [i for i, x in enumerate(op.inputs[0].shape) if x == 1]
                 return ShapeExpr(ShapeExpr.Op.DownRank, args=[inputs[0], len(axes)])
-            elif op.type == 'ExpandDims':
+            elif op.type == 'ExpandDims' or op.type == 'EXPAND_DIMS':
                 axes = self.as_list(self.as_const(op.inputs[1]))
                 return ShapeExpr(ShapeExpr.Op.UpRank, args=[inputs[0], len(axes)])
-            elif op.type == 'Cast':
+            elif op.type == 'Cast' or op.type == 'CAST':
                 output_type = self.sknd_dtype(op.output.dtype)
                 return ShapeExpr(ShapeExpr.Op.Cast, args=[inputs[0], output_type])
-            elif op.type == 'Tile':
-                assert inputs[0].effective_rank == 0, f"Operation '{op.name}' of type 'Tile' must have input of singular dimensions"
+            elif op.type == 'Tile' or op.type == 'TILE':
+                assert inputs[0].effective_rank == 0, f"Operation '{op.name}' of type '{op.type}' must have input of singular dimensions"
                 repeats = ShapeExpr(ShapeExpr.Op.DownRank, args=[inputs[1], 1])
                 return ShapeExpr(ShapeExpr.Op.Expand, args=[inputs[0], repeats])
-            elif op.type == 'Transpose':
+            elif op.type == 'Transpose' or op.type == 'TRANSPOSE':
                 return inputs[0]
-            elif op.type == 'Reshape':
-                shape = op.attribs.get('shape')
+            elif op.type == 'Reshape' or op.type == 'RESHAPE':
+                shape = op.attribs.get('shape' if op.type == 'Reshape' else 'new_shape')
                 if shape is None and self._is_constant(op.inputs[1]):
                     shape = self.as_list(self.as_const(op.inputs[1]))
                 if shape is None:
-                    raise ConversionError(f"Shape argument of operation '{op.name}' of type 'Reshape' must be constant in shape expression")
+                    raise ConversionError(f"Shape argument of operation '{op.name}' of type '{op.type}' must be constant in shape expression")
 
                 if len(shape) > inputs[0].rank:
                     return ShapeExpr(ShapeExpr.Op.UpRank, args=[inputs[0], len(shape) - inputs[0].rank])
@@ -297,19 +300,19 @@ class Converter(_Converter):
                     return ShapeExpr(ShapeExpr.Op.DownRank, args=[inputs[0], inputs[0].rank - len(shape)])
                 else:
                     return inputs[0]
-            elif op.type == 'Sum':
+            elif op.type == 'Sum' or op.type == 'SUM':
                 expr = ShapeExpr(ShapeExpr.Op.Sum, args=[inputs[0]])
                 return expr if op.attribs.get('keepdims') == 0 else \
                     ShapeExpr(ShapeExpr.Op.UpRank, args=[expr, 1])
-            elif op.type == 'Prod':
+            elif op.type == 'Prod' or op.type == 'REDUCE_PROD':
                 expr = ShapeExpr(ShapeExpr.Op.Prod, args=[inputs[0]])
                 return expr if op.attribs.get('keepdims') == 0 else \
                     ShapeExpr(ShapeExpr.Op.UpRank, args=[expr, 1])
-            elif op.type == 'Min':
+            elif op.type == 'Min' or op.type == 'REDUCE_MIN':
                 expr = ShapeExpr(ShapeExpr.Op.Minimize, args=[inputs[0]])
                 return expr if op.attribs.get('keepdims') == 0 else \
                     ShapeExpr(ShapeExpr.Op.UpRank, args=[expr, 1])
-            elif op.type == 'Max':
+            elif op.type == 'Max' or op.type == 'REDUCE_MAX':
                 expr = ShapeExpr(ShapeExpr.Op.Maximize, args=[inputs[0]])
                 return expr if op.attribs.get('keepdims') == 0 else \
                     ShapeExpr(ShapeExpr.Op.UpRank, args=[expr, 1])
