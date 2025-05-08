@@ -2361,7 +2361,7 @@ graph resize_cubic {
     }
 }
 
-graph linear_quantize {
+graph zero_point_linear_quantize {
     @input {
         input: real[4,32,224,224];
     }
@@ -2373,7 +2373,7 @@ graph linear_quantize {
     }
 }
 
-graph linear_quantize_per_channel {
+graph zero_point_linear_quantize_per_channel {
     @input {
         input: real[4,3,224,224];
     }
@@ -2382,6 +2382,30 @@ graph linear_quantize_per_channel {
     }
     @compose {
         output = quant.zero_point_linear_quantize{bits=8, zero_point=[1, 2, 3], scale=[1.0, 2.0, 3.0]}(input);
+    }
+}
+
+graph min_max_linear_quantize {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = quant.min_max_linear_quantize{bits=8, min=-1.0, max=1.0}(input);
+    }
+}
+
+graph min_max_linear_quantize_per_channel {
+    @input {
+        input: real[4,3,224,224];
+    }
+    @output {
+        output: real[4,3,224,224];
+    }
+    @compose {
+        output = quant.min_max_linear_quantize{bits=8, min=[-1.0, -2.0, -3.0], max=[1.0, 2.0, 3.0]}(input);
     }
 }
 

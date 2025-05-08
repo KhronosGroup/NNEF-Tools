@@ -4,17 +4,18 @@
 
 operator zero_point_linear_quantize {
     @attrib {
-        zero_point: int..(c);
-        scale: real..(c);
+        zero_point: int..(s[channel_axis]);
+        scale: real..(s[channel_axis]);
         bits: int;
         signed: bool = true;
         symmetric: bool = false;
+        channel_axis: int = 1;
     }
     @input {
-        input: real[b,c,s..];
+        input: real[s..];
     }
     @output {
-        output: real[b,c,s..];
+        output: real[s..];
     }
     @using {
         r = signed ? 2 ** (bits - 1) - 1 : 2 ** bits - 1;
@@ -27,10 +28,44 @@ operator zero_point_linear_quantize {
         bits > 0: "bits must be positive", bits;
     }
     @lower {
-        zp = uz ?? zero_point[ci],
-        sc = us ?? scale[ci],
-        quantized = zp + int(`round`(input[bi,ci,i..] / sc)) >> m << r,
-        output[bi,ci,i..] = real(quantized - zp) * sc,
-            bi < b, ci < c, i < s;
+        zp = uz ?? zero_point[i[channel_axis]],
+        sc = us ?? scale[i[channel_axis]],
+        quantized = zp + int(`round`(input[i..] / sc)) >> m << r,
+        output[i..] = real(quantized - zp) * sc,
+            i < s;
+    }
+}
+
+operator min_max_linear_quantize {
+    @attrib {
+        min: real..(s[channel_axis]);
+        max: real..(s[channel_axis]);
+        bits: int;
+        signed: bool = true;
+        symmetric: bool = false;
+        channel_axis: int = 1;
+    }
+    @input {
+        input: real[s..];
+    }
+    @output {
+        output: real[s..];
+    }
+    @using {
+        r = real(2 ** bits - 1 - int(signed && symmetric));
+        p = real(signed ? 2 ** (bits - 1) - int(symmetric) : 0);
+        umin = min := ..;
+        umax = max := ..;
+    }
+    @assert {
+        bits > 0: "bits must be positive", bits;
+    }
+    @lower {
+        mn = umin ?? min[i[channel_axis]],
+        mx = umax ?? max[i[channel_axis]],
+        sc = mx - mn,
+        quantized = `round`(((input[i..] >> mn << mx) - mn) / sc * r) - p,
+        output[i..] = real((quantized + p) / r * sc + mn),
+            i < s;
     }
 }
