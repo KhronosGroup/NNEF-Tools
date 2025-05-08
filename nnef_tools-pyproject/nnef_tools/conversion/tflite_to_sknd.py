@@ -242,6 +242,18 @@ _Transforms = Converter.unpack_transforms({
                 'ignore_border': '!True if _type_ == "AVERAGE_POOL_2D" else None',
             }
         ),
+    ('ADD', 'SUB', 'MUL', 'DIV', 'POW', 'MINIMUM', 'MAXIMUM'):
+        Transform(
+            type=('math.add', 'math.sub', 'math.mul', 'math.div', 'math.pow', 'math.min', 'math.max'),
+            defaults={
+                'fused_activation_function': None,
+            },
+            inputs=(
+                '!I[0]',
+                '!I[1]',
+            ),
+            outputs='!activation(O[0], fused_activation_function)',
+        ),
     'RESHAPE':
         Transform(
             type='layout.reshape',
@@ -374,13 +386,6 @@ _Transforms = Converter.unpack_transforms({
     'SQUARE': _TFTransforms['Square'],
     'SQRT': _TFTransforms['Sqrt'],
     'RSQRT': _TFTransforms['Rsqrt'],
-    'ADD': _TFTransforms['Add'],
-    'SUB': _TFTransforms['Sub'],
-    'MUL': _TFTransforms['Mul'],
-    'DIV': _TFTransforms['RealDiv'],
-    'POW': _TFTransforms['Pow'],
-    'MINIMUM': _TFTransforms['Minimum'],
-    'MAXIMUM': _TFTransforms['Maximum'],
     'LOGICAL_AND': _TFTransforms['LogicalAnd'],
     'LOGICAL_OR': _TFTransforms['LogicalOr'],
     'LESS': _TFTransforms['Less'],
