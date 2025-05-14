@@ -1,4 +1,4 @@
-# Copyright (c) 2017 The Khronos Group Inc.
+# Copyright (c) 2017-2025 The Khronos Group Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,16 @@
 
 from setuptools import Extension, setup
 import numpy
-from os import name as os_name
+import shutil
+import os
+
+
+if os.path.exists("build"):
+    shutil.rmtree("build")
+if os.path.exists("dist"):
+    shutil.rmtree("dist")
+if os.path.exists("nnef.egg-info"):
+    shutil.rmtree("nnef.egg-info")
 
 setup(
     ext_modules=[
@@ -24,7 +33,7 @@ setup(
             sources=["nnef/nnef.cpp"],
             include_dirs=["nnef/cpp/include", numpy.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"] if os_name != "nt" else [],
+            extra_compile_args=["-std=c++11"] if os.name != "nt" else [],
         )
     ],
 )
