@@ -47,18 +47,30 @@ operator conv {
     }
     @using {
         b = data_format == 'XCN' ? s[-1] : s[0];
-        ic = data_format == 'NCX' ? s[1] : data_format == 'NXC' ? s[-1] : s[-2];
-        ix = data_format == 'NCX' ? s[2:] : data_format == 'NXC' ? s[1:-1] : s[:-2];
+        ic = data_format == 'NCX' ? s[1] :
+             data_format == 'NXC' ? s[-1] :
+                                    s[-2];
+        ix = data_format == 'NCX' ? s[2:] :
+             data_format == 'NXC' ? s[1:-1] :
+                                    s[:-2];
         n = filter_format == 'XCN' || filter_format == 'CXN' ? fs[-1] : fs[0];
-        fc = filter_format == 'NCX' ? fs[1] : filter_format == 'NXC' ? fs[-1] : filter_format == 'XCN' ? fs[-2] : fs[0];
-        fx = filter_format == 'NCX' ? fs[2:] : filter_format == 'NXC' ? fs[1:-1] : filter_format == 'XCN' ? fs[:-2] : fs[1:-1];
+        fc = filter_format == 'NCX' ? fs[1] :
+             filter_format == 'NXC' ? fs[-1] :
+             filter_format == 'XCN' ? fs[-2] :
+                                      fs[0];
+        fx = filter_format == 'NCX' ? fs[2:] :
+             filter_format == 'NXC' ? fs[1:-1] :
+             filter_format == 'XCN' ? fs[:-2] :
+                                      fs[1:-1];
         fd = (fx - 1) * dilation + 1;
         paddings = padding[:d] + padding[d:] ??
                    ((ceil_mode ? ix \ stride : ix / stride) - 1) * stride + fd - ix;
         offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
         ox = ceil_mode ? (ix + paddings - fd) \ stride + 1 :
                          (ix + paddings - fd) / stride + 1;
-        os = data_format == 'NCX' ? [b,n,ox..] : data_format == 'NXC' ? [b,ox..,n] : [ox..,n,b];
+        os = data_format == 'NCX' ? [b,n,ox..] :
+             data_format == 'NXC' ? [b,ox..,n] :
+                                    [ox..,n,b];
         g = groups == 0 ? ic : groups;
         m = n / g;
         padding_aligns = ['LOWER', 'UPPER'];
@@ -133,18 +145,28 @@ operator deconv {
     }
     @using {
         b = data_format == 'XCN' ? s[-1] : s[0];
-        ic = data_format == 'NCX' ? s[1] : data_format == 'NXC' ? s[-1] : s[-2];
-        ix = data_format == 'NCX' ? s[2:] : data_format == 'NXC' ? s[1:-1] : s[:-2];
+        ic = data_format == 'NCX' ? s[1] :
+             data_format == 'NXC' ? s[-1] : s[-2];
+        ix = data_format == 'NCX' ? s[2:] :
+             data_format == 'NXC' ? s[1:-1] : s[:-2];
         n = filter_format == 'XCN' || filter_format == 'CXN' ? fs[-1] : fs[0];
-        fc = filter_format == 'NCX' ? fs[1] : filter_format == 'NXC' ? fs[-1] : filter_format == 'XCN' ? fs[-2] : fs[0];
-        fx = filter_format == 'NCX' ? fs[2:] : filter_format == 'NXC' ? fs[1:-1] : filter_format == 'XCN' ? fs[:-2] : fs[1:-1];
+        fc = filter_format == 'NCX' ? fs[1] :
+             filter_format == 'NXC' ? fs[-1] :
+             filter_format == 'XCN' ? fs[-2] :
+                                      fs[0];
+        fx = filter_format == 'NCX' ? fs[2:] :
+             filter_format == 'NXC' ? fs[1:-1] :
+             filter_format == 'XCN' ? fs[:-2] :
+                                      fs[1:-1];
         fd = (fx - 1) * dilation + 1;
         paddings = padding[:d] + padding[d:] ?? (ix - 1) * stride + fd - ix * stride;
         offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
         ox = output_size ?? (ix - 1) * stride + fd - paddings;
         g = groups == 0 ? ic : groups;
         oc = fc * g;
-        os = data_format == 'NCX' ? [b,oc,ox..] : data_format == 'NXC' ? [b,ox..,oc] : [ox..,oc,b];
+        os = data_format == 'NCX' ? [b,oc,ox..] :
+             data_format == 'NXC' ? [b,ox..,oc] :
+                                    [ox..,oc,b];
         m = n / g;
         padding_aligns = ['LOWER', 'UPPER'];
         data_formats = ['NCX', 'NXC', 'XCN'];
@@ -561,9 +583,10 @@ operator gelu {
             "'approximate' must be one of {approximations}", approximate;
     }
     @lower {
-        y[i..] = approximation == 'TANH' ? 0.5 * x[i..] * (1.0 + `tanh`(`sqrt`(2.0 / pi) * (x[i..] + 0.044715 * x[i..] ** 3.0))) :
+        y[i..] = approximation == 'TANH' ? 0.5 * x[i..] * (1.0 + `tanh`(`sqrt`(2.0 / pi)
+                                           * (x[i..] + 0.044715 * x[i..] ** 3.0))) :
                  approximation == 'SIGMOID' ? x[i..] / (1.0 + `exp`(-1.702 * x[i..])) :
-                 0.5 * x[i..] * (1.0 + `erf`(x[i..] / `sqrt`(2.0))),
+                                    0.5 * x[i..] * (1.0 + `erf`(x[i..] / `sqrt`(2.0))),
             i < s;
     }
 }
