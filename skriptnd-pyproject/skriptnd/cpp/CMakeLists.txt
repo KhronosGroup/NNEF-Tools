@@ -65,7 +65,7 @@ target_include_directories(${PROJECT_NAME}
         PUBLIC $<INSTALL_INTERFACE:include/frontend>
         PUBLIC $<INSTALL_INTERFACE:include/composer>)
 
-set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
+set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX _d)
 
 target_link_libraries(${PROJECT_NAME})
