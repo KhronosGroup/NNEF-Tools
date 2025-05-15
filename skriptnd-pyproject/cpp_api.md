@@ -58,3 +58,5 @@ bool( const std::string& name, const std::map<std::string,sknd::Typename>& dtype
 ```
 
 where the parameters of the callback are the properties of the operation in question, and the return value must be whether to consider the operation instance as atomic or to be unrolled. For both parameters, supplying a null pointer results in a constant false function.
+
+More detailed usage example can be found in `skriptnd/cpp/src/sample.cpp`.
