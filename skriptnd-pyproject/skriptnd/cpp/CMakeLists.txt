@@ -35,21 +35,19 @@ add_library(${PROJECT_NAME}
         include/core/types.h
         include/core/value.h
         include/core/variant.h
-        include/frontent/astexpr.h
-        include/frontent/lexer.h
-        include/frontent/operator.h
-        include/frontent/parser.h
-        include/frontent/polynom.h
-        include/frontent/symbolic.h
-        include/frontent/typing.h
+        include/frontend/astexpr.h
+        include/frontend/lexer.h
+        include/frontend/operator.h
+        include/frontend/parser.h
+        include/frontend/polynom.h
+        include/frontend/symbolic.h
+        include/frontend/typing.h
         include/composer/composer.h
         include/composer/evaluation.h
         include/composer/simplification.h
         include/composer/model.h
         include/composer/tensorref.h
         include/composer/valuexpr.h
-        include/runtime/runtime.h
-        include/runtime/intrinsics.h
         src/skriptnd.cpp
         )
 
