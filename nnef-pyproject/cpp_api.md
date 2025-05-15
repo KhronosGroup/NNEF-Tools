@@ -7,7 +7,7 @@ The `examples/samples/sample.cpp` contains a minimal example that showcases the 
 
 Example of build commands under Linux:
 ````
-$ cd NNEF-Tools/parser/cpp
+$ cd nnef/cpp
 $ mkdir build && cd build
 $ cmake ..
 $ make
