@@ -57,7 +57,13 @@ add_library(${PROJECT_NAME}
 # during install step
 target_include_directories(${PROJECT_NAME}
         PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        PUBLIC $<INSTALL_INTERFACE:include>)
+        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/core>
+        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/frontend>
+        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/composer>
+        PUBLIC $<INSTALL_INTERFACE:include>
+        PUBLIC $<INSTALL_INTERFACE:include/core>
+        PUBLIC $<INSTALL_INTERFACE:include/frontend>
+        PUBLIC $<INSTALL_INTERFACE:include/composer>)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX _d)
