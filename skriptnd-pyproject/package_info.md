@@ -1,7 +1,7 @@
-SkriptND Parser Project
+SkriptND Python package
 ===================
 
-This package contains a sample SkriptND parser and sample executor, using a C++ backend.
+This package contains a SkriptND parser and sample executor, using a C++ backend.
 
 
 Using the module
@@ -10,32 +10,32 @@ Using the module
 In the python interpreter, type
 
     import skriptnd as sknd
-    graph = sknd.read_model('/model/folder/main.sknd')
+    model = sknd.read_model('path/to/model/folder')
 
-The path `'/model/folder/main.sknd'` should point to the main .sknd source file of the model, which may reference other
-.sknd files that it includes and .dat files for model weights.
+The path `'path/to/model/folder'` should point to the folder containing the model's main .sknd file, which may reference other .sknd files that it includes and .dat files for model parameters.
 
 Alternatively, the methods
 
-    graph = sknd.parse_file('/model/folder/main.sknd')
+    model = sknd.parse_file('path/to/model/folder/main.sknd')
 
 and
 
-    graph = sknd.parse_string("graph G { ... }")
+    model = sknd.parse_string("graph G { ... }")
 
-can be used to parse a graph from files or strings without loading the associated weights.
+can be used to parse a model from files or strings without loading the associated parameters.
 
-After invocation, `graph` is a data class containing the name, tensors, operations, inputs and outputs of the graph.
-After the graph is obtained, it can be compiled with the command
+After invocation, `model` is a data class containing the graphs of the model, and each graph contains its name, tensors, operations, inputs and outputs. After the model is obtained, it can be compiled with the command
 
-    model = sknd.compile_model(graph)
+    compiled = sknd.compile_model(model)
 
 The compiled model is a python executable object that can then be invoked with inputs (numpy arrays) and returns the 
 model outputs (as a tuple of numpy arrays):
 
     import numpy as np
     input = np.random.random((10, 20))
-    output, = model(input)
+    output, = compiled(input)
 
 Note however that the executor uses a sample C++ code generator running on CPU (unoptimized), therefore it is only 
 intended for testing/comparison purposes.  
+
+Further usage examples can be found in `sample.py`.
