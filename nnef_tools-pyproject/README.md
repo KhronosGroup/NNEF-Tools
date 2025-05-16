@@ -1,6 +1,10 @@
 # NNEF Tools
 
-This package contains a set of tools for converting and transforming machine learning models.
+This package contains a set of tools for converting and optimizing machine learning models into NNEF format and compiling or executing them.
+
+## Usage
+
+[Python package usage](package_info.md)
 
 ## Dependencies
 
@@ -11,15 +15,10 @@ The python package supports extras for different functionalities:
 | TensorFlow Protobuf conversion | tensorflow-protobuf | tensorflow                                   |
 | TensorFlow Lite conversion     | tensorflow-lite     | tensorflow, flatbuffers                      |
 | ONNX conversion                | onnx                | protobuf, onnx, onnx-simplifier, onnxruntime |
-| Caffe and Caffe2 conversion    | caffe               | protobuf, torch                              |
 | Visualization of NNEF models   | visualization       | graphviz                                     |
 | Full install                   | full                | _all packages listed above_                  |
 
-Installing ONNX and Caffe dependencies (for reference):
+Installing ONNX dependencies (for reference):
 ```
-pip install nnet_tools[onnx, caffe] 
+pip install nnet_tools[onnx] 
 ```
-
-## Usage
-
-[Python package usage](package_info.md)
