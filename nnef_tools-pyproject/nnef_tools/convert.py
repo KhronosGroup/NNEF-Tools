@@ -316,7 +316,10 @@ def main(args):
                 return -1
 
         if args.static_only:
-            utils.remove_dynamic(graph)
+            if not utils.remove_dynamic(graph):
+                print("Conversion is called with --static-only but model contains dynamic inputs, "
+                      "which would result in an empty model")
+                return -1
             utils.remove_unreachable(graph)
 
         if converter:
