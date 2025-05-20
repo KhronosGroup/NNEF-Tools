@@ -234,7 +234,7 @@ def replace_chain(arg, types, func, allow_forks=False):
 
 
 def _remove_unreachables(graph):
-    visited = {tensor.producer for tensor in graph.outputs}
+    visited = {tensor.producer for tensor in graph.outputs if tensor.producer is not None}
     queue = list(visited)
 
     k = 0
@@ -260,6 +260,59 @@ def remove_unreachables(arg):
     else:
         for graph in arg.graphs:
             _remove_unreachables(graph)
+
+
+def _remove_dynamic(graph):
+    for tensor in graph.inputs:
+        if tensor.shape is None or any(s is None for s in tensor.shape):
+            return False
+
+    dynamic_tensors = {tensor for tensor in graph.tensors if tensor.shape is None or any(s is None for s in tensor.shape)}
+    dynamic_ops = {tensor.producer for tensor in dynamic_tensors}
+
+    def has_graph_attrib(op):
+        for key, value in op.attribs.items():
+            if isinstance(value, Graph) or (isinstance(value, list) and any(isinstance(item, Graph) for item in value)):
+                return True
+        return False
+
+    dynamic_ops.update(op for op in graph.operations if has_graph_attrib(op))
+
+    queue = list(dynamic_ops)
+
+    k = 0
+    while k < len(queue):
+        op = queue[k]
+        k += 1
+
+        for tensor in op.outputs:
+            dynamic_tensors.add(tensor)
+            for op in tensor.consumers:
+                if op not in dynamic_ops:
+                    dynamic_ops.add(op)
+                    queue.append(op)
+
+    kept_outputs = tuple(tensor for tensor in graph.outputs if tensor not in dynamic_tensors)
+    new_outputs = kept_outputs + tuple(tensor for tensor in graph.tensors
+                                       if all(op in dynamic_ops for op in tensor.consumers) and
+                                       tensor not in dynamic_tensors and tensor.producer is not None)
+
+    graph.outputs = kept_outputs
+    graph.remove_operations(dynamic_ops, unlink=True)
+    graph.remove_tensors(dynamic_tensors)
+    graph.outputs = new_outputs
+
+    return True
+
+
+def remove_dynamic(arg):
+    if isinstance(arg, Graph):
+        return _remove_dynamic(arg)
+    else:
+        if not _remove_dynamic(arg.main):
+            return False
+        arg.remove_graphs(arg.graphs[1:])
+        return True
 
 
 def _remove_unused_tensors(graph):

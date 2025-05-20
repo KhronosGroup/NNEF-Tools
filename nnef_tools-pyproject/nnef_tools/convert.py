@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import utils
+from model.utils import remove_dynamic, remove_unreachables
 from skriptnd import Expr
 from .conversion import Converter, ConversionError
 import numpy as np
@@ -321,7 +321,7 @@ def main(args):
                 print("Could not find tensor(s) in graph: {}".format(not_found_names))
                 return -1
 
-            utils.remove_unreachables(model)
+            remove_unreachables(model)
 
         optimizer = get_optimizer(args.input_format)
         if optimizer:
@@ -331,8 +331,11 @@ def main(args):
                 return -1
 
         if args.static_only:
-            utils.remove_dynamic(model)
-            utils.remove_unreachables(model)
+            if not remove_dynamic(model):
+                print("Conversion is called with --static-only but model contains dynamic inputs, "
+                      "which would result in an empty model")
+                return -1
+            remove_unreachables(model)
 
         if converter:
             model.sort()
