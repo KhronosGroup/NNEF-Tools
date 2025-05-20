@@ -58,7 +58,7 @@ class TestEnv(sknd_test.TestEnv):
         self._onnx_reader = onnx_io.Reader(simplify=False, enforce_output_shapes=True)
         self._onnx_writer = onnx_io.Writer()
         self._onnx_to_sknd_converter = onnx_to_sknd.Converter()
-        self._skriptnd_reader = skriptnd_io.Reader(atomics=lambda name: not name.startswith('main.'))
+        self._skriptnd_reader = skriptnd_io.Reader(atomic=lambda name: not name.startswith('main.'))
         self._skriptnd_writer = skriptnd_io.Writer(operators=onnx_to_sknd.Converter.defined_operations(),
                                                    imports=onnx_to_sknd.Converter.defined_imports(),
                                                    inline_subgraphs=False)

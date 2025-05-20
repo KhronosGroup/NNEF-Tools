@@ -522,7 +522,7 @@ def main(args):
 
     try:
         executor = get_executor(args.format, args.model, collect_statistics,
-                                custom_operators, args.decompose, args.atomics,
+                                custom_operators, args.decompose, args.atomic,
                                 args.target, args.device)
 
         if isinstance(output_names, dict):
@@ -631,7 +631,7 @@ if __name__ == '__main__':
                         help='The inputs/outputs to transpose from channels last to channels first dimension order')
     parser.add_argument('--decompose', type=str, nargs='*', default=None,
                         help='Names of operators to be decomposed by NNEF parser')
-    parser.add_argument('--atomics', type=str, nargs='*', default=None,
+    parser.add_argument('--atomic', type=str, nargs='*', default=None,
                         help='Names of operators not to be decomposed by parser')
     parser.add_argument('--statistics', type=str, nargs='?', default=None, const='stats.json',
                         help='Calculate activations statistics and save to output path in json format')

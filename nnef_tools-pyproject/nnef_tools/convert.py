@@ -22,10 +22,10 @@ import json
 import six
 
 
-def get_reader(input_format, atomics, decomposed, fold_constants, custom_shapes):
+def get_reader(input_format, atomic, decomposed, fold_constants, custom_shapes):
     if input_format == 'sknd':
         from .io.skriptnd import Reader
-        return Reader(atomics=atomics)
+        return Reader(atomic=atomic)
     elif input_format == 'nnef':
         from .io.nnef import Reader
         return Reader(custom_shapes=custom_shapes, decomposed=decomposed)
@@ -246,13 +246,13 @@ def main(args):
             print("Unsupported tools: {} to {}".format(args.input_format, args.output_format))
             return -1
 
-    atomics = converter.atomic_operations() if converter else []
+    atomic = converter.atomic_operations() if converter else []
     decomposed = converter.decomposed_operations() if converter else []
     operators = converter.defined_operations() if converter else {}
     dependencies = converter.defined_operation_dependencies() if converter else {}
 
-    if args.atomics is not None:
-        atomics += args.atomics
+    if args.atomic is not None:
+        atomic += args.atomic
 
     if args.decompose is not None:
         decomposed += args.decompose
@@ -263,7 +263,7 @@ def main(args):
     if converter is not None:
         custom_shapes.update(converter.defined_shapes())
 
-    reader = get_reader(args.input_format, atomics=atomics, decomposed=decomposed,
+    reader = get_reader(args.input_format, atomic=atomic, decomposed=decomposed,
                         fold_constants=args.fold_constants, custom_shapes=custom_shapes)
     if reader is None:
         print("Unsupported input-format: {}".format(args.input_format))
@@ -420,7 +420,7 @@ if __name__ == '__main__':
                         help='Enable mirror-tools of unsupported operations')
     parser.add_argument('--keep-io-names', action='store_true',
                         help='Keep the names of model inputs/outputs if possible')
-    parser.add_argument('--atomics', type=str, nargs='*', default=None,
+    parser.add_argument('--atomic', type=str, nargs='*', default=None,
                         help='Names of operators not to be decomposed by parser')
     parser.add_argument('--decompose', type=str, nargs='*', default=None,
                         help='Names of operators to be decomposed by parser')

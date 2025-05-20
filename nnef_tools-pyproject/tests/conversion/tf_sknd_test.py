@@ -43,7 +43,7 @@ class TestEnv(sknd_test.TestEnv):
     def setUp(self) -> None:
         self._tf_reader = tf_io.Reader()
         self._tf_to_sknd_converter = tf_to_sknd.Converter()
-        self._sknd_reader = sknd_io.Reader(atomics=lambda name: not name.startswith('main.'))
+        self._sknd_reader = sknd_io.Reader(atomic=lambda name: not name.startswith('main.'))
         self._sknd_writer = sknd_io.Writer(operators=tf_to_sknd.Converter.defined_operations(),
                                            imports=tf_to_sknd.Converter.defined_imports(),
                                            inline_subgraphs=False)
