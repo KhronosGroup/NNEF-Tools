@@ -17,7 +17,6 @@ from __future__ import division, print_function, absolute_import
 from ..model import *
 from ..model.utils import remove_unused_tensors
 from ..utils import types
-from skriptnd import valid_id as ensure_valid_id
 from enum import Enum
 import numpy as np
 import functools

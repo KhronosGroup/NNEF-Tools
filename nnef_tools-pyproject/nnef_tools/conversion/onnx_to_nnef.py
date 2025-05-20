@@ -303,7 +303,7 @@ class Converter(_Converter):
 
     def lower_pads(self, input_size, filter_size, output_size, stride, dilation):
         rank = len(input_size)
-        total = [None] * rank
+        total = [0] * rank
         for i in range(rank):
             dilated_size = (filter_size[i] - 1) * dilation[i] + 1
             total[i] = max((input_size[i] // stride[i] - 1) * stride[i] + dilated_size - output_size[i], 0)

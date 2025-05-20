@@ -18,7 +18,7 @@ from ..model.utils import *
 from ..model import *
 from ..utils import types
 from collections import OrderedDict
-from .converter import ShapeExpr, optimize_shape_expr, check_shape_expr
+from .converter import ShapeExpr
 import numpy as np
 import copy
 
