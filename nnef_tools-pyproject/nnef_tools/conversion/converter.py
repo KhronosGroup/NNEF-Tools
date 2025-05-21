@@ -1103,7 +1103,7 @@ class ShapeExpr:
         elif self.op == ShapeExpr.Op.DownRank:
             return f"{self.args[0]}[0]"
         elif self.op == ShapeExpr.Op.Expand:
-            return f"[{self.args[0]}..({self.args[1]})]"
+            return f"[{self.args[0]} ..({self.args[1]})]"
         elif self.op == ShapeExpr.Op.Select:
             return f"{self.args[0]} ? {self.args[1]} : {self.args[2]}"
         elif self.op == ShapeExpr.Op.Sum:
