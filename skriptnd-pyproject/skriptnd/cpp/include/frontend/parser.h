@@ -537,6 +537,8 @@ namespace sknd
                         spreads |= 1 << extents.size();
                     }
                     
+                    auto pos = lexer.position();
+                    
                     Shared<Expr> extent;
                     TRY_DECL(tilde, (flags & Flags::AllowTilde) ? lexer.accept_if(Operator::Tilde) : false)
                     if ( !tilde )
@@ -553,7 +555,7 @@ namespace sknd
                     
                     if ( !extent && (bound || (flags & Flags::IsDecl)) )
                     {
-                        extent = (Shared<Expr>)std::make_shared<IdenfitierExpr>(position, name + ".shape:" + std::to_string(extents.size()));
+                        extent = (Shared<Expr>)std::make_shared<IdenfitierExpr>(pos, name + ".shape:" + std::to_string(extents.size()));
                     }
                     
                     TRY_DECL(expand, lexer.accept_if(Operator::Dots))
@@ -562,9 +564,9 @@ namespace sknd
                         TRY_DECL(count, lexer.is_token(Operator::LeftParen) || !extent ? parse_paren(lexer, parse_expr) : Shared<Expr>())
                         if ( !count && extent->kind == Expr::Identifier && (flags & Flags::IsDecl) )
                         {
-                            count = std::make_shared<IdenfitierExpr>(position, "|" + as_identifier(*extent).name + "|");
+                            count = std::make_shared<IdenfitierExpr>(pos, "|" + as_identifier(*extent).name + "|");
                         }
-                        extent = (Shared<Expr>)std::make_shared<ExpandExpr>(position, extent, count);
+                        extent = (Shared<Expr>)std::make_shared<ExpandExpr>(pos, extent, count);
                     }
                     
                     extents.emplace_back(extent);
