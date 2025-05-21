@@ -422,6 +422,19 @@ class Converter(_Converter):
                     return ShapeExpr(ShapeExpr.Op.DownRank, args=[inputs[0], inputs[0].rank - len(shape)])
                 else:
                     return inputs[0]
+            elif op.type == 'ConstantOfShape':
+                assert inputs[0].rank <= 1, f"Operation '{op.name}' of type 'ConstantOfShape' must have shape of rank <= 1 in shape expression"
+                value = op.attribs['value']
+                if len(value.shape) > 0:
+                    value = np.squeeze(value)
+                if inputs[0].rank == 0:
+                    return ShapeExpr(ShapeExpr.Op.Const, args=[value])
+                else:
+                    zero = ShapeExpr(ShapeExpr.Op.Const, args=[np.array(0)])
+                    size = ShapeExpr(ShapeExpr.Op.Subscript, args=[inputs[0], zero])
+                    return ShapeExpr(ShapeExpr.Op.Expand, args=[value, size])
+            elif op.type == 'Where':
+                return ShapeExpr(ShapeExpr.Op.Select, args=[inputs[0], inputs[1], inputs[2]])
             elif op.type == 'Range':
                 return ShapeExpr(ShapeExpr.Op.Range, args=[inputs[0], inputs[1], inputs[2]])
             elif op.type == 'ReduceSum':
