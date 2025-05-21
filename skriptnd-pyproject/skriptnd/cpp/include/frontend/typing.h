@@ -165,6 +165,10 @@ namespace sknd
                 {
                     report_error(param.position, "input shape can only be omitted for graphs");
                 }
+                if ( param.rank && main )
+                {
+                    report_error(param.rank->position, "capturing input rank in main graph is not allowed");
+                }
             }
             for ( auto& [iden, decl] : decls )
             {
@@ -560,6 +564,14 @@ namespace sknd
                 if ( !iden.empty() && !decls.count(iden) && !bound )
                 {
                     report_error(extent->position, "upper bound must be specified in main graph for dynamic shape");
+                }
+                if ( extent->kind == Expr::Expand )
+                {
+                    auto count = as_expand(*extent).count;
+                    if ( has_unknown_symbols(*count, decls) )
+                    {
+                        report_error(count->position, "shape components of main graph inputs must have fixed length");
+                    }
                 }
             }
         }
