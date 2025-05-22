@@ -62,6 +62,45 @@ namespace sknd
             }
         }
         
+        static bool is_divisible( const monom_type& x, const monom_type& y )
+        {
+            for ( auto it = y.begin(); it != y.end(); )
+            {
+                auto itt = it + 1;
+                while ( itt != y.end() && *itt == *it )
+                {
+                    ++itt;
+                }
+                if ( x.find(&*it, 0, itt - it) == monom_type::npos )
+                {
+                    return false;
+                }
+                it = itt;
+            }
+            return true;
+        }
+        
+        static monom_type monom_divide( const monom_type& x, const monom_type& y )
+        {
+            monom_type res;
+            for ( auto it = x.begin(); it != x.end(); )
+            {
+                auto it1 = y.begin() + y.find(*it);
+                auto it2 = it1 + 1;
+                while ( it2 != y.end() && *it2 == *it1 )
+                {
+                    ++it2;
+                }
+                symbol_type s = *it;
+                it += (it2 - it1);
+                while ( it != x.end() && *it == s )
+                {
+                    res += *it++;
+                }
+            }
+            return res;
+        }
+        
     public:
         
         typedef typename monom_list::const_iterator const_iterator;
@@ -237,6 +276,11 @@ namespace sknd
             return _monoms.empty();
         }
         
+        bool is_monomial() const
+        {
+            return _monoms.size() == 1 && _constant == 0;
+        }
+        
         const value_type& constant_value() const
         {
             return _constant;
@@ -277,6 +321,34 @@ namespace sknd
             {
                 monom.second /= value;
             }
+        }
+        
+        bool is_monomial_divisible( const polynom& other ) const
+        {
+            if ( !other.is_monomial() || _constant != 0 )
+            {
+                return false;
+            }
+            auto& divisor = *other._monoms.begin();
+            for ( auto& monom : _monoms )
+            {
+                if ( !is_divisible(monom.first, divisor.first) || !is_divisible(monom.second, divisor.second) )
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        void monomial_divide( const polynom& other )
+        {
+            auto& divisor = *other._monoms.begin();
+            monom_list monoms;
+            for ( auto& monom : _monoms )
+            {
+                monoms[monom_divide(monom.first, divisor.first)] = monom.second / divisor.second;
+            }
+            _monoms.swap(monoms);
         }
         
     private:
@@ -500,6 +572,11 @@ namespace sknd
         bool is_constant() const
         {
             return _monoms.empty();
+        }
+        
+        bool is_monomial() const
+        {
+            return _monoms.size() == 1 && _constant == 0;
         }
         
         const value_type& constant_value() const

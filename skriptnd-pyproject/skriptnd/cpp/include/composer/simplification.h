@@ -249,6 +249,11 @@ namespace sknd
                                     left.const_divide(right.constant_value());
                                     return left;
                                 }
+                                if ( left.is_monomial_divisible(right) )
+                                {
+                                    left.monomial_divide(right);
+                                    return left;
+                                }
                                 break;
                             }
                             case Lexer::Operator::Power:
