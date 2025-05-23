@@ -17,6 +17,7 @@ from __future__ import division, print_function, absolute_import
 from ..model import *
 from ..model.utils import remove_unused_tensors
 from ..utils import types
+from skriptnd import PlaceholderExpr
 from enum import Enum
 import numpy as np
 import functools
@@ -794,6 +795,14 @@ class ConverterToSkriptND(Converter):
             arg.set_data(expr.args[0], variable=False)
         else:
             Operation(graph, type="layout.constant", attribs={"shape": list(arg.shape), "value": expr}, inputs=(), outputs=(arg,))
+
+    @staticmethod
+    def _set_max_input_shapes(model, max_input_shapes):
+        for tensor in model.main.inputs:
+            max_shape = max_input_shapes.get(tensor.name)
+            if max_shape is not None:
+                tensor.shape = tuple(s if s is not None else PlaceholderExpr(None, max_shape[i])
+                                     for i, s in enumerate(tensor.shape))
 
     @staticmethod
     def _convert_int_inf(x):

@@ -283,7 +283,7 @@ def main(args):
         input_shapes = eval(args.input_shapes)
         if not isinstance(input_shapes, dict) or not all(isinstance(name, str) and isinstance(shape, tuple)
                                                         for name, shape in six.iteritems(input_shapes)):
-            print("'Input-shape' must be a dict of strings to tuples")
+            print("'input-shapes' must be a dict of strings to tuples")
             return -1
 
         reader_kwargs['input_shapes'] = input_shapes
@@ -337,9 +337,19 @@ def main(args):
                 return -1
             remove_unreachables(model)
 
+        converter_kwargs = {}
+        if args.max_input_shapes:
+            max_input_shapes = eval(args.max_input_shapes)
+            if not isinstance(max_input_shapes, dict) or not all(isinstance(name, str) and isinstance(shape, tuple)
+                                                                 for name, shape in six.iteritems(max_input_shapes)):
+                print("'max-input-shapes' must be a dict of strings to tuples")
+                return -1
+
+            converter_kwargs['max_input_shapes'] = max_input_shapes
+
         if converter:
             model.sort()
-            model = converter(model)
+            model = converter(model, **converter_kwargs)
 
             if not check_nan_or_inf(model, 'Converted'):
                 return -1
@@ -401,6 +411,8 @@ if __name__ == '__main__':
                         help='The format of the output model')
     parser.add_argument('--input-shapes', type=str, default=None,
                         help='The (dict of) shape(s) to use for input(s).')
+    parser.add_argument('--max-input-shapes', type=str, default=None,
+                        help='The (dict of) shape upper bound(s) to use for input(s).')
     parser.add_argument('--io-transpose', type=str, nargs='*', default=None,
                         help='The inputs/outputs to transpose')
     parser.add_argument('--fold-constants', action='store_true',

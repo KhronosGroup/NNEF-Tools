@@ -136,7 +136,7 @@ class Converter(_Converter):
         _Converter.__init__(self, transforms=self.merge_transforms(_Transforms, custom_transforms),
                             functions=custom_functions, mirror_unsupported=mirror_unsupported)
 
-    def __call__(self, model):
+    def __call__(self, model, max_input_shapes=None):
         self._eliminate_constant_ops(model)
         self._collect_shape_ops(model)
         model = _Converter.__call__(self, model)
@@ -148,6 +148,8 @@ class Converter(_Converter):
         self._fix_loops(model)
         self._fix_shape_expr_args(model)
         generate_missing_tensor_names_from_op_type(model)
+        if max_input_shapes:
+            self._set_max_input_shapes(model, max_input_shapes)
         return model
 
     def should_skip_conversion(self, op):
