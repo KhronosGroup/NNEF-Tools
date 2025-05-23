@@ -343,7 +343,11 @@ class Converter(_Converter):
             else:
                 return ShapeExpr(ShapeExpr.Op.Const, args=[value])
         elif op.type == 'Shape':
-            return ShapeExpr(ShapeExpr.Op.Shape, args=[self._map_tensor(op.input)])
+            if op.input.has_producer and op.input.producer in self._shape_ops:
+                length = ShapeExpr(ShapeExpr.Op.Length, args=[self._eval_symbolic_shape(op.input)])
+                return ShapeExpr(ShapeExpr.Op.UpRank, args=[length, 1])
+            else:
+                return ShapeExpr(ShapeExpr.Op.Shape, args=[self._map_tensor(op.input)])
         elif op.type == 'If':
             condition = self._eval_symbolic_shape(op.inputs[0])
             then_branch = self._eval_symbolic_shape(op.attribs['then_branch'].outputs[0])
@@ -389,7 +393,10 @@ class Converter(_Converter):
                 assert inputs[1].rank <= 1, f"Operation '{op.name}' of type 'Gather' must have index of rank <= 1 in shape expression"
                 return ShapeExpr(ShapeExpr.Op.Subscript, args=[inputs[0], inputs[1]])
             elif op.type == 'Concat':
-                return ShapeExpr(ShapeExpr.Op.Concat, args=inputs)
+                if all(arg.op == ShapeExpr.Op.UpRank and arg.arg.rank == 0 for arg in inputs):
+                    return ShapeExpr(ShapeExpr.Op.Pack, args=[arg.arg for arg in inputs])
+                else:
+                    return ShapeExpr(ShapeExpr.Op.Concat, args=inputs)
             elif op.type == 'Slice':
                 assert inputs[1].effective_rank == 0, f"Operation '{op.name}' of type 'Slice' must have 'starts' of length 1"
                 assert inputs[2].effective_rank == 0, f"Operation '{op.name}' of type 'Slice' must have 'ends' of length 1"

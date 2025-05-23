@@ -1043,7 +1043,8 @@ class ShapeExpr:
                      'Less', 'Greater', 'LessEqual', 'GreaterEqual', 'Equal', 'NotEqual',
                      'And', 'Or', 'Xor', 'Neg', 'Not', 'Tilde', 'Select',
                      'Sum', 'Prod', 'Minimize', 'Maximize', 'Any', 'All',
-                     'Pack', 'Concat', 'Slice', 'Subscript', 'Range', 'Cast', 'UpRank', 'DownRank', 'Expand'])
+                     'Pack', 'Concat', 'Slice', 'Subscript', 'Range', 'Cast', 'UpRank', 'DownRank',
+                     'Expand', 'Length'])
 
     def __init__(self, op, args):
         self.op = op
@@ -1113,6 +1114,8 @@ class ShapeExpr:
             return f"{self.args[0]}[0]"
         elif self.op == ShapeExpr.Op.Expand:
             return f"[{self.args[0]} ..({self.args[1]})]"
+        elif self.op == ShapeExpr.Op.Length:
+            return f"len({self.args[0]})"
         elif self.op == ShapeExpr.Op.Select:
             return f"{self.args[0]} ? {self.args[1]} : {self.args[2]}"
         elif self.op == ShapeExpr.Op.Sum:
@@ -1146,6 +1149,8 @@ class ShapeExpr:
             return self.args[0].rank - self.args[1]
         elif self.op == ShapeExpr.Op.Expand:
             return 1
+        elif self.op == ShapeExpr.Op.Length:
+            return 0
         elif self.op == ShapeExpr.Op.Pack:
             return 1
         elif self.op == ShapeExpr.Op.Cast:
@@ -1173,6 +1178,8 @@ class ShapeExpr:
             return self.args[0].rank - self.args[1]
         elif self.op == ShapeExpr.Op.Expand:
             return 1
+        elif self.op == ShapeExpr.Op.Length:
+            return 0
         elif self.op == ShapeExpr.Op.Pack:
             return 1
         elif self.op == ShapeExpr.Op.Cast:
@@ -1187,6 +1194,8 @@ class ShapeExpr:
     @property
     def dtype(self):
         if self.op == ShapeExpr.Op.Shape:
+            return int
+        elif self.op == ShapeExpr.Op.Length:
             return int
         elif self.op == ShapeExpr.Op.Const:
             return self.args[0].dtype
@@ -1261,6 +1270,9 @@ def optimize_shape_expr(expr):
         return _optimize_reduce_shape_expr(expr, ShapeExpr.Op.Minimize, ShapeExpr.Op.Add)
     elif expr.op == ShapeExpr.Op.Prod:
         return _optimize_reduce_shape_expr(expr, ShapeExpr.Op.Minimize, ShapeExpr.Op.Mul)
+    elif expr.op == ShapeExpr.Op.Length:
+        if expr.arg.op == ShapeExpr.Op.Pack:
+            return ShapeExpr(ShapeExpr.Op.Const, args=[np.array(len(expr.arg.args))])
 
     return expr
 
@@ -1273,9 +1285,14 @@ _INT_NEG_INF = ShapeExpr(ShapeExpr.Op.Cast, args=[_FLT_NEG_INF, 'int'])
 
 
 def _optimize_reduce_shape_expr(expr, reduce_op, binary_op):
-    if expr.arg.op == ShapeExpr.Op.Concat:
-        items = [item.arg if item.op == ShapeExpr.Op.UpRank and item.args[1] == 1 else ShapeExpr(reduce_op, [item])
-                 for item in expr.arg.args]
+    arg = expr.arg
+    if arg.op == ShapeExpr.Op.Concat or arg.op == ShapeExpr.Op.Pack:
+        if arg.op == ShapeExpr.Op.Concat:
+            items = [item.arg if item.op == ShapeExpr.Op.UpRank and item.args[1] == 1 else ShapeExpr(reduce_op, [item])
+                     for item in arg.args]
+        else:
+            items = arg.args
+
         if len(items) == 1:
             return items[0]
         elif len(items) > 1:
