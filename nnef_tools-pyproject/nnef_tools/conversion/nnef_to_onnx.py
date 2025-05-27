@@ -32,6 +32,8 @@ class Converter(_Converter):
             'lstm_loop': lambda X, W, R, B, h, c, **kwargs: (h, c),
             'erf': lambda x: x,
             'mish': lambda x: x,
+            'depth_to_space': lambda x, block_size, **kwargs: [x[0], x[1] // block_size ** 2, x[2] * block_size, x[3] * block_size],
+            'space_to_depth': lambda x, block_size, **kwargs: [x[0], x[1] * block_size ** 2, x[2] // block_size, x[3] // block_size],
         }
 
     @staticmethod
@@ -532,5 +534,24 @@ _Transforms = Converter.unpack_transforms({
             attribs={
                 'to': '!O[0].dtype',
             }
+        ),
+    'depth_to_space':
+        Transform(
+            type="DepthToSpace",
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'blocksize': '!block_size',
+                'mode': '!"DCR" if blocks_first else "CRD"',
+            },
+        ),
+    'space_to_depth':
+        Transform(
+            type="SpaceToDepth",
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'blocksize': '!block_size',
+            },
         ),
 })
