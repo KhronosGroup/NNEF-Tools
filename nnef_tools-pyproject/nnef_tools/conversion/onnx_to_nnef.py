@@ -121,6 +121,27 @@ fragment mish( x: tensor<scalar> ) -> ( y: tensor<scalar> )
 }
 """
 
+_DEPTH_TO_SPACE_FRAGMENT = """
+fragment depth_to_space( x: tensor<scalar>, block_size: integer, blocks_first: logical ) -> ( y: tensor<scalar> )
+{
+    r = reshape(x, axis_start=1, axis_count=1, shape=[block_size, block_size, -1] 
+                                if blocks_first else [-1, block_size, block_size]);
+    t = transpose(r, axes=[0, 3, 4, 1, 5, 2] if blocks_first else [0, 1, 4, 2, 5, 3]);
+    q = reshape(t, axis_start=4, axis_count=2, shape=[-1]);
+    y = reshape(q, axis_start=2, axis_count=2, shape=[-1]);
+}
+"""
+
+_SPACE_TO_DEPTH_FRAGMENT = """
+fragment space_to_depth( x: tensor<scalar>, block_size: integer, blocks_first: logical ) -> ( y: tensor<scalar> )
+{
+    p = reshape(x, axis_start=3, axis_count=1, shape=[-1, block_size]);
+    r = reshape(p, axis_start=2, axis_count=1, shape=[-1, block_size]);
+    t = transpose(r, axes=[0, 3, 5, 1, 2, 4] if blocks_first else [0, 1, 3, 5, 2, 4]);
+    y = reshape(t, axis_start=1, axis_count=1, shape=[-1]);
+}
+"""
+
 _INT_MAX = 2 ** 31 - 1
 
 
@@ -136,6 +157,8 @@ class Converter(_Converter):
             'lstm_loop': _LSTM_LOOP_FRAGMENT,
             'erf': _ERF_FRAGMENT,
             'mish': _MISH_FRAGMENT,
+            'depth_to_space': _DEPTH_TO_SPACE_FRAGMENT,
+            'space_to_depth': _SPACE_TO_DEPTH_FRAGMENT,
         }
 
     @staticmethod
@@ -154,6 +177,8 @@ class Converter(_Converter):
             'lstm_loop': lambda X, W, R, B, h, c, **kwargs: (h, c),
             'erf': lambda x: x,
             'mish': lambda x: x,
+            'depth_to_space': lambda x, block_size, **kwargs: [x[0], x[1] // block_size ** 2, x[2] * block_size, x[3] * block_size],
+            'space_to_depth': lambda x, block_size, **kwargs: [x[0], x[1] * block_size ** 2, x[2] // block_size, x[3] // block_size],
         }
 
     def __init__(self, custom_transforms=None, custom_functions=None, mirror_unsupported=False, keep_io_names=False,
@@ -909,6 +934,32 @@ _Transforms = Converter.unpack_transforms({
             attribs={
                 'steps': '!I[0].shape[seq_axis]',
                 'axis': '!seq_axis',
+            },
+        ),
+    'DepthToSpace':
+        Transform(
+            type="depth_to_space",
+            defaults={
+                'mode': "DCR",
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'block_size': '!blocksize',
+                'blocks_first': '!mode == "DCR"',
+            },
+        ),
+    'SpaceToDepth':
+        Transform(
+            type="space_to_depth",
+            defaults={
+                'mode': "DCR",
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'block_size': '!blocksize',
+                'blocks_first': '!mode == "DCR"',
             },
         ),
 })

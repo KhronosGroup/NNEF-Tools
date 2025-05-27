@@ -1002,6 +1002,43 @@ class TestCases(TestEnv):
 
         self._test_conversion('lstm', [node], [X, h0, c0], [hn, cn], constants=[W, R, B])
 
+    def test_depth_to_space(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 64, 32, 32])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 4, 128, 128])
+        node = helper.make_node(
+            op_type='DepthToSpace',
+            inputs=['input'],
+            outputs=['output'],
+            blocksize=4,
+        )
+
+        self._test_conversion('depth_to_space', [node], [input], [output])
+
+    def test_depth_to_space_CRD(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 64, 32, 32])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 4, 128, 128])
+        node = helper.make_node(
+            op_type='DepthToSpace',
+            inputs=['input'],
+            outputs=['output'],
+            blocksize=4,
+            mode="CRD"
+        )
+
+        self._test_conversion('depth_to_space_crd', [node], [input], [output])
+
+    def test_space_to_depth(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 4, 128, 128])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 64, 32, 32])
+        node = helper.make_node(
+            op_type='SpaceToDepth',
+            inputs=['input'],
+            outputs=['output'],
+            blocksize=4,
+        )
+
+        self._test_conversion('space_to_depth', [node], [input], [output])
+
     def test_min_recude(self):
         self._test_reduce('ReduceMin', keepdims=False)
 
