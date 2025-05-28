@@ -452,4 +452,8 @@ _Transforms = Converter.unpack_transforms({
     'RESIZE_BILINEAR': _TFTransforms['ResizeBilinear'],
     'ADD_N': _TFTransforms['AddN'],
     'CAST': _TFTransforms['Cast'],
+    'BATCH_TO_SPACE_ND': _TFTransforms['BatchToSpaceND'],
+    'SPACE_TO_BATCH_ND': _TFTransforms['SpaceToBatchND'],
+    'DEPTH_TO_SPACE': _TFTransforms['DepthToSpace'],
+    'SPACE_TO_DEPTH': _TFTransforms['SpaceToDepth'],
 })

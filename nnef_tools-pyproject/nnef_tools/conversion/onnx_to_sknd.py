@@ -1211,4 +1211,26 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!O[0]',
         ),
+    'DepthToSpace':
+        Transform(
+            type='layout.depth_to_space',
+            defaults={
+                'mode': "DCR",
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'block_size': '!blocksize',
+                'blocks_first': '!mode == "DCR"',
+            },
+        ),
+    'SpaceToDepth':
+        Transform(
+            type='layout.space_to_depth',
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'block_size': '!blocksize',
+            },
+        ),
 })

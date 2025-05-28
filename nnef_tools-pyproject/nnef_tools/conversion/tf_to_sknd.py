@@ -808,4 +808,50 @@ _Transforms = Converter.unpack_transforms({
             inputs='!list(I)',
             outputs='!O[0]'
         ),
+    'SpaceToBatchND':
+        Transform(
+            type='layout.space_to_batch',
+            using={
+                'block_shape': '!arg_as_attrib(I[1])'
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'block_size': '!block_shape',
+                'data_format': "NXC",
+            },
+        ),
+    'BatchToSpaceND':
+        Transform(
+            type='layout.batch_to_space',
+            using={
+                'block_shape': '!arg_as_attrib(I[1])'
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'block_size': '!block_shape',
+                'data_format': "NXC",
+            },
+        ),
+    'SpaceToDepth':
+        Transform(
+            type='layout.space_to_depth',
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'block_size': '!block_size',
+                'data_format': '!("NCX" if data_format == "NCHW" else "NXC") if not _lite_ else "NXC"',
+            },
+        ),
+    'DepthToSpace':
+        Transform(
+            type='layout.depth_to_space',
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'block_size': '!block_size',
+                'data_format': '!("NCX" if data_format == "NCHW" else "NXC") if not _lite_ else "NXC"',
+            },
+        ),
 })

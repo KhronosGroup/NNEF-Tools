@@ -917,6 +917,30 @@ class TestCases(TestEnv):
 
         self._test_conversion('add_n')
 
+    def test_batch_to_space(self):
+        input = tf.placeholder(shape=(16, 32, 32, 128), dtype=tf.float32)
+        output = tf.batch_to_space(input, [[0, 0], [0, 0]], 2)
+
+        self._test_conversion('batch_to_space')
+
+    def test_space_to_batch(self):
+        input = tf.placeholder(shape=(16, 32, 32, 128), dtype=tf.float32)
+        output = tf.space_to_batch(input, [[0, 0], [0, 0]], 2)
+
+        self._test_conversion('space_to_batch')
+
+    def test_depth_to_space(self):
+        input = tf.placeholder(shape=(16, 32, 32, 128), dtype=tf.float32)
+        output = tf.nn.depth_to_space(input, 2)
+
+        self._test_conversion('depth_to_space')
+
+    def test_space_to_depth(self):
+        input = tf.placeholder(shape=(16, 32, 32, 128), dtype=tf.float32)
+        output = tf.nn.space_to_depth(input, 2)
+
+        self._test_conversion('space_to_depth')
+
 
 @unittest.skipIf(TestEnv._network_folder is None or not os.path.isdir(TestEnv._network_folder),
                  "no network test folder provided")
