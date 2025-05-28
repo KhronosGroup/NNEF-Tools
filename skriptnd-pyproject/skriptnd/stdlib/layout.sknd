@@ -650,7 +650,7 @@ operator transpose {
     }
 }
 
-# @item Merging space dimensions into / out of batch dimension
+# @item Merging space dimensions into / out of batch / channel dimension
 
 operator space_to_batch {
     @dtype {
@@ -658,12 +658,14 @@ operator space_to_batch {
     }
     @attrib {
         block_size: int..(d);
+        blocks_first: bool = true;
+        data_format: str = 'NCX';
     }
     @input {
-        input: T[b,c,s..(d)];
+        input: T[b,c..(ncx),s..(d),c..(!ncx)];
     }
     @output {
-        output: T[block_size * .. * b,c,s / block_size..];
+        output: T[block_size * .. * b,c..(ncx),s / block_size..,c..(!ncx)];
     }
     @assert {
         block_size > 0:
@@ -671,10 +673,20 @@ operator space_to_batch {
         s % block_size == 0:
             "spatial size of input must be divisibe by 'block_size'",
             'size': s, block_size;
+        data_format in data_formats:
+            "'data_format' must be one of {data_formats}", data_format;
+    }
+    @using {
+        data_formats = ['NCX', 'NXC'];
+        ncx = data_format == 'NCX';
+        spatial_axis = ncx ? 2 : 1;
+        spatial_dims = [spatial_axis : spatial_axis + 2 * d : 2];
+        perm = [0 ..(!blocks_first),spatial_dims + 1 ..,0 ..(blocks_first),
+                1 ..(ncx),spatial_dims..,(2*d+1)..(!ncx)];
     }
     @compose {
-        reshaped = reshape{axis=2, rank=d, shape=[(block_size,s / block_size)..]}(input);
-        transposed = transpose{perm=[2:2*d+2:2,0,1,3:2*d+2:2]}(reshaped);
+        reshaped = reshape{axis=spatial_axis, rank=d, shape=[(s / block_size, block_size)..]}(input);
+        transposed = transpose{perm=perm}(reshaped);
         output = flatten{axis=0, rank=d+1}(transposed);
     }
 }
@@ -685,12 +697,14 @@ operator batch_to_space {
     }
     @attrib {
         block_size: int..(d);
+        blocks_first: bool = true;
+        data_format: str = 'NCX';
     }
     @input {
-        input: T[b,c,s..(d)];
+        input: T[b,c..(ncx),s..(d),c..(!ncx)];
     }
     @output {
-        output: T[b / (block_size * ..),c,s * block_size..];
+        output: T[b / (block_size * ..),c..(ncx),s * block_size..,c..(!ncx)];
     }
     @assert {
         block_size > 0:
@@ -698,14 +712,111 @@ operator batch_to_space {
         b % (block_size * ..) == 0:
             "batch size of input must be divisible by product of 'block_size'",
             'batch': b, block_size;
+        data_format in data_formats:
+            "'data_format' must be one of {data_formats}", data_format;
     }
     @using {
-        range_d = [0:d];
+        data_formats = ['NCX', 'NXC'];
+        ncx = data_format == 'NCX';
+        channel_axis = ncx ? 1 : d + 1;
+        spatial_axis = ncx ? 2 : 1;
+        dims = [0:d];
+        split_shape = blocks_first ? [block_size.., b / (block_size * ..)] :
+                                     [b / (block_size * ..), block_size..];
+        batch_dim = blocks_first ? d : 0;
+        block_dims = blocks_first ? [0:d] : [1:d+1];
+        spatial_dims = ncx ? [d+2:d+2+d] : [d+1:d+1+d];
+        perm = [batch_dim,(d+1)..(ncx),(spatial_dims,block_dims)..,(2*d+1)..(!ncx)];
     }
     @compose {
-        reshaped = reshape{axis=0, rank=1, shape=[block_size..,b / (block_size * ..)]}(input);
-        transposed = transpose{perm=[d,d+1,(range_d,range_d+d+2)..]}(reshaped);
-        output = reshape{axis=2, rank=2*d, shape=[s * block_size..]}(transposed);
+        reshaped = reshape{axis=0, rank=1, shape=split_shape}(input);
+        transposed = transpose{perm=perm}(reshaped);
+        output = reshape{axis=spatial_axis, rank=2*d, shape=[s * block_size..]}(transposed);
+    }
+}
+
+operator space_to_depth {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        block_size: int..(d);
+        blocks_first: bool = true;
+        data_format: str = 'NCX';
+    }
+    @input {
+        input: T[b,c..(ncx),s..(d),c..(!ncx)];
+    }
+    @output {
+        output: T[b,(block_size * .. * c)..(ncx),s / block_size..,(block_size * .. * c)..(!ncx)];
+    }
+    @assert {
+        block_size > 0:
+            "'block_size' must be positive", block_size;
+        s % block_size == 0:
+            "spatial size of input must be divisibe by 'block_size'",
+            'size': s, block_size;
+        data_format in data_formats:
+            "'data_format' must be one of {data_formats}", data_format;
+    }
+    @using {
+        data_formats = ['NCX', 'NXC'];
+        ncx = data_format == 'NCX';
+        channel_axis = ncx ? 1 : d + 1;
+        spatial_axis = ncx ? 2 : 1;
+        spatial_dims = [spatial_axis : spatial_axis + 2 * d : 2];
+        channel_dims = blocks_first ? [spatial_dims + 1 ..,ncx ? 1 : 2 * d + 1] :
+                                      [ncx ? 1 : 2 * d + 1,spatial_dims + 1 ..];
+        perm = ncx ? [0,channel_dims..,spatial_dims..] :
+                     [0,spatial_dims..,channel_dims..];
+    }
+    @compose {
+        reshaped = reshape{axis=spatial_axis, rank=d, shape=[(s / block_size, block_size)..]}(input);
+        transposed = transpose{perm=perm}(reshaped);
+        output = flatten{axis=channel_axis, rank=d+1}(transposed);
+    }
+}
+
+operator depth_to_space {
+    @dtype {
+        T: type;
+    }
+    @attrib {
+        block_size: int..(d);
+        blocks_first: bool = true;
+        data_format: str = 'NCX';
+    }
+    @input {
+        input: T[b,c..(ncx),s..(d),c..(!ncx)];
+    }
+    @output {
+        output: T[b,c / (block_size * ..)..(ncx),s * block_size..,c / (block_size * ..)..(!ncx)];
+    }
+    @assert {
+        block_size > 0:
+            "'block_size' must be positive", block_size;
+        c % (block_size * ..) == 0:
+            "depth of input must be divisible by product of 'block_size'",
+            'depth': c, block_size;
+        data_format in data_formats:
+            "'data_format' must be one of {data_formats}", data_format;
+    }
+    @using {
+        data_formats = ['NCX', 'NXC'];
+        ncx = data_format == 'NCX';
+        channel_axis = ncx ? 1 : d + 1;
+        spatial_axis = ncx ? 2 : 1;
+        split_shape = blocks_first ? [block_size..,c / (block_size * ..)] :
+                                     [c / (block_size * ..),block_size..];
+        channel_dim = channel_axis + (blocks_first ? d : 0);
+        block_dims = channel_axis + (blocks_first ? [0:d] : [1:d+1]);
+        spatial_dims = ncx ? [d+2:d+2+d] : [1:d+1];
+        perm = [0,channel_dim..(ncx),(spatial_dims,block_dims)..,channel_dim..(!ncx)];
+    }
+    @compose {
+        reshaped = reshape{axis=channel_axis, rank=1, shape=split_shape}(input);
+        transposed = transpose{perm=perm}(reshaped);
+        output = reshape{axis=spatial_axis, rank=2*d, shape=[s * block_size..]}(transposed);
     }
 }
 

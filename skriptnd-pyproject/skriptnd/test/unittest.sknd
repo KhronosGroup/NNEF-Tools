@@ -1334,6 +1334,30 @@ graph batch_to_space {
     }
 }
 
+graph space_to_depth {
+    @input {
+        input: real[4,32,10,10];
+    }
+    @output {
+        output: real[4,128,5,5];
+    }
+    @compose {
+        output = layout.space_to_depth{block_size=[2,2]}(input);
+    }
+}
+
+graph depth_to_space {
+    @input {
+        input: real[4,32,10,10];
+    }
+    @output {
+        output: real[4,8,20,20];
+    }
+    @compose {
+        output = layout.depth_to_space{block_size=[2,2]}(input);
+    }
+}
+
 graph shuffle {
     @input {
         input: real[4,32,10,10];
