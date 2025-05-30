@@ -1376,6 +1376,7 @@ namespace sknd
                 return ceil_div(range.last - range.first, range.stride);
             }
         }
+        return nullptr;
     }
 
     inline ValueExpr ValueExpr::at( const size_t idx ) const
