@@ -1468,6 +1468,10 @@ namespace sknd
                 auto i = dtype() == Typename::Real ? ValueExpr((real_t)idx) : ValueExpr((int_t)idx);
                 return range.first + i * range.stride;
             }
+            default:
+            {
+                return *this;
+            }
         }
     }
 
