@@ -2289,6 +2289,8 @@ namespace sknd
                     return eval_type(as_substitute(expr), decls, flags);
                 }
             }
+
+            return Error(expr.position, "unknown expression type '%s'");
         }
         
         static Result<Type> eval_type( const LiteralExpr& literal, const Dict<Declaration>& decls )
