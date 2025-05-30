@@ -93,9 +93,9 @@ py::dtype py_dtype( sknd::rt::Dtype dtype )
 {
     static const py::dtype py_dtypes[] =
     {
-        py::dtype::of<sknd::real_t>(),
-        py::dtype::of<sknd::int_t>(),
-        py::dtype::of<sknd::bool_t>(),
+        py::dtype::of<sknd::rt::real_t>(),
+        py::dtype::of<sknd::rt::int_t>(),
+        py::dtype::of<sknd::rt::bool_t>(),
     };
     return py_dtypes[(int)dtype];
 }
@@ -408,7 +408,7 @@ def _format_guard(index, tensor, dim):
 
 
 def _format_dtype(dtype):
-    return f"sknd::{dtype.name.lower()}_t"
+    return f"sknd::rt::{dtype.name.lower()}_t"
 
 
 def _format_decl_type(tensor):
@@ -480,9 +480,9 @@ def _format_value_expr(expr, bracket=True, extent=None):
         return str(expr)
     elif isinstance(expr, float):
         if expr == math.inf:
-            return "std::numeric_limits<sknd::real_t>::infinity()"
+            return "std::numeric_limits<sknd::rt::real_t>::infinity()"
         elif expr == -math.inf:
-            return "-std::numeric_limits<sknd::real_t>::infinity()"
+            return "-std::numeric_limits<sknd::rt::real_t>::infinity()"
         return f"{expr}f"
     elif isinstance(expr, str):
         return f'"{expr}"'
@@ -509,9 +509,9 @@ def _format_value_expr(expr, bracket=True, extent=None):
         if not expr.packed:
             if expr.dtype == sknd.Dtype.Int:
                 if expr.arg == float('inf'):
-                    return "std::numeric_limits<sknd::int_t>::max()"
+                    return "std::numeric_limits<sknd::rt::int_t>::max()"
                 elif expr.arg == float('-inf'):
-                    return "std::numeric_limits<sknd::int_t>::min()"
+                    return "std::numeric_limits<sknd::rt::int_t>::min()"
             arg = _format_value_expr(expr.arg)
             dtype = _format_dtype(expr.dtype)
             return f"({dtype}){arg}"
@@ -524,7 +524,7 @@ def _format_value_expr(expr, bracket=True, extent=None):
             if len(expr.op) < 3:
                 return expr.op + _format_value_expr(expr.arg)
             else:
-                ns = "sknd" if expr.op == "sign" or expr.op == "frac" else "std"
+                ns = "sknd::rt" if expr.op == "sign" or expr.op == "frac" else "std"
                 arg = _format_value_expr(expr.arg, bracket=False)
                 return f"{ns}::{expr.op}({arg})"
         else:

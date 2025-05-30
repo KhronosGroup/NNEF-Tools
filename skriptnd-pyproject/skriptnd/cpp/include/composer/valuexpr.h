@@ -187,9 +187,39 @@ namespace sknd
         {
         }
         
+        ValueExpr( const int& value )
+        : _kind(Literal), _dtype(Typename::Int), _index(variant_data::index_of<int_t>()),
+          _size(UnpackedSize), _data((int_t)value)
+        {
+        }
+        
+        ValueExpr( const bool& value )
+        : _kind(Literal), _dtype(Typename::Bool), _index(variant_data::index_of<bool_t>()),
+          _size(UnpackedSize), _data((bool_t)value)
+        {
+        }
+        
+        ValueExpr( const float& value )
+        : _kind(Literal), _dtype(Typename::Real), _index(variant_data::index_of<real_t>()),
+          _size(UnpackedSize), _data((real_t)value)
+        {
+        }
+        
+        ValueExpr( const double& value )
+        : _kind(Literal), _dtype(Typename::Real), _index(variant_data::index_of<real_t>()),
+          _size(UnpackedSize), _data((real_t)value)
+        {
+        }
+        
+        ValueExpr( const char* value )
+        : _kind(Literal), _dtype(Typename::Str), _index(variant_data::index_of<str_t>()),
+          _size(UnpackedSize), _data((str_t)value)
+        {
+        }
+        
         template<typename T, typename = std::enable_if_t<is_typename<T>>>
         ValueExpr( const T& value )
-        : _kind(Literal), _dtype(typename_of<T>::value), _index((index_type)_dtype - (index_type)Typename::Int), 
+        : _kind(Literal), _dtype(typename_of<T>::value), _index(variant_data::index_of<T>()),
           _size(UnpackedSize), _data(value)
         {
         }
@@ -695,7 +725,7 @@ namespace sknd
         
         bool operator==( const ValueExpr& other ) const
         {
-            return _dtype == other._dtype && _index == other._index && _size == other._size && (_kind == Null || _data.equals(other._data, _index));
+            return _index == other._index && (_index == NullIndex || _data.equals(other._data, _index));
         }
         
         bool operator!=( const ValueExpr& other ) const
@@ -706,13 +736,63 @@ namespace sknd
         template<typename T, typename = std::enable_if_t<is_typename<T>>>
         bool operator==( const T& value ) const
         {
-            return _index == _data.index_of<T>() && _data.as<T>() == value;
+            return equals_literal(value);
         }
         
         template<typename T, typename = std::enable_if_t<is_typename<T>>>
         bool operator!=( const T& value ) const
         {
-            return !(*this == value);
+            return !equals_literal(value);
+        }
+        
+        bool operator==( const int& value ) const
+        {
+            return equals_literal((int_t)value);
+        }
+        
+        bool operator!=( const int& value ) const
+        {
+            return !equals_literal((int_t)value);
+        }
+        
+        bool operator==( const bool& value ) const
+        {
+            return equals_literal((bool_t)value);
+        }
+        
+        bool operator!=( const bool& value ) const
+        {
+            return !equals_literal((bool_t)value);
+        }
+        
+        bool operator==( const float& value ) const
+        {
+            return equals_literal((real_t)value);
+        }
+        
+        bool operator!=( const float& value ) const
+        {
+            return !equals_literal((real_t)value);
+        }
+        
+        bool operator==( const double& value ) const
+        {
+            return equals_literal((real_t)value);
+        }
+        
+        bool operator!=( const double& value ) const
+        {
+            return !equals_literal((real_t)value);
+        }
+        
+        bool operator==( const char* value ) const
+        {
+            return equals_literal((str_t)value);
+        }
+        
+        bool operator!=( const char* value ) const
+        {
+            return !equals_literal((str_t)value);
         }
         
         void swap( ValueExpr& other )
@@ -758,6 +838,14 @@ namespace sknd
         bool is_unary( const std::string& op ) const;
         bool is_binary( const std::string& op ) const;
         bool is_fold( const std::string& op ) const;
+        
+    private:
+        
+        template<typename T, typename = std::enable_if_t<is_typename<T>>>
+        bool equals_literal( const T& value ) const
+        {
+            return _index == _data.index_of<T>() && _data.as<T>() == value;
+        }
         
     private:
         

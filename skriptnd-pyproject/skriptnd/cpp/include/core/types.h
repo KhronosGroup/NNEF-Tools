@@ -27,7 +27,7 @@ namespace sknd
 {
     
     typedef float real_t;
-    typedef int int_t;
+    typedef long int_t;
     typedef bool bool_t;
     typedef std::string str_t;
     

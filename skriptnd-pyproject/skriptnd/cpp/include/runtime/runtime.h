@@ -21,7 +21,6 @@
 #include <vector>
 #include <string>
 #include <limits>
-#include "types.h"
 #include "either.h"
 #include "print.h"
 
@@ -43,6 +42,10 @@ namespace sknd
     {
     
         enum class Dtype { Real, Int, Bool };
+    
+        typedef int int_t;
+        typedef bool bool_t;
+        typedef float real_t;
         
         template<typename T> struct dtype_of {};
         template<> struct dtype_of<real_t> { static const Dtype value = Dtype::Real; };
@@ -50,9 +53,34 @@ namespace sknd
         template<> struct dtype_of<int_t> { static const Dtype value = Dtype::Int; };
     
         template<typename T>
-        static T ceil_div( const T x, const T y )
+        inline constexpr bool is_typename = std::is_same_v<T,int_t> || std::is_same_v<T,real_t> || std::is_same_v<T,bool_t>;
+    
+    
+        inline int_t ceil_div( const int_t x, const int_t y )
         {
-            return sknd::ceil_div(x, y);
+            auto z = std::abs(y) - 1;
+            return x < 0 ? (x - z) / y : (x + z) / y;
+        }
+
+        inline real_t ceil_div( const real_t x, const real_t y )
+        {
+            return std::ceil(x / y);
+        }
+
+        inline int_t sign( const int_t x )
+        {
+            return x < 0 ? -1 : x > 0 ? 1 : 0;
+        }
+
+        inline real_t sign( const real_t x )
+        {
+            return x < 0.f ? -1.f : x > 0.f ? 1.f : 0.f;
+        }
+
+        inline real_t frac( const real_t x )
+        {
+            real_t integral;
+            return std::modf(x, &integral);
         }
     
         
@@ -1069,7 +1097,6 @@ namespace sknd
             template<typename... Args> struct _value_type<int_t,Args...> { typedef int_t type; };
             template<typename... Args> struct _value_type<real_t,Args...> { typedef real_t type; };
             template<typename... Args> struct _value_type<bool_t,Args...> { typedef bool_t type; };
-            template<typename... Args> struct _value_type<str_t,Args...> { typedef str_t type; };
             
             template<typename... Args>
             using value_type = typename _value_type<Args...>::type;
@@ -1195,7 +1222,7 @@ namespace sknd
             constexpr size_t concat_max_size()
             {
                 size_t size = 0;
-                if constexpr( sknd::is_typename<Arg> )
+                if constexpr( is_typename<Arg> )
                 {
                     size = 1;
                 }
@@ -1213,7 +1240,7 @@ namespace sknd
             template<typename T, size_t N, typename Arg, typename... Args>
             inline void concat( ValuePack<T,N>& result, const Arg& first, const Args& ...rest )
             {
-                if constexpr( sknd::is_typename<Arg> )
+                if constexpr( is_typename<Arg> )
                 {
                     result.append(first);
                 }
