@@ -28,6 +28,7 @@
 #include <limits>
 #include <cmath>
 #include <unordered_map>
+#include <exception>
 
 
 namespace sknd
@@ -1262,11 +1263,10 @@ namespace sknd
                 auto range = as_range();
                 return !range.first.is_literal() || !range.last.is_literal() || !range.stride.is_literal();
             }
-            default:
-            {
-                return false;
-            }
         }
+
+        assert(false);
+        return false;
     }
 
     inline ValueExpr ValueExpr::size() const
@@ -1472,11 +1472,10 @@ namespace sknd
                 auto i = dtype() == Typename::Real ? ValueExpr((real_t)idx) : ValueExpr((int_t)idx);
                 return range.first + i * range.stride;
             }
-            default:
-            {
-                return *this;
-            }
         }
+
+        assert(false);
+        return *this;
     }
 
     inline ValueExpr ValueExpr::at( const ValueExpr& idx ) const
@@ -1570,11 +1569,10 @@ namespace sknd
                 auto range = as_range();
                 return range.first + idx * range.stride;
             }
-            default:
-            {
-                return *this;
-            }
         }
+
+        assert(false);
+        return *this;
     }
 
     inline const ValueExpr& ValueExpr::operator[]( const size_t i ) const
@@ -1608,8 +1606,7 @@ namespace sknd
             }
             default:
             {
-                assert(false);
-                return ValueExpr::null();
+                throw std::invalid_argument("operator[] called on invalid ValueExpr");
             }
         }
     }
