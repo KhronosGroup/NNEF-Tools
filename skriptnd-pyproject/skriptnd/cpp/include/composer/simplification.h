@@ -54,6 +54,16 @@ namespace sknd
             return expr;
         }
         
+        static ValueExpr resolved( const ValueExpr& expr )
+        {
+            ValueExpr resolved = expr;
+            preorder_traverse(resolved, []( ValueExpr& x )
+            {
+                x = resolve_shape_accesses(x);
+            });
+            return resolved;
+        }
+        
     private:
         
         static void simplify_polynomial( ValueExpr& expr )
@@ -93,6 +103,31 @@ namespace sknd
                     }
                 }
             }
+        }
+        
+    private:
+        
+        static const ValueExpr& resolve_shape_accesses( const ValueExpr& expr )
+        {
+            const ValueExpr* ptr = &expr;
+            while ( ptr->is_size_access() || ptr->is_shape_access() )
+            {
+                if ( ptr->is_size_access() )
+                {
+                    auto& access = ptr->as_size_access();
+                    ptr = &access.pack.size();
+                }
+                else if ( ptr->is_shape_access() )
+                {
+                    auto& access = ptr->as_shape_access();
+                    if ( !access.dim.is_literal() )
+                    {
+                        break;
+                    }
+                    ptr = &access.tensor.shape()[access.dim.as_int()];
+                }
+            }
+            return *ptr;
         }
         
     private:
@@ -313,6 +348,10 @@ namespace sknd
                 auto op = poly.constant_value() < (T)0 ? "-" : "+";
                 expr = ValueExpr::binary(op, expr, ValueExpr(std::abs(poly.constant_value())), type, size);
             }
+            else if ( expr == nullptr )
+            {
+                expr = (T)0;
+            }
             return expr;
         }
         
@@ -376,6 +415,10 @@ namespace sknd
             if ( poly.constant_value() )
             {
                 expr = ValueExpr::binary("^", expr, ValueExpr(poly.constant_value()), Typename::Bool, size);
+            }
+            else if ( expr == nullptr )
+            {
+                expr = false;
             }
             return expr;
         }
