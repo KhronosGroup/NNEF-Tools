@@ -3268,6 +3268,8 @@ namespace sknd
                     return pack_rank;
                 }
             }
+
+            return Error(expr.position, "unknown expression type");
         }
         
         static Result<Shared<Expr>> eval_items_rank( const std::vector<Shared<Expr>>& items, const Dict<Declaration>& decls,
