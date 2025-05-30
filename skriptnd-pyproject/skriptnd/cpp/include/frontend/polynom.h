@@ -85,14 +85,20 @@ namespace sknd
             monom_type res;
             for ( auto it = x.begin(); it != x.end(); )
             {
-                auto it1 = y.begin() + y.find(*it);
-                auto it2 = it1 + 1;
-                while ( it2 != y.end() && *it2 == *it1 )
+                size_t cnt = 0;
+                auto pos = y.find(*it);
+                if ( pos != monom_type::npos )
                 {
-                    ++it2;
+                    auto it1 = y.begin() + pos;
+                    auto it2 = it1 + 1;
+                    while ( it2 != y.end() && *it2 == *it1 )
+                    {
+                        ++it2;
+                    }
+                    cnt = it2 - it1;
                 }
                 symbol_type s = *it;
-                it += (it2 - it1);
+                it += cnt;
                 while ( it != x.end() && *it == s )
                 {
                     res += *it++;

@@ -3213,7 +3213,7 @@ namespace sknd
         
         static ValueExpr common_shape_expr( const std::vector<ValueExpr>& exprs )
         {
-            auto canonical = canonical_shape_expr(exprs[0]);
+            auto canonical = canonical_shape_expr(exprs.front());
             for ( size_t i = 1; i < exprs.size(); ++i )
             {
                 auto item = canonical_shape_expr(exprs[i]);
@@ -3222,41 +3222,14 @@ namespace sknd
                     return nullptr;
                 }
             }
-            return canonical;
-        }
-        
-        static const ValueExpr& follow_shape_accesses( const ValueExpr& expr )
-        {
-            const ValueExpr* ptr = &expr;
-            while ( ptr->is_size_access() || ptr->is_shape_access() )
-            {
-                if ( ptr->is_size_access() )
-                {
-                    auto& access = ptr->as_size_access();
-                    ptr = &access.pack.size();
-                }
-                else if ( ptr->is_shape_access() )
-                {
-                    auto& access = ptr->as_shape_access();
-                    if ( !access.dim.is_literal() )
-                    {
-                        break;
-                    }
-                    ptr = &access.tensor.shape()[access.dim.as_int()];
-                }
-            }
-            return *ptr;
+            return exprs.front();
         }
         
         static ValueExpr canonical_shape_expr( const ValueExpr& expr )
         {
-            ValueExpr canonical = expr;
-            preorder_traverse(canonical, []( ValueExpr& x )
-            {
-                x = follow_shape_accesses(x);
-            });
-            simplify(canonical);
-            return canonical;
+            auto simplified = resolved(expr);
+            simplify(simplified);
+            return simplified;
         }
         
         static std::vector<ValueExpr> canonical_shape( const std::vector<ValueExpr>& shape )
