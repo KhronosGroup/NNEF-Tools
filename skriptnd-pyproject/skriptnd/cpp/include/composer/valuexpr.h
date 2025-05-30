@@ -1566,6 +1566,10 @@ namespace sknd
                 auto range = as_range();
                 return range.first + idx * range.stride;
             }
+            default:
+            {
+                return *this;
+            }
         }
     }
 
