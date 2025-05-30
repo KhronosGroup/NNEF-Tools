@@ -1380,6 +1380,8 @@ namespace sknd
                 return ceil_div(range.last - range.first, range.stride);
             }
         }
+        
+        assert(false);
         return nullptr;
     }
 
