@@ -27,6 +27,7 @@
 #include <vector>
 #include <limits>
 #include <cmath>
+#include <unordered_map>
 
 
 namespace sknd
