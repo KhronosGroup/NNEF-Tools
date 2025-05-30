@@ -17,6 +17,10 @@
 #ifndef _SKND_PARSER_H_
 #define _SKND_PARSER_H_
 
+#ifdef _WIN32
+#define _USE_MATH_DEFINES
+#endif
+
 #include "lexer.h"
 #include "operator.h"
 #include <algorithm>
