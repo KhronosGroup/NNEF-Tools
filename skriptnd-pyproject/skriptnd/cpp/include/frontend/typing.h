@@ -2290,7 +2290,7 @@ namespace sknd
                 }
             }
 
-            return Error(expr.position, "unknown expression type '%s'");
+            return Error(expr.position, "unknown expression type");
         }
         
         static Result<Type> eval_type( const LiteralExpr& literal, const Dict<Declaration>& decls )
