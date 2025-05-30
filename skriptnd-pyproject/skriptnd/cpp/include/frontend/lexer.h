@@ -525,6 +525,7 @@ namespace sknd
                     return read_operator();
                 }
                 case Category::Invalid:
+                default:
                 {
                     return Error(_position, "illegal symbol '%c'", (char)_input.peek());
                 }

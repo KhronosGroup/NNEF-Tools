@@ -787,6 +787,9 @@ namespace sknd
                     return Typename::Type;
                 }
             }
+
+            assert(false);
+            return Typename::Type;
         }
         
     private:

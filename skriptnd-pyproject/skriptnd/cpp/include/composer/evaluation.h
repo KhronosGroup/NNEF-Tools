@@ -2463,6 +2463,9 @@ namespace sknd
                     return Typename::Type;
                 }
             }
+
+            assert(false);
+            return Typename::Type;
         }
         
         static Result<bool> eval_null( const Expr& expr, const Dict<Symbol>& symbols )

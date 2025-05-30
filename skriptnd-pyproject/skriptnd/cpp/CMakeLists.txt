@@ -68,6 +68,12 @@ target_include_directories(${PROJECT_NAME}
 set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 17)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX _d)
 
+if(MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE 
+        /Zc:preprocessor
+        $<$<CONFIG:Debug>:/bigobj>)
+endif()
+
 target_link_libraries(${PROJECT_NAME})
 
 # install the library

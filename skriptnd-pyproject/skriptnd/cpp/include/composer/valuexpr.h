@@ -27,6 +27,8 @@
 #include <vector>
 #include <limits>
 #include <cmath>
+#include <unordered_map>
+#include <exception>
 
 
 namespace sknd
@@ -1262,6 +1264,9 @@ namespace sknd
                 return !range.first.is_literal() || !range.last.is_literal() || !range.stride.is_literal();
             }
         }
+
+        assert(false);
+        return false;
     }
 
     inline ValueExpr ValueExpr::size() const
@@ -1375,6 +1380,7 @@ namespace sknd
                 return ceil_div(range.last - range.first, range.stride);
             }
         }
+        return nullptr;
     }
 
     inline ValueExpr ValueExpr::at( const size_t idx ) const
@@ -1467,6 +1473,9 @@ namespace sknd
                 return range.first + i * range.stride;
             }
         }
+
+        assert(false);
+        return *this;
     }
 
     inline ValueExpr ValueExpr::at( const ValueExpr& idx ) const
@@ -1561,6 +1570,9 @@ namespace sknd
                 return range.first + idx * range.stride;
             }
         }
+
+        assert(false);
+        return *this;
     }
 
     inline const ValueExpr& ValueExpr::operator[]( const size_t i ) const
@@ -1594,8 +1606,7 @@ namespace sknd
             }
             default:
             {
-                assert(false);
-                return ValueExpr::null();
+                throw std::invalid_argument("operator[] called on invalid ValueExpr");
             }
         }
     }

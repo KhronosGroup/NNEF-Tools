@@ -2289,6 +2289,8 @@ namespace sknd
                     return eval_type(as_substitute(expr), decls, flags);
                 }
             }
+
+            return Error(expr.position, "unknown expression type");
         }
         
         static Result<Type> eval_type( const LiteralExpr& literal, const Dict<Declaration>& decls )
@@ -3266,6 +3268,8 @@ namespace sknd
                     return pack_rank;
                 }
             }
+
+            return Error(expr.position, "unknown expression type");
         }
         
         static Result<Shared<Expr>> eval_items_rank( const std::vector<Shared<Expr>>& items, const Dict<Declaration>& decls,

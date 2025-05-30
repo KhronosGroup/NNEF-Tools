@@ -22,6 +22,7 @@
 #include <memory>
 #include <forward_list>
 #include <iomanip>
+#include <functional>
 #include "types.h"
 #include "either.h"
 #include "packable.h"
