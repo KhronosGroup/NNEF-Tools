@@ -1262,6 +1262,10 @@ namespace sknd
                 auto range = as_range();
                 return !range.first.is_literal() || !range.last.is_literal() || !range.stride.is_literal();
             }
+            default:
+            {
+                return false;
+            }
         }
     }
 
