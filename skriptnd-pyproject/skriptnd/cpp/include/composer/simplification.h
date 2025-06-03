@@ -48,20 +48,76 @@ namespace sknd
             simplify_polynomial(expr);
         }
         
+        static ValueExpr simplified( const ValueExpr& expr )
+        {
+            auto simplified = expr;
+            simplify(simplified);
+            return simplified;
+        }
+        
         static ValueExpr simplified( ValueExpr&& expr )
         {
             simplify(expr);
             return expr;
         }
         
+        static void resolve( ValueExpr& expr )
+        {
+            preorder_traverse(expr, []( ValueExpr& x )
+            {
+                if ( x.is_size_access() )
+                {
+                    auto& access = x.as_size_access();
+                    x = access.pack.canonic_size();
+                }
+                else if ( x.is_shape_access() )
+                {
+                    auto& access = x.as_shape_access();
+                    if ( access.dim.is_literal() )
+                    {
+                        if ( access.item == nullptr )
+                        {
+                            x = access.tensor.canonic_shape()[access.dim.as_int()];
+                        }
+                        else if ( access.item.is_literal() )
+                        {
+                            x = access.tensor[access.item.as_int()].canonic_shape[access.dim.as_int()];
+                        }
+                    }
+                }
+            });
+        }
+        
         static ValueExpr resolved( const ValueExpr& expr )
         {
-            ValueExpr resolved = expr;
-            preorder_traverse(resolved, []( ValueExpr& x )
-            {
-                x = resolve_shape_accesses(x);
-            });
+            auto resolved = expr;
+            resolve(resolved);
             return resolved;
+        }
+        
+        static ValueExpr resolved( ValueExpr&& expr )
+        {
+            resolve(expr);
+            return expr;
+        }
+        
+        static void canonify( ValueExpr& expr )
+        {
+            resolve(expr);
+            simplify(expr);
+        }
+        
+        static ValueExpr canonical( const ValueExpr& expr )
+        {
+            auto canonic = expr;
+            canonify(canonic);
+            return canonic;
+        }
+        
+        static ValueExpr canonical( ValueExpr&& expr )
+        {
+            canonify(expr);
+            return expr;
         }
         
     private:
@@ -76,7 +132,8 @@ namespace sknd
         
         static void simplify_polynomial( ValueExpr& expr, PolynomContext& ctx )
         {
-            if ( expr != nullptr )
+            if ( expr != nullptr && !expr.is_literal() && !expr.is_identifier() &&
+                !expr.is_size_access() && !expr.is_shape_access() && !expr.is_tensor_access() )
             {
                 auto size = expr.max_size_or_null();
                 
@@ -103,31 +160,6 @@ namespace sknd
                     }
                 }
             }
-        }
-        
-    private:
-        
-        static const ValueExpr& resolve_shape_accesses( const ValueExpr& expr )
-        {
-            const ValueExpr* ptr = &expr;
-            while ( ptr->is_size_access() || ptr->is_shape_access() )
-            {
-                if ( ptr->is_size_access() )
-                {
-                    auto& access = ptr->as_size_access();
-                    ptr = &access.pack.size();
-                }
-                else if ( ptr->is_shape_access() )
-                {
-                    auto& access = ptr->as_shape_access();
-                    if ( !access.dim.is_literal() )
-                    {
-                        break;
-                    }
-                    ptr = &access.tensor.shape()[access.dim.as_int()];
-                }
-            }
-            return *ptr;
         }
         
     private:
@@ -160,18 +192,20 @@ namespace sknd
                 case ValueExpr::Unary:
                 {
                     auto& unary = expr.as_unary();
-                    auto arg = as_polynom<T>(unary.arg, ctx);
                     auto op = Lexer::operator_value(unary.op);
                     
                     if constexpr( std::is_same_v<T,bool_t> )
                     {
                         if ( op == Lexer::Operator::Not )
                         {
+                            auto arg = as_polynom<T>(unary.arg, ctx);
                             return !arg;
                         }
                     }
-                    else
+                    else if ( op == Lexer::Operator::Plus || op == Lexer::Operator::Minus )
                     {
+                        auto arg = as_polynom<T>(unary.arg, ctx);
+                        
                         switch ( op )
                         {
                             case Lexer::Operator::Plus:
@@ -231,82 +265,91 @@ namespace sknd
                             }
                         }
                         
-                        auto left = as_polynom<T>(binary.left, ctx);
-                        auto right = as_polynom<T>(binary.right, ctx);
-                        
-                        switch ( op )
+                        if ( op == Lexer::Operator::And || op == Lexer::Operator::Or ||
+                            op == Lexer::Operator::Xor || op == Lexer::Operator::Imply )
                         {
-                            case Lexer::Operator::And:
+                            auto left = as_polynom<T>(binary.left, ctx);
+                            auto right = as_polynom<T>(binary.right, ctx);
+                            
+                            switch ( op )
                             {
-                                return left && right;
-                            }
-                            case Lexer::Operator::Or:
-                            {
-                                return left || right;
-                            }
-                            case Lexer::Operator::Xor:
-                            {
-                                return left ^ right;
-                            }
-                            case Lexer::Operator::Imply:
-                            {
-                                return !left || right;
-                            }
-                            default:
-                            {
-                                break;
+                                case Lexer::Operator::And:
+                                {
+                                    return left && right;
+                                }
+                                case Lexer::Operator::Or:
+                                {
+                                    return left || right;
+                                }
+                                case Lexer::Operator::Xor:
+                                {
+                                    return left ^ right;
+                                }
+                                case Lexer::Operator::Imply:
+                                {
+                                    return !left || right;
+                                }
+                                default:
+                                {
+                                    break;
+                                }
                             }
                         }
                     }
                     else
                     {
-                        auto left = as_polynom<T>(binary.left, ctx);
-                        auto right = as_polynom<T>(binary.right, ctx);
-                        
-                        switch ( op )
+                        if ( op == Lexer::Operator::Plus || op == Lexer::Operator::Minus ||
+                            op == Lexer::Operator::Multiply || op == Lexer::Operator::Divide || 
+                            op == Lexer::Operator::Power )
                         {
-                            case Lexer::Operator::Plus:
+                            auto left = as_polynom<T>(binary.left, ctx);
+                            auto right = as_polynom<T>(binary.right, ctx);
+                            
+                            switch ( op )
                             {
-                                return left + right;
-                            }
-                            case Lexer::Operator::Minus:
-                            {
-                                return left - right;
-                            }
-                            case Lexer::Operator::Multiply:
-                            {
-                                return left * right;
-                            }
-                            case Lexer::Operator::Divide:
-                            {
-                                if ( right.is_constant() && left.is_divisible(right.constant_value()) )
+                                case Lexer::Operator::Plus:
                                 {
-                                    left.const_divide(right.constant_value());
-                                    return left;
+                                    return left + right;
                                 }
-                                if ( left.is_monomial_divisible(right) )
+                                case Lexer::Operator::Minus:
                                 {
-                                    left.monomial_divide(right);
-                                    return left;
+                                    return left - right;
                                 }
-                                break;
-                            }
-                            case Lexer::Operator::Power:
-                            {
-                                if ( right.is_constant() && (int_t)right.constant_value() == right.constant_value() )
+                                case Lexer::Operator::Multiply:
                                 {
-                                    Poly<T> pow((T)1);
-                                    for ( int_t i = 0; i < (int_t)right.constant_value(); ++i )
+                                    return left * right;
+                                }
+                                case Lexer::Operator::Divide:
+                                {
+                                    if ( right.is_constant() && left.is_divisible(right.constant_value()) )
                                     {
-                                        pow *= left;
+                                        left.const_divide(right.constant_value());
+                                        return left;
                                     }
-                                    return pow;
+                                    if ( left.is_monomial_divisible(right) )
+                                    {
+                                        left.monomial_divide(right);
+                                        return left;
+                                    }
+                                    break;
                                 }
-                                break;
-                            }
-                            default:
-                            {
-                                break;
+                                case Lexer::Operator::Power:
+                                {
+                                    if ( right.is_constant() && (int_t)right.constant_value() == right.constant_value() )
+                                    {
+                                        Poly<T> pow((T)1);
+                                        for ( int_t i = 0; i < (int_t)right.constant_value(); ++i )
+                                        {
+                                            pow *= left;
+                                        }
+                                        return pow;
+                                    }
+                                    break;
+                                }
+                                default:
+                                {
+                                    break;
+                                }
                             }
                         }
                     }

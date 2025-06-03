@@ -53,6 +53,8 @@ namespace sknd
         typedef std::function<TensorRef(const ValueExpr&, const Typename&)> AsTensor;
         typedef std::function<TensorRef(const Tensors&, const Typename&, const Shape&, const std::vector<int_t>&, const ValueExpr&)> AsTensorPack;
         
+        using Simplification::canonical;
+        
     protected:
         
         struct LoopIndex {};
@@ -3211,40 +3213,39 @@ namespace sknd
             return shape;
         }
         
-        static ValueExpr common_shape_expr( const std::vector<ValueExpr>& exprs )
+        static Shape canonical( const Shape& shape )
         {
-            auto canonical = canonical_shape_expr(exprs.front());
+            Shape canonic = shape;
+            for ( auto& item : canonic )
+            {
+                canonify(item);
+            }
+            return canonic;
+        }
+        
+        static bool equivalent( const ValueExpr& x, const ValueExpr& y )
+        {
+            return x == y || canonical(x) == canonical(y);
+        }
+        
+        static bool equivalent( const std::vector<ValueExpr>& exprs )
+        {
+            ValueExpr first;
             for ( size_t i = 1; i < exprs.size(); ++i )
             {
-                auto item = canonical_shape_expr(exprs[i]);
-                if ( item != canonical )
+                if ( exprs[i] != exprs.front() )
                 {
-                    return nullptr;
+                    if ( first == nullptr )
+                    {
+                        first = canonical(exprs.front());
+                    }
+                    if ( canonical(exprs[i]) != first )
+                    {
+                        return false;
+                    }
                 }
             }
-            return exprs.front();
-        }
-        
-        static ValueExpr canonical_shape_expr( const ValueExpr& expr )
-        {
-            auto simplified = resolved(expr);
-            simplify(simplified);
-            return simplified;
-        }
-        
-        static std::vector<ValueExpr> canonical_shape( const std::vector<ValueExpr>& shape )
-        {
-            std::vector<ValueExpr> canonical(shape.size());
-            for ( size_t i = 0; i < shape.size(); ++i )
-            {
-                canonical[i] = canonical_shape_expr(shape[i]);
-            }
-            return canonical;
-        }
-        
-        static bool canonical_shape_expr_equals( const ValueExpr& x, const ValueExpr& y )
-        {
-            return x == y || canonical_shape_expr(x) == canonical_shape_expr(y);
+            return true;
         }
         
         static bool has_undefined_symbols( const Shapedef& shape, const Dict<Symbol>& symbols )

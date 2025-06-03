@@ -69,6 +69,7 @@ namespace sknd
         std::string name;                                               // name of the tensor in the graph
         Typename dtype;                                                 // data-type of the tensor
         std::vector<ValueExpr> shape;                                   // shape of the tensor, possibly dynamic expressions
+        std::vector<ValueExpr> canonic_shape;                           // canonical shape the tensor (resolved shape references)
         std::vector<int_t> max_shape;                                   // upper bound of tensor shape
         std::map<std::string,ValueExpr> quant;                          // quantization info for the tensor
         ValueExpr value;                                                // value of constant tensors
@@ -85,8 +86,10 @@ namespace sknd
         std::string name;                                               // name of the pack
         Typename dtype;                                                 // dtype of the tensors in the pack
         std::vector<ValueExpr> shape;                                   // (partial) shape of tensors in the pack
+        std::vector<ValueExpr> canonic_shape;                           // canonical shape of tensors in the pack (resolved shape references)
         std::vector<int_t> max_shape;                                   // upper bound of tensor shape
         ValueExpr size;                                                 // dynamic size of the pack
+        ValueExpr canonic_size;                                         // canonical dynamic size of the pack
     };
 
 

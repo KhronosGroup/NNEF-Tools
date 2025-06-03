@@ -1630,7 +1630,7 @@ namespace sknd
                     if ( item.type.packed && item.repeats )
                     {
                         TRY_DECL(length, eval(*item.repeats, symbols))
-                        if ( !canonical_shape_expr_equals(length, output.size()) )
+                        if ( !equivalent(length, output.size()) )
                         {
                             return Error(item.position, "mismatch between declared and computed pack length (%s vs %s)",
                                          str(length).c_str(), str(output.size()).c_str());
@@ -2368,7 +2368,7 @@ namespace sknd
                 if ( !has_undefined_symbols(*param.repeats, locals) )
                 {
                     TRY_DECL(count, eval(*param.repeats, locals))
-                    if ( symbol.packed() && !canonical_shape_expr_equals(count, symbol.size) )
+                    if ( symbol.packed() && !equivalent(count, symbol.size) )
                     {
                         return Error(position, "argument length %s does not match expected rank %s of attribute '%s'",
                                      str(symbol.size).c_str(), str(count).c_str(), param.name.c_str());
@@ -2390,7 +2390,7 @@ namespace sknd
                     else if ( symbol.packed() )
                     {
                         auto& size = it->second.as<ValueExpr>();
-                        if ( !canonical_shape_expr_equals(size, value) )
+                        if ( !equivalent(size, value) )
                         {
                             return Error(position, "ambiguous deduction of rank '%s' (%s vs %s)",
                                          iden.c_str(), str(size).c_str(), str(value).c_str());
@@ -3260,21 +3260,24 @@ namespace sknd
         }
         
         Tensor* make_tensor( Graph& graph, const Typename dtype, const Shape& shape,
-                            const std::vector<int_t>& shape_bound, const std::string& name = {},
+                            const std::vector<int_t>& max_shape, const std::string& name = {},
                             const ValueExpr& value = ValueExpr(nullptr), const bool variable = false )
         {
             auto _name = !name.empty() ? name : next_tensor_name();
-            auto tensor = std::make_unique<Tensor>(Tensor{ _name, dtype, shape, shape_bound, {}, value, variable });
+            auto canonic_shape = canonical(shape);
+            auto tensor = std::make_unique<Tensor>(Tensor{ _name, dtype, shape, canonic_shape, max_shape, {}, value, variable });
             graph.tensors.push_back(std::move(tensor));
             return graph.tensors.back().get();
         }
         
         TensorPack* make_tensor_pack( Graph& graph, const Typename dtype, const size_t max_size, const ValueExpr& size,
-                                     const Shape& shape, const std::vector<int_t>& shape_bound,
+                                     const Shape& shape, const std::vector<int_t>& max_shape,
                                      const std::string& name = {} )
         {
             auto _name = !name.empty() ? name : next_pack_name();
-            auto pack = std::make_unique<TensorPack>(TensorPack{ std::vector<Tensor*>(max_size, nullptr), _name, dtype, shape, shape_bound, size });
+            auto canonic_shape = canonical(shape);
+            auto canonic_size = canonical(size);
+            auto pack = std::make_unique<TensorPack>(TensorPack{ std::vector<Tensor*>(max_size, nullptr), _name, dtype, shape, canonic_shape, max_shape, size, canonic_size });
             graph.packs.push_back(std::move(pack));
             return graph.packs.back().get();
         }
@@ -3669,13 +3672,12 @@ namespace sknd
                         {
                             if ( shape_value[i].is_list() )
                             {
-                                auto common_value = common_shape_expr(shape_value[i].as_list());
-                                if ( common_value == nullptr )
+                                if ( !equivalent(shape_value[i].as_list()) )
                                 {
                                     return Error(position, "ambiguous deduction of shape component %d due to non-uniform pack item shape: %s",
                                                  (int)k+i, std::to_string(shape_value[i]).c_str());
                                 }
-                                shape_value.as_list()[i] = common_value;
+                                shape_value.as_list()[i] = shape_value[i].as_list().front();
                             }
                         }
                     }
@@ -3694,13 +3696,12 @@ namespace sknd
                     shape_value = tensor.shape()[k];
                     if ( shape_value.is_list() )
                     {
-                        auto common_value = common_shape_expr(shape_value.as_list());
-                        if ( common_value == nullptr )
+                        if ( !equivalent(shape_value.as_list()) )
                         {
                             return Error(position, "ambiguous deduction of shape component %d due to non-uniform pack item shape: %s",
                                          (int)k, std::to_string(shape_value).c_str());
                         }
-                        shape_value = common_value;
+                        shape_value = shape_value.as_list().front();
                     }
                 }
                 
@@ -4289,7 +4290,7 @@ namespace sknd
         
         void dereference( ValueExpr& expr )
         {
-            auto key = str(canonical_shape_expr(expr));
+            auto key = str(canonical(expr));
             auto it = _dereferenced.find(key);
             if ( it == _dereferenced.end() )
             {

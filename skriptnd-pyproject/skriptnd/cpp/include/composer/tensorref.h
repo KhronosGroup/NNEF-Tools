@@ -57,6 +57,8 @@ namespace sknd
             Typename& dtype() { return packed() ? as<P*>()->dtype : as<T*>()->dtype; }
             const std::vector<ValueExpr>& shape() const { return packed() ? as<P*>()->shape : as<T*>()->shape; }
             std::vector<ValueExpr>& shape() { return packed() ? as<P*>()->shape : as<T*>()->shape; }
+            const std::vector<ValueExpr>& canonic_shape() const { return packed() ? as<P*>()->canonic_shape : as<T*>()->canonic_shape; }
+            std::vector<ValueExpr>& canonic_shape() { return packed() ? as<P*>()->canonic_shape : as<T*>()->canonic_shape; }
             const std::vector<int_t>& max_shape() const { return packed() ? as<P*>()->max_shape : as<T*>()->max_shape; }
             std::vector<int_t>& max_shape() { return packed() ? as<P*>()->max_shape : as<T*>()->max_shape; }
             size_t rank() const { return packed() ? as<P*>()->shape.size() : as<T*>()->shape.size(); }
@@ -64,13 +66,16 @@ namespace sknd
             size_t max_size() const { return as<P*>()->items.size(); }
             std::optional<size_t> max_size_or_null() const { return packed() ? max_size() : (std::optional<size_t>)std::nullopt; }
             const ValueExpr& size() const { return as<P*>()->size; }
+            const ValueExpr& canonic_size() const { return as<P*>()->canonic_size; }
             const ValueExpr& size_or_null() const { return packed() ? size() : V::null(); }
             bool is_constant() const { return !packed() ? as<T*>()->value != nullptr :
                 std::all_of(as<P*>()->items.begin(), as<P*>()->items.end(), []( const T* item ){ return item->value != nullptr; }); }
+            TensorRef at( const size_t i ) { return TensorRef(as<P*>()->items[i]); }
+            TensorRef at( const size_t i ) const { return TensorRef(as<P*>()->items[i]); }
             
             T* operator->() { return as<T*>(); }
             T& operator*() { return *as<T*>(); }
-            T& operator[]( size_t i ) { return *as<P*>()->items[i]; }
+            T& operator[]( const size_t i ) { return *as<P*>()->items[i]; }
             explicit operator T&() { return *as<T*>(); }
             explicit operator P&() { return *as<P*>(); }
             explicit operator T*() { return as<T*>(); }
@@ -78,7 +83,7 @@ namespace sknd
             
             const T* operator->() const { return as<T*>(); }
             const T& operator*() const { return *as<T*>(); }
-            const T& operator[]( size_t i ) const { return *as<P*>()->items[i]; }
+            const T& operator[]( const size_t i ) const { return *as<P*>()->items[i]; }
             explicit operator const T&() const { return *as<T*>(); }
             explicit operator const P&() const { return *as<P*>(); }
             explicit operator const T*() const { return as<T*>(); }
