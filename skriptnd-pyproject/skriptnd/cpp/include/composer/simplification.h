@@ -75,15 +75,26 @@ namespace sknd
                     auto& access = x.as_shape_access();
                     if ( access.dim.is_literal() )
                     {
+                        auto tensor = access.tensor;
                         if ( access.item == nullptr )
                         {
-                            x = access.tensor.canonic_shape()[access.dim.as_int()];
+                            x = tensor.canonic_shape()[access.dim.as_int()];
                         }
                         else if ( access.item.is_literal() )
                         {
-                            x = access.tensor[access.item.as_int()].canonic_shape[access.dim.as_int()];
+                            x = tensor[access.item.as_int()].canonic_shape[access.dim.as_int()];
+                        }
+                        if ( tensor.packed() && !x.packed() )
+                        {
+                            x = ValueExpr::uniform(x, tensor.size(), tensor.max_size());
                         }
                     }
+                }
+                else if ( x.is_reference() )
+                {
+                    auto& reference = x.as_reference();
+                    x = *reference.target;
+                    resolve(x);
                 }
             });
         }

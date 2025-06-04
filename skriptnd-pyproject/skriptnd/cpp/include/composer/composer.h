@@ -2104,7 +2104,7 @@ namespace sknd
                         const size_t count = eval_shape_expr_max(repeats);
                         TRY_CALL(check_shape_repeats(*param.shape, symbols, count))
                         
-                        if ( !compare_sizes(repeats, output.size(), count, output.max_size()) )
+                        if ( !compare_sizes(canonical(repeats), output.canonic_size(), count, output.max_size()) )
                         {
                             return Error(param.repeats->position, "output pack length (%s) does not match declared output count (%s)",
                                          str(output.size()).c_str(), str(repeats).c_str());
@@ -2112,23 +2112,21 @@ namespace sknd
                     }
                     for ( size_t j = 0; j < output.max_size(); ++j )
                     {
-                        auto& composed_shape = output[j].shape;
                         TRY_DECL(declared_shape, eval_shape(*param.shape, symbols, j))
-                        if ( !compare_shapes(declared_shape, composed_shape) )
+                        if ( !compare_shapes(canonical(declared_shape), output[j].canonic_shape) )
                         {
                             return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of item %d of output '%s'",
-                                         str(composed_shape).c_str(), str(declared_shape).c_str(), (int)j, param.name.c_str());
+                                         str(output[j].shape).c_str(), str(declared_shape).c_str(), (int)j, param.name.c_str());
                         }
                     }
                 }
                 else
                 {
-                    auto& composed_shape = output->shape;
                     TRY_DECL(declared_shape, eval_shape(*param.shape, symbols))
-                    if ( !compare_shapes(declared_shape, composed_shape) )
+                    if ( !compare_shapes(canonical(declared_shape), output->canonic_shape) )
                     {
                         return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of output '%s'",
-                                     str(composed_shape).c_str(), str(declared_shape).c_str(), param.name.c_str());
+                                     str(output->shape).c_str(), str(declared_shape).c_str(), param.name.c_str());
                     }
                 }
             }
@@ -3672,7 +3670,9 @@ namespace sknd
                         {
                             if ( shape_value[i].is_list() )
                             {
-                                if ( !equivalent(shape_value[i].as_list()) )
+                                auto& canonical_value = tensor.canonic_shape()[k+i];
+                                assert(canonical_value.is_list());
+                                if ( !all_equal(canonical_value.as_list()) )
                                 {
                                     return Error(position, "ambiguous deduction of shape component %d due to non-uniform pack item shape: %s",
                                                  (int)k+i, std::to_string(shape_value[i]).c_str());
@@ -3696,7 +3696,9 @@ namespace sknd
                     shape_value = tensor.shape()[k];
                     if ( shape_value.is_list() )
                     {
-                        if ( !equivalent(shape_value.as_list()) )
+                        auto& canonical_value = tensor.canonic_shape()[k];
+                        assert(canonical_value.is_list());
+                        if ( !all_equal(canonical_value.as_list()) )
                         {
                             return Error(position, "ambiguous deduction of shape component %d due to non-uniform pack item shape: %s",
                                          (int)k, std::to_string(shape_value).c_str());

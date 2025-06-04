@@ -1523,7 +1523,7 @@ namespace sknd
                 auto& fold = as_fold();
                 if ( fold.accumulate )
                 {
-                    auto pack = ValueExpr(SliceExpr{ fold.pack, ValueExpr((int_t)0), ValueExpr((int_t)idx+1) }, dtype());
+                    auto pack = ValueExpr(SliceExpr{ fold.pack, ValueExpr((int_t)0), ValueExpr((int_t)idx+1) }, dtype(), idx + 1);
                     return ValueExpr(FoldExpr{ fold.op, pack, false }, dtype());
                 }
                 else
@@ -1620,7 +1620,7 @@ namespace sknd
                 {
                     auto first = ValueExpr((int_t)0);
                     auto last = idx.is_literal() ? ValueExpr(idx.as_int() + (int_t)1) : ValueExpr(BinaryExpr{ "+", idx, (int_t)1 }, Typename::Int);
-                    auto pack = ValueExpr(SliceExpr{ fold.pack, first, last }, dtype());
+                    auto pack = ValueExpr(SliceExpr{ fold.pack, first, last }, dtype(), fold.pack.max_size_or_null());
                     return ValueExpr(FoldExpr{ fold.op, pack, false }, dtype());
                 }
                 else

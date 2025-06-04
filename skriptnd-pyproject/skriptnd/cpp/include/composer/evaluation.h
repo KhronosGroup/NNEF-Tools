@@ -3228,21 +3228,29 @@ namespace sknd
             return x == y || canonical(x) == canonical(y);
         }
         
-        static bool equivalent( const std::vector<ValueExpr>& exprs )
+        static bool equivalent( const Shape& x, const Shape& y )
         {
-            ValueExpr first;
+            if ( x.size() != y.size() )
+            {
+                return false;
+            }
+            for ( size_t i = 0; i < x.size(); ++i )
+            {
+                if ( !equivalent(x[i], y[i]) )
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        
+        static bool all_equal( const std::vector<ValueExpr>& exprs )
+        {
             for ( size_t i = 1; i < exprs.size(); ++i )
             {
                 if ( exprs[i] != exprs.front() )
                 {
-                    if ( first == nullptr )
-                    {
-                        first = canonical(exprs.front());
-                    }
-                    if ( canonical(exprs[i]) != first )
-                    {
-                        return false;
-                    }
+                    return false;
                 }
             }
             return true;
