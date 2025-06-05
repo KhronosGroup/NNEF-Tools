@@ -352,7 +352,16 @@ namespace sknd
             monom_list monoms;
             for ( auto& monom : _monoms )
             {
-                monoms[monom_divide(monom.first, divisor.first)] = monom.second / divisor.second;
+                auto m = monom_divide(monom.first, divisor.first);
+                auto c = monom.second / divisor.second;
+                if ( !m.empty() )
+                {
+                    monoms[m] = c;
+                }
+                else
+                {
+                    _constant = c;
+                }
             }
             _monoms.swap(monoms);
         }
