@@ -402,10 +402,6 @@ namespace sknd
                 auto op = poly.constant_value() < (T)0 ? "-" : "+";
                 expr = ValueExpr::binary(op, expr, ValueExpr(std::abs(poly.constant_value())), type, size);
             }
-            else if ( expr == nullptr )
-            {
-                expr = (T)0;
-            }
             return expr;
         }
         
@@ -469,10 +465,6 @@ namespace sknd
             if ( poly.constant_value() )
             {
                 expr = ValueExpr::binary("^", expr, ValueExpr(poly.constant_value()), Typename::Bool, size);
-            }
-            else if ( expr == nullptr )
-            {
-                expr = false;
             }
             return expr;
         }

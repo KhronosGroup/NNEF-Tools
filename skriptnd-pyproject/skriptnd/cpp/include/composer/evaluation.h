@@ -51,7 +51,7 @@ namespace sknd
         
         typedef std::vector<Tensor*> Tensors;
         typedef std::function<TensorRef(const ValueExpr&, const Typename&)> AsTensor;
-        typedef std::function<TensorRef(const Tensors&, const Typename&, const Shape&, const std::vector<int_t>&, const ValueExpr&)> AsTensorPack;
+        typedef std::function<TensorRef(const Tensors&, const Typename&, const Shape&, const ValueExpr&)> AsTensorPack;
         
         using Simplification::canonical;
         
@@ -169,9 +169,8 @@ namespace sknd
                 TRY_DECL(tensors, eval_pack<Tensor*>(expr, symbols, *rank))
                 auto type = eval_type(expr, symbols);
                 TRY_DECL(shape, eval_shape_from_expr(expr, symbols))
-                auto max_shape = eval_shape_max(shape);
                 TRY_DECL(size, eval_dynamic_rank(expr, symbols))
-                return aspack(tensors, type, shape, max_shape, size);
+                return aspack(tensors, type, shape, size);
             }
             else
             {
