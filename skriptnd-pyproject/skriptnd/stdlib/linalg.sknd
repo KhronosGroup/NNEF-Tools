@@ -74,7 +74,7 @@ operator matmul {
         ea = [1 ..(dz - da), a..];
         eb = [1 ..(dz - db), b..];
         ec = [1 ..(dz - dc), c..];
-        z = ea >> eb;
+        z = ea is 1 ? eb : ea;
         mZ = transA ? nA : mA;
         nZ = transB ? mB : nB;
         kZ = transA ? mA : nA;
@@ -94,26 +94,26 @@ operator matmul {
          transA && transB => mA == nB: "first (non-batch) dimension of A must match "
             "last dimension of B when both A and B are transposed",
             'A.shape': [mA,nA], 'B.shape': [mB,nB];
-        ea == eb || ea == 1 || eb == 1:
+        ea == eb || ea is 1 || eb is 1:
             "incompatible argument shapes of A and B for broadcasting batch dimensions "
             "({ea} vs {eb} after alignment)",
             A.shape, B.shape;
-        ec == z || ec == 1:
+        ec == z || ec is 1:
             "incompatible argument shape of C for broadcasting batch dimensions "
             "({ec} vs {z} after alignment)",
             C.shape, "result shape": [z..,mZ,nZ];
     }
     @lower {
-        Z[l..,i,j] = C[c == 1 ? 0 : l[dz-dc:]..,i,j] ?? 0.0,
+        Z[l..,i,j] = C[c is 1 ? 0 : l[dz-dc:]..,i,j] ?? 0.0,
             l < z, i < mZ, j < nZ;
-        Z[l..,i,j] += transA && transB ? A[a == 1 ? 0 : l[dz-da:]..,k,i] *
-                                         B[b == 1 ? 0 : l[dz-db:]..,j,k] :
-                                transA ? A[a == 1 ? 0 : l[dz-da:]..,k,i] *
-                                         B[b == 1 ? 0 : l[dz-db:]..,k,j] :
-                                transB ? A[a == 1 ? 0 : l[dz-da:]..,i,k] *
-                                         B[b == 1 ? 0 : l[dz-db:]..,j,k] :
-                                         A[a == 1 ? 0 : l[dz-da:]..,i,k] *
-                                         B[b == 1 ? 0 : l[dz-db:]..,k,j],
+        Z[l..,i,j] += transA && transB ? A[a is 1 ? 0 : l[dz-da:]..,k,i] *
+                                         B[b is 1 ? 0 : l[dz-db:]..,j,k] :
+                                transA ? A[a is 1 ? 0 : l[dz-da:]..,k,i] *
+                                         B[b is 1 ? 0 : l[dz-db:]..,k,j] :
+                                transB ? A[a is 1 ? 0 : l[dz-da:]..,i,k] *
+                                         B[b is 1 ? 0 : l[dz-db:]..,j,k] :
+                                         A[a is 1 ? 0 : l[dz-da:]..,i,k] *
+                                         B[b is 1 ? 0 : l[dz-db:]..,k,j],
             l < z, i < mZ, j < nZ, k < kZ;
     }
 }
