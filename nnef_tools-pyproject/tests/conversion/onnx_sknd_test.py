@@ -2059,6 +2059,10 @@ class NetworkTestCases(TestEnv):
         self._test_conversion_from_file(self._network_folder + 'gpt2-10.onnx',
                                         input_shape=(1, 1, 8))
 
+    def test_distilbert(self):
+        self._test_conversion_from_file(self._network_folder + 'distilbert.onnx',
+                                        input_shape=(4, 100))
+
 
 if __name__ == '__main__':
     unittest.main()
