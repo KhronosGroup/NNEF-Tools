@@ -65,9 +65,12 @@ namespace sknd
             bool packed() const { return is<P*>(); }
             size_t max_size() const { return as<P*>()->items.size(); }
             std::optional<size_t> max_size_or_null() const { return packed() ? max_size() : (std::optional<size_t>)std::nullopt; }
+            ValueExpr& size() { return as<P*>()->size; }
             const ValueExpr& size() const { return as<P*>()->size; }
+            ValueExpr& canonic_size() { return as<P*>()->canonic_size; }
             const ValueExpr& canonic_size() const { return as<P*>()->canonic_size; }
             const ValueExpr& size_or_null() const { return packed() ? size() : V::null(); }
+            const ValueExpr& canonic_size_or_null() const { return packed() ? canonic_size() : V::null(); }
             bool is_constant() const { return !packed() ? as<T*>()->value != nullptr :
                 std::all_of(as<P*>()->items.begin(), as<P*>()->items.end(), []( const T* item ){ return item->value != nullptr; }); }
             TensorRef at( const size_t i ) { return TensorRef(as<P*>()->items[i]); }

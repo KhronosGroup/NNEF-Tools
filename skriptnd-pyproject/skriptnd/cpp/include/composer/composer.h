@@ -223,7 +223,7 @@ namespace sknd
             _contexts = {};
             _contexts.push({});
             _subgraphs.clear();
-            _dereferenced.clear();
+            _placeholders.clear();
             _trace.clear();
             _next_tensor_idx = 1;
             _next_graph_idx = 1;
@@ -540,7 +540,7 @@ namespace sknd
                     
                     if ( branch_graphs.size() == 1 )
                     {
-                        outputs = make_tensors_like(model.graphs[graph_idx], graph_outputs, std::nullopt, {}, true);
+                        outputs = duplicate_tensors(model.graphs[graph_idx], graph_outputs, std::nullopt, {});
                     }
                     else
                     {
@@ -573,7 +573,10 @@ namespace sknd
                     }
                 }
                 
-                finalize_branch_output_shapes(outputs);
+                for ( auto& output : outputs )
+                {
+                    dereference(output);
+                }
                 
                 rename_results(component.results, outputs, scope);
                 TRY_CALL(add_results_to_symbols(component.results, outputs, model.graphs[graph_idx], symbols, scope, component.position))
@@ -719,32 +722,33 @@ namespace sknd
                 std::vector<TensorRef> outputs(graph_outputs.size());
                 for ( size_t i = 0; i < component.loop->carries.size(); ++i )
                 {
-                    auto& output = *graph_outputs[i];
-                    auto deref_shape = dereferenced(output.shape);
-                    auto max_shape = eval_shape_max(deref_shape);
-                    outputs[i] = make_tensor(*graph, output.dtype, deref_shape, deref_shape, max_shape, {}, {});
+                    outputs[i] = make_tensor_like(*graph, graph_outputs[i]);
+                    dereference(outputs[i]);
                 }
                 
                 if ( repeats != nullptr )
                 {
-                    const int_t max_repeats = component.loop->count ? eval_shape_expr_max_checked(canonical(repeats), component.loop->count->position) :
-                                                                       eval_shape_expr_max(canonical(repeats));
+                    auto canonic_repeats = canonical(repeats);
+                    const int_t max_repeats = component.loop->count ? eval_shape_expr_max_checked(canonic_repeats, component.loop->count->position) :
+                                                                       eval_shape_expr_max(canonic_repeats);
                     auto size = repeats;
+                    auto canonic_size = canonic_repeats;
                     if ( component.loop->condition || count_is_tensor )
                     {
-                        size = ValueExpr::placeholder(next_placeholder_name(), ValueExpr(max_repeats));
+                        size = canonic_size = ValueExpr::placeholder(next_placeholder_name(), ValueExpr(max_repeats));
                     }
                     
                     for ( size_t i = component.loop->carries.size(); i < outputs.size(); ++i )
                     {
                         auto& output = *graph_outputs[i];
-                        auto deref_shape = dereferenced(output.shape);
-                        auto max_shape = eval_shape_max(deref_shape);
-                        auto pack = make_tensor_pack(*graph, output.dtype, max_repeats, size, canonical(size),
-                                                     deref_shape, deref_shape, max_shape);
+                        
+                        auto shape = output.canonic_shape;
+                        dereference(shape, output.max_shape);
+                        
+                        auto pack = make_tensor_pack(*graph, output.dtype, max_repeats, size, canonic_size, shape, shape, output.max_shape);
                         for ( size_t k = 0; k < (size_t)max_repeats; ++k )
                         {
-                            pack->items[k] = make_tensor(*graph, output.dtype, deref_shape, deref_shape, max_shape, {}, {});
+                            pack->items[k] = make_tensor(*graph, output.dtype, shape, shape, output.max_shape);
                         }
                         cache_tensor_pack(pack);
                         outputs[i] = TensorRef(pack);
@@ -1105,7 +1109,12 @@ namespace sknd
             
             auto& graph = model.graphs[graph_idx];
             
-            auto inputs = make_tensors_like(graph, external_inputs, std::nullopt, {}, true);
+            auto inputs = duplicate_tensors(graph, external_inputs, std::nullopt, {});
+            for ( auto& input : inputs )
+            {
+                dereference(input);
+            }
+            
             for ( size_t i = 0; i < external_inputs.size(); ++i )
             {
                 replace_tensor(graph, external_inputs[i], inputs[i]);
@@ -1194,7 +1203,7 @@ namespace sknd
                 
                 if ( !intermediates.count(tensor) || std::find(outputs.begin(), outputs.begin() + i, tensor) != outputs.end() )
                 {
-                    TensorRef output = make_tensors_like(graph, tensor, {}, {});
+                    TensorRef output = make_tensor_like(graph, tensor, {}, {});
                     graph.operations.push_back(Operation{ "", {}, {}, { tensor }, { output } });
                     tensor = output;
                 }
@@ -1836,7 +1845,7 @@ namespace sknd
                         items.resize(update.max_size());
                         for ( size_t j = old_size; j < update.max_size(); ++j )
                         {
-                            items[j] = &*make_tensors_like(graph, TensorRef((Tensor*)&update[j]), std::nullopt, {}, true);
+                            items[j] = &*make_tensor_like(graph, TensorRef((Tensor*)&update[j]), std::nullopt, {});
                         }
                     }
                 }
@@ -1865,36 +1874,6 @@ namespace sknd
                 if ( update.max_shape[i] > output.max_shape[i] )
                 {
                     output.max_shape[i] = update.max_shape[i];
-                }
-            }
-        }
-        
-        void finalize_branch_output_shapes( std::vector<TensorRef>& outputs )
-        {
-            for ( size_t i = 0; i < outputs.size(); ++i )
-            {
-                auto& output = outputs[i];
-                if ( output.packed() )
-                {
-                    for ( size_t j = 0; j < output.max_size(); ++j )
-                    {
-                        finalize_branch_output_shape(output[j]);
-                    }
-                }
-                else
-                {
-                    finalize_branch_output_shape(*output);
-                }
-            }
-        }
-        
-        void finalize_branch_output_shape( Tensor& output )
-        {
-            for ( size_t i = 0; i < output.shape.size(); ++i )
-            {
-                if ( output.shape[i] == nullptr )
-                {
-                    output.shape[i] = output.canonic_shape[i] = ValueExpr::placeholder(next_placeholder_name(), output.max_shape[i]);
                 }
             }
         }
@@ -3300,7 +3279,7 @@ namespace sknd
         }
         
         Tensor* make_tensor( Graph& graph, const Typename dtype, const Shape& shape, const std::string& name = {},
-                            const ValueExpr& value = ValueExpr(nullptr), const bool variable = false )
+                            const ValueExpr& value = nullptr, const bool variable = false )
         {
             auto canonic_shape = canonical(shape);
             auto max_shape = eval_shape_max(canonic_shape);
@@ -3309,7 +3288,7 @@ namespace sknd
         
         Tensor* make_tensor( Graph& graph, const Typename dtype, const Shape& shape, const Shape& canonic_shape,
                             const std::vector<int_t>& max_shape, const std::string& name = {},
-                            const ValueExpr& value = ValueExpr(nullptr), const bool variable = false )
+                            const ValueExpr& value = nullptr, const bool variable = false )
         {
             auto _name = !name.empty() ? name : next_tensor_name();
             auto tensor = std::make_unique<Tensor>(Tensor{ _name, dtype, shape, canonic_shape, max_shape, {}, value, variable });
@@ -3342,8 +3321,8 @@ namespace sknd
             _contexts.top().packs.emplace(pack->items, pack);
         }
         
-        TensorRef make_tensors_like( Graph& graph, const TensorRef& tensor, const std::optional<std::string>& scope,
-                                 const std::string& iden, const bool dereference_shape = false )
+        TensorRef make_tensor_like( Graph& graph, const TensorRef& tensor, const std::optional<std::string>& scope = {},
+                                   const std::string& iden = {} )
         {
             if ( tensor == nullptr )
             {
@@ -3351,21 +3330,13 @@ namespace sknd
             }
             else if ( tensor.packed() )
             {
+                auto name = !iden.empty() ? scoped_name(scope, iden) : iden;
                 auto pack = make_tensor_pack(graph, tensor.dtype(), tensor.max_size(), tensor.size(), tensor.canonic_size(),
-                                             tensor.shape(), tensor.canonic_shape(), tensor.max_shape(), scoped_name(scope, iden));
-                if ( dereference_shape )
-                {
-                    dereference(pack->shape);
-                }
-                
+                                             tensor.shape(), tensor.canonic_shape(), tensor.max_shape(), name);
                 for ( size_t i = 0; i < tensor.max_size(); ++i )
                 {
                     auto name = !iden.empty() ? scoped_name(scope, iden, i+1) : iden;
-                    pack->items[i] = make_tensor(graph, tensor[i].dtype, tensor[i].shape, tensor[i].canonic_shape, tensor[i].max_shape, name, {});
-                    if ( dereference_shape )
-                    {
-                        dereference(pack->items[i]->shape);
-                    }
+                    pack->items[i] = make_tensor(graph, tensor[i].dtype, tensor[i].shape, tensor[i].canonic_shape, tensor[i].max_shape, name);
                 }
                 cache_tensor_pack(pack);
                 return pack;
@@ -3373,23 +3344,18 @@ namespace sknd
             else
             {
                 auto name = !iden.empty() ? scoped_name(scope, iden) : iden;
-                auto result = make_tensor(graph, tensor->dtype, tensor->shape, tensor->canonic_shape, tensor->max_shape, name, {});
-                if ( dereference_shape )
-                {
-                    dereference(result->shape);
-                }
+                auto result = make_tensor(graph, tensor->dtype, tensor->shape, tensor->canonic_shape, tensor->max_shape, name);
                 return result;
             }
         }
         
-        std::vector<TensorRef> make_tensors_like( Graph& graph, const std::vector<TensorRef>& tensors,
-                                                 const std::optional<std::string>& scope, const std::string& iden,
-                                                 const bool dereference_shape = false )
+        std::vector<TensorRef> duplicate_tensors( Graph& graph, const std::vector<TensorRef>& tensors,
+                                                 const std::optional<std::string>& scope, const std::string& iden )
         {
             std::vector<TensorRef> duplicates(tensors.size());
             for ( size_t i = 0; i < tensors.size(); ++i )
             {
-                duplicates[i] = make_tensors_like(graph, tensors[i], scope, iden, dereference_shape);
+                duplicates[i] = make_tensor_like(graph, tensors[i], scope, iden);
             }
             return duplicates;
         }
@@ -4335,35 +4301,43 @@ namespace sknd
             return true;
         }
         
-        const ValueExpr& placeholder_for( const ValueExpr& expr )
+        const ValueExpr& placeholder_for( const ValueExpr& expr, const int_t& max_value )
         {
-            auto canonic = canonical(expr);
-            auto key = str(canonic);
-            auto it = _dereferenced.find(key);
-            if ( it == _dereferenced.end() )
+            auto key = str(expr);
+            auto it = _placeholders.find(key);
+            if ( it == _placeholders.end() )
             {
-                auto max_value = eval_shape_expr_max(canonic);
-                it = _dereferenced.emplace(key, ValueExpr::placeholder(next_placeholder_name(), max_value)).first;
+                it = _placeholders.emplace(key, ValueExpr::placeholder(next_placeholder_name(), max_value)).first;
             }
             return it->second;
         }
         
-        void dereference( Shape& shape )
+        Shape& dereference( Shape& shape, const std::vector<int_t>& max_shape )
         {
             for ( size_t i = 0; i < shape.size(); ++i )
             {
                 if ( !shape[i].is_literal() )
                 {
-                    shape[i] = placeholder_for(shape[i]);
+                    shape[i] = placeholder_for(shape[i], max_shape[i]);
                 }
             }
+            return shape;
         }
         
-        Shape dereferenced( const Shape& shape )
+        void dereference( TensorRef& tensor )
         {
-            Shape result = shape;
-            dereference(result);
-            return result;
+            if ( tensor.packed() )
+            {
+                for ( size_t i = 0; i < tensor.max_size(); ++i )
+                {
+                    tensor[i].shape = dereference(tensor[i].canonic_shape, tensor[i].max_shape);
+                }
+                if ( !tensor.canonic_size().is_literal() )
+                {
+                    tensor.size() = tensor.canonic_size() = placeholder_for(tensor.canonic_size(), tensor.max_size());
+                }
+            }
+            tensor.shape() = dereference(tensor.canonic_shape(), tensor.max_shape());
         }
         
         static Typename resolve_type( const Param& param, const Dict<Symbol>& symbols )
@@ -4432,7 +4406,7 @@ namespace sknd
         const OperationCallback _unroll;
         std::stack<SubgraphContext> _contexts;
         Dict<SubgraphInfo> _subgraphs;
-        Dict<ValueExpr> _dereferenced;
+        Dict<ValueExpr> _placeholders;
         StackTrace _trace;
         size_t _next_tensor_idx;
         size_t _next_graph_idx;
