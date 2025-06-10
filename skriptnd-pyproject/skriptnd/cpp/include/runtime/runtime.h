@@ -162,6 +162,8 @@ namespace sknd
         template<size_t N, typename T>
         class Tensor : public TensorView
         {
+            static const size_t MaxTensorSize = 1 << 30;
+            
         public:
             
             typedef T value_type;
@@ -186,8 +188,14 @@ namespace sknd
             
             template<typename ...Ts, typename = std::enable_if_t<sizeof...(Ts) == N && (std::is_same_v<Ts, size_type> && ...)>>
             Tensor( const size_t dynamic_mask, Ts... shape )
-            : _max_shape({ shape... }), _shape(_max_shape), _dynamic_mask(dynamic_mask), _data(new T[max_volume()])
+            : _max_shape({ shape... }), _shape(_max_shape), _dynamic_mask(dynamic_mask)
             {
+                const size_t n = max_volume();
+                if ( n > MaxTensorSize )
+                {
+                    throw std::invalid_argument("trying to allocate tensor larger than 1GB");
+                }
+                _data = new T[n];
                 std::fill_n(_data, volume(), T());
             }
             
