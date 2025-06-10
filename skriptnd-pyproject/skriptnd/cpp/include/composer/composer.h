@@ -727,8 +727,8 @@ namespace sknd
                 
                 if ( repeats != nullptr )
                 {
-                    const int_t max_repeats = component.loop->count ? eval_shape_expr_max_checked(repeats, component.loop->count->position) :
-                                                                       eval_shape_expr_max(repeats);
+                    const int_t max_repeats = component.loop->count ? eval_shape_expr_max_checked(canonical(repeats), component.loop->count->position) :
+                                                                       eval_shape_expr_max(canonical(repeats));
                     auto size = repeats;
                     if ( component.loop->condition || count_is_tensor )
                     {
@@ -2139,7 +2139,7 @@ namespace sknd
                     if ( param.repeats )
                     {
                         TRY_DECL(repeats, eval(*param.repeats, symbols))
-                        const size_t count = eval_shape_expr_max(repeats);
+                        const size_t count = eval_shape_expr_max(canonical(repeats));
                         TRY_CALL(check_shape_repeats(*param.shape, symbols, count))
                         
                         if ( !compare_sizes(canonical(repeats), output.canonic_size(), count, output.max_size()) )
@@ -2356,7 +2356,7 @@ namespace sknd
                         }
                         
                         TRY_DECL(count, eval(*param.repeats, locals))
-                        auto max_count = eval_shape_expr_max(count);
+                        auto max_count = eval_shape_expr_max(canonical(count));
                         
                         value = ValueExpr::uniform(value, count, max_count);
                     }
@@ -3266,7 +3266,7 @@ namespace sknd
             {
                 TRY_DECL(size, eval_shape_expr(*param.repeats, symbols))
                 auto canonic_size = canonical(size);
-                const size_t max_size = eval_shape_expr_max_checked(size, param.repeats->position);
+                const size_t max_size = eval_shape_expr_max_checked(canonic_size, param.repeats->position);
                 TRY_CALL(check_shape_repeats(*param.shape, symbols, max_size))
                 
                 TRY_DECL(value, param.default_value ? eval(*param.default_value, symbols) : ValueExpr(nullptr))

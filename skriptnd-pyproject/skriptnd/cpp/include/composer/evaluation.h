@@ -413,15 +413,9 @@ namespace sknd
             return values;
         }
         
-        static Result<ValueExpr> eval_dynamic_pack( const Expr& expr, const Dict<Symbol>& symbols )
-        {
-            TRY_DECL(rank, eval_dynamic_rank(expr, symbols))
-            return eval_dynamic_pack(expr, symbols, rank);
-        }
-        
         static Result<ValueExpr> eval_dynamic_pack( const Expr& expr, const Dict<Symbol>& symbols, const ValueExpr& rank )
         {
-            auto size = eval_shape_expr_max(rank);
+            auto size = eval_shape_expr_max(canonical(rank));
             switch ( expr.kind )
             {
                 case Expr::Identifier:
@@ -1047,7 +1041,7 @@ namespace sknd
             else
             {
                 TRY_DECL(rank, eval_dynamic_rank(*expr.array, symbols))
-                auto length = eval_shape_expr_max(rank);
+                auto length = eval_shape_expr_max(canonical(rank));
                 
                 ValueExpr index_value;
                 if ( expr.index->kind == Expr::Range )
@@ -2008,7 +2002,7 @@ namespace sknd
         static Result<std::optional<size_t>> eval_max_rank( const Expr& expr, const Dict<Symbol>& symbols )
         {
             TRY_DECL(rank, eval_dynamic_rank<Optional>(expr, symbols))
-            return rank == nullptr ? (std::optional<size_t>)std::nullopt : (std::optional<size_t>)eval_shape_expr_max(rank);
+            return rank == nullptr ? (std::optional<size_t>)std::nullopt : (std::optional<size_t>)eval_shape_expr_max(canonical(rank));
         }
         
         template<bool Optional = false>
