@@ -55,6 +55,7 @@ def _build_model(model):
 def _build_tensor(tensor):
     return sknd.Tensor(name=tensor.name or "~",
                        shape=tensor.shape,
+                       canonic_shape=tensor.shape,
                        max_shape=tensor.shape,
                        dtype=sknd.DtypeFromNumpy[tensor.dtype] if tensor.dtype else None,
                        quant=tensor.quant,
@@ -65,9 +66,11 @@ def _build_tensor(tensor):
 def _build_tensor_pack(pack, tensor_map):
     return sknd.TensorPack(name=pack.name,
                            shape=pack.shape,
+                           canonic_shape=pack.shape,
                            max_shape=pack.shape,
                            dtype=sknd.DtypeFromNumpy[pack.dtype] if pack.dtype else None,
                            size=pack.size,
+                           canonic_size=pack.size,
                            items=[remap_tensor(item, tensor_map) for item in pack])
 
 

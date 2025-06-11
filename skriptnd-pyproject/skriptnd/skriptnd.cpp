@@ -679,22 +679,25 @@ static PyObject* buildPyTensor( const sknd::Tensor& tensor, const BuildContext& 
 {
     PyObject* name = buildPyStr(tensor.name);
     PyObject* dtype = buildPyDtype(tensor.dtype);
-    PyObject* shape = Py_None; // deferred
+    PyObject* shape = Py_None; // deferred due to references to other tensors
+    PyObject* canonic_shape = buildPyShape(tensor.canonic_shape, context);
     PyObject* max_shape = buildPyShape(tensor.max_shape);
     PyObject* quant = buildPyAttribs(tensor.quant, context);
     PyObject* value = buildPyValueExpr(tensor.value, context);
     PyObject* variable = buildPyBoolean(tensor.variable);
 
-    return makePyObject(Tensor, name, dtype, shape, max_shape, quant, value, variable);
+    return makePyObject(Tensor, name, dtype, shape, canonic_shape, max_shape, quant, value, variable);
 }
 
 static PyObject* buildPyTensorPack( const sknd::TensorPack& pack, const BuildContext& context )
 {
     PyObject* name = buildPyStr(pack.name);
     PyObject* dtype = buildPyDtype(pack.dtype);
-    PyObject* shape = Py_None;  // deferred
+    PyObject* shape = Py_None;  // deferred due to references to other tensors
+    PyObject* canonic_shape = buildPyShape(pack.canonic_shape, context);
     PyObject* max_shape = buildPyShape(pack.max_shape);
-    PyObject* size = Py_None;   // deferred
+    PyObject* size = Py_None;   // deferred due to references to other tensors
+    PyObject* canonic_size = buildPyValueExpr(pack.canonic_size, context);
 
     PyObject* items = PyList_New(pack.items.size());
     for ( size_t i = 0; i < pack.items.size(); ++i )
@@ -704,7 +707,7 @@ static PyObject* buildPyTensorPack( const sknd::TensorPack& pack, const BuildCon
         PyList_SetItem(items, i, item);
     }
 
-    return makePyObject(TensorPack, name, dtype, shape, max_shape, size, items);
+    return makePyObject(TensorPack, name, dtype, shape, canonic_shape, max_shape, size, canonic_size, items);
 }
 
 static PyObject* buildPyContraction( const sknd::Contraction& contraction, const BuildContext& context )
@@ -1188,9 +1191,9 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
 
     Contraction = makeDataClass(module, "Contraction", { "left", "right", "condition", "assignment", "locals", "bounds", "subscripts", "axes" });
 
-    Tensor = makeDataClass(module, "Tensor", { "name", "dtype", "shape", "max_shape", "quant", "value", "variable" },
+    Tensor = makeDataClass(module, "Tensor", { "name", "dtype", "shape", "canonic_shape", "max_shape", "quant", "value", "variable" },
                            { buildPyNone(), buildPyNone(), buildPyBoolean(false) });
-    TensorPack = makeDataClass(module, "TensorPack", { "name", "dtype", "shape", "max_shape", "size", "items" },
+    TensorPack = makeDataClass(module, "TensorPack", { "name", "dtype", "shape", "canonic_shape", "max_shape", "size", "canonic_size", "items" },
                                { buildPyInt(0), EmptyListDefault });
     Assertion = makeDataClass(module, "Assertion", { "condition", "message", "args" });
     Operation = makeDataClass(module, "Operation", { "name", "dtypes", "attribs", "inputs", "outputs", "internals", "contractions", "asserts", "subexprs" },

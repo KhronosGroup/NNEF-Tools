@@ -212,7 +212,7 @@ class Printer:
             index_name = attribs.get('index')
             pretest = attribs.get('pretest', False)
 
-            index = _sknd.Tensor(name=index_name, dtype=_sknd.Dtype.Int, shape=(), max_shape=()) if index_name else None
+            index = _sknd.Tensor(name=index_name, dtype=_sknd.Dtype.Int, shape=(), canonic_shape=(), max_shape=()) if index_name else None
 
             subgraph_inputs = body.inputs[:nvars + nscans] + (index,) + args[nvars + nscans + 1:]
             cond_inputs = [subgraph_inputs[idx] for idx in cond_input_indices] \

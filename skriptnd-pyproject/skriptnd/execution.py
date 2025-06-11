@@ -961,7 +961,7 @@ def _format_do(op, indent, context):
     dynamic_iters = op.inputs[nvars+nscans]
 
     auxiliaries = context['auxiliaries']
-    index = sknd.Tensor(name='$', dtype=sknd.Dtype.Int, shape=(), max_shape=())
+    index = sknd.Tensor(name='$', dtype=sknd.Dtype.Int, shape=(), canonic_shape=(), max_shape=())
     vars = tuple(auxiliaries[output] for output in op.outputs[:nvars])
     subgraph_inputs = vars + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
     body_inputs = tuple(subgraph_inputs[idx] for idx in op.attribs['body_inputs'])
@@ -1096,7 +1096,8 @@ def _valid_id(name):
 
 
 def _make_auxiliary_tensor(tensor, dtype=None):
-    return sknd.Tensor(name='$'+tensor.name, dtype=dtype or tensor.dtype, shape=tensor.shape, max_shape=tensor.max_shape)
+    return sknd.Tensor(name='$'+tensor.name, dtype=dtype or tensor.dtype,
+                       shape=tensor.shape, canonic_shape=tensor.canonic_shape, max_shape=tensor.max_shape)
 
 
 def _generate_model_source(model):
