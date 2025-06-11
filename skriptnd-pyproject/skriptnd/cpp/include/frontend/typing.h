@@ -502,17 +502,20 @@ namespace sknd
         
         void check_shape_components( const Dict<Declaration>& decls, const Shapedef& shape, const Shared<Expr>& repeats, bool enforce ) const
         {
-            size_t idx = 0;
-            for ( auto item : shape.extents )
+            for ( size_t i = 0; i < shape.extents.size(); ++i )
             {
-                bool spread = shape.spreads & (1 << idx++);
-                if ( !item )
+                auto extent = shape.extents[i];
+                auto bound = shape.bounds[i];
+                bool spread = shape.spreads & (1 << i++);
+                
+                if ( !extent )
                 {
                     continue;
                 }
-                if ( item->kind == Expr::Expand )
+                
+                if ( extent->kind == Expr::Expand )
                 {
-                    auto& expand = as_expand(*item);
+                    auto& expand = as_expand(*extent);
                     if ( expand.count )
                     {
                         if ( !is_affine_expr(*expand.count) || enforce )
@@ -520,18 +523,18 @@ namespace sknd
                             check_repeat(*expand.count, decls, true);
                         }
                     }
-                    item = expand.item;
-                    if ( !item )
+                    extent = expand.item;
+                    if ( !extent )
                     {
                         continue;
                     }
                     
-                    if ( !is_affine_expr(*item) || enforce )
+                    if ( !is_affine_expr(*extent) || enforce )
                     {
-                        auto [type, rank] = check_extent(*item, decls);
+                        auto [type, rank] = check_extent(*extent, decls);
                         if ( type && !type->packed && !expand.count )
                         {
-                            report_error(item->position, "repeat count must be supplied if item is not a pack");
+                            report_error(extent->position, "repeat count must be supplied if item is not a pack");
                         }
                     }
                 }
@@ -539,16 +542,21 @@ namespace sknd
                 {
                     if ( spread && !repeats )
                     {
-                        report_error(item->position, "packed item can only be spread across a packed parameter");
+                        report_error(extent->position, "packed item can only be spread across a packed parameter");
                     }
-                    if ( !is_affine_expr(*item) || enforce )
+                    if ( !is_affine_expr(*extent) || enforce )
                     {
-                        auto [type, rank] = check_extent(*item, decls, repeats);
+                        auto [type, rank] = check_extent(*extent, decls, repeats);
                         if ( type && type->packed && !spread )
                         {
-                            report_error(item->position, "packed item must be expanded or spread in shape definitions");
+                            report_error(extent->position, "packed item must be expanded or spread in shape definitions");
                         }
                     }
+                }
+                
+                if ( bound )
+                {
+                    check_extent(*bound, decls);
                 }
             }
         }

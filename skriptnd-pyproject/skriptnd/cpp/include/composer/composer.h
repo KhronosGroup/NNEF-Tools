@@ -735,7 +735,7 @@ namespace sknd
                     auto canonic_size = canonic_repeats;
                     if ( component.loop->condition || count_is_tensor )
                     {
-                        size = canonic_size = ValueExpr::placeholder(next_placeholder_name(), ValueExpr(max_repeats));
+                        size = canonic_size = ValueExpr::placeholder(next_placeholder_name(), max_repeats);
                     }
                     
                     for ( size_t i = component.loop->carries.size(); i < outputs.size(); ++i )
