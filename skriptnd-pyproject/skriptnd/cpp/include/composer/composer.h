@@ -2122,7 +2122,7 @@ namespace sknd
                         const size_t count = eval_shape_expr_max(canonical(repeats));
                         TRY_CALL(check_shape_repeats(*param.shape, symbols, count))
                         
-                        if ( !compare_sizes(canonical(repeats), output.canonic_size(), count, output.max_size()) )
+                        if ( !compare_sizes(canonical(repeats), output.canonic_size()) )
                         {
                             return Error(param.repeats->position, "output pack length (%s) does not match declared output count (%s)",
                                          str(output.size()).c_str(), str(repeats).c_str());
@@ -2151,26 +2151,13 @@ namespace sknd
             return Result<void>();
         }
         
-        bool compare_sizes( const ValueExpr& declared_size, const ValueExpr& composed_size,
-                           const size_t declared_size_max, const size_t composed_size_max )
+        bool compare_sizes( const ValueExpr& declared_size, const ValueExpr& composed_size )
         {
-            if ( composed_size.is_literal() )
+            if ( composed_size.is_literal() && declared_size.is_placeholder() && composed_size == declared_size.as_placeholder().max_value )
             {
-                if ( declared_size.is_placeholder() && composed_size == declared_size.as_placeholder().max_value )
-                {
-                    return true;
-                }
-                return composed_size == declared_size;
+                return true;
             }
-            else if ( declared_size.is_literal() )
-            {
-                return composed_size == declared_size;
-            }
-            else
-            {
-                return declared_size_max == composed_size_max;
-            }
-            return true;
+            return composed_size == declared_size;
         }
         
         bool compare_shapes( const Shape& declared_shape, const Shape& composed_shape )
