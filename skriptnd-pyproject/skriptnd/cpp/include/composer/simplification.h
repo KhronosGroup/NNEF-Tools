@@ -78,15 +78,16 @@ namespace sknd
                         auto tensor = access.tensor;
                         if ( access.item == nullptr )
                         {
+                            bool packed = x.packed();
                             x = tensor.canonic_shape()[access.dim.as_int()];
+                            if ( packed && !x.packed() )
+                            {
+                                x = ValueExpr::uniform(x, tensor.size(), tensor.max_size());
+                            }
                         }
                         else if ( access.item.is_literal() )
                         {
                             x = tensor[access.item.as_int()].canonic_shape[access.dim.as_int()];
-                        }
-                        if ( tensor.packed() && !x.packed() )
-                        {
-                            x = ValueExpr::uniform(x, tensor.size(), tensor.max_size());
                         }
                     }
                 }
