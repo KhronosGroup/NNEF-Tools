@@ -2102,7 +2102,7 @@ namespace sknd
             return outputs;
         }
         
-        Result<void> check_outputs( const std::vector<Param>& params, const std::vector<TensorRef> outputs,
+        Result<void> check_outputs( const std::vector<Param>& params, std::vector<TensorRef> outputs,
                                    const Dict<Symbol>& symbols )
         {
             for ( size_t i = 0; i < params.size(); ++i )
@@ -2119,48 +2119,49 @@ namespace sknd
                     if ( param.repeats )
                     {
                         TRY_DECL(repeats, eval(*param.repeats, symbols))
-                        const size_t count = eval_shape_expr_max(canonical(repeats));
+                        auto canonic_repeats = canonical(repeats);
+                        const size_t count = eval_shape_expr_max(canonic_repeats);
                         TRY_CALL(check_shape_repeats(*param.shape, symbols, count))
                         
-                        if ( !compare_sizes(canonical(repeats), output.canonic_size()) )
+                        if ( !compare_shapes(output.canonic_size(), canonic_repeats) )
                         {
                             return Error(param.repeats->position, "output pack length (%s) does not match declared output count (%s)",
                                          str(output.size()).c_str(), str(repeats).c_str());
+                        }
+                        if ( can_replace_shape(output.canonic_size(), canonic_repeats) )
+                        {
+                            output.size() = repeats;
+                            output.canonic_size() = canonic_repeats;
                         }
                     }
                     for ( size_t j = 0; j < output.max_size(); ++j )
                     {
                         TRY_DECL(declared_shape, eval_shape(*param.shape, symbols, j))
-                        if ( !compare_shapes(canonical(declared_shape), output[j].canonic_shape) )
+                        auto canonic_shape = canonical(declared_shape);
+                        if ( !compare_shapes(output[j].canonic_shape, canonic_shape) )
                         {
                             return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of item %d of output '%s'",
                                          str(output[j].shape).c_str(), str(declared_shape).c_str(), (int)j, param.name.c_str());
                         }
+                        replace_shape(output[j], declared_shape, canonic_shape);
                     }
                 }
                 else
                 {
                     TRY_DECL(declared_shape, eval_shape(*param.shape, symbols))
-                    if ( !compare_shapes(canonical(declared_shape), output->canonic_shape) )
+                    auto canonic_shape = canonical(declared_shape);
+                    if ( !compare_shapes(output->canonic_shape, canonic_shape) )
                     {
                         return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of output '%s'",
                                      str(output->shape).c_str(), str(declared_shape).c_str(), param.name.c_str());
                     }
+                    replace_shape(*output, declared_shape, canonic_shape);
                 }
             }
             return Result<void>();
         }
         
-        bool compare_sizes( const ValueExpr& declared_size, const ValueExpr& composed_size )
-        {
-            if ( composed_size.is_literal() && declared_size.is_placeholder() && composed_size == declared_size.as_placeholder().max_value )
-            {
-                return true;
-            }
-            return composed_size == declared_size;
-        }
-        
-        bool compare_shapes( const Shape& declared_shape, const Shape& composed_shape )
+        bool compare_shapes( const Shape& composed_shape, const Shape& declared_shape )
         {
             if ( declared_shape.size() != composed_shape.size() )
             {
@@ -2168,7 +2169,7 @@ namespace sknd
             }
             for ( size_t i = 0; i < declared_shape.size(); ++i )
             {
-                if ( declared_shape[i] != nullptr && !compare_shapes(declared_shape[i], composed_shape[i]) )
+                if ( declared_shape[i] != nullptr && !compare_shapes(composed_shape[i], declared_shape[i]) )
                 {
                     return false;
                 }
@@ -2176,7 +2177,7 @@ namespace sknd
             return true;
         }
         
-        bool compare_shapes( const ValueExpr& declared_shape, const ValueExpr& composed_shape )
+        bool compare_shapes( const ValueExpr& composed_shape, const ValueExpr& declared_shape )
         {
             if ( declared_shape.is_placeholder() && declared_shape.as_placeholder().id.empty() )
             {
@@ -2187,6 +2188,31 @@ namespace sknd
                 return true;
             }
             return composed_shape == declared_shape;
+        }
+        
+        bool can_replace_shape( const ValueExpr& composed_shape, const ValueExpr& declared_shape )
+        {
+            if ( declared_shape.is_placeholder() && declared_shape.as_placeholder().id.empty() )
+            {
+                return false;
+            }
+            else if ( composed_shape.is_literal() && declared_shape.is_placeholder() && composed_shape == declared_shape.as_placeholder().max_value )
+            {
+                return false;
+            }
+            return true;
+        }
+        
+        void replace_shape( Tensor& tensor, const Shape& shape, const Shape& canonic_shape )
+        {
+            for ( size_t k = 0; k < canonic_shape.size(); ++k )
+            {
+                if ( canonic_shape[k] != nullptr && can_replace_shape(tensor.canonic_shape[k], canonic_shape[k]) )
+                {
+                    tensor.shape[k] = shape[k];
+                    tensor.canonic_shape[k] = canonic_shape[k];
+                }
+            }
         }
         
         Result<void> check_shape_repeats( const Shapedef& shape, const Dict<Symbol>& symbols, const size_t repeats )
