@@ -154,7 +154,7 @@ namespace sknd
                 }
             }
             
-            TRY_CALL(add_placeholder_symbols(main.inputs, symbols))
+            TRY_CALL(add_placeholder_symbols(main.inputs, symbols, false))
             
             const std::string scope = graph_name + ".";
             
@@ -201,7 +201,7 @@ namespace sknd
                 TRY_CALL(compose(component, operators, symbols, model, 0, scope, propagate_label))
             }
             
-            TRY_CALL(add_placeholder_symbols(main.outputs, symbols))
+            TRY_CALL(add_placeholder_symbols(main.outputs, symbols, true))
             
             auto& graph = model.graphs.front();
             graph.inputs = list_tensors(main.inputs, symbols);
@@ -240,7 +240,7 @@ namespace sknd
             return model.graphs.back();
         }
         
-        Result<void> add_placeholder_symbols( const std::vector<Param>& params, Dict<Symbol>& symbols )
+        Result<void> add_placeholder_symbols( const std::vector<Param>& params, Dict<Symbol>& symbols, bool composed )
         {
             for ( auto& param : params )
             {
@@ -253,19 +253,20 @@ namespace sknd
                         auto& bound = param.shape->bounds[i];
                         if ( bound )
                         {
-                            TRY_CALL(add_placeholder_symbol(*extent, *bound, symbols, spread ? param.repeats : nullptr))
+                            TRY_CALL(add_placeholder_symbol(*extent, *bound, symbols, composed, spread ? param.repeats : nullptr))
                         }
                     }
                 }
                 if ( param.repeats && param.repeats_bound )
                 {
-                    TRY_CALL(add_placeholder_symbol(*param.repeats, *param.repeats_bound, symbols))
+                    TRY_CALL(add_placeholder_symbol(*param.repeats, *param.repeats_bound, symbols, composed))
                 }
             }
             return {};
         }
         
-        Result<void> add_placeholder_symbol( const Expr& extent, const Expr& bound, Dict<Symbol>& symbols, const Shared<Expr>& repeats = nullptr )
+        Result<void> add_placeholder_symbol( const Expr& extent, const Expr& bound, Dict<Symbol>& symbols, bool composed,
+                                            const Shared<Expr>& repeats = nullptr )
         {
             auto count = extent.kind == Expr::Expand ? as_expand(extent).count : repeats;
             auto& iden = as_identifier(expanded(extent)).name;
@@ -279,14 +280,14 @@ namespace sknd
                     for ( size_t i = 0; i < items.size(); ++i )
                     {
                         TRY_DECL(max_value, eval(bound, symbols, i))
-                        items[i] = ValueExpr::placeholder(next_placeholder_name(), max_value);
+                        items[i] = ValueExpr::placeholder(composed ? "" : next_placeholder_name(), max_value);
                     }
                     symbols.emplace(iden, Symbol(ValueExpr::list(std::move(items), Typename::Int), Typename::Int));
                 }
                 else
                 {
                     TRY_DECL(max_value, eval(bound, symbols))
-                    auto value = ValueExpr::placeholder(next_placeholder_name(), max_value);
+                    auto value = ValueExpr::placeholder(composed ? "" : next_placeholder_name(), max_value);
                     symbols.emplace(iden, Symbol(value, Typename::Int));
                 }
             }
@@ -1358,7 +1359,7 @@ namespace sknd
                 add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), locals);
             }
             
-            TRY_CALL(add_placeholder_symbols(op.outputs, locals))
+            TRY_CALL(add_placeholder_symbols(op.outputs, locals, !op.components.empty()))
             
             bool is_private = op.name.front() == '_';
             bool is_atomic = !is_private && !op.graph && _atomic(invocation.target, types, attribs, inputs);
@@ -2190,24 +2191,15 @@ namespace sknd
         
         bool compare_shapes( const ValueExpr& declared_shape, const ValueExpr& composed_shape )
         {
-            if ( composed_shape.is_literal() )
+            if ( declared_shape.is_placeholder() && declared_shape.as_placeholder().id.empty() )
             {
-                if ( declared_shape.is_placeholder() && composed_shape == declared_shape.as_placeholder().max_value )
-                {
-                    return true;
-                }
-                return composed_shape == declared_shape;
+                return true;
             }
-            else if ( declared_shape.is_literal() )
+            else if ( composed_shape.is_literal() && declared_shape.is_placeholder() && composed_shape == declared_shape.as_placeholder().max_value )
             {
-                return composed_shape == declared_shape;
+                return true;
             }
-            else
-            {
-                auto declared_shape_max = eval_shape_expr_max(declared_shape);
-                auto composed_shape_max = eval_shape_expr_max(composed_shape);
-                return declared_shape_max == composed_shape_max;
-            }
+            return composed_shape == declared_shape;
         }
         
         Result<void> check_shape_repeats( const Shapedef& shape, const Dict<Symbol>& symbols, const size_t repeats )
@@ -3629,18 +3621,18 @@ namespace sknd
             return value.is_literal() ? value : ShapeAccess{ tensor, (int_t)dim };
         }
         
-        ValueExpr make_shape_access_exprs( const ValueExpr& value, const TensorRef tensor, const size_t dim, bool merge_pack = false )
+        ValueExpr make_shape_access_exprs( const ValueExpr& value, const TensorRef tensor, const size_t dim, bool spread = false )
         {
             if ( is_literal(value) )
             {
                 return value;
             }
-            else if ( value.is_list() && !merge_pack )
+            else if ( value.is_list() && !spread )
             {
                 std::vector<ValueExpr> items(value.max_size());
                 for ( size_t i = 0; i < value.max_size(); ++i )
                 {
-                    items[i] = make_shape_access_expr(value[i], tensor, dim + i);
+                    items[i] = make_shape_access_expr(value[i], tensor, spread ? dim : dim + i);
                 }
                 return ValueExpr::list(std::move(items), Typename::Int);
             }

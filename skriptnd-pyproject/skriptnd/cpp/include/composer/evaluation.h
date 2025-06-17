@@ -2827,6 +2827,7 @@ namespace sknd
                 {
                     auto& fold = expr.as_fold();
                     auto& pack = fold.pack.is_reference() ? *fold.pack.as_reference().target : fold.pack;
+                    assert(pack.packed());
                     bool dynamic_size = pack.has_dynamic_size();
                     switch ( Lexer::operator_value(fold.op) )
                     {
@@ -3204,6 +3205,16 @@ namespace sknd
                 }
             }
             return shape;
+        }
+        
+        static Shape resolved( const Shape& shape )
+        {
+            Shape resolved = shape;
+            for ( auto& item : resolved )
+            {
+                resolve(item);
+            }
+            return resolved;
         }
         
         static Shape canonical( const Shape& shape )
