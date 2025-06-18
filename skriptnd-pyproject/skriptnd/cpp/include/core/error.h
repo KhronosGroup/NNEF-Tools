@@ -23,6 +23,7 @@
 #include <list>
 #include <cstdarg>
 #include <type_traits>
+#include <stdexcept>
 
 
 namespace sknd

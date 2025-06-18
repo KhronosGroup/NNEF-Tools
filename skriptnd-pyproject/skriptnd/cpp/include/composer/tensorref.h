@@ -21,6 +21,7 @@
 #include "types.h"
 #include <vector>
 #include <string>
+#include <optional>
 
 
 namespace sknd
