@@ -3010,7 +3010,7 @@ namespace sknd
             else
             {
                 recurse(expr, [&]( ValueExpr& x ){ substitute(x, iden, value); });
-                Evaluation::simplify(expr);
+                simplify(expr);
             }
         }
 
@@ -3881,15 +3881,16 @@ namespace sknd
             {
                 return {};
             }
-            simplify(cond);
-            if ( !cond.is_literal() )
+            auto canonic = canonical(cond);
+            if ( !canonic.is_literal() )
             {
+                simplify(cond);
                 std::vector<ValueExpr> args;
                 TRY_DECL(message, format_assert_message(assert, symbols, &args))
                 dynamic_asserts.emplace_back(Assertion{ std::move(cond), std::move(message), std::move(args) });
                 return {};
             }
-            else if ( !cond )
+            else if ( !canonic.as_bool() )
             {
                 TRY_DECL(message, format_assert_message(assert, symbols))
                 return Error(position, message.c_str());
