@@ -3658,6 +3658,8 @@ namespace sknd
         Result<void> deduce_extents( const Typed& param, const TensorRef tensor, size_t offset, size_t count,
                                     const ValueExpr& size, const Position& position, Dict<Symbol>& symbols )
         {
+            auto& canonic_shape = tensor.canonic_shape();
+            
             size_t k = 0, idx = 0;
             for ( auto item : param.shape->extents )
             {
@@ -3688,11 +3690,11 @@ namespace sknd
                 {
                     if ( bool_count )
                     {
-                        shape_value = rank ? tensor.shape()[k] : nullptr;
+                        shape_value = rank ? canonic_shape[k] : nullptr;
                     }
                     else
                     {
-                        shape_value = ValueExpr(tensor.shape().data() + k, rank, Typename::Int);
+                        shape_value = ValueExpr(canonic_shape.data() + k, rank, Typename::Int);
                         for ( size_t i = 0; i < rank; ++i )
                         {
                             if ( shape_value[i].is_list() )
@@ -3714,18 +3716,16 @@ namespace sknd
                     std::vector<ValueExpr> items(count);
                     for ( size_t i = 0; i < count; ++i )
                     {
-                        items[i] = tensor[i + offset].shape[k];
+                        items[i] = tensor[i + offset].canonic_shape[k];
                     }
                     shape_value = ValueExpr::list(std::move(items), Typename::Int);
                 }
                 else
                 {
-                    shape_value = tensor.shape()[k];
+                    shape_value = canonic_shape[k];
                     if ( shape_value.is_list() )
                     {
-                        auto& canonical_value = tensor.canonic_shape()[k];
-                        assert(canonical_value.is_list());
-                        if ( !all_equal(canonical_value.as_list()) )
+                        if ( !all_equal(shape_value.as_list()) )
                         {
                             return Error(position, "ambiguous deduction of shape component %d due to non-uniform pack item shape: %s",
                                          (int)k, std::to_string(shape_value).c_str());
@@ -3773,8 +3773,6 @@ namespace sknd
                 k += rank;
             }
             
-            auto& shape = tensor.shape();
-            
             k = 0;
             for ( auto item : param.shape->extents )
             {
@@ -3800,34 +3798,34 @@ namespace sknd
                     {
                         if ( value.is_list() )
                         {
-                            if ( !std::equal(value.as_list().begin(), value.as_list().end(), shape.data() + k,
+                            if ( !std::equal(value.as_list().begin(), value.as_list().end(), canonic_shape.data() + k,
                                              []( const auto& x, const ValueExpr& y ){ return y == (int_t)x; }) )
                             {
                                 return Error(position, "expected value '%s' for shape components %d:%d of param '%s', found shape %s",
-                                             std::to_string(value).c_str(), (int)k, (int)(k + rank), param.name.c_str(), str(shape).c_str());
+                                             std::to_string(value).c_str(), (int)k, (int)(k + rank), param.name.c_str(), str(tensor.shape()).c_str());
                             }
                         }
                         else
                         {
                             auto extent = value.as_int();
-                            bool equals = std::all_of(shape.data() + k, shape.data() + k + rank, [&]( const ValueExpr& expr )
+                            bool equals = std::all_of(canonic_shape.data() + k, canonic_shape.data() + k + rank, [&]( const ValueExpr& expr )
                             {
                                 return expr == extent;
                             });
                             if ( !equals )
                             {
                                 return Error(position, "expected value '%d' for shape components %d:%d of param '%s', found shape %s",
-                                             (int)extent, (int)k, (int)(k + rank), param.name.c_str(), str(shape).c_str());
+                                             (int)extent, (int)k, (int)(k + rank), param.name.c_str(), str(tensor.shape()).c_str());
                             }
                         }
                     }
                     else
                     {
                         auto extent = value.as_int();
-                        if ( shape[k] != extent )
+                        if ( canonic_shape[k] != extent )
                         {
                             return Error(position, "expected value '%d' for shape component %d of param '%s', found shape %s",
-                                         (int)extent, (int)k, param.name.c_str(), str(shape).c_str());
+                                         (int)extent, (int)k, param.name.c_str(), str(tensor.shape()).c_str());
                         }
                     }
                 }
@@ -3835,10 +3833,10 @@ namespace sknd
                 k += rank;
             }
             
-            if ( k != shape.size() )
+            if ( k != canonic_shape.size() )
             {
                 return Error(position, "deduced rank %d for parameter '%s' does not match actual rank %d",
-                             (int)k, param.name.c_str(), (int)shape.size());
+                             (int)k, param.name.c_str(), (int)canonic_shape.size());
             }
             return Result<void>();
         }
