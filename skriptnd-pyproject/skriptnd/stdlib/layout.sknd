@@ -151,8 +151,7 @@ operator reshape {
     @using {
         input_volume = t[:rank] * ..;
         shape_volume = (shape is -1 ? 1 : shape) * ..;
-        inferred_extent = shape_volume != 0 ? input_volume / shape_volume : 0;
-        _shape = shape is -1 ? inferred_extent : shape;
+        _shape = shape is -1 ? (input_volume / shape_volume) : shape;
     }
     @assert {
         axis >= -input.rank && axis < input.rank:

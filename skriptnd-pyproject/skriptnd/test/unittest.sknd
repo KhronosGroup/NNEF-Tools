@@ -995,6 +995,18 @@ graph reshape {
     }
 }
 
+graph dynamic_reshape {
+    @input {
+        input: real[h|100,w|100];
+    }
+    @output {
+        output: real[h,w];
+    }
+    @compose {
+        output = layout.reshape{shape=[h,-1]}(input);
+    }
+}
+
 graph flatten {
     @input {
         input: real[4,16,10,10];
