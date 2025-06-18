@@ -661,18 +661,25 @@ namespace sknd
                 }
                 case Category::Identifier:
                 {
-                    auto name = lexer.token();
+                    TRY_DECL(name, parse_identifier(lexer))
                     auto aliased_type = lexer.aliased_type(name);
                     if ( aliased_type )
                     {
-                        TRY_CALL(lexer.accept())
                         TRY_CALL(lexer.accept(Operator::LeftParen))
                         TRY_DECL(arg, !lexer.is_token(Operator::RightParen) ? parse_expr(lexer) : Shared<Expr>())
                         TRY_CALL(lexer.accept(Operator::RightParen))
                         return (Shared<Expr>)std::make_shared<CastExpr>(position, name, *aliased_type, arg);
                     }
-                    TRY_DECL(expr, parse_iden_expr(lexer))
                     
+                    if ( lexer.is_token(Operator::LeftParen) )
+                    {
+                        TRY_CALL(lexer.accept(Operator::LeftParen))
+                        TRY_DECL(arg, parse_expr(lexer))
+                        TRY_CALL(lexer.accept(Operator::RightParen))
+                        return (Shared<Expr>)std::make_shared<BuiltinExpr>(position, name, arg);
+                    }
+                    
+                    Shared<Expr> expr;
                     if ( lexer.is_token(Operator::Dot) )
                     {
                         position = lexer.position();
@@ -685,6 +692,10 @@ namespace sknd
                         }
                         TRY_CALL(lexer.accept(Category::Identifier))
                         expr = (Shared<Expr>)std::make_shared<IdenfitierExpr>(position, name + "." + member);
+                    }
+                    else
+                    {
+                        expr = (Shared<Expr>)std::make_shared<IdenfitierExpr>(position, name);
                     }
                     
                     while ( lexer.is_token(Operator::LeftBracket) )
@@ -752,10 +763,6 @@ namespace sknd
                                 TRY_MOVE(expr, parse_index_expr(lexer, expr))
                             }
                             return expr;
-                        }
-                        case Operator::Tick:
-                        {
-                            return parse_builtin_expr(lexer);
                         }
                         case Operator::Plus:
                         case Operator::Minus:
@@ -1043,19 +1050,6 @@ namespace sknd
             TRY_DECL(strided, lexer.accept_if(Operator::Colon))
             TRY_DECL(stride, strided ? parse_expr(lexer) : Shared<Expr>())
             return (Shared<Expr>)std::make_shared<RangeExpr>(position, first, last, stride);
-        }
-        
-        static Result<Shared<Expr>> parse_builtin_expr( Lexer& lexer )
-        {
-            auto position = lexer.position();
-            
-            TRY_CALL(lexer.accept(Operator::Tick))
-            TRY_DECL(func, parse_identifier(lexer))
-            TRY_CALL(lexer.accept(Operator::Tick))
-            TRY_CALL(lexer.accept(Operator::LeftParen))
-            TRY_DECL(arg, parse_expr(lexer))
-            TRY_CALL(lexer.accept(Operator::RightParen))
-            return (Shared<Expr>)std::make_shared<BuiltinExpr>(position, func, arg);
         }
         
         static Result<Shared<Expr>> parse_select_expr( Lexer& lexer, const Shared<Expr> cond )

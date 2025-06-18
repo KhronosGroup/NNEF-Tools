@@ -179,7 +179,6 @@ namespace sknd
             Ellipsis,
             Colon,
             Semicolon,
-            Tick,
             Tilde,
             LeftParen,
             RightParen,
@@ -231,7 +230,6 @@ namespace sknd
             "...",
             ":",
             ";",
-            "`",
             "~",
             "(",
             ")",
@@ -774,7 +772,6 @@ namespace sknd
             types['.'] = Category::Operator;
             types[':'] = Category::Operator;
             types[';'] = Category::Operator;
-            types['`'] = Category::Operator;
             types['?'] = Category::Operator;
             types['!'] = Category::Operator;
             types['<'] = Category::Operator;

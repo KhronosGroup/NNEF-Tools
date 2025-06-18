@@ -143,7 +143,7 @@ operator linear_upsample {
             "'factor' must be positive", factor;
     }
     @constant {
-        filter: real[fs..] = (1.0 - `abs`(real(i - factor) + offset) / real(factor)) * ..,
+        filter: real[fs..] = (1.0 - abs(real(i - factor) + offset) / real(factor)) * ..,
                              i < fs;
     }
     @lower {
@@ -195,10 +195,10 @@ operator nearest_resize {
     }
     @lower {
         r = real(i[axes]) * scale + offset,
-        output[i..] = input[i[axes] <- (int(rounding_method == 'FLOOR' ? `floor`(r) :
-                                            rounding_method == 'CEIL' ? `ceil`(r) :
+        output[i..] = input[i[axes] <- (int(rounding_method == 'FLOOR' ? floor(r) :
+                                            rounding_method == 'CEIL' ? ceil(r) :
                                             rounding_method == 'ROUND_PREFER_FLOOR' ?
-                                               `ceil`(r - 0.5) : `floor`(r + 0.5))
+                                               ceil(r - 0.5) : floor(r + 0.5))
                                         << (s[axes] - 1))..],
             i < os;
     }
@@ -239,8 +239,8 @@ operator linear_resize {
     }
     @lower {
         r = real(i[axes]) * scale + offset,
-        output[i..] += `abs`(real(1 - j) - `frac`(`abs`(r))) * ..
-                     * input[i[axes] <- |int(`floor`(r)) + j <> 0 : s[axes] - 1|..],
+        output[i..] += abs(real(1 - j) - frac(abs(r))) * ..
+                     * input[i[axes] <- |int(floor(r)) + j <> 0 : s[axes] - 1|..],
             i < os, j < w;
     }
 }
@@ -349,7 +349,7 @@ operator rescale {
         modes = ['NEAREST', 'LINEAR', 'CUBIC'];
         coordinate_transforms = ['SYMMETRIC', 'ASYMMETRIC', 'ALIGNED'];
         rounding_methods = ['FLOOR', 'CEIL', 'ROUND_PREFER_FLOOR', 'ROUND_PREFER_CEIL'];
-        size = int(`round`(real(s[axes]) * factor));
+        size = int(round(real(s[axes]) * factor));
     }
     @assert {
         axes >= -d && axes < d:

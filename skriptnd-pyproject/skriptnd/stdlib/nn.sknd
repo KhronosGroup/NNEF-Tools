@@ -556,7 +556,7 @@ operator elu {
         y: real[s..];
     }
     @lower {
-        y[i..] = x[i..] < 0.0 ? alpha * (`exp`(x[i..]) - 1.0) : x[i..],
+        y[i..] = x[i..] < 0.0 ? alpha * (exp(x[i..]) - 1.0) : x[i..],
             i < s;
     }
 }
@@ -573,7 +573,7 @@ operator selu {
         y: real[s..];
     }
     @lower {
-        y[i..] = lambda * (x[i..] < 0.0 ? alpha * (`exp`(x[i..]) - 1.0) : x[i..]),
+        y[i..] = lambda * (x[i..] < 0.0 ? alpha * (exp(x[i..]) - 1.0) : x[i..]),
             i < s;
     }
 }
@@ -597,10 +597,10 @@ operator gelu {
             "'approximate' must be one of {approximations}", approximate;
     }
     @lower {
-        y[i..] = approximation == 'TANH' ? 0.5 * x[i..] * (1.0 + `tanh`(`sqrt`(2.0 / pi)
+        y[i..] = approximation == 'TANH' ? 0.5 * x[i..] * (1.0 + tanh(sqrt(2.0 / pi)
                                            * (x[i..] + 0.044715 * x[i..] ** 3.0))) :
-                 approximation == 'SIGMOID' ? x[i..] / (1.0 + `exp`(-1.702 * x[i..])) :
-                                    0.5 * x[i..] * (1.0 + `erf`(x[i..] / `sqrt`(2.0))),
+                 approximation == 'SIGMOID' ? x[i..] / (1.0 + exp(-1.702 * x[i..])) :
+                                    0.5 * x[i..] * (1.0 + erf(x[i..] / sqrt(2.0))),
             i < s;
     }
 }
@@ -613,7 +613,7 @@ operator silu {
         y: real[s..];
     }
     @lower {
-        y[i..] = x[i..] / (1.0 + `exp`(-x[i..])),
+        y[i..] = x[i..] / (1.0 + exp(-x[i..])),
             i < s;
     }
 }
@@ -626,7 +626,7 @@ operator sigmoid {
         y: real[s..];
     }
     @lower {
-        y[i..] = 1.0 / (1.0 + `exp`(-x[i..])),
+        y[i..] = 1.0 / (1.0 + exp(-x[i..])),
             i < s;
     }
 }
@@ -639,7 +639,7 @@ operator softplus {
         y: real[s..];
     }
     @lower {
-        y[i..] = `log`(`exp`(x[i..]) + 1.0),
+        y[i..] = log(exp(x[i..]) + 1.0),
             i < s;
     }
 }
@@ -652,7 +652,7 @@ operator erf {
         y: real[s..];
     }
     @lower {
-        y[i..] = `erf`(x[i..]),
+        y[i..] = erf(x[i..]),
             i < s;
     }
 }

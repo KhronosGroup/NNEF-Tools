@@ -98,7 +98,7 @@ operator sqrt {
         y: real[s..];
     }
     @lower {
-        y[i..] = `sqrt`(x[i..]),
+        y[i..] = sqrt(x[i..]),
             i < s;
     }
 }
@@ -128,7 +128,7 @@ operator rsqrt {
         y: real[s..];
     }
     @lower {
-        y[i..] = 1.0 / `sqrt`(x[i..]),
+        y[i..] = 1.0 / sqrt(x[i..]),
             i < s;
     }
 }
@@ -143,7 +143,7 @@ operator exp {
         y: real[s..];
     }
     @lower {
-        y[i..] = `exp`(x[i..]),
+        y[i..] = exp(x[i..]),
             i < s;
     }
 }
@@ -158,7 +158,7 @@ operator log {
         y: real[s..];
     }
     @lower {
-        y[i..] = `log`(x[i..]),
+        y[i..] = log(x[i..]),
             i < s;
     }
 }
@@ -173,7 +173,7 @@ operator log2 {
         y: real[s..];
     }
     @lower {
-        y[i..] = `log`(x[i..]) / `log`(2.0),
+        y[i..] = log(x[i..]) / log(2.0),
             i < s;
     }
 }
@@ -188,7 +188,7 @@ operator sin {
         y: real[s..];
     }
     @lower {
-        y[i..] = `sin`(x[i..]),
+        y[i..] = sin(x[i..]),
             i < s;
     }
 }
@@ -201,7 +201,7 @@ operator cos {
         y: real[s..];
     }
     @lower {
-        y[i..] = `cos`(x[i..]),
+        y[i..] = cos(x[i..]),
             i < s;
     }
 }
@@ -214,7 +214,7 @@ operator tan {
         y: real[s..];
     }
     @lower {
-        y[i..] = `tan`(x[i..]),
+        y[i..] = tan(x[i..]),
             i < s;
     }
 }
@@ -227,7 +227,7 @@ operator sinh {
         y: real[s..];
     }
     @lower {
-        y[i..] = `sinh`(x[i..]),
+        y[i..] = sinh(x[i..]),
             i < s;
     }
 }
@@ -240,7 +240,7 @@ operator cosh {
         y: real[s..];
     }
     @lower {
-        y[i..] = `cosh`(x[i..]),
+        y[i..] = cosh(x[i..]),
             i < s;
     }
 }
@@ -253,7 +253,7 @@ operator tanh {
         y: real[s..];
     }
     @lower {
-        y[i..] = `tanh`(x[i..]),
+        y[i..] = tanh(x[i..]),
             i < s;
     }
 }
@@ -266,7 +266,7 @@ operator asin {
         y: real[s..];
     }
     @lower {
-        y[i..] = `asin`(x[i..]),
+        y[i..] = asin(x[i..]),
             i < s;
     }
 }
@@ -279,7 +279,7 @@ operator acos {
         y: real[s..];
     }
     @lower {
-        y[i..] = `acos`(x[i..]),
+        y[i..] = acos(x[i..]),
             i < s;
     }
 }
@@ -292,7 +292,7 @@ operator atan {
         y: real[s..];
     }
     @lower {
-        y[i..] = `atan`(x[i..]),
+        y[i..] = atan(x[i..]),
             i < s;
     }
 }
@@ -305,7 +305,7 @@ operator asinh {
         y: real[s..];
     }
     @lower {
-        y[i..] = `asinh`(x[i..]),
+        y[i..] = asinh(x[i..]),
             i < s;
     }
 }
@@ -318,7 +318,7 @@ operator acosh {
         y: real[s..];
     }
     @lower {
-        y[i..] = `acosh`(x[i..]),
+        y[i..] = acosh(x[i..]),
             i < s;
     }
 }
@@ -331,7 +331,7 @@ operator atanh {
         y: real[s..];
     }
     @lower {
-        y[i..] = `atanh`(x[i..]),
+        y[i..] = atanh(x[i..]),
             i < s;
     }
 }
@@ -397,7 +397,7 @@ operator floor {
         y: real[s..];
     }
     @lower {
-        y[i..] = `floor`(x[i..]),
+        y[i..] = floor(x[i..]),
             i < s;
     }
 }
@@ -412,7 +412,7 @@ operator ceil {
         y: real[s..];
     }
     @lower {
-        y[i..] = `ceil`(x[i..]),
+        y[i..] = ceil(x[i..]),
             i < s;
     }
 }
@@ -427,7 +427,7 @@ operator round {
         y: real[s..];
     }
     @lower {
-        y[i..] = `round`(x[i..]),
+        y[i..] = round(x[i..]),
             i < s;
     }
 }
@@ -436,11 +436,11 @@ operator round {
 
 # @text In case of binary element-wise operators, broadcasting must also be considered. When the ranks of the two arguments are the eqaul, broadcasting requires that the size of each dimension match or one of them is singular. If the ranks of the two arguments are not equal then one of is implicitly padded with singular dimensions either from left (first dimension) or right (last dimension).
 
-# @text By default, if the ranks of the two arguments are different, the arguments are aligned from the right, and the shorter one is padded with singular dimensions on the left for broadcasting. However, this behavior can be changed by aligning each of the arguments (with attributes `lhs_align` and `rhs_align`), padding with specified number of singular dimensions both from left (zero or positive alignment) or right (negative alignment). Note that the alignment of zero corresponds to complete left-alignment of the argument, while the complete right-alignment is achieved by not supplying the alignment attribute (default null value).
+# @text By default, if the ranks of the two arguments are different, the arguments are aligned from the right, and the shorter one is padded with singular dimensions on the left for broadcasting. However, this behavior can be changed by aligning each of the arguments (with attributes lhs_align and rhs_align), padding with specified number of singular dimensions both from left (zero or positive alignment) or right (negative alignment). Note that the alignment of zero corresponds to complete left-alignment of the argument, while the complete right-alignment is achieved by not supplying the alignment attribute (default null value).
 
 # @text The whole alignment procedure can be summarized as follows. For each argument, calculate the _aligned rank_ (sum of argument rank plus the absolute value of the alignment, if any), and pad both arguments with singular dimensions as specified by their alignment (left or right), if any. The result's rank will be the maximum of the two aligned ranks. Then for the argument that has lower aligned rank (shorter), align it (already padded) with the other one (already padded) from the left if the alignment (of the shorter) is positive or zero, or from the right if the alignment (of the shorter) is negative or not specified. Finally, pad the shorter with singular dimensions on the non-aligned end if necessary to make the two padded ranks equal.
 
-# @text All this alignment and padding computation is incorporated in the `@using` block of the binary operators. The final aligned and padded shapes are checked for being broadcast compatible in the `@assert` block.
+# @text All this alignment and padding computation is incorporated in the @using block of the binary operators. The final aligned and padded shapes are checked for being broadcast compatible in the @assert block.
 
 
 # @item Element-wise addition
@@ -461,8 +461,8 @@ operator add {
         z: T[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -499,8 +499,8 @@ operator sub {
         z: T[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -537,8 +537,8 @@ operator mul {
         z: T[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -575,8 +575,8 @@ operator div {
         z: T[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -613,8 +613,8 @@ operator mod {
         z: T[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -651,8 +651,8 @@ operator pow {
         z: T[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -689,8 +689,8 @@ operator min {
         z: T[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -727,8 +727,8 @@ operator max {
         z: T[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -766,8 +766,8 @@ operator lt {
         z: bool[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -805,8 +805,8 @@ operator gt {
         z: bool[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -844,8 +844,8 @@ operator le {
         z: bool[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -883,8 +883,8 @@ operator ge {
         z: bool[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -922,8 +922,8 @@ operator eq {
         z: bool[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -961,8 +961,8 @@ operator ne {
         z: bool[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -996,8 +996,8 @@ operator and {
         z: bool[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -1031,8 +1031,8 @@ operator or {
         z: bool[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -1066,8 +1066,8 @@ operator xor {
         z: bool[sz..];
     }
     @using {
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -1110,9 +1110,9 @@ operator select {
         z: T[sz..];
     }
     @using {
-        qc = rc + `abs`(cond_align ?? 0);
-        qx = rx + `abs`(lhs_align ?? 0);
-        qy = ry + `abs`(rhs_align ?? 0);
+        qc = rc + abs(cond_align ?? 0);
+        qx = rx + abs(lhs_align ?? 0);
+        qy = ry + abs(rhs_align ?? 0);
         rz = qx >> qy >> qc;
         pc = (cond_align < 0 ? rz - qc : cond_align) ?? rz - rc;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
@@ -1312,9 +1312,9 @@ operator axpb {
         y: real[sy..];
     }
     @using {
-        qx = rx + `abs`(x_align ?? 0);
-        qa = ra + `abs`(a_align ?? 0);
-        qb = rb + `abs`(b_align ?? 0);
+        qx = rx + abs(x_align ?? 0);
+        qa = ra + abs(a_align ?? 0);
+        qb = rb + abs(b_align ?? 0);
         ry = qx >> qa >> qb;
         px = (x_align < 0 ? ry - qx : x_align) ?? ry - rx;
         pa = (a_align < 0 ? ry - qa : a_align) ?? ry - ra;
@@ -1364,10 +1364,10 @@ operator axpby {
         z: real[sz..];
     }
     @using {
-        qx = rx + `abs`(x_align ?? 0);
-        qy = ry + `abs`(y_align ?? 0);
-        qa = ra + `abs`(a_align ?? 0);
-        qb = rb + `abs`(b_align ?? 0);
+        qx = rx + abs(x_align ?? 0);
+        qy = ry + abs(y_align ?? 0);
+        qa = ra + abs(a_align ?? 0);
+        qb = rb + abs(b_align ?? 0);
         rz = qx >> qy >> qa >> qb;
         px = (x_align < 0 ? rz - qx : x_align) ?? rz - rx;
         py = (y_align < 0 ? rz - qy : y_align) ?? rz - ry;
@@ -1422,9 +1422,9 @@ operator clamp {
         y: T[sy..];
     }
     @using {
-        qx = rx + `abs`(val_align ?? 0);
-        qa = ra + `abs`(min_align ?? 0);
-        qb = rb + `abs`(max_align ?? 0);
+        qx = rx + abs(val_align ?? 0);
+        qa = ra + abs(min_align ?? 0);
+        qb = rb + abs(max_align ?? 0);
         ry = qx >> qa >> qb;
         px = (val_align < 0 ? ry - qx : val_align) ?? ry - rx;
         pa = (min_align < 0 ? ry - qa : min_align) ?? ry - ra;
