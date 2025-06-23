@@ -33,11 +33,19 @@ namespace sknd
     
     std::optional<Model> read_model( const std::string& path, const std::string& graph_name, const std::string& stdlib_path,
                                     const ErrorCallback error, const OperationCallback atomic = nullptr, const OperationCallback unroll = nullptr,
-                                    const std::map<std::string, sknd::ValueExpr>& attribs = {} );
+                                    const std::map<std::string, sknd::ValueExpr>& attribs = {} ) noexcept;
     std::optional<Model> read_model( std::istream& is, const std::string& module, const std::string& graph_name,
                                     const std::string& stdlib_path, const std::string& import_path,
                                     const ErrorCallback error, const OperationCallback atomic = nullptr, const OperationCallback unroll = nullptr,
-                                    const std::map<std::string, sknd::ValueExpr>& attribs = {} );
+                                    const std::map<std::string, sknd::ValueExpr>& attribs = {} ) noexcept;
+
+    bool read_tensor( std::istream& is, Tensor& tensor, std::string& error ) noexcept;
+    bool write_tensor( std::ostream& os, const Tensor& tensor, std::string& error ) noexcept;
+
+    bool read_tensor( const std::string& filename, Tensor& tensor, std::string& error ) noexcept;
+    bool write_tensor( const std::string& filename, const Tensor& tensor, std::string& error ) noexcept;
+
+    bool load_variables( const std::string& path, Model& model, const ErrorCallback error ) noexcept;
     
 }   // namespace sknd
 

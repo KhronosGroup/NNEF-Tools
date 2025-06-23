@@ -46,6 +46,12 @@ namespace sknd
         }
         
         template<typename... Args>
+        Error( const char* format, Args&&... args )
+        : message(format_string(format, std::forward<Args>(args)...))
+        {
+        }
+        
+        template<typename... Args>
         Error( const Position& position, const char* format, Args&&... args )
         : position(position), message(format_string(format, std::forward<Args>(args)...))
         {

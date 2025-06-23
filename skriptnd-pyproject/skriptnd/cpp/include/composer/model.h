@@ -72,6 +72,7 @@ namespace sknd
         std::vector<ValueExpr> canonic_shape;                           // canonical shape the tensor (resolved shape references)
         std::vector<int_t> max_shape;                                   // upper bound of tensor shape
         std::map<std::string,ValueExpr> quant;                          // quantization info for the tensor
+        std::vector<char> data;                                         // data of variable tensor
         ValueExpr value;                                                // value of constant tensors
         bool variable;                                                  // whether the tensor is a variable
     };

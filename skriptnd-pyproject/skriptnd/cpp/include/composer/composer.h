@@ -3296,7 +3296,7 @@ namespace sknd
                             const ValueExpr& value = nullptr, const bool variable = false )
         {
             auto _name = !name.empty() ? name : next_tensor_name();
-            auto tensor = std::make_unique<Tensor>(Tensor{ _name, dtype, shape, canonic_shape, max_shape, {}, value, variable });
+            auto tensor = std::make_unique<Tensor>(Tensor{ _name, dtype, shape, canonic_shape, max_shape, {}, {}, value, variable });
             graph.tensors.push_back(std::move(tensor));
             return graph.tensors.back().get();
         }
