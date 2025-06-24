@@ -329,12 +329,52 @@ namespace sknd
             }
         }
         
+        bool is_partial_divisible( const value_type& value ) const
+        {
+            for ( auto& monom : _monoms )
+            {
+                if ( is_divisible(monom.second, value) )
+                {
+                    return true;
+                }
+            }
+            return _constant != 0 && is_divisible(_constant, value);
+        }
+        
+        polynom partial_const_divide( const value_type& value )
+        {
+            monom_list monoms;
+            for ( auto it = _monoms.begin(); it != _monoms.end(); )
+            {
+                if ( is_divisible(it->second, value) )
+                {
+                    it->second /= value;
+                    ++it;
+                }
+                else
+                {
+                    monoms[it->first] = it->second;
+                    it = _monoms.erase(it);
+                }
+            }
+            
+            value_type constant;
+            if ( is_divisible(_constant, value) )
+            {
+                _constant /= value;
+                constant = 0;
+            }
+            else
+            {
+                constant = _constant;
+                _constant = 0;
+            }
+            return polynom(std::move(monoms), constant);
+        }
+        
         bool is_monomial_divisible( const polynom& other ) const
         {
-            if ( !other.is_monomial() || _constant != 0 )
-            {
-                return false;
-            }
+            assert(other.is_monomial());
             auto& divisor = *other._monoms.begin();
             for ( auto& monom : _monoms )
             {
@@ -343,11 +383,12 @@ namespace sknd
                     return false;
                 }
             }
-            return true;
+            return _constant == 0;
         }
         
         void monomial_divide( const polynom& other )
         {
+            assert(other.is_monomial());
             auto& divisor = *other._monoms.begin();
             monom_list monoms;
             for ( auto& monom : _monoms )
@@ -364,6 +405,53 @@ namespace sknd
                 }
             }
             _monoms.swap(monoms);
+        }
+        
+        bool is_partial_monomial_divisible( const polynom& other ) const
+        {
+            assert(other.is_monomial());
+            auto& divisor = *other._monoms.begin();
+            for ( auto& monom : _monoms )
+            {
+                if ( is_divisible(monom.first, divisor.first) && is_divisible(monom.second, divisor.second) )
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        polynom partial_monomial_divide( const polynom& other )
+        {
+            assert(other.is_monomial());
+            auto& divisor = *other._monoms.begin();
+            monom_list monoms;
+            value_type constant = 0;
+            for ( auto it = _monoms.begin(); it != _monoms.end(); )
+            {
+                auto& monom = *it;
+                if ( is_divisible(monom.first, divisor.first) && is_divisible(monom.second, divisor.second) )
+                {
+                    auto m = monom_divide(monom.first, divisor.first);
+                    auto c = monom.second / divisor.second;
+                    if ( !m.empty() )
+                    {
+                        monoms[m] = c;
+                    }
+                    else
+                    {
+                        constant = c;
+                    }
+                    it = _monoms.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+            _monoms.swap(monoms);
+            std::swap(_constant, constant);
+            return polynom(std::move(monoms), constant);
         }
         
     private:

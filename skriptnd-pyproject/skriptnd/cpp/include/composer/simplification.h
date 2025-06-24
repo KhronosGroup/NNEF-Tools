@@ -240,11 +240,10 @@ namespace sknd
                 {
                     auto& binary = expr.as_binary();
                     auto op = Lexer::operator_value(binary.op);
+                    auto size = expr.max_size_or_null();
                     
                     if constexpr( std::is_same_v<T,bool_t> )
                     {
-                        auto size = expr.max_size_or_null();
-                        
                         switch ( op )
                         {
                             case Lexer::Operator::Equal:
@@ -333,15 +332,37 @@ namespace sknd
                                 }
                                 case Lexer::Operator::Divide:
                                 {
-                                    if ( right.is_constant() && left.is_divisible(right.constant_value()) )
+                                    if ( right.is_constant() )
                                     {
-                                        left.const_divide(right.constant_value());
-                                        return left;
+                                        if ( left.is_divisible(right.constant_value()) )
+                                        {
+                                            left.const_divide(right.constant_value());
+                                            return left;
+                                        }
+                                        else if ( left.is_partial_divisible(right.constant_value()) )
+                                        {
+                                            auto remainder_poly = left.partial_const_divide(right.constant_value());
+                                            auto remainder_expr = as_expr(remainder_poly, size, ctx);
+                                            auto remainder_ratio = ValueExpr::binary("/", remainder_expr, binary.right, expr.dtype(), size);
+                                            left += Poly<T>(make_symbol(remainder_ratio, ctx));
+                                            return left;
+                                        }
                                     }
-                                    if ( left.is_monomial_divisible(right) )
+                                    else if ( right.is_monomial() )
                                     {
-                                        left.monomial_divide(right);
-                                        return left;
+                                        if ( left.is_monomial_divisible(right) )
+                                        {
+                                            left.monomial_divide(right);
+                                            return left;
+                                        }
+                                        else if ( left.is_partial_monomial_divisible(right) )
+                                        {
+                                            auto remainder_poly = left.partial_monomial_divide(right);
+                                            auto remainder_expr = as_expr(remainder_poly, size, ctx);
+                                            auto remainder_ratio = ValueExpr::binary("/", remainder_expr, binary.right, expr.dtype(), size);
+                                            left += Poly<T>(make_symbol(remainder_ratio, ctx));
+                                            return left;
+                                        }
                                     }
                                     break;
                                 }
