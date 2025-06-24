@@ -1,4 +1,6 @@
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)<p align="center"><img src="https://www.khronos.org/assets/uploads/ceimg/made/assets/uploads/apis/NNEF_500px_Apr17_165_75.png" /></p>
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+<p align="center"><img src="https://www.khronos.org/images/jcogs_img/cache/nnef_500px_apr17_-_28de80_-_3c2b17797282ce265889b88b2035b24403f2d049.png" /></p>
 
 **Development of the latest tools related to version 2.0 of the NNEF specification draft can be found on branch [v2.0](https://github.com/KhronosGroup/NNEF-Tools/tree/v2.0).**
 
