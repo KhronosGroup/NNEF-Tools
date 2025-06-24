@@ -3958,20 +3958,25 @@ namespace sknd
             {
                 std::string message = "assert failed: '" + str(*assert.expression) + "'";
                 
-                std::vector<std::string> ids;
+                std::set<std::string> ids;
                 preorder_traverse(*assert.expression, [&]( const Expr& e )
                 {
                     if ( e.kind == Expr::Identifier )
                     {
-                        ids.push_back(as_identifier(e).name);
+                        ids.insert(as_identifier(e).name);
                     }
                 });
                 
                 if ( !ids.empty() )
                 {
                     message += "; operator invoked with ";
+                    size_t i = 0;
                     for ( auto& iden : ids )
                     {
+                        if ( i++ )
+                        {
+                            message += ", ";
+                        }
                         message += iden;
                         message += " = ";
                         auto& x = symbols.at(iden).as<ValueExpr>();
