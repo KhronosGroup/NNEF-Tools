@@ -29,6 +29,7 @@ namespace sknd
     std::string model_name_from_path( const std::string& path );
     std::vector<std::string> enum_graph_names( std::istream& is );
 
+    OperationCallback make_operation_callback( const std::set<std::string>& names );
     OperationCallback make_operation_callback( std::set<std::string>&& names );
     
     std::optional<Model> read_model( const std::string& path, const std::string& graph_name, const std::string& stdlib_path,

@@ -895,10 +895,6 @@ static size_t function_arg_count( PyObject* pyFunc )
     return length;
 }
 
-static sknd::OperationCallback make_operation_callback()
-{
-}
-
 static sknd::OperationCallback make_operation_callback( PyObject* obj, const std::string& key )
 {
     if ( obj == Py_None )

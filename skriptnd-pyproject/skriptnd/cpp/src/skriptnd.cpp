@@ -62,6 +62,15 @@ namespace sknd
         return names;
     }
 
+    OperationCallback make_operation_callback( const std::set<std::string>& names )
+    {
+        return [&]( const std::string& name, const std::map<std::string,Typename>&,
+                   const std::map<std::string,ValueExpr>&, const std::vector<TensorRef>& )
+        {
+            return (bool)names.count(name);
+        };
+    }
+
     OperationCallback make_operation_callback( std::set<std::string>&& names )
     {
         return [=]( const std::string& name, const std::map<std::string,Typename>&,
