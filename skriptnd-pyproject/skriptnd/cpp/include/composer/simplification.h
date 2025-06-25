@@ -45,7 +45,16 @@ namespace sknd
         static void simplify( ValueExpr& expr )
         {
             simplify_heuristic(expr);
-            simplify_polynomial(expr);
+            if ( simplify_polynomial(expr) )
+            {
+                while ( simplify_heuristic(expr) )
+                {
+                    if ( !simplify_polynomial(expr) )
+                    {
+                        break;
+                    }
+                }
+            }
         }
         
         static ValueExpr simplified( const ValueExpr& expr )
@@ -134,42 +143,53 @@ namespace sknd
         
     private:
         
-        static void simplify_polynomial( ValueExpr& expr )
+        static bool simplify_polynomial( ValueExpr& expr )
         {
             PolynomContext ctx;
             ctx.exprs.push_back(ValueExpr(nullptr));
             
-            simplify_polynomial(expr, ctx);
+            return simplify_polynomial(expr, ctx);
         }
         
-        static void simplify_polynomial( ValueExpr& expr, PolynomContext& ctx )
+        static bool simplify_polynomial( ValueExpr& expr, PolynomContext& ctx )
         {
-            if ( expr != nullptr && !expr.is_literal() && !expr.is_identifier() &&
-                !expr.is_size_access() && !expr.is_shape_access() && !expr.is_tensor_access() )
+            switch ( expr.kind() )
             {
-                auto size = expr.max_size_or_null();
-                
-                switch ( expr.dtype() )
+                case ValueExpr::Null:
+                case ValueExpr::Literal:
+                case ValueExpr::Identifier:
+                case ValueExpr::SizeAccess:
+                case ValueExpr::ShapeAccess:
+                case ValueExpr::TensorAccess:
                 {
-                    case Typename::Int:
+                    return false;
+                }
+                default:
+                {
+                    auto size = expr.max_size_or_null();
+                    switch ( expr.dtype() )
                     {
-                        expr = as_expr(as_polynom<int_t>(expr, ctx), size, ctx);
-                        break;
+                        case Typename::Int:
+                        {
+                            expr = as_expr(as_polynom<int_t>(expr, ctx), size, ctx);
+                            break;
+                        }
+                        case Typename::Real:
+                        {
+                            expr = as_expr(as_polynom<real_t>(expr, ctx), size, ctx);
+                            break;
+                        }
+                        case Typename::Bool:
+                        {
+                            expr = as_expr(as_polynom<bool_t>(expr, ctx), size, ctx);
+                            break;
+                        }
+                        default:
+                        {
+                            assert(false);
+                        }
                     }
-                    case Typename::Real:
-                    {
-                        expr = as_expr(as_polynom<real_t>(expr, ctx), size, ctx);
-                        break;
-                    }
-                    case Typename::Bool:
-                    {
-                        expr = as_expr(as_polynom<bool_t>(expr, ctx), size, ctx);
-                        break;
-                    }
-                    default:
-                    {
-                        assert(false);
-                    }
+                    return true;
                 }
             }
         }
@@ -617,11 +637,12 @@ namespace sknd
     private:
         
         template<bool Recursive = true>
-        static void simplify_heuristic( ValueExpr& expr )
+        static bool simplify_heuristic( ValueExpr& expr )
         {
+            bool simplified = false;
             if constexpr(Recursive)
             {
-                recurse(expr, []( ValueExpr& x ){ simplify_heuristic<true>(x); });
+                recurse(expr, [&]( ValueExpr& x ){ simplified |= simplify_heuristic<true>(x); });
             }
             
             switch ( expr.kind() )
@@ -638,19 +659,19 @@ namespace sknd
                             {
                                 expr = arg.dtype() == Typename::Int ? ValueExpr((real_t)(int_t)arg) : arg.dtype() == Typename::Bool ?
                                                                       ValueExpr((real_t)(bool_t)arg) : arg.detach();
-                                break;
+                                return true;
                             }
                             case Typename::Int:
                             {
                                 expr = arg.dtype() == Typename::Real ? ValueExpr((int_t)(real_t)arg) : arg.dtype() == Typename::Bool ?
                                                                        ValueExpr((int_t)(bool_t)arg) : arg.detach();
-                                break;
+                                return true;
                             }
                             case Typename::Bool:
                             {
                                 expr = arg.dtype() == Typename::Real ? ValueExpr((real_t)(bool_t)arg) : arg.dtype() == Typename::Int ?
                                                                        ValueExpr((int_t)(bool_t)arg) : arg.detach();
-                                break;
+                                return true;
                             }
                             default:
                             {
@@ -661,10 +682,12 @@ namespace sknd
                     else if ( cast.arg.is_cast() )
                     {
                         expr = ValueExpr(ValueExpr::CastExpr{ cast.dtype, cast.arg.as_cast().arg.detach() }, cast.dtype, expr.max_size_or_null());
+                        return true;
                     }
                     else if ( cast.arg.dtype() == cast.dtype )
                     {
                         expr = cast.arg.detach();
+                        return true;
                     }
                     break;
                 }
@@ -680,10 +703,12 @@ namespace sknd
                         if ( unary.arg.is_uniform() )
                         {
                             expr = ValueExpr::uniform(std::move(value), unary.arg.as_uniform().size.detach(), expr.max_size());
+                            return true;
                         }
                         else
                         {
                             expr = std::move(value);
+                            return true;
                         }
                     }
                     else
@@ -692,6 +717,7 @@ namespace sknd
                         if ( value != nullptr )
                         {
                             expr = std::move(value);
+                            return true;
                         }
                     }
                     break;
@@ -708,14 +734,17 @@ namespace sknd
                         if ( binary.left.is_uniform() )
                         {
                             expr = ValueExpr::uniform(std::move(value), binary.left.as_uniform().size.detach(), expr.max_size());
+                            return true;
                         }
                         else if ( binary.right.is_uniform() )
                         {
                             expr = ValueExpr::uniform(std::move(value), binary.right.as_uniform().size.detach(), expr.max_size());
+                            return true;
                         }
                         else
                         {
                             expr = std::move(value);
+                            return true;
                         }
                     }
                     else if ( (left.is_shape_access() || right.is_shape_access()) && Lexer::is_comparison(op) )
@@ -724,6 +753,7 @@ namespace sknd
                         if ( value != nullptr )
                         {
                             expr = std::move(value);
+                            return true;
                         }
                     }
                     else
@@ -732,6 +762,7 @@ namespace sknd
                         if ( value != nullptr )
                         {
                             expr = std::move(value);
+                            return true;
                         }
                     }
                     break;
@@ -742,10 +773,12 @@ namespace sknd
                     if ( select.cond.is_literal() )
                     {
                         expr = select.cond.as_bool() ? select.left.detach() : select.right.detach();
+                        return true;
                     }
                     else if ( select.cond.is_uniform() && select.cond.as_uniform().value.is_literal() )
                     {
                         expr = select.cond.as_uniform().value.as_bool() ? select.left.detach() : select.right.detach();
+                        return true;
                     }
                     else if ( select.cond.is_list() )
                     {
@@ -758,6 +791,7 @@ namespace sknd
                                 items[i] = list[i] ? select.left.at(i) : select.right.at(i);
                             }
                             expr = ValueExpr::list(std::move(items), expr.dtype());
+                            return true;
                         }
                     }
                     break;
@@ -773,6 +807,7 @@ namespace sknd
                         if ( std::all_of(items.begin(), items.end(), []( const ValueExpr& x ){ return x.is_literal(); }) )
                         {
                             expr = fold_constants_fold(op, fold.accumulate, pack);
+                            return true;
                         }
                     }
                     else if ( pack.is_uniform() )
@@ -781,6 +816,7 @@ namespace sknd
                         if ( value != nullptr )
                         {
                             expr = std::move(value);
+                            return true;
                         }
                     }
                     break;
@@ -791,13 +827,19 @@ namespace sknd
                     if ( subscript.index.is_literal() )
                     {
                         auto index = (size_t)subscript.index.as_int();
-                        expr = subscript.pack.at(index);
+                        auto sub = subscript.pack.at(index);
+                        if ( sub != expr )
+                        {
+                            expr = sub;
+                            return true;
+                        }
                     }
                     else if ( subscript.index.is_uniform() && subscript.index.as_uniform().value.is_literal() )
                     {
                         auto& uniform = subscript.index.as_uniform();
                         auto index = (size_t)uniform.value.as_int();
                         expr = ValueExpr::uniform(subscript.pack.at(index), uniform.size.detach(), subscript.index.max_size());
+                        return true;
                     }
                     break;
                 }
@@ -808,6 +850,7 @@ namespace sknd
                     {
                         access.tensor = &access.tensor[access.item.as_int()];
                         access.item = nullptr;
+                        return true;
                     }
                     break;
                 }
@@ -820,6 +863,7 @@ namespace sknd
                         if ( value.is_literal() )
                         {
                             expr = value;
+                            return true;
                         }
                     }
                     break;
@@ -831,6 +875,7 @@ namespace sknd
                     if ( value.is_literal() )
                     {
                         expr = value;
+                        return true;
                     }
                     break;
                 }
@@ -839,6 +884,7 @@ namespace sknd
                     break;
                 }
             }
+            return simplified;
         }
         
     protected:
