@@ -1,4 +1,6 @@
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)<p align="center"><img src="https://www.khronos.org/assets/uploads/ceimg/made/assets/uploads/apis/NNEF_500px_Apr17_165_75.png" /></p>
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+<p align="center"><img src="https://www.khronos.org/images/jcogs_img/cache/nnef_500px_apr17_-_28de80_-_3c2b17797282ce265889b88b2035b24403f2d049.png" /></p>
 
 # NNEF-Tools
 
