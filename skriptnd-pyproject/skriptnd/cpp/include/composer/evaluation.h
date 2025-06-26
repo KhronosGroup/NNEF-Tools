@@ -1229,7 +1229,8 @@ namespace sknd
                 return fold_constants_binary(binary.op, left, right);
             }
             
-            auto simplified = simplify_binary(binary.op, left, right);
+            bool altered = false;
+            auto simplified = simplify_binary(binary.op, left, right, altered);
             if ( simplified != nullptr )
             {
                 return simplified;

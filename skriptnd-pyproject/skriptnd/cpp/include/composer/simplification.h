@@ -758,7 +758,7 @@ namespace sknd
                     }
                     else
                     {
-                        auto value = simplify_binary(op, binary.left, binary.right);
+                        auto value = simplify_binary(op, binary.left, binary.right, simplified);
                         if ( value != nullptr )
                         {
                             expr = std::move(value);
@@ -1053,7 +1053,7 @@ namespace sknd
             return nullptr;
         }
         
-        static ValueExpr simplify_binary( const Lexer::Operator op, ValueExpr& left, ValueExpr& right )
+        static ValueExpr simplify_binary( const Lexer::Operator op, ValueExpr& left, ValueExpr& right, bool& altered )
         {
             switch ( op )
             {
@@ -1372,6 +1372,20 @@ namespace sknd
                     {
                         return right.detach();
                     }
+                    if ( left.is_literal() && !right.is_literal() )
+                    {
+                        left.swap(right);
+                        altered = true;
+                    }
+                    if ( right.is_literal() && left.is_binary(Lexer::str(op)) )
+                    {
+                        auto& child = left.as_binary();
+                        if ( child.right.is_literal() )
+                        {
+                            auto arg = right < child.right ? right : child.right;
+                            return ValueExpr::binary(child.op, child.left.detach(), arg, left.dtype(), left.max_size_or_null());
+                        }
+                    }
                     break;
                 }
                 case Lexer::Operator::Max:
@@ -1403,6 +1417,20 @@ namespace sknd
                     if ( right.is_int() && right.as_int() <= 0 && (left.is_shape_access() || left.is_size_access()) )
                     {
                         return left.detach();
+                    }
+                    if ( left.is_literal() && !right.is_literal() )
+                    {
+                        left.swap(right);
+                        altered = true;
+                    }
+                    if ( right.is_literal() && left.is_binary(Lexer::str(op)) )
+                    {
+                        auto& child = left.as_binary();
+                        if ( child.right.is_literal() )
+                        {
+                            auto arg = right > child.right ? right : child.right;
+                            return ValueExpr::binary(child.op, child.left.detach(), arg, left.dtype(), left.max_size_or_null());
+                        }
                     }
                     break;
                 }
