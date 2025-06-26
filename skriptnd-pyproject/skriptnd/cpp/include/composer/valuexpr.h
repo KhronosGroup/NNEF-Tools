@@ -325,22 +325,22 @@ namespace sknd
         
         bool is_int() const
         {
-            return _kind == Literal && _dtype == Typename::Int;
+            return is<int_t>();
         }
         
         bool is_real() const
         {
-            return _kind == Literal && _dtype == Typename::Real;
+            return is<real_t>();
         }
         
         bool is_bool() const
         {
-            return _kind == Literal && _dtype == Typename::Bool;
+            return is<bool_t>();
         }
         
         bool is_str() const
         {
-            return _kind == Literal && _dtype == Typename::Str;
+            return is<str_t>();
         }
         
         bool is_placeholder() const
@@ -736,63 +736,151 @@ namespace sknd
         template<typename T, typename = std::enable_if_t<is_typename<T>>>
         bool operator==( const T& value ) const
         {
-            return equals_literal(value);
+            return equal_literal(value);
         }
         
         template<typename T, typename = std::enable_if_t<is_typename<T>>>
         bool operator!=( const T& value ) const
         {
-            return !equals_literal(value);
+            return !equal_literal(value);
+        }
+        
+        template<typename T, typename = std::enable_if_t<is_arithmetic<T>>>
+        bool operator<( const T& value ) const
+        {
+            return less_literal(value);
+        }
+        
+        template<typename T, typename = std::enable_if_t<is_arithmetic<T>>>
+        bool operator>( const T& value ) const
+        {
+            return !less_equal_literal(value);
+        }
+        
+        template<typename T, typename = std::enable_if_t<is_arithmetic<T>>>
+        bool operator<=( const T& value ) const
+        {
+            return less_equal_literal(value);
+        }
+        
+        template<typename T, typename = std::enable_if_t<is_arithmetic<T>>>
+        bool operator>=( const T& value ) const
+        {
+            return !less_literal(value);
         }
         
         bool operator==( const int& value ) const
         {
-            return equals_literal((int_t)value);
+            return equal_literal((int_t)value);
         }
         
         bool operator!=( const int& value ) const
         {
-            return !equals_literal((int_t)value);
+            return !equal_literal((int_t)value);
         }
         
         bool operator==( const bool& value ) const
         {
-            return equals_literal((bool_t)value);
+            return equal_literal((bool_t)value);
         }
         
         bool operator!=( const bool& value ) const
         {
-            return !equals_literal((bool_t)value);
+            return !equal_literal((bool_t)value);
         }
         
         bool operator==( const float& value ) const
         {
-            return equals_literal((real_t)value);
+            return equal_literal((real_t)value);
         }
         
         bool operator!=( const float& value ) const
         {
-            return !equals_literal((real_t)value);
+            return !equal_literal((real_t)value);
         }
         
         bool operator==( const double& value ) const
         {
-            return equals_literal((real_t)value);
+            return equal_literal((real_t)value);
         }
         
         bool operator!=( const double& value ) const
         {
-            return !equals_literal((real_t)value);
+            return !equal_literal((real_t)value);
         }
         
         bool operator==( const char* value ) const
         {
-            return equals_literal((str_t)value);
+            return equal_literal((str_t)value);
         }
         
         bool operator!=( const char* value ) const
         {
-            return !equals_literal((str_t)value);
+            return !equal_literal((str_t)value);
+        }
+        
+        bool operator<( const ValueExpr& other ) const
+        {
+            if ( other.is_int() )
+            {
+                return *this < other.as_int();
+            }
+            else if ( other.is_real() )
+            {
+                return *this < other.as_real();
+            }
+            else
+            {
+                throw std::bad_cast();
+            }
+        }
+        
+        bool operator>( const ValueExpr& other ) const
+        {
+            if ( other.is_int() )
+            {
+                return *this > other.as_int();
+            }
+            else if ( other.is_real() )
+            {
+                return *this > other.as_real();
+            }
+            else
+            {
+                throw std::bad_cast();
+            }
+        }
+        
+        bool operator<=( const ValueExpr& other ) const
+        {
+            if ( other.is_int() )
+            {
+                return *this <= other.as_int();
+            }
+            else if ( other.is_real() )
+            {
+                return *this <= other.as_real();
+            }
+            else
+            {
+                throw std::bad_cast();
+            }
+        }
+        
+        bool operator>=( const ValueExpr& other ) const
+        {
+            if ( other.is_int() )
+            {
+                return *this >= other.as_int();
+            }
+            else if ( other.is_real() )
+            {
+                return *this >= other.as_real();
+            }
+            else
+            {
+                throw std::bad_cast();
+            }
         }
         
         void swap( ValueExpr& other )
@@ -842,9 +930,29 @@ namespace sknd
     private:
         
         template<typename T, typename = std::enable_if_t<is_typename<T>>>
-        bool equals_literal( const T& value ) const
+        bool equal_literal( const T& value ) const
         {
             return _index == _data.index_of<T>() && _data.as<T>() == value;
+        }
+        
+        template<typename T, typename = std::enable_if_t<is_arithmetic<T>>>
+        bool less_literal( const T& value ) const
+        {
+            if ( _index != _data.index_of<T>() )
+            {
+                throw std::bad_cast();
+            }
+            return _data.as<T>() < value;
+        }
+        
+        template<typename T, typename = std::enable_if_t<is_arithmetic<T>>>
+        bool less_equal_literal( const T& value ) const
+        {
+            if ( _index != _data.index_of<T>() )
+            {
+                throw std::bad_cast();
+            }
+            return _data.as<T>() <= value;
         }
         
     private:

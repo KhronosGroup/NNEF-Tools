@@ -46,6 +46,9 @@ namespace sknd
 
     template<typename T>
     inline constexpr bool is_typename = std::is_same_v<T,int_t> || std::is_same_v<T,real_t> || std::is_same_v<T,bool_t> || std::is_same_v<T,str_t>;
+
+    template<typename T>
+    inline constexpr bool is_arithmetic = std::is_same_v<T,int_t> || std::is_same_v<T,real_t>;
     
     
     struct Type
