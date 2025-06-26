@@ -315,9 +315,9 @@ namespace sknd
         os << indentation << contraction.left << ' ' << contraction.assignment << ' ' << nobrackets << contraction.right;
         
         bool first = true;
-        for ( auto& [iden,affine] : contraction.bounds )
+        for ( auto& [iden, expr] : contraction.bounds )
         {
-            os << (first ? "\n" + indentation + "\t" : ", ") << iden << " < " << affine;
+            os << (first ? ",\n" + indentation + "\t" : ", ") << iden << " < " << expr;
             first = false;
         }
         
