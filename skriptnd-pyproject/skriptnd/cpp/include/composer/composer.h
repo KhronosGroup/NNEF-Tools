@@ -2613,6 +2613,20 @@ namespace sknd
         
         Result<Lowering> generate_initializer( const Lowering& lowering, const Dict<Symbol>& symbols )
         {
+            auto& _symbols = const_cast<Dict<Symbol>&>(symbols);
+            
+            for ( auto& [iden, expr] : lowering.bounds )
+            {
+                TRY_DECL(rank, eval_static_rank(*expr, symbols))
+                _symbols.emplace(iden, Symbol(LoopIndex{}, rank));
+            }
+            for ( auto& [iden, expr] : lowering.locals )
+            {
+                const Typename type = eval_type(*expr, symbols);
+                TRY_DECL(rank, eval_max_rank(*expr, symbols))
+                _symbols.emplace(iden, Symbol(LoopLocal(), type, rank));
+            }
+            
             auto type = eval_type(*lowering.right, symbols);
             auto right = implicit_initializer(lowering.op, type, lowering.position);
             if ( !right )
@@ -2629,6 +2643,16 @@ namespace sknd
                     bounds.push_back(bound);
                 }
             }
+            
+            for ( auto& [iden, expr] : lowering.bounds )
+            {
+                _symbols.erase(iden);
+            }
+            for ( auto& [iden, expr] : lowering.locals )
+            {
+                _symbols.erase(iden);
+            }
+            
             return Lowering{ lowering.position, lowering.left, right, Lexer::Operator::Assign, {}, bounds, nullptr, lowering.unroll_index, lowering.unroll_count };
         }
         
@@ -2688,8 +2712,8 @@ namespace sknd
             return {};
         }
         
-        Result<void> eval_lowering( const Lowering& lowering, const Dict<Symbol>& symbols, Graph& graph, std::vector<Contraction>& contractions,
-                                   bool unroll_packs )
+        Result<void> eval_lowering( const Lowering& lowering, const Dict<Symbol>& symbols, Graph& graph, 
+                                   std::vector<Contraction>& contractions, bool unroll_packs )
         {
             auto& _symbols = const_cast<Dict<Symbol>&>(symbols);
             
