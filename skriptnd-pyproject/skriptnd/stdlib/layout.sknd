@@ -599,7 +599,7 @@ operator pad {
             "'axes' must be distinct", axes;
     }
     @lower {
-        zi = si - before,
+        with zi = si - before:
         output[si..] = method == 'REFLECT' ? input[|zi <> -zi : 2 * (s - 1) - zi|..] :
                        method == 'REPLICATE' ? input[|zi <> 0 : s - 1|..] :
                        method == 'SYMMETRIC' ? input[|zi <> -zi - 1 : 2 * (s - 1) - zi + 1|..] :

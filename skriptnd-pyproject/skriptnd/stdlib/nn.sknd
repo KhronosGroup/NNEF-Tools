@@ -115,22 +115,24 @@ operator conv {
             "'filter_format' must be one of {filter_formats}", filter_format;
     }
     @lower {
-        oi = data_format == 'NCX' ? [bi,ni,i..] :
-             data_format == 'NXC' ? [bi,i..,ni] :
-                                    [i..,ni,bi],
+        with
+            oi = data_format == 'NCX' ? [bi,ni,i..] :
+                 data_format == 'NXC' ? [bi,i..,ni] :
+                                        [i..,ni,bi]:
         output[oi..] = bias[ni,] ?? 0.0,
             bi < b, ni < n, i < ox;
         
-        oi = data_format == 'NCX' ? [bi,gi * m + mi,i..] :
-             data_format == 'NXC' ? [bi,i..,gi * m + mi] :
-                                    [i..,gi * m + mi,bi],
-        ii = data_format == 'NCX' ? [bi,gi * fc + ci,|stride * i + dilation * j - offset|..] :
-             data_format == 'NXC' ? [bi,|stride * i + dilation * j - offset|..,gi * fc + ci] :
-                                    [|stride * i + dilation * j - offset|..,gi * fc + ci,bi],
-        fi = filter_format == 'NCX' ? [gi * m + mi,ci,j..] :
-             filter_format == 'NXC' ? [gi * m + mi,j..,ci] :
-             filter_format == 'XCN' ? [j..,ci,gi * m + mi] :
-                                      [ci,j..,gi * m + mi],
+        with
+            oi = data_format == 'NCX' ? [bi,gi * m + mi,i..] :
+                 data_format == 'NXC' ? [bi,i..,gi * m + mi] :
+                                        [i..,gi * m + mi,bi],
+            ii = data_format == 'NCX' ? [bi,gi * fc + ci,|stride * i + dilation * j - offset|..] :
+                 data_format == 'NXC' ? [bi,|stride * i + dilation * j - offset|..,gi * fc + ci] :
+                                        [|stride * i + dilation * j - offset|..,gi * fc + ci,bi],
+            fi = filter_format == 'NCX' ? [gi * m + mi,ci,j..] :
+                 filter_format == 'NXC' ? [gi * m + mi,j..,ci] :
+                 filter_format == 'XCN' ? [j..,ci,gi * m + mi] :
+                                          [ci,j..,gi * m + mi]:
         output[oi..] += input[ii..] * filter[fi..],
             bi < b, gi < g, mi < m, ci < fc, i < ox, j < fx;
     }
@@ -205,22 +207,24 @@ operator deconv {
             "'filter_format' must be one of {data_formats}", filter_format;
     }
     @lower {
-        oi = data_format == 'NCX' ? [bi,ci,i..] :
-             data_format == 'NXC' ? [bi,i..,ci] :
-                                    [i..,ci,bi],
+        with
+            oi = data_format == 'NCX' ? [bi,ci,i..] :
+                 data_format == 'NXC' ? [bi,i..,ci] :
+                                        [i..,ci,bi]:
         output[oi..] = bias[ci,] ?? 0.0,
             bi < b, ci < oc, i < ox;
-            
-        oi = data_format == 'NCX' ? [bi,gi * fc + ci,|stride * i + dilation * j - offset|..] :
-             data_format == 'NXC' ? [bi,|stride * i + dilation * j - offset|..,gi * fc + ci] :
-                                    [|stride * i + dilation * j - offset|..,gi * fc + ci,bi],
-        ii = data_format == 'NCX' ? [bi,gi * m + mi,i..] :
-             data_format == 'NXC' ? [bi,i..,gi * m + mi] :
-                                    [i..,gi * m + mi,bi],
-        fi = filter_format == 'NCX' ? [gi * m + mi,ci,j..] :
-             filter_format == 'NXC' ? [gi * m + mi,j..,ci] :
-             filter_format == 'XCN' ? [j..,ci,gi * m + mi] :
-                                      [ci,j..,gi * m + mi],
+        
+        with
+            oi = data_format == 'NCX' ? [bi,gi * fc + ci,|stride * i + dilation * j - offset|..] :
+                 data_format == 'NXC' ? [bi,|stride * i + dilation * j - offset|..,gi * fc + ci] :
+                                        [|stride * i + dilation * j - offset|..,gi * fc + ci,bi],
+            ii = data_format == 'NCX' ? [bi,gi * m + mi,i..] :
+                 data_format == 'NXC' ? [bi,i..,gi * m + mi] :
+                                        [i..,gi * m + mi,bi],
+            fi = filter_format == 'NCX' ? [gi * m + mi,ci,j..] :
+                 filter_format == 'NXC' ? [gi * m + mi,j..,ci] :
+                 filter_format == 'XCN' ? [j..,ci,gi * m + mi] :
+                                          [ci,j..,gi * m + mi]:
         output[oi..] += input[ii..] * filter[fi..],
             bi < b, ci < fc, gi < g, mi < m, i < ix, j < fx;
     }

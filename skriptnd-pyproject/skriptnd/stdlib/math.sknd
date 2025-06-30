@@ -1452,9 +1452,10 @@ operator clamp {
             val_align, min_align, max_align;
     }
     @lower {
-        xi = x[sx is 1 ? 0 : i[px:px+rx]..],
-        ai = a[sa is 1 ? 0 : i[pa:pa+ra]..],
-        bi = b[sb is 1 ? 0 : i[pb:pb+rb]..],
+        with
+            xi = x[sx is 1 ? 0 : i[px:px+rx]..],
+            ai = a[sa is 1 ? 0 : i[pa:pa+ra]..],
+            bi = b[sb is 1 ? 0 : i[pb:pb+rb]..]:
         y[i..] = xi < ai ? ai : xi > bi ? bi : xi,
             i < sy;
     }

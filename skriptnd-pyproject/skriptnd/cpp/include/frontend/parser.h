@@ -1129,31 +1129,38 @@ namespace sknd
             TRY_DECL(unroll, lexer.accept_if(Lexer::Keyword::Unroll))
             if ( unroll )
             {
-                TRY_CALL(lexer.accept(Lexer::Operator::Dots))
-                TRY_CALL(lexer.accept(Lexer::Operator::LeftParen))
+                TRY_CALL(lexer.accept(Operator::Dots))
+                TRY_CALL(lexer.accept(Operator::LeftParen))
                 TRY_MOVE(unroll_index, parse_identifier(lexer))
-                TRY_CALL(lexer.accept(Lexer::Operator::RightArrow))
+                TRY_CALL(lexer.accept(Operator::RightArrow))
                 TRY_MOVE(unroll_count, parse_expr(lexer))
-                TRY_CALL(lexer.accept(Lexer::Operator::RightParen))
+                TRY_CALL(lexer.accept(Operator::RightParen))
             }
             
             std::vector<std::pair<std::string,Shared<Expr>>> locals;
             
-            TRY_DECL(left, parse_iden_expr(lexer))
-            while ( !lexer.is_token(Operator::LeftBracket) )
+            if ( lexer.is_token(Keyword::With) )
             {
-                TRY_CALL(lexer.accept(Lexer::Operator::Assign))
-                TRY_DECL(expr, parse_expr(lexer))
-                TRY_CALL(lexer.accept(Lexer::Operator::Comma))
-                locals.emplace_back(as_identifier(*left).name, expr);
-                TRY_MOVE(left, parse_iden_expr(lexer))
+                do
+                {
+                    TRY_CALL(lexer.accept())
+                    TRY_DECL(iden, parse_identifier(lexer))
+                    TRY_CALL(lexer.accept(Operator::Assign))
+                    TRY_DECL(expr, parse_expr(lexer))
+                    locals.emplace_back(iden, expr);
+                }
+                while ( lexer.is_token(Operator::Comma) );
+                TRY_CALL(lexer.accept(Operator::Colon))
             }
-            while ( lexer.is_token(Operator::LeftBracket) )
+            
+            TRY_DECL(left, parse_iden_expr(lexer))
+            TRY_MOVE(left, parse_index_expr(lexer, left))
+            if ( lexer.is_token(Operator::LeftBracket) )
             {
                 TRY_MOVE(left, parse_index_expr(lexer, left))
             }
             
-            auto op = (Lexer::Operator)lexer.index();
+            auto op = (Operator)lexer.index();
             TRY_CALL(lexer.accept(Category::Operator))
             
             TRY_DECL(right, parse_expr(lexer))

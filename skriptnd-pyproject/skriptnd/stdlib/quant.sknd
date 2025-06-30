@@ -42,9 +42,10 @@ operator zero_point_linear_quantize {
         bits > 0: "bits must be positive", bits;
     }
     @lower {
-        zp = uz ?? zero_point[i[channel_axis]],
-        sc = us ?? scale[i[channel_axis]],
-        quantized = zp + int(round(input[i..] / sc)) >> m << r,
+        with
+            zp = uz ?? zero_point[i[channel_axis]],
+            sc = us ?? scale[i[channel_axis]],
+            quantized = zp + int(round(input[i..] / sc)) >> m << r:
         output[i..] = real(quantized - zp) * sc,
             i < s;
     }
@@ -75,10 +76,11 @@ operator min_max_linear_quantize {
         bits > 0: "bits must be positive", bits;
     }
     @lower {
-        mn = umin ?? min[i[channel_axis]],
-        mx = umax ?? max[i[channel_axis]],
-        sc = mx - mn,
-        quantized = round(((input[i..] >> mn << mx) - mn) / sc * r) - p,
+        with
+            mn = umin ?? min[i[channel_axis]],
+            mx = umax ?? max[i[channel_axis]],
+            sc = mx - mn,
+            quantized = round(((input[i..] >> mn << mx) - mn) / sc * r) - p:
         output[i..] = real((quantized + p) / r * sc + mn),
             i < s;
     }
