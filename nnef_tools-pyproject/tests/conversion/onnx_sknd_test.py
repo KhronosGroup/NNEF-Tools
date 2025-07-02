@@ -17,7 +17,6 @@ from nnef_tools.io import skriptnd as skriptnd_io
 from nnef_tools.conversion import onnx_to_sknd
 from nnef_tools.optimization import skriptnd_optimizer
 from nnef_tools.optimization import onnx_optimizer
-from skriptnd import PlaceholderExpr
 import sknd_test
 import numpy as np
 import unittest
@@ -83,16 +82,6 @@ class TestEnv(sknd_test.TestEnv):
             nnef_model = self._skriptnd_reader(output_filename)
             self._skriptnd_optimizer(nnef_model)
             self._skriptnd_writer(nnef_model, output_filename)
-
-    def _set_max_input_shapes(self, model, input_shape):
-        if not isinstance(input_shape, list):
-            input_shape = [input_shape] * len(model.main.inputs)
-
-        for idx, input in enumerate(model.main.inputs):
-            shape = input_shape[idx]
-            assert all(s is None or s == shape[i] for i, s in enumerate(input.shape))
-            input.shape = tuple(s if s is not None else PlaceholderExpr(None, shape[i])
-                                for i, s in enumerate(input.shape))
 
     @staticmethod
     def _exec_orig_model(filename, input_shape=None, input_range=None):

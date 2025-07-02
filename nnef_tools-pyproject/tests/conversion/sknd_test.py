@@ -26,6 +26,16 @@ class TestEnv(unittest.TestCase):
     def _exec_orig_model(filename, input_shape=None, input_range=None):
         raise NotImplementedError()
 
+    def _set_max_input_shapes(self, model, input_shape):
+        if not isinstance(input_shape, list):
+            input_shape = [input_shape] * len(model.main.inputs)
+
+        for idx, input in enumerate(model.main.inputs):
+            shape = input_shape[idx]
+            assert all(s is None or s == shape[i] for i, s in enumerate(input.shape))
+            input.shape = tuple(s if s is not None else sknd.PlaceholderExpr(None, shape[i])
+                                for i, s in enumerate(input.shape))
+
     @staticmethod
     def _exec_sknd_model(path, input_shape=None, input_range=None):
         np.random.seed(0)
