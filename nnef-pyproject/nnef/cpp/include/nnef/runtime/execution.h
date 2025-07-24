@@ -169,7 +169,7 @@ namespace nnef { namespace rt
             
             reduce(input_view, output_view, func, init);
             
-            if ( op.name == "mean_reduce" )
+            if ( op.name == "mean_reduce" || (op.name == "sum_reduce" && op.attribs.get("normalize").logical()) )
             {
                 const T volume = (T)(input_view.volume / output_view.volume);
                 binary((tensor_view<const T>)output_view, _tensor_view<const T>(volume), output_view, std::divides<T>());
