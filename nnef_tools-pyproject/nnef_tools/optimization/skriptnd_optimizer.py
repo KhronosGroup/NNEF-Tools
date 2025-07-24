@@ -20,9 +20,10 @@ import skriptnd as nd
 
 class Optimizer:
 
-    def __init__(self, custom_optimizers=None, dequantize=False):
+    def __init__(self, custom_optimizers=None, dequantize=False, optimize_batch_norm=True):
         self._custom_optimizers = custom_optimizers or {}
         self._dequantize = dequantize
+        self._optimize_batch_norm = optimize_batch_norm
 
     def __call__(self, model, only_required=False):
         self._collect_shape_referenced_tensors(model)
@@ -88,11 +89,14 @@ class Optimizer:
                                          self._merge_linear_mul)
                 changed |= replace_chain(graph, ['linalg.matmul', {'math.add', 'math.sub'}],
                                          self._merge_matmul_bias)
-                changed |= replace_chain(graph, [{'nn.conv', 'nn.deconv'}, 'nn.batch_norm'],
-                                         self._merge_conv_batch_norm)
-                changed |= replace_chain(graph, ['nn.batch_norm'], self._split_batch_norm)
+
                 changed |= replace_chain(graph, ['layout.transpose', 'layout.squeeze'], self._merge_transpose_squeeze)
                 changed |= replace_chain(graph, ['layout.reshape'], self._substitute_squeeze)
+
+                if self._optimize_batch_norm:
+                    changed |= replace_chain(graph, [{'nn.conv', 'nn.deconv'}, 'nn.batch_norm'],
+                                             self._merge_conv_batch_norm)
+                    changed |= replace_chain(graph, ['nn.batch_norm'], self._split_batch_norm)
 
                 for chain, replacer in self._custom_optimizers.items():
                     changed |= replace_chain(graph, chain, replacer)
