@@ -357,7 +357,7 @@ class Converter:
         if isinstance(value, Exception):
             err_type = type(value).__name__ + ": " if type(value) != ConversionError else ""
             raise ConversionError("Could not evaluate {kind} '{key}' while converting operator '{name}' of type '{type}'; {err}{cause}"
-                                  .format(kind=kind, key=key, type=op_type, name=op_name, err=err_type, cause=str(value) or repr(value)))
+                                  .format(kind=kind, key=key, type=op_type, name=op_name or '', err=err_type, cause=str(value) or repr(value)))
         if tensor and value is not None and not isinstance(value, Tensor) and not \
                 (isinstance(value, list) and all(isinstance(item, Tensor) for item in value)):
             raise ConversionError("While converting operator '{name}' of type '{op_type}', {kind} '{key}' must result in a tensor, "
