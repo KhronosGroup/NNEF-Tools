@@ -72,6 +72,22 @@ def generate_missing_tensor_names_from_op_type(model):
                 tensor.name = op.type + str(idx)
 
 
+def generate_missing_constant_and_variable_names(model):
+    idx = 0
+    for graph in model.graphs:
+        for tensor in graph.tensors:
+            if tensor.name is not None:
+                name, count = _split_counter_from_name(tensor.name)
+                if name is not None and name.startswith('.T'):
+                    idx = max(idx, count)
+
+    for graph in model.graphs:
+        for tensor in graph.tensors:
+            if tensor.name is None and tensor.data is not None:
+                idx += 1
+                tensor.name = f".T{idx}"
+
+
 def generate_op_names_from_op_type(model):
     op_counts = {}
     for graph in model.graphs:
