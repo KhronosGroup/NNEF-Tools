@@ -95,3 +95,18 @@ def save_graph(graph, path, annotate_shapes=False):
             if tensor.data is not None:
                 with open(variable_filename, 'wb') as variable_file:
                     write_tensor(variable_file, tensor.data, quantized=bool(tensor.quantization))
+
+
+class Session:
+
+    def __init__(self, path, stdlib=None, lowered=None):
+        self._handle = _nnef.create_session(path, stdlib=stdlib, lowered=lowered)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        _nnef.cleanup_session(self._handle)
+
+    def __call__(self, *inputs):
+        return _nnef.execute_session(self._handle, tuple(inputs))

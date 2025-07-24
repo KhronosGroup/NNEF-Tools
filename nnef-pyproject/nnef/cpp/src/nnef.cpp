@@ -187,7 +187,7 @@ namespace nnef
     
     size_t item_bits( const std::string& dtype )
     {
-        return dtype == "scalar" ? 32 : dtype == "integer" ? 32 : dtype == "logical" ? 1 : 0;
+        return dtype == "scalar" ? 32 : dtype == "integer" ? sizeof(int) * 8 : dtype == "logical" ? 1 : 0;
     }
 
     bool read_tensor( std::istream& is, Tensor& tensor, std::string& error ) noexcept
