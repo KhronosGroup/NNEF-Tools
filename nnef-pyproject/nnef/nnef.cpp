@@ -19,12 +19,14 @@
 #include "nnef/flat/flat_parser.h"
 #include "nnef/comp/comp_parser.h"
 #include "nnef/flat/quant_parser.h"
+#include "nnef.h"
 #include <initializer_list>
 #include <exception>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <locale>
+#include <memory>
 
 
 static PyObject* NNEF_Error;
@@ -192,6 +194,21 @@ static PyObject* buildPyObjectFromValue( const nnef::Value& value )
     return nullptr;
 }
 
+static int numpy_type_num( const nnef::Typename& dtype )
+{
+    switch ( dtype )
+    {
+        case nnef::Typename::Scalar:
+            return NPY_FLOAT32;
+        case nnef::Typename::Integer:
+            return NPY_INT32;
+        case nnef::Typename::Logical:
+            return NPY_BOOL;
+        default:
+            return NPY_VOID;
+    }
+}
+
 static PyArray_Descr* numpy_dtype( const nnef::Typename& dtype )
 {
     switch ( dtype )
@@ -199,7 +216,7 @@ static PyArray_Descr* numpy_dtype( const nnef::Typename& dtype )
         case nnef::Typename::Scalar:
             return PyArray_DescrFromType(NPY_FLOAT32);
         case nnef::Typename::Integer:
-            return PyArray_DescrFromType(NPY_INT64);
+            return PyArray_DescrFromType(NPY_INT32);
         case nnef::Typename::Logical:
             return PyArray_DescrFromType(NPY_BOOL);
         default:
@@ -482,11 +499,155 @@ static PyObject* parseString( PyObject* self, PyObject* args, PyObject* kwargs )
     return parse(self, args, kwargs, false);
 }
 
+static PyObject* createSession( PyObject* self, PyObject* args, PyObject* kwargs )
+{
+    static const char* kwlist[] = { "", "stdlib", "lowered", NULL };
+
+    const char* path = nullptr;
+    const char* stdlib = nullptr;
+    PyObject* lower = nullptr;
+
+	if ( !PyArg_ParseTupleAndKeywords(args, kwargs, "s|zO!", (char**)kwlist, &path, &stdlib, &PyList_Type, &lower) )
+    {
+        return NULL;
+    }
+
+    std::set<std::string> lowered;
+    if ( lower )
+    {
+        for ( Py_ssize_t i = 0; i < PyList_Size(lower); ++i )
+        {
+            PyObject* item = PyList_GetItem(lower, i);
+            if ( !PY_STRING_CHECK(item) )
+            {
+                const std::string message = "Paremeter 'lowered' must be a list of strings";
+                PyErr_SetString(NNEF_Error, message.c_str());
+                return NULL;
+            }
+            lowered.insert(PY_STRING_AS_CSTR(item));
+        }
+    }
+
+    std::unique_ptr<nnef::Graph> graph(new nnef::Graph());
+    std::string error;
+
+    if ( !nnef::load_graph(path, *graph, error, stdlib ?: "", lowered) )
+    {
+        PyErr_SetString(PyExc_ValueError, error.c_str());
+        return NULL;
+    }
+
+    if ( !nnef::infer_shapes(*graph, error) )
+    {
+        PyErr_SetString(PyExc_ValueError, error.c_str());
+        return NULL;
+    }
+
+    if ( !nnef::allocate_buffers(*graph, error) )
+    {
+        PyErr_SetString(PyExc_ValueError, error.c_str());
+        return NULL;
+    }
+
+    const size_t handle = reinterpret_cast<size_t>(graph.release());
+    return PyLong_FromSize_t(handle);
+}
+
+static PyObject* cleanupSession( PyObject* self, PyObject* args, PyObject* kwargs )
+{
+    PyObject* handle;
+    static const char* kwlist[] = { "", NULL };
+
+	if ( !PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char**)kwlist, &handle) )
+    {
+        return NULL;
+    }
+
+    nnef::Graph* graph = reinterpret_cast<nnef::Graph*>(PyLong_AsSize_t(handle));
+    delete graph;
+
+    Py_RETURN_NONE;
+}
+
+static PyObject* executeSession( PyObject* self, PyObject* args, PyObject* kwargs )
+{
+    PyObject* handle;
+    PyObject* inputs;
+    static const char* kwlist[] = { "", "", NULL };
+
+	if ( !PyArg_ParseTupleAndKeywords(args, kwargs, "OO!", (char**)kwlist, &handle, &PyTuple_Type, &inputs) )
+    {
+        return NULL;
+    }
+
+    nnef::Graph* graph = reinterpret_cast<nnef::Graph*>(PyLong_AsSize_t(handle));
+
+    if ( PyTuple_Size(inputs) != graph->inputs.size() )
+    {
+        PyErr_Format(PyExc_ValueError, "number of inputs (%d) does not match number of graph inputs (%d)",
+                     (int)PyTuple_Size(inputs), (int)graph->inputs.size());
+        return NULL;
+    }
+
+    for ( size_t i = 0; i < PyTuple_Size(inputs); ++i )
+    {
+        PyObject* input = PyTuple_GetItem(inputs, i);
+        if ( !PyArray_Check(input) )
+        {
+            PyErr_SetString(PyExc_ValueError, "inputs must be numpy arrays");
+            return NULL;
+        }
+        PyArrayObject* array = (PyArrayObject*)input;
+
+        nnef::Tensor& tensor = graph->tensors.at(graph->inputs[i]);
+        nnef::Typename dtype = nnef::fromString(tensor.dtype);
+
+        if ( PyArray_TYPE(array) != numpy_type_num(dtype) )
+        {
+            PyErr_Format(PyExc_ValueError, "dtype of input %d does not match input dtype in graph", (int)i+1);
+            return NULL;
+        }
+
+        if ( PyArray_NDIM(array) != tensor.shape.size() || !std::equal(tensor.shape.begin(), tensor.shape.end(), PyArray_SHAPE(array)) )
+        {
+            PyErr_Format(PyExc_ValueError, "shape of input %d does not match input shape in graph", (int)i+1);
+            return NULL;
+        }
+
+        std::copy_n(PyArray_BYTES(array), tensor.data.size(), tensor.data.data());
+    }
+
+    std::string error;
+    if ( !nnef::execute(*graph, error) )
+    {
+        PyErr_SetString(PyExc_ValueError, error.c_str());
+        return NULL;
+    }
+
+    PyObject* outputs = PyTuple_New(graph->outputs.size());
+    for ( size_t i = 0; i < graph->outputs.size(); ++i )
+    {
+        nnef::Tensor& tensor = graph->tensors.at(graph->outputs[i]);
+        std::vector<npy_intp> shape(tensor.shape.begin(), tensor.shape.end());
+        nnef::Typename dtype = nnef::fromString(tensor.dtype);
+
+        PyObject* output = PyArray_SimpleNew(shape.size(), shape.data(), numpy_type_num(dtype));
+        std::copy_n(tensor.data.data(), tensor.data.size(), PyArray_BYTES((PyArrayObject*)output));
+
+        PyTuple_SetItem(outputs, i, output);
+    }
+
+    return outputs;
+}
+
 
 static PyMethodDef NNEF_Methods[] = 
 {
     { "parse_file", (PyCFunction)parseFile, METH_VARARGS | METH_KEYWORDS, "Parse the contents of a file" },
     { "parse_string", (PyCFunction)parseString, METH_VARARGS | METH_KEYWORDS, "Parse the contents of a string" },
+    { "create_session", (PyCFunction)createSession, METH_VARARGS | METH_KEYWORDS, "Create session for executing a graph" },
+    { "cleanup_session", (PyCFunction)cleanupSession, METH_VARARGS | METH_KEYWORDS, "Cleanup session" },
+    { "execute_session", (PyCFunction)executeSession, METH_VARARGS | METH_KEYWORDS, "Execute graph in a session" },
  	{ NULL, NULL, 0, NULL }
 };
 

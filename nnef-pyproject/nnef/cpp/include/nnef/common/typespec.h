@@ -39,6 +39,18 @@ namespace nnef
         };
         return strings[(size_t)name];
     }
+
+    inline Typename fromString( const std::string& str )
+    {
+        static const std::map<std::string,Typename> typenames =
+        {
+            { "integer", Typename::Integer },
+            { "scalar", Typename::Scalar },
+            { "logical", Typename::Logical },
+            { "string", Typename::String },
+        };
+        return typenames.at(str);
+    }
     
 
     
