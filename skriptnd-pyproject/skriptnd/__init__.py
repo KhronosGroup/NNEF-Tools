@@ -373,7 +373,7 @@ def write_model(model, path, operators=None, imports=None, inline_subgraphs=Fals
         graph_name = graph.name if graph.name.startswith(module_scope) else module_scope + graph.name
         block_scope = graph_name + '.'
         for tensor in graph.variables:
-            name = tensor.name if tensor.name.startswith(block_scope) else block_scope + tensor.name
+            name = tensor.name if tensor.name.startswith(block_scope) else block_scope + valid_id(tensor.name)
             variable_path = os.path.join(path, name + '.dat')
             with open(variable_path, 'wb') as variable_file:
                 write_tensor(variable_file, tensor.value)
