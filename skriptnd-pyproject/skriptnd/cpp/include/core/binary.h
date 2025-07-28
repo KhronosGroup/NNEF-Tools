@@ -45,6 +45,16 @@ namespace sknd
     };
 
 
+    template<typename In, typename Out>
+    void copy_and_cast_n( In* input, size_t n, Out* output )
+    {
+        for ( size_t i = 0; i < n; ++i )
+        {
+            *output++ = (Out)*input++;
+        }
+    }
+
+
     template<typename T>
     inline void fill_tensor_header( TensorHeader& header, const size_t version[2], const size_t rank, const T* extents,
                                    const size_t bits_per_item, const TensorHeader::ItemType item_type )
@@ -155,11 +165,11 @@ namespace sknd
     {
         if ( bits_per_item == 32 )
         {
-            std::copy_n((const float*)bytes, count, data);
+            copy_and_cast_n((const float*)bytes, count, data);
         }
         else if ( bits_per_item == 64 )
         {
-            std::copy_n((const double*)bytes, count, data);
+            copy_and_cast_n((const double*)bytes, count, data);
         }
         else
         {
@@ -173,44 +183,44 @@ namespace sknd
         {
             if ( is_signed )
             {
-                std::copy_n((const int8_t*)bytes, count, data);
+                copy_and_cast_n((const int8_t*)bytes, count, data);
             }
             else
             {
-                std::copy_n((const uint8_t*)bytes, count, data);
+                copy_and_cast_n((const uint8_t*)bytes, count, data);
             }
         }
         else if ( bits_per_item == 16 )
         {
             if ( is_signed )
             {
-                std::copy_n((const int16_t*)bytes, count, data);
+                copy_and_cast_n((const int16_t*)bytes, count, data);
             }
             else
             {
-                std::copy_n((const uint16_t*)bytes, count, data);
+                copy_and_cast_n((const uint16_t*)bytes, count, data);
             }
         }
         else if ( bits_per_item == 32 )
         {
             if ( is_signed )
             {
-                std::copy_n((const int32_t*)bytes, count, data);
+                copy_and_cast_n((const int32_t*)bytes, count, data);
             }
             else
             {
-                std::copy_n((const uint32_t*)bytes, count, data);
+                copy_and_cast_n((const uint32_t*)bytes, count, data);
             }
         }
         else if ( bits_per_item == 64 )
         {
             if ( is_signed )
             {
-                std::copy_n((const int64_t*)bytes, count, data);
+                copy_and_cast_n((const int64_t*)bytes, count, data);
             }
             else
             {
-                std::copy_n((const uint64_t*)bytes, count, data);
+                copy_and_cast_n((const uint64_t*)bytes, count, data);
             }
         }
         else
@@ -227,7 +237,7 @@ namespace sknd
         }
         else if ( bits_per_item == 8 )
         {
-            std::copy_n((const int8_t*)bytes, count, data);
+            copy_and_cast_n((const int8_t*)bytes, count, data);
         }
         else
         {
@@ -237,18 +247,18 @@ namespace sknd
 
     inline void to_bytes( const float* data, const size_t count, char* bytes )
     {
-        std::copy_n(data, count, (float*)bytes);
+        copy_and_cast_n(data, count, (float*)bytes);
     }
 
     inline void to_bytes( const int* data, const size_t count, char* bytes, const bool as_signed )
     {
         if ( as_signed )
         {
-            std::copy_n(data, count, (int32_t*)bytes);
+            copy_and_cast_n(data, count, (int32_t*)bytes);
         }
         else
         {
-            std::copy_n(data, count, (uint32_t*)bytes);
+            copy_and_cast_n(data, count, (uint32_t*)bytes);
         }
     }
 
