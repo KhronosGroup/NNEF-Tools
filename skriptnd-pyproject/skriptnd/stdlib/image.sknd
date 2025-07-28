@@ -155,8 +155,6 @@ operator linear_upsample {
 
 # @section resize-ops Image Resize/Rescale Operators
 
-# @text The following operators cannot be expressed using affine indexing, hence they need to be defined as intrinsic operators in an actual compiler implementation.
-
 operator nearest_resize {
     @attrib {
         axes: int..(k) = [0:d];
