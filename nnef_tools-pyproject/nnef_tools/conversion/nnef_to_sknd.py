@@ -13,9 +13,9 @@
 # limitations under the License.
 
 from __future__ import division, print_function, absolute_import
-from .converter import ConverterToSkriptND as _Converter, Transform
-from ..model import Tensor, Operation
+from .converter import ConverterToSkriptND as _Converter, Transform, ConversionError
 from ..model.utils import generate_missing_constant_and_variable_names
+from ..utils import types
 import numpy as np
 
 
@@ -29,6 +29,23 @@ class Converter(_Converter):
         model = _Converter.__call__(self, model)
         generate_missing_constant_and_variable_names(model)
         return model
+
+    def _is_constant(self, tensor):
+        if tensor.producer:
+            return tensor.producer.type == 'constant'
+        else:
+            return tensor.data is not None
+
+    def _read_constant(self, tensor, type, flat):
+        if tensor.data is not None:
+            value = tensor.data
+        elif tensor.producer and tensor.producer.type == 'constant':
+            value = tensor.producer.attribs['value']
+        else:
+            raise ConversionError('trying to evaluate non-constant tensor')
+
+        return types.from_numpy(value, type=type, flat=flat) if isinstance(value, np.ndarray) else \
+            types.cast(value, type=type) if type is not None else value
 
     def convert_padding(self, padding):
         return [p for p, q in padding] + [q for p, q in padding] if len(padding) != 0 else None
@@ -421,6 +438,55 @@ _Transforms = Converter.unpack_transforms({
             outputs='!O[0]',
             attribs={
                 'output_size': '!output_size',
+            },
+        ),
+    'add_n':
+        Transform(
+            type='math.sum_n',
+            inputs='!I[0]',
+            outputs='!O[0]',
+        ),
+    'moments':
+        Transform(
+            type='math.moments',
+            inputs='!I[0]',
+            outputs=('!O[0]', '!O[1]'),
+            attribs={
+                'axes': '!axes',
+            },
+        ),
+    'min_max_linear_quantize':
+        Transform(
+            type='quant.min_max_linear_quantize',
+            cond={
+                '!is_const(I[1])': 'min must be constant tensor',
+                '!is_const(I[2])': 'max must be constant tensor',
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'min': '!as_const(I[1])',
+                'max': '!as_const(I[2])',
+                'bits': '!bits',
+                'signed': '!signed',
+                'symmetric': '!symmetric',
+            },
+        ),
+    'zero_point_linear_quantize':
+        Transform(
+            type='quant.zero_point_linear_quantize',
+            cond={
+                '!is_const(I[1])': 'zero_point must be constant tensor',
+                '!is_const(I[2])': 'scale must be constant tensor',
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'zero_point': '!as_const(I[1])',
+                'scale': '!as_const(I[2])',
+                'bits': '!bits',
+                'signed': '!signed',
+                'symmetric': '!symmetric',
             },
         ),
 })

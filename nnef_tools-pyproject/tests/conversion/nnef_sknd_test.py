@@ -62,6 +62,10 @@ class TestEnv(sknd_test.TestEnv):
         'nearest_downsample',
         'nearest_upsample',
         'area_downsample',
+        'moments',
+        'add_n',
+        'min_max_linear_quantize',
+        'zero_point_linear_quantize',
     ]
 
     def setUp(self) -> None:
@@ -1158,3 +1162,49 @@ class TestCases(TestEnv):
            """
 
         self._test_conversion('max_roi_pool', code, execute=False, compile=False)
+
+    def test_sum(self):
+        code = """
+           graph G(input1, input2, input3) -> (output)
+           {
+               input1 = external<scalar>(shape = [1, 16, 32, 32]);
+               input2 = external<scalar>(shape = [1, 16, 32, 32]);
+               input3 = external<scalar>(shape = [1, 16, 32, 32]);
+               output = add_n([input1, input2, input3]);
+           }
+           """
+
+        self._test_conversion('sum', code)
+
+    def test_moments(self):
+        code = """
+           graph G(input) -> (mean, variance)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               mean, variance = moments(input, axes = [1, 2, 3]);
+           }
+           """
+
+        self._test_conversion('moments', code)
+
+    def test_min_max_linear_quant(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = min_max_linear_quantize(input, 0.0, 1.0, bits = 8, signed = true, symmetric = true);
+           }
+           """
+
+        self._test_conversion('min_max_linear_quant', code, input_range=(0.0, 1.0))
+
+    def test_zero_point_linear_quant(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = zero_point_linear_quantize(input, 0, 1.0, bits = 8, signed = true, symmetric = true);
+           }
+           """
+
+        self._test_conversion('zero_point_linear_quant', code, input_range=(0.0, 1.0))
