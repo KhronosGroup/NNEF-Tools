@@ -287,24 +287,24 @@ _Transforms = Converter.unpack_transforms({
         ),
     'multilinear_upsample':
         Transform(
-            type='!"image.linear_resize" if is_resize else "image.linear_upsample"',
+            type='!"image.linear_resize" if as_resize else "image.linear_upsample"',
             cond={
                 '!border == "constant" || border == "replicate"': 'border must be "constant" or "replicate"',
                 '!method != "aligned" || border == "replicate"': 'border must be "replicate" if method is "aligned"'
             },
             using={
-                'is_resize': '!method == "aligned"',
-                'is_upsample': '!method != "aligned"',
+                'as_resize': '!method == "aligned" or border == "replicate"',
+                'as_upsample': '!not as_resize',
             },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
                 'axes': '!list(range(2, I[0].rank))',
-                'size': '![s * f for s, f in zip(I[0].shape[2:], factor)] if is_resize else None',
-                'factor': '!factor if is_upsample else None',
-                'symmetric': '!method == "symmetric" if is_upsample else None',
-                'replicate_border': '!border == "replicate" if is_upsample else None',
-                'coordinate_transform': '!method.upper() if is_resize else None',
+                'size': '![s * f for s, f in zip(I[0].shape[2:], factor)] if as_resize else None',
+                'factor': '!factor if as_upsample else None',
+                'symmetric': '!method == "symmetric" if as_upsample else None',
+                'replicate_border': '!border == "replicate" if as_upsample else None',
+                'coordinate_transform': '!method.upper() if as_resize else None',
             },
         ),
 })
