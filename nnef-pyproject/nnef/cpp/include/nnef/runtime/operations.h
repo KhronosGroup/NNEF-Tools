@@ -488,7 +488,7 @@ namespace nnef { namespace rt
         const int shape[] = { 1, 1, 3 };
         tensor_view<const T> filter = { 3, 3, shape, weights };
         tensor_view<const T> bias = { 0, 1, nullptr, &zero };
-        const int padding[] = { 0 };
+        const int padding[] = { 1 };
         const int stride[] = { 2 };
         const int dilation[] = { 1 };
         return _depthwise_conv<true,1>(filter, bias, output, input, padding, stride, dilation);
@@ -527,7 +527,7 @@ namespace nnef { namespace rt
         const int shape[] = { 1, 1, 3, 3 };
         tensor_view<const T> filter = { 4, 9, shape, weights };
         tensor_view<const T> bias = { 0, 1, nullptr, &zero };
-        const int padding[] = { 0, 0 };
+        const int padding[] = { 1, 1 };
         const int stride[] = { 2, 2 };
         const int dilation[] = { 1, 1 };
         return _depthwise_conv<true,2>(filter, bias, output, input, padding, stride, dilation);
