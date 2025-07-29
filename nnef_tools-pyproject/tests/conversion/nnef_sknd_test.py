@@ -1079,7 +1079,7 @@ class TestCases(TestEnv):
            }
            """
 
-        self._test_conversion('pad_reflect', code, execute=False)
+        self._test_conversion('pad_reflect', code)
 
     def test_pad_symmetric(self):
         code = """
@@ -1090,7 +1090,7 @@ class TestCases(TestEnv):
            }
            """
 
-        self._test_conversion('pad_symmetric', code, execute=False)
+        self._test_conversion('pad_symmetric', code)
 
     def test_slice(self):
         code = """
