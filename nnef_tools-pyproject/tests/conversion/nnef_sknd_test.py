@@ -112,7 +112,7 @@ class TestEnv(sknd_test.TestEnv):
         with nnef.Session(filename, lowered=TestEnv._DecomposedForExecution) as session:
             return session(*inputs)
 
-    def _test_conversion(self, name, code, epsilon=1e-5, input_range=None, execute=True):
+    def _test_conversion(self, name, code, epsilon=1e-5, input_range=None, execute=True, compile=True):
         path = self._output_folder + name + '.nnef'
         if not os.path.exists(path):
             os.makedirs(path)
@@ -134,7 +134,7 @@ class TestEnv(sknd_test.TestEnv):
                 with open(filename, 'wb') as file:
                     nnef.write_tensor(file, data)
 
-        self._test_conversion_from_file(path, epsilon=epsilon, input_range=input_range, execute=execute)
+        self._test_conversion_from_file(path, epsilon=epsilon, input_range=input_range, execute=execute, compile=compile)
 
     def _test_unary(self, name, dtype='scalar', epsilon=1e-5, input_range=None):
         code = """

@@ -81,11 +81,12 @@ class TestEnv(unittest.TestCase):
             lo, hi = range if range else (0, 100)
             return np.random.randint(low=lo, high=hi, size=shape, dtype=dtype)
 
-    def _test_conversion_from_file(self, filename, epsilon=1e-5, input_shape=None, input_range=None, execute=True):
+    def _test_conversion_from_file(self, filename, epsilon=1e-5, input_shape=None, input_range=None, execute=True, compile=True):
         self._convert_to_sknd(filename, input_shape=input_shape)
 
         if not self._execute or not execute:
-            assert self._compile_sknd_model(filename + '.nnef2') is not None
+            if compile:
+                assert self._compile_sknd_model(filename + '.nnef2') is not None
             return
 
         original_outputs = self._exec_orig_model(filename, input_shape=input_shape, input_range=input_range)
