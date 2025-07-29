@@ -414,4 +414,13 @@ _Transforms = Converter.unpack_transforms({
             inputs='!I[0]',
             outputs='!O[0]',
         ),
+    ('avg_roi_pool', 'max_roi_pool'):
+        Transform(
+            type=('image.avg_roi_pool', 'image.max_roi_pool'),
+            inputs=('!I[0]', '!I[1]', '!I[2]'),
+            outputs='!O[0]',
+            attribs={
+                'output_size': '!output_size',
+            },
+        ),
 })

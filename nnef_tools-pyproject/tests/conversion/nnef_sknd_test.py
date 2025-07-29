@@ -1132,3 +1132,29 @@ class TestCases(TestEnv):
            """
 
         self._test_conversion('cast', code)
+
+    def test_avg_roi_pool(self):
+        code = """
+           graph G(input, rois, index) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               rois = external<scalar>(shape = [8, 4]);
+               index = external<integer>(shape = [8]);
+               output = avg_roi_pool(input, rois, index, output_size = [16, 16]);
+           }
+           """
+
+        self._test_conversion('avg_roi_pool', code, execute=False, compile=False)
+
+    def test_max_roi_pool(self):
+        code = """
+           graph G(input, rois, index) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               rois = external<scalar>(shape = [8, 4]);
+               index = external<integer>(shape = [8]);
+               output = max_roi_pool(input, rois, index, output_size = [16, 16]);
+           }
+           """
+
+        self._test_conversion('max_roi_pool', code, execute=False, compile=False)

@@ -385,11 +385,11 @@ operator max_roi_pool {
     }
     @input {
         input: real[b,c,s..(d)];
-        rois: real[m,2 * d];
-        index: int[m];
+        rois: real[n,2 * d];
+        index: int[n];
     }
     @output {
-        output: real[b,c,output_size..];
+        output: real[n,c,output_size..];
     }
 }
 
@@ -399,10 +399,10 @@ operator avg_roi_pool {
     }
     @input {
         input: real[b,c,s..(d)];
-        rois: real[m,2 * d];
-        index: int[m];
+        rois: real[n,2 * d];
+        index: int[n];
     }
     @output {
-        output: real[b,c,output_size..];
+        output: real[n,c,output_size..];
     }
 }
