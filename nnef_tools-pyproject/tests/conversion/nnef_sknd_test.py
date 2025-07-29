@@ -59,6 +59,9 @@ class TestEnv(sknd_test.TestEnv):
         'l1_normalization',
         'l2_normalization',
         'batch_normalization',
+        'nearest_downsample',
+        'nearest_upsample',
+        'area_downsample',
     ]
 
     def setUp(self) -> None:
@@ -850,3 +853,91 @@ class TestCases(TestEnv):
         """
 
         self._test_conversion('local_contrast_norm', code)
+
+    def test_nearest_downsample(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = nearest_downsample(input, factor = [2, 2]);
+           }
+           """
+
+        self._test_conversion('nearest_downsample', code)
+
+    def test_nearest_upsample(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = nearest_upsample(input, factor = [2, 2]);
+           }
+           """
+
+        self._test_conversion('nearest_upsample', code)
+
+    def test_area_downsample(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = area_downsample(input, factor = [2, 2]);
+           }
+           """
+
+        self._test_conversion('area_downsample', code)
+
+    def test_linear_upsample_symmetric(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = multilinear_upsample(input, factor = [2, 2], method = 'symmetric', border = 'constant');
+           }
+           """
+
+        self._test_conversion('linear_upsample_symmetric', code)
+
+    def test_linear_upsample_symmetric_replicate_border(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = multilinear_upsample(input, factor = [2, 2], method = 'symmetric', border = 'replicate');
+           }
+           """
+
+        self._test_conversion('linear_upsample_symmetric_replicate_border', code)
+
+    def test_linear_upsample_asymmetric(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = multilinear_upsample(input, factor = [2, 2], method = 'asymmetric', border = 'constant');
+           }
+           """
+
+        self._test_conversion('linear_upsample_asymmetric', code)
+
+    def test_linear_upsample_asymmetric_replicate_border(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = multilinear_upsample(input, factor = [2, 2], method = 'asymmetric', border = 'replicate');
+           }
+           """
+
+        self._test_conversion('linear_upsample_asymmetric_replicate_border', code)
+
+    def test_linear_upsample_aligned(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = multilinear_upsample(input, factor = [2, 2], method = 'aligned', border = 'replicate');
+           }
+           """
+
+        self._test_conversion('linear_upsample_aligned', code, execute=False)

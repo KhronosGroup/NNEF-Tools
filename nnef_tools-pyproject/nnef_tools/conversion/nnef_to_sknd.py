@@ -275,4 +275,36 @@ _Transforms = Converter.unpack_transforms({
                 'epsilon': '!epsilon',
             },
         ),
+    ('nearest_downsample', 'nearest_upsample', 'area_downsample'):
+        Transform(
+            type=('image.nearest_downsample', 'image.nearest_upsample', 'image.area_downsample'),
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'axes': '!list(range(2, I[0].rank))',
+                'factor': '!factor',
+            },
+        ),
+    'multilinear_upsample':
+        Transform(
+            type='!"image.linear_resize" if is_resize else "image.linear_upsample"',
+            cond={
+                '!border == "constant" || border == "replicate"': 'border must be "constant" or "replicate"',
+                '!method != "aligned" || border == "replicate"': 'border must be "replicate" if method is "aligned"'
+            },
+            using={
+                'is_resize': '!method == "aligned"',
+                'is_upsample': '!method != "aligned"',
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'axes': '!list(range(2, I[0].rank))',
+                'size': '![s * f for s, f in zip(I[0].shape[2:], factor)] if is_resize else None',
+                'factor': '!factor if is_upsample else None',
+                'symmetric': '!method == "symmetric" if is_upsample else None',
+                'replicate_border': '!border == "replicate" if is_upsample else None',
+                'coordinate_transform': '!method.upper() if is_resize else None',
+            },
+        ),
 })
