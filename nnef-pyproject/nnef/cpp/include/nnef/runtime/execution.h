@@ -443,6 +443,14 @@ namespace nnef { namespace rt
         {
             pad_replicate<T>(input_view, output_view, paddingShape.data());
         }
+        else if ( border == "reflect" )
+        {
+            pad_reflect<T>(input_view, output_view, paddingShape.data());
+        }
+        else if ( border == "reflect-even" )
+        {
+            pad_reflect_even<T>(input_view, output_view, paddingShape.data());
+        }
         else
         {
             throw std::runtime_error("operation not implemented: pad with border == '" + border + "'");
