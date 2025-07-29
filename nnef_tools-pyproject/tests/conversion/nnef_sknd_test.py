@@ -33,7 +33,7 @@ class TestEnv(sknd_test.TestEnv):
 
     _NumpyDtype = {
         'scalar': np.float32,
-        'integer': np.int64,
+        'integer': np.int32,
         'logical': np.bool_,
     }
 
@@ -941,3 +941,194 @@ class TestCases(TestEnv):
            """
 
         self._test_conversion('linear_upsample_aligned', code, execute=False)
+
+    def test_reshape(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 10, 10]);
+               output = reshape(input, axis_start = 1, shape = [1600]);
+           }
+           """
+
+        self._test_conversion('reshape', code)
+
+    def test_transpose(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = transpose(input, axes = [0, 2, 3, 1]);
+           }
+           """
+
+        self._test_conversion('transpose', code)
+
+    def test_squeeze(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [4, 1, 32, 1, 32]);
+               output = squeeze(input, axes = [1, 3]);
+           }
+           """
+
+        self._test_conversion('squeeze', code)
+
+    def test_unsqueeze(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [4, 32, 32]);
+               output = unsqueeze(input, axes = [1, 3]);
+           }
+           """
+
+        self._test_conversion('unsqueeze', code)
+
+    def test_concat(self):
+        code = """
+           graph G(input1, input2) -> (output)
+           {
+               input1 = external<scalar>(shape = [1, 8, 32, 32]);
+               input2 = external<scalar>(shape = [1, 8, 32, 32]);
+               output = concat([input1, input2], axis = 1);
+           }
+           """
+
+        self._test_conversion('concat', code)
+
+    def test_split(self):
+        code = """
+           graph G(input) -> (output1, output2)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               [output1, output2] = split(input, axis = 1, ratios = [1, 1]);
+           }
+           """
+
+        self._test_conversion('split', code)
+
+    def test_stack(self):
+        code = """
+           graph G(input1, input2, input3) -> (output)
+           {
+               input1 = external<scalar>(shape = [4, 32, 32]);
+               input2 = external<scalar>(shape = [4, 32, 32]);
+               input3 = external<scalar>(shape = [4, 32, 32]);
+               output = concat([input1, input2, input3], axis = 1);
+           }
+           """
+
+        self._test_conversion('stack', code)
+
+    def test_unstack(self):
+        code = """
+           graph G(input) -> (output1, output2, output3)
+           {
+               input = external<scalar>(shape = [4, 3, 32, 32]);
+               [output1, output2, output3] = unstack(input, axis = 1);
+           }
+           """
+
+        self._test_conversion('unstack', code)
+
+    def test_pad(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = pad(input, padding = [(0, 0), (0, 0), (1, 1), (1, 1)]);
+           }
+           """
+
+        self._test_conversion('pad', code)
+
+    def test_pad_constant(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = pad(input, padding = [(0, 0), (0, 0), (1, 1), (1, 1)], value = 42.0);
+           }
+           """
+
+        self._test_conversion('pad_constant', code)
+
+    def test_pad_replicate(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = pad(input, padding = [(0, 0), (0, 0), (1, 1), (1, 1)], border = "replicate");
+           }
+           """
+
+        self._test_conversion('pad_replicate', code)
+
+    def test_pad_reflect(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = pad(input, padding = [(0, 0), (0, 0), (1, 1), (1, 1)], border = "reflect");
+           }
+           """
+
+        self._test_conversion('pad_reflect', code, execute=False)
+
+    def test_pad_symmetric(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = pad(input, padding = [(0, 0), (0, 0), (1, 1), (1, 1)], border = "reflect-even");
+           }
+           """
+
+        self._test_conversion('pad_symmetric', code, execute=False)
+
+    def test_slice(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = slice(input, axes = [2, 3], begin = [1, 1], end = [-1, -1]);
+           }
+           """
+
+        self._test_conversion('slice', code)
+
+    def test_tile(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = tile(input, repeats = [1, 2, 4, 4]);
+           }
+           """
+
+        self._test_conversion('tile', code)
+
+    def test_gather(self):
+        code = """
+           graph G(input, indices) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               indices = external<integer>(shape = [8]);
+               output = gather(input, indices, axis = 1);
+           }
+           """
+
+        self._test_conversion('gather', code, input_range=[(1, 100), (0, 15)])
+
+    def test_cast(self):
+        code = """
+           graph G(input) -> (output)
+           {
+               input = external<scalar>(shape = [1, 16, 32, 32]);
+               output = cast<integer>(input);
+           }
+           """
+
+        self._test_conversion('cast', code)

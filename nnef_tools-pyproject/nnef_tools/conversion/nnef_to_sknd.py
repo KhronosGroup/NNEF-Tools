@@ -307,4 +307,111 @@ _Transforms = Converter.unpack_transforms({
                 'coordinate_transform': '!method.upper() if as_resize else None',
             },
         ),
+    'reshape':
+        Transform(
+            type='layout.reshape',
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'shape': '!shape',
+                'axis': '!axis_start if axis_start != 0 else None',
+                'rank': '!axis_count if axis_count != -1 else None',
+            },
+        ),
+    'transpose':
+        Transform(
+            type='layout.transpose',
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'perm': '!axes',
+            },
+        ),
+    ('squeeze', 'unsqueeze'):
+        Transform(
+            type=('layout.squeeze', 'layout.unsqueeze'),
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'axes': '!axes',
+            },
+        ),
+    'concat':
+        Transform(
+            type='layout.concat',
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'axis': '!axis',
+            },
+        ),
+    'split':
+        Transform(
+            type='layout.split',
+            using={
+                'unit': '!int(I[0].shape[axis] / sum(ratios))',
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'axis': '!axis',
+                'sizes': '![r * unit for r in ratios]',
+            },
+        ),
+    ('stack', 'unstack'):
+        Transform(
+            type=('layout.stack', 'layout.unstack'),
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'axis': '!axis',
+            },
+        ),
+    'pad':
+        Transform(
+            type='layout.pad',
+            inputs='!I[0] if value == 0 else (I[0], as_tensor(value, I[0].dtype))',
+            outputs='!O[0]',
+            attribs={
+                'padding': '!convert_padding(padding)',
+                'method': '!"SYMMETRIC" if border == "reflect-even" else border.upper()',
+            },
+        ),
+    'slice':
+        Transform(
+            type='layout.slice',
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'axes': '!axes',
+                'begin': '!begin',
+                'end': '!end',
+                'stride': '!stride',
+            },
+        ),
+    'tile':
+        Transform(
+            type='layout.tile',
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'repeats': '!repeats',
+            },
+        ),
+    'gather':
+        Transform(
+            type='layout.gather',
+            inputs=('!I[0]', '!I[1]'),
+            outputs='!O[0]',
+            attribs={
+                'axis': '!axis',
+            },
+        ),
+    'cast':
+        Transform(
+            type='layout.cast',
+            dtypes={'R': '!O[0].dtype'},
+            inputs='!I[0]',
+            outputs='!O[0]',
+        ),
 })
