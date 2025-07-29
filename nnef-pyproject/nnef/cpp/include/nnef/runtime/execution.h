@@ -657,22 +657,28 @@ namespace nnef { namespace rt
         }
         else if ( border == "replicate" )
         {
-            Shape input_padding = { 0, 0 };
-            input_padding.insert(input_padding.end(), d, 1);
+            Shape input_padding(input_view.rank, 0);
+            for ( size_t i = 2; i < input_view.rank; ++i )
+            {
+                input_padding[i] = 1;
+            }
             
-            Shape output_padding = { 0, 0 };
-            output_padding.insert(output_padding.end(), d, 2);
+            Shape output_padding(output_view.rank, 0);
+            for ( size_t i = 2; i < output_view.rank; ++i )
+            {
+                output_padding[i] = factor[i-2].integer();
+            }
             
             Shape padded_input_shape(input_view.shape, input_view.shape + input_view.rank);
             for ( size_t i = 2; i < padded_input_shape.size(); ++i )
             {
-                padded_input_shape[i] += (method == "symmetric" ? 2 : 1);
+                padded_input_shape[i] += 1 + 1;
             }
             
             Shape padded_output_shape(output_view.shape, output_view.shape + output_view.rank);
             for ( size_t i = 2; i < padded_output_shape.size(); ++i )
             {
-                padded_output_shape[i] += (method == "symmetric" ? 4 : 2);
+                padded_output_shape[i] += 2 * factor[i-2].integer();
             }
             
             Tensor padded_input = _make_tensor(padded_input_shape.size(), padded_input_shape.data(), sizeof(T));
