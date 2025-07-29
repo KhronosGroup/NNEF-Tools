@@ -751,6 +751,60 @@ namespace nnef { namespace rt
             at<D>(output, output_index) = at<D>(input, input_index);
         });
     }
+
+    template<size_t D, typename T>
+    void _pad_reflect( tensor_view<const T> input, tensor_view<T> output, const int padding[] )
+    {
+        int input_index[D];
+        nd_loop<D,int>(output.shape, [&]( const int output_index[] )
+        {
+            for_n<D>([&]( const size_t k )
+            {
+                auto index = output_index[k] - padding[k];
+                if ( index < 0 )
+                {
+                    input_index[k] = -index;
+                }
+                else if ( index >= input.shape[k] )
+                {
+                    input_index[k] = 2 * (input.shape[k] - 1) - index;
+                }
+                else
+                {
+                    input_index[k] = index;
+                }
+            });
+            
+            at<D>(output, output_index) = at<D>(input, input_index);
+        });
+    }
+
+    template<size_t D, typename T>
+    void _pad_reflect_even( tensor_view<const T> input, tensor_view<T> output, const int padding[] )
+    {
+        int input_index[D];
+        nd_loop<D,int>(output.shape, [&]( const int output_index[] )
+        {
+            for_n<D>([&]( const size_t k )
+            {
+                auto index = output_index[k] - padding[k];
+                if ( index < 0 )
+                {
+                    input_index[k] = -index - 1;
+                }
+                else if ( index >= input.shape[k] )
+                {
+                    input_index[k] = 2 * (input.shape[k] - 1) - index + 1;
+                }
+                else
+                {
+                    input_index[k] = index;
+                }
+            });
+            
+            at<D>(output, output_index) = at<D>(input, input_index);
+        });
+    }
     
     template<typename T>
     void pad_constant( tensor_view<const T> input, tensor_view<T> output, const int padding[], const T value )
@@ -776,6 +830,34 @@ namespace nnef { namespace rt
             _pad_replicate<3,T>,
             _pad_replicate<4,T>,
             _pad_replicate<5,T>,
+        };
+        return funcs[input.rank - 1](input, output, padding);
+    }
+
+    template<typename T>
+    void pad_reflect( tensor_view<const T> input, tensor_view<T> output, const int padding[] )
+    {
+        static decltype(&_pad_reflect<1,T>) funcs[] =
+        {
+            _pad_reflect<1,T>,
+            _pad_reflect<2,T>,
+            _pad_reflect<3,T>,
+            _pad_reflect<4,T>,
+            _pad_reflect<5,T>,
+        };
+        return funcs[input.rank - 1](input, output, padding);
+    }
+
+    template<typename T>
+    void pad_reflect_even( tensor_view<const T> input, tensor_view<T> output, const int padding[] )
+    {
+        static decltype(&_pad_reflect_even<1,T>) funcs[] =
+        {
+            _pad_reflect_even<1,T>,
+            _pad_reflect_even<2,T>,
+            _pad_reflect_even<3,T>,
+            _pad_reflect_even<4,T>,
+            _pad_reflect_even<5,T>,
         };
         return funcs[input.rank - 1](input, output, padding);
     }
