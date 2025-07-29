@@ -362,7 +362,7 @@ class Converter:
                 (isinstance(value, list) and all(isinstance(item, Tensor) for item in value)):
             raise ConversionError("While converting operator '{name}' of type '{op_type}', {kind} '{key}' must result in a tensor, "
                                   "but found {value_type}"
-                                  .format(kind=kind, key=key, name=op_name, op_type=op_type, value_type=type(value)))
+                                  .format(kind=kind, key=key, name=op_name or '', op_type=op_type, value_type=type(value)))
 
     def _read_constant(self, tensor, type, flat):
         raise NotImplementedError()
