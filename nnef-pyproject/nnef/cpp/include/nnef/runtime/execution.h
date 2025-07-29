@@ -65,6 +65,12 @@ namespace nnef { namespace rt
         return value.kind() == Value::Identifier ? _tensor_view<T>(tensors.at(value.identifier())) : _tensor_view<T>(value.get<T>());
     }
 
+    const std::string& _literal_dtype( const Value& value )
+    {
+        static const std::string dtypes[] = { "", "integer", "scalar", "logical", "string" };
+        return dtypes[(size_t)value.kind()];
+    }
+
 
     inline void check_supported_rank( const std::string& op, const size_t rank, const size_t max )
     {
@@ -525,8 +531,8 @@ namespace nnef { namespace rt
     {
         auto& input = op.inputs.get("input");
         auto& output = op.outputs.get("output");
-
-        auto& input_dtype = tensors.at(input.identifier()).dtype;
+        
+        auto& input_dtype = input.kind() == Value::Identifier ? tensors.at(input.identifier()).dtype : _literal_dtype(input);
         auto output_view = _tensor_view<T>(output, tensors);
         
         if ( input_dtype == "scalar" )
