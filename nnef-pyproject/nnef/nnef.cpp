@@ -404,6 +404,11 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
         return NULL;
     }
 
+    if ( !stdlib )
+    {
+        stdlib = "";
+    }
+
     std::ifstream gfs, qfs;
     std::stringstream gss, qss;
 
@@ -440,12 +445,6 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
     std::istream& gis = isFile ? (std::istream&)gfs : (std::istream&)gss;
     std::istream& qis = isFile ? (std::istream&)qfs : (std::istream&)qss;
     
-    std::string stdlib_source;
-    if ( stdlib )
-    {
-        stdlib_source = stdlib;
-    }
-    
     std::set<std::string> lowered;
     if ( lower )
     {
@@ -462,7 +461,7 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
         }
     }
     
-    nnef::CompParser parser(stdlib_source, lowered);
+    nnef::CompParser parser(stdlib, lowered);
 
     GraphCallback callback(qis, isFile ? quant : "quantization");
 
@@ -512,6 +511,11 @@ static PyObject* createSession( PyObject* self, PyObject* args, PyObject* kwargs
         return NULL;
     }
 
+    if ( !stdlib )
+    {
+        stdlib = "";
+    }
+
     std::set<std::string> lowered;
     if ( lower )
     {
@@ -531,7 +535,7 @@ static PyObject* createSession( PyObject* self, PyObject* args, PyObject* kwargs
     std::unique_ptr<nnef::Graph> graph(new nnef::Graph());
     std::string error;
 
-    if ( !nnef::load_graph(path, *graph, error, stdlib ?: "", lowered) )
+    if ( !nnef::load_graph(path, *graph, error, stdlib, lowered) )
     {
         PyErr_SetString(PyExc_ValueError, error.c_str());
         return NULL;
