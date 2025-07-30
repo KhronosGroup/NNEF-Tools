@@ -115,6 +115,11 @@ def get_converter(input_format, output_format, io_transforms, custom_transforms,
                          custom_transforms=custom_transforms,
                          custom_functions=custom_functions,
                          mirror_unsupported=mirror_unsupported)
+    elif input_format == 'nnef' and output_format == 'sknd':
+        from .conversion.nnef_to_sknd import Converter
+        return Converter(custom_transforms=custom_transforms,
+                         custom_functions=custom_functions,
+                         mirror_unsupported=mirror_unsupported)
     else:
         return None
 
