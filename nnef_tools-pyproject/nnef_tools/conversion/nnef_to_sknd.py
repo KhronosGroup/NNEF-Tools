@@ -99,6 +99,7 @@ _Transforms = Converter.unpack_transforms({
                 'dilation': '!dilation if len(dilation) != 0 else None',
                 'groups': '!groups',
                 'output_size': '!output_shape[2:] if transposed and len(output_shape) != 0 else None',
+                'ceil_mode': '!padding == [] if not transposed else None',
             },
         ),
     'box':
@@ -116,7 +117,8 @@ _Transforms = Converter.unpack_transforms({
                 'stride': '!stride if len(stride) != 0 else None',
                 'dilation': '!dilation if len(dilation) != 0 else None',
                 'axes': '!list(range(I[0].rank))',
-                'ignore_border': '!border == "ignore" if normalize else None'
+                'ignore_border': '!border == "ignore" if normalize else None',
+                'ceil_mode': '!padding == []',
             },
         ),
     ('max_pool', 'avg_pool', 'rms_pool'):
@@ -134,7 +136,8 @@ _Transforms = Converter.unpack_transforms({
                 'stride': '!stride if len(stride) != 0 else None',
                 'dilation': '!dilation if len(dilation) != 0 else None',
                 'axes': '!list(range(I[0].rank))',
-                'ignore_border': '!border == "ignore" if _type_ == "avg_pool" or _type_ == "rms_pool" else None'
+                'ignore_border': '!border == "ignore" if _type_ == "avg_pool" or _type_ == "rms_pool" else None',
+                'ceil_mode': '!padding == []',
             },
         ),
     ('copy', 'neg', 'rcp', 'sqr', 'sqrt', 'rsqr', 'rsqrt',
@@ -327,12 +330,15 @@ _Transforms = Converter.unpack_transforms({
     'reshape':
         Transform(
             type='layout.reshape',
+            using={
+                'leading': '!leading_zeros(shape)',
+            },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
-                'shape': '!shape',
-                'axis': '!axis_start if axis_start != 0 else None',
-                'rank': '!axis_count if axis_count != -1 else None',
+                'shape': '!shape[leading:]',
+                'axis': '!axis_start + leading if axis_start + leading != 0 else None',
+                'rank': '!axis_count - leading if axis_count != -1 else None',
             },
         ),
     'transpose':

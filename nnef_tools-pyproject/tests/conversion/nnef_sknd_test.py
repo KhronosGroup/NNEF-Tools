@@ -17,6 +17,7 @@ from nnef_tools.io import skriptnd as skriptnd_io
 from nnef_tools.conversion import nnef_to_sknd
 from nnef_tools.optimization import skriptnd_optimizer as sknd_optimizer
 from nnef_tools.optimization import nnef_optimizer
+import unittest
 import sknd_test
 import numpy as np
 import nnef
@@ -66,6 +67,7 @@ class TestEnv(sknd_test.TestEnv):
         'add_n',
         'min_max_linear_quantize',
         'zero_point_linear_quantize',
+        'softmax',
     ]
 
     def setUp(self) -> None:
@@ -1208,3 +1210,44 @@ class TestCases(TestEnv):
            """
 
         self._test_conversion('zero_point_linear_quant', code, input_range=(0.0, 1.0))
+
+
+@unittest.skipIf(TestEnv._network_folder is None or not os.path.isdir(TestEnv._network_folder),
+                 "no network test folder provided")
+class NetworkTestCases(TestEnv):
+
+    def test_alexnet(self):
+        self._test_conversion_from_file(self._network_folder + 'alexnet.nnef')
+
+    def test_googlenet(self):
+        self._test_conversion_from_file(self._network_folder + 'googlenet.nnef')
+
+    def test_inception_v1(self):
+        self._test_conversion_from_file(self._network_folder + 'inception_v1.nnef')
+
+    def test_inception_v2(self):
+        self._test_conversion_from_file(self._network_folder + 'inception_v2.nnef')
+
+    def test_resnet_v1(self):
+        self._test_conversion_from_file(self._network_folder + 'resnet_v1.nnef')
+
+    def test_resnet_v2(self):
+        self._test_conversion_from_file(self._network_folder + 'resnet_v2.nnef')
+
+    def test_inception_resnet(self):
+        self._test_conversion_from_file(self._network_folder + 'inception_resnet.nnef')
+
+    def test_mobilenet_v1(self):
+        self._test_conversion_from_file(self._network_folder + 'mobilenet_v1.nnef')
+
+    def test_mobilenet_v2(self):
+        self._test_conversion_from_file(self._network_folder + 'mobilenet_v2.nnef')
+
+    def test_squeezenet(self):
+        self._test_conversion_from_file(self._network_folder + 'squeezenet.nnef')
+
+    def test_shufflenet(self):
+        self._test_conversion_from_file(self._network_folder + 'shufflenet.nnef')
+
+    def test_nasnet(self):
+        self._test_conversion_from_file(self._network_folder + 'nasnet.nnef')
