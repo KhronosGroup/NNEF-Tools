@@ -31,7 +31,7 @@ _DtypeToNumpy = {
 
 def _make_constant_tensor(graph, value):
     value = types.to_numpy(value)
-    return Tensor(graph=graph, shape=(), dtype=value.dtype.type, data=value)
+    return Tensor(graph=graph, shape=(), dtype=value.dtype.type, data=value, variable=False)
 
 
 def _make_tensor(graph, nnef_tensor):
