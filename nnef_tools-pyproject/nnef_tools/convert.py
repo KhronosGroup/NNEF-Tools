@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from model.utils import remove_dynamic, remove_unreachables
-from skriptnd import Expr
+from .model.utils import remove_dynamic, remove_unreachables
 from .conversion import Converter, ConversionError
+from skriptnd import Expr
 import numpy as np
 import importlib
 import argparse
