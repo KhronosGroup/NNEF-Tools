@@ -322,7 +322,7 @@ DtypeFromNumpy = {
 }
 
 
-def read_model(path, attribs=None, atomic=None, unroll=None):
+def read_model(path, attribs=None, atomic=None, unroll=None, init_data=True):
     if not os.path.isfile(path) and not os.path.isdir(path):
         raise FileNotFoundError("Path '{}' does not exist".format(path))
 
@@ -331,21 +331,21 @@ def read_model(path, attribs=None, atomic=None, unroll=None):
         path += '/'
 
     model = parse_file(path, attribs=attribs, atomic=atomic, unroll=unroll)
-    if model:
+    if model and init_data:
         _init_tensor_data(model.tensors, path if isdir else None)
 
     return model
 
 
-def scan_model(source, attribs=None, atomic=None, unroll=None):
+def scan_model(source, attribs=None, atomic=None, unroll=None, init_data=True):
     model = parse_string(source, attribs=attribs, atomic=atomic, unroll=unroll)
-    if model:
+    if model and init_data:
         _init_tensor_data(model.tensors, None)
 
     return model
 
 
-def write_model(model, path, operators=None, imports=None, inline_subgraphs=False):
+def write_model(model, path, operators=None, imports=None, inline_subgraphs=False, include_variables=True):
     imported = {_split_module_name(op.name) for graph in model.graphs for op in graph.operations}
     if imports:
         imported.update(imports)
@@ -368,15 +368,16 @@ def write_model(model, path, operators=None, imports=None, inline_subgraphs=Fals
 
         print_model(model, file, inline_subgraphs=inline_subgraphs, module='main')
 
-    module_scope = 'main.'
-    for i, graph in enumerate(model.graphs):
-        graph_name = graph.name if graph.name.startswith(module_scope) else module_scope + graph.name
-        block_scope = graph_name + '.'
-        for tensor in graph.variables:
-            name = tensor.name if tensor.name.startswith(block_scope) else block_scope + valid_id(tensor.name)
-            variable_path = os.path.join(path, name + '.dat')
-            with open(variable_path, 'wb') as variable_file:
-                write_tensor(variable_file, tensor.value)
+    if include_variables:
+        module_scope = 'main.'
+        for i, graph in enumerate(model.graphs):
+            graph_name = graph.name if graph.name.startswith(module_scope) else module_scope + graph.name
+            block_scope = graph_name + '.'
+            for tensor in graph.variables:
+                name = tensor.name if tensor.name.startswith(block_scope) else block_scope + valid_id(tensor.name)
+                variable_path = os.path.join(path, name + '.dat')
+                with open(variable_path, 'wb') as variable_file:
+                    write_tensor(variable_file, tensor.value)
 
 
 def _init_tensor_data(tensors, path):
@@ -394,7 +395,7 @@ def _init_tensor_data(tensors, path):
                 tensor.value = data
             else:
                 tensor.value = np.full(tensor.shape, dtype=DtypeToNumpy[tensor.dtype],
-                                       fill_value='' if tensor.dtype == Dtype.Str else 0, )
+                                       fill_value='' if tensor.dtype == Dtype.Str else 0)
         elif tensor.is_constant:
             if isinstance(tensor.value, sknd.ListExpr):
                 tensor.value = np.array(tensor.value.items, dtype=DtypeToNumpy[tensor.dtype]).reshape(tensor.shape)

@@ -87,8 +87,8 @@ class Reader(object):
     def __init__(self, atomic=None):
         self._atomic = atomic
 
-    def __call__(self, filename, attribs=None):
-        sknd_model = sknd.read_model(filename, atomic=self._atomic, attribs=attribs)
+    def __call__(self, filename, attribs=None, init_data=True):
+        sknd_model = sknd.read_model(filename, atomic=self._atomic, attribs=attribs, init_data=init_data)
         if sknd_model is None:
             raise IOError('could not read model')
         return _build_model(sknd_model)

@@ -116,7 +116,7 @@ class Writer(object):
         self._compression = compression
         self._inline_subgraphs = inline_subgraphs
 
-    def __call__(self, model, path):
+    def __call__(self, model, path, include_variables=True):
         folder = None
         try:
             if self._compression is not None:
@@ -133,7 +133,7 @@ class Writer(object):
 
             sknd_model = _build_model(model)
             sknd.write_model(sknd_model, folder, operators=operators, imports=self._imports,
-                             inline_subgraphs=self._inline_subgraphs)
+                             inline_subgraphs=self._inline_subgraphs, include_variables=include_variables)
         finally:
             if self._compression is not None and folder:
                 compress(folder, path + '.tgz', compression_level=self._compression)
