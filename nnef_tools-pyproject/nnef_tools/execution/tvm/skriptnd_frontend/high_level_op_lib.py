@@ -893,16 +893,33 @@ class convert_map:
         return conv
 
     def nn_max_pool(self, input, attribs):
-        axes = attribs.ts_attrs["axes"]     # todo!!
+        axes = attribs.ts_attrs["axes"]
         size = attribs.ts_attrs["size"]
         stride = attribs.ts_attrs["stride"]
         dilation = attribs.ts_attrs["dilation"]
         padding = attribs.ts_attrs["padding"]
         padding_align = attribs.ts_attrs["padding_align"]
         ceil_mode = attribs.ts_attrs["ceil_mode"]
-        ignore_border = attribs.ts_attrs["ignore_border"]
-
         ndim = input.struct_info.ndim - 2
+
+        if len(axes) != ndim:
+            if len(axes) - 2 != ndim:
+                raise UnsupportedAttr("max pooling", "axes", axes)
+            # check attribs as batch and channel axes are not supported
+            if not all(s == 1 for s in size[:2]):
+                raise UnsupportedAttr("max pooling", "size", size)
+            if not all(s == 1 for s in stride[:2]):
+                raise UnsupportedAttr("max pooling", "stride", stride)
+            if not all(d == 1 for d in dilation[:2]):
+                raise UnsupportedAttr("max pooling", "dilation", dilation)
+            if not all(p == 0 for p in padding[:2] + padding[2 + ndim: 4 + ndim]):
+                raise UnsupportedAttr("max pooling", "padding", padding)
+
+            size = size[2:]
+            stride = stride[2:]
+            dilation = dilation[2:]
+            padding = padding[2: 2 + ndim] + padding[4 + ndim:]
+
 
         try:
             op = getattr(_op.nn, f"max_pool{ndim}d")
@@ -918,7 +935,7 @@ class convert_map:
                                           padding_align,
                                           ceil_mode)
 
-        return op(  # TODO check attribs
+        return op(
             input,
             pool_size=size,
             strides=stride,
@@ -929,7 +946,7 @@ class convert_map:
         )
 
     def nn_avg_pool(self, input, attribs):
-        axes = attribs.ts_attrs["axes"]     # todo!!
+        axes = attribs.ts_attrs["axes"]
         size = attribs.ts_attrs["size"]
         stride = attribs.ts_attrs["stride"]
         dilation = attribs.ts_attrs["dilation"]
@@ -939,6 +956,25 @@ class convert_map:
         ceil_mode = attribs.ts_attrs["ceil_mode"]
 
         ndim = input.struct_info.ndim - 2
+
+        if len(axes) != ndim:
+            if len(axes) - 2 != ndim:
+                raise UnsupportedAttr("max pooling", "axes", axes)
+            # check attribs as batch and channel axes are not supported
+            if not all(s == 1 for s in size[:2]):
+                raise UnsupportedAttr("max pooling", "size", size)
+            if not all(s == 1 for s in stride[:2]):
+                raise UnsupportedAttr("max pooling", "stride", stride)
+            if not all(d == 1 for d in dilation[:2]):
+                raise UnsupportedAttr("max pooling", "dilation", dilation)
+            if not all(p == 0 for p in padding[:2] + padding[2 + ndim: 4 + ndim]):
+                raise UnsupportedAttr("max pooling", "padding", padding)
+
+            size = size[2:]
+            stride = stride[2:]
+            dilation = dilation[2:]
+            padding = padding[2: 2 + ndim] + padding[4 + ndim:]
+
 
         try:
             op = getattr(_op.nn, f"avg_pool{ndim}d")

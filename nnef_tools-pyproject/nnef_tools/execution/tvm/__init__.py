@@ -21,6 +21,21 @@ class VirtualMachine:
     def __init__(self, model, target=None, device=None):
         model = from_skriptnd(model)
         target = tvm.target.Target(target or 'llvm')
+        if target.get_target_device_type() != 1:
+            print("Target is not CPU / LLVM, trying compilation with DLight GPU binds")
+            import tvm.dlight as dl, tvm.relax as rx
+
+            with (target):
+                model = tvm.ir.transform.Sequential([
+                    rx.get_pipeline("zero"),
+                    dl.ApplyDefaultSchedule(  # pylint: disable=not-callable
+                        dl.gpu.Matmul(),
+                        dl.gpu.GEMV(),
+                        dl.gpu.Reduction(),
+                        dl.gpu.GeneralReduction(),
+                        dl.gpu.Fallback(), ),
+                ])(model)
+
         exe = tvm.compile(model, target=target)
         self.device = tvm.device(device) if device else tvm.cpu()
         self.vm = tvm.relax.VirtualMachine(exe, self.device)
