@@ -37,7 +37,11 @@ class VirtualMachine:
                 ])(model)
 
         exe = tvm.compile(model, target=target)
+
         self.device = tvm.device(device) if device else tvm.cpu()
+        if target.get_target_device_type() != 1 and self.device == tvm.cpu():
+            raise ValueError("Device must be specified for non-LLVM targets.")
+
         self.vm = tvm.relax.VirtualMachine(exe, self.device)
 
     def __call__(self, *inputs):
