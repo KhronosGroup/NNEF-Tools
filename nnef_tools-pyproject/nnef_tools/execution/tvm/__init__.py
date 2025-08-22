@@ -21,7 +21,7 @@ class VirtualMachine:
     def __init__(self, model, target=None, device=None):
         target = tvm.target.Target(target or 'llvm')
         if target.get_target_device_type() != tvm.runtime.Device.kDLCPU and device is None:
-            raise ValueError("Device must be specified for CPU targets.")
+            raise ValueError("Device must be specified for non-CPU targets.")
 
         model = from_skriptnd(model)
         model = self.addTransforms(model, target)
