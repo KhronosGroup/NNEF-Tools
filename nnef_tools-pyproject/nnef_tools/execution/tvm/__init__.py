@@ -19,29 +19,16 @@ import tvm
 class VirtualMachine:
 
     def __init__(self, model, target=None, device=None):
-        model = from_skriptnd(model)
         target = tvm.target.Target(target or 'llvm')
-        if target.get_target_device_type() != 1:
-            print("Target is not CPU / LLVM, trying compilation with DLight GPU binds")
-            import tvm.dlight as dl, tvm.relax as rx
+        if target.get_target_device_type() != tvm.runtime.Device.kDLCPU and device is None:
+            raise ValueError("Device must be specified for CPU targets.")
 
-            with (target):
-                model = tvm.ir.transform.Sequential([
-                    rx.get_pipeline("zero"),
-                    dl.ApplyDefaultSchedule(  # pylint: disable=not-callable
-                        dl.gpu.Matmul(),
-                        dl.gpu.GEMV(),
-                        dl.gpu.Reduction(),
-                        dl.gpu.GeneralReduction(),
-                        dl.gpu.Fallback(), ),
-                ])(model)
+        model = from_skriptnd(model)
+        model = self.addTransforms(model, target)
 
         exe = tvm.compile(model, target=target)
 
         self.device = tvm.device(device) if device else tvm.cpu()
-        if target.get_target_device_type() != 1 and self.device == tvm.cpu():
-            raise ValueError("Device must be specified for non-LLVM targets.")
-
         self.vm = tvm.relax.VirtualMachine(exe, self.device)
 
     def __call__(self, *inputs):
@@ -50,3 +37,16 @@ class VirtualMachine:
         if isinstance(tvm_output, tvm.nd.NDArray):
             tvm_output = (tvm_output,)
         return tuple(output.numpy() for output in tvm_output)
+
+    def addTransforms(self, model, target):
+        if target.get_target_device_type() != tvm.runtime.Device.kDLCPU:
+            import tvm.dlight as dl, tvm.relax as rx
+            with (target):
+                model = tvm.ir.transform.Sequential([
+                    rx.get_pipeline("zero"),
+                    dl.ApplyDefaultSchedule(  # pylint: disable=not-callable
+                        dl.gpu.Fallback(),
+                    ),
+                ])(model)
+
+        return model
