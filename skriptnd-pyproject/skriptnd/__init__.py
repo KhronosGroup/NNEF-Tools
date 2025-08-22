@@ -209,10 +209,10 @@ TensorPack.packed = property(lambda expr: True)
 Operation.constants = property(lambda op: (tensor for tensor in op.internals if tensor.is_constant))
 Operation.variables = property(lambda op: (tensor for tensor in op.internals if tensor.is_variable))
 
-Graph.variables = property(lambda block: (tensor for tensor in block.tensors if tensor.is_variable))
-Graph.constants = property(lambda block: (tensor for tensor in block.tensors if tensor.is_constant))
-Graph.activations = property(lambda block: (tensor for tensor in block.tensors if tensor.is_activation))
-Graph.intermediates = property(lambda block: (tensor for op in block.operations for tensor in _itemize(op.outputs)))
+Graph.variables = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_variable))
+Graph.constants = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_constant))
+Graph.activations = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_activation))
+Graph.intermediates = property(lambda graph: (tensor for op in graph.operations for tensor in _itemize(op.outputs)))
 
 Model.tensors = property(lambda model: (tensor for graph in model.graphs for tensor in graph.tensors))
 Model.packs = property(lambda model: (pack for graphs in model.graphs for pack in graphs.packs))
@@ -370,7 +370,7 @@ def write_model(model, path, operators=None, imports=None, inline_subgraphs=Fals
 
     if include_variables:
         module_scope = 'main.'
-        for i, graph in enumerate(model.graphs):
+        for graph in model.graphs:
             graph_name = graph.name if graph.name.startswith(module_scope) else module_scope + graph.name
             block_scope = graph_name + '.'
             for tensor in graph.variables:

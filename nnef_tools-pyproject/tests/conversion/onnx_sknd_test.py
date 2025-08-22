@@ -73,15 +73,15 @@ class TestEnv(sknd_test.TestEnv):
         onnx_model = self._onnx_reader(filename)
         if self._optimize:
             self._onnx_optimizer(onnx_model)
-        nnef_model = self._onnx_to_sknd_converter(onnx_model)
+        sknd_model = self._onnx_to_sknd_converter(onnx_model)
         if input_shape is not None:
-            self._set_max_input_shapes(nnef_model, input_shape)
+            self._set_max_input_shapes(sknd_model, input_shape)
         output_filename = filename + '.nnef2'
-        self._skriptnd_writer(nnef_model, output_filename)
+        self._skriptnd_writer(sknd_model, output_filename)
         if self._optimize:
-            nnef_model = self._skriptnd_reader(output_filename)
-            self._skriptnd_optimizer(nnef_model)
-            self._skriptnd_writer(nnef_model, output_filename)
+            sknd_model = self._skriptnd_reader(output_filename)
+            self._skriptnd_optimizer(sknd_model)
+            self._skriptnd_writer(sknd_model, output_filename)
 
     @staticmethod
     def _exec_orig_model(filename, input_shape=None, input_range=None):
