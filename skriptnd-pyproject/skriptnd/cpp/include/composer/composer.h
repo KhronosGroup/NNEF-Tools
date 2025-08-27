@@ -3628,7 +3628,12 @@ namespace sknd
                     {
                         return value.as_bool() ? 1 : 0;
                     }
-                    return value.as_int();
+                    auto int_value = value.as_int();
+                    if ( int_value < 0 )
+                    {
+                        return Error(count->position, "item rank must not be negative; found %d", (int)int_value);
+                    }
+                    return (size_t)int_value;
                 }
                 else
                 {
