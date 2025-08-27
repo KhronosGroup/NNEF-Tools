@@ -21,6 +21,7 @@
 #include "variant.h"
 #include "function.h"
 #include "tensorref.h"
+#include <cstdint>
 #include <optional>
 #include <sstream>
 #include <cassert>
