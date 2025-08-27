@@ -22,8 +22,7 @@ class TestEnv(unittest.TestCase):
     def _convert_to_sknd(self, filename, input_shape=None):
         raise NotImplementedError()
 
-    @staticmethod
-    def _exec_orig_model(filename, input_shape=None, input_range=None):
+    def _exec_orig_model(self, filename, input_shape=None, input_range=None):
         raise NotImplementedError()
 
     def _set_max_input_shapes(self, model, input_shape):
@@ -36,8 +35,7 @@ class TestEnv(unittest.TestCase):
             input.shape = tuple(s if s is not None else sknd.PlaceholderExpr(None, shape[i])
                                 for i, s in enumerate(input.shape))
 
-    @staticmethod
-    def _exec_sknd_model(path, input_shape=None, input_range=None):
+    def _exec_sknd_model(self, path, input_shape=None, input_range=None):
         np.random.seed(0)
 
         model = sknd.read_model(path)

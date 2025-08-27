@@ -76,8 +76,7 @@ class TestEnv(sknd_test.TestEnv):
             with open(filename, "wb") as file:
                 file.write(tflite_model)
 
-    @staticmethod
-    def _exec_orig_model(model_path, input_shape=None, input_range=None):
+    def _exec_orig_model(self, model_path, input_shape=None, input_range=None):
         np.random.seed(0)
 
         interpreter = tf.lite.Interpreter(model_path=model_path,

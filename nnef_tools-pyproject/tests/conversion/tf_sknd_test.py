@@ -104,8 +104,7 @@ class TestEnv(sknd_test.TestEnv):
         only_first_output = op.type.startswith('FusedBatchNorm')
         return op.outputs[:1] if only_first_output else op.outputs
 
-    @staticmethod
-    def _exec_orig_model(filename, input_shape=None, input_range=None):
+    def _exec_orig_model(self, filename, input_shape=None, input_range=None):
         np.random.seed(0)
 
         graph_def = TestEnv._load_graph_def(filename)

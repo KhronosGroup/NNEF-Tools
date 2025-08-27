@@ -97,8 +97,7 @@ class TestEnv(sknd_test.TestEnv):
             self._sknd_optimizer(sknd_model)
             self._sknd_writer(sknd_model, output_filename)
 
-    @staticmethod
-    def _exec_orig_model(filename, input_shape=None, input_range=None):
+    def _exec_orig_model(self, filename, input_shape=None, input_range=None):
         np.random.seed(0)
 
         graph = nnef.load_graph(filename, load_variables=False)

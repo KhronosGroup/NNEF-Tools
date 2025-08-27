@@ -83,8 +83,7 @@ class TestEnv(sknd_test.TestEnv):
             self._skriptnd_optimizer(sknd_model)
             self._skriptnd_writer(sknd_model, output_filename)
 
-    @staticmethod
-    def _exec_orig_model(filename, input_shape=None, input_range=None):
+    def _exec_orig_model(self, filename, input_shape=None, input_range=None):
         import onnxruntime
         np.random.seed(0)
 
