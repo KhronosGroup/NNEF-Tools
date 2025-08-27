@@ -772,7 +772,7 @@ def _hex_id(obj):
 
 
 def _recursive_itemize(arg):
-    if type(arg) is list or type(arg) is tuple:
+    if isinstance(arg, Sequence):
         for item in arg:
             yield from _recursive_itemize(item)
     else:
