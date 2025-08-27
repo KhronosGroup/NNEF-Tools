@@ -18,6 +18,7 @@
 #define _NNEF_BINARY_H_
 
 #include "error.h"
+#include <cstdint>
 #include <functional>
 #include <algorithm>
 #include <numeric>
