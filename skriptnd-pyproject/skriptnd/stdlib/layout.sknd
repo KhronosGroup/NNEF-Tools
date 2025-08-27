@@ -849,9 +849,9 @@ operator shuffle {
             input.shape, axis, groups;
     }
     @compose {
-        reshaped = reshape{axis=axis, rank=1, shape=[groups, c / groups]}(input);
-        transposed = transpose{axis=axis, perm=[offs+1,offs,offs+2:input.rank+1]}(reshaped);
-        output = reshape{axis=axis, rank=2, shape=[c]}(transposed);
+        reshaped = reshape{axis=offs, rank=1, shape=[groups, c / groups]}(input);
+        transposed = transpose{axis=offs, perm=[offs+1,offs,offs+2:input.rank+1]}(reshaped);
+        output = reshape{axis=offs, rank=2, shape=[c]}(transposed);
     }
 }
 
