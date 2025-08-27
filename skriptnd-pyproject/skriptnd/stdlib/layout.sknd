@@ -938,9 +938,9 @@ operator scatter {
         axis: int;
     }
     @input {
-        data: T^(rank)[s..(axis),n,t..];
-        indices: int[s..(axis),m,t..];
-        updates: T[s..(axis),m,t..];
+        data: T^(rank)[s..(axis < 0 ? axis + rank : axis),n,t..];
+        indices: int[s..(axis < 0 ? axis + rank : axis),m,t..];
+        updates: T[s..(axis < 0 ? axis + rank : axis),m,t..];
     }
     @output {
         output: T[s..,n,t..];
