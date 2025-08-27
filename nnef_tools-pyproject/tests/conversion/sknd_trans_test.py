@@ -731,3 +731,60 @@ class TestCases(TestEnv):
         """
 
         self._test_conversion('softmax', code)
+
+    def test_linear_upsample(self):
+        code = """
+        import image;
+        graph G
+        {
+            @input {
+                input: real[4,128,128,3];
+            }
+            @output {
+                output: real[4,256,256,3];
+            }
+            @compose {
+                output = image.linear_upsample{axes=[1,2], factor=[2,2]}(input);
+            }
+        }
+        """
+
+        self._test_conversion('linear_upsample', code)
+
+    def test_resize(self):
+        code = """
+        import image;
+        graph G
+        {
+            @input {
+                input: real[4,128,128,3];
+            }
+            @output {
+                output: real[4,256,256,3];
+            }
+            @compose {
+                output = image.resize{axes=[1,2], size=[256,256]}(input);
+            }
+        }
+        """
+
+        self._test_conversion('resize', code)
+
+    def test_quantize(self):
+        code = """
+        import quant;
+        graph G
+        {
+            @input {
+                input: real[4,256,256,3];
+            }
+            @output {
+                output: real[4,256,256,3];
+            }
+            @compose {
+                output = quant.zero_point_linear_quantize{channel_axis=-1, zero_point=0, scale=1.0, bits=8}(input);
+            }
+        }
+        """
+
+        self._test_conversion('quantize', code)

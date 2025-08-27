@@ -533,4 +533,36 @@ _Transforms = Transposer.unpack_transforms({
                 'axes': '!axes if all_axes else transpose_axes_like(axes, I[0].rank, I[0])',
             },
         ),
+    ('image.nearest_downsample', 'image.nearest_upsample', 'image.area_downsample', 'image.linear_upsample', 'image.rescale'):
+        Transform(
+            using={
+                'all_axes': '!axes == list(range(I[0].rank))',
+            },
+            inputs='!I[0]',
+            outputs='!transpose_output_like(O[0], I[0])',
+            attribs={
+                'axes': '!axes if all_axes else transpose_axes_like(axes, I[0].rank, I[0])',
+                'factor': '!transpose_shape(factor) if all_axes else factor',
+            },
+        ),
+    ('image.nearest_resize', 'image.linear_resize', 'image.cubic_resize', 'image.resize'):
+        Transform(
+            using={
+                'all_axes': '!axes == list(range(I[0].rank))',
+            },
+            inputs='!I[0]',
+            outputs='!transpose_output_like(O[0], I[0])',
+            attribs={
+                'axes': '!axes if all_axes else transpose_axes_like(axes, I[0].rank, I[0])',
+                'size': '!transpose_shape(size) if all_axes else size',
+            },
+        ),
+    ('quant.zero_point_linear_quantize', 'quant.min_max_linear_quantize'):
+        Transform(
+            inputs='!I[0]',
+            outputs='!transpose_output_like(O[0], I[0])',
+            attribs={
+                'channel_axis': '!transpose_axis_like(channel_axis, I[0].rank, I[0])',
+            },
+        ),
 })
