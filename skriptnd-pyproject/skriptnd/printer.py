@@ -103,7 +103,7 @@ class Printer:
             return self._make_id(result.name)
         elif isinstance(result, _sknd.TensorPack):
             if not result.name.startswith('.'):
-                return result.name + "..(" + str(len(result)) + ")"
+                return self._make_id(result.name) + "..(" + str(len(result)) + ")"
             else:
                 return "[" + ", ".join(self._format_result(r) for r in result) + "]"
         elif isinstance(result, tuple):
