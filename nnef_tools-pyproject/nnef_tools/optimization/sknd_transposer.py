@@ -108,7 +108,7 @@ class Transposer:
                 elif len(op.inputs) == 1 and len(op.outputs) == 1:
                     op.outputs = (self.transpose_output_like(op.output, op.input),)
                 else:
-                    op.inputs = tuple(self.undo_transpose(input) for input in op.inputs)
+                    op.inputs = tuple(self.undo_transpose(input) if input is not None else input for input in op.inputs)
 
             graph.sort()
 
