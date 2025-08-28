@@ -171,6 +171,26 @@ class TestCases(TestEnv):
 
         self._test_conversion('add', code)
 
+    def test_add_channelwise(self):
+        code = """
+        import nn;
+        graph G
+        {
+            @input {
+                input1: real[4,224,224,3];
+                input2: real[3];
+            }
+            @output {
+                output: real[4,224,224,3];
+            }
+            @compose {
+                output = math.add(input1, input2);
+            }
+        }
+        """
+
+        self._test_conversion('add_channelwise', code)
+
     def test_select(self):
         code = """
         import nn;
@@ -191,6 +211,27 @@ class TestCases(TestEnv):
         """
 
         self._test_conversion('select', code)
+
+    def test_select_channelwise(self):
+        code = """
+        import nn;
+        graph G
+        {
+            @input {
+                cond: bool[];
+                input1: real[4,224,224,3];
+                input2: real[3];
+            }
+            @output {
+                output: real[4,224,224,3];
+            }
+            @compose {
+                output = math.select(cond, input1, input2);
+            }
+        }
+        """
+
+        self._test_conversion('select_channelwise', code)
 
     def test_conv1d(self):
         code = """
@@ -238,6 +279,29 @@ class TestCases(TestEnv):
 
         self._test_conversion('conv2d', code)
 
+    def test_deconv2d(self):
+        code = """
+        import nn;
+        graph G
+        {
+            @input {
+                input: real[4,224,224,6];
+            }
+            @output {
+                output: real[4,224,224,3];
+            }
+            @variable {
+                filter: real[6,5,5,3];
+                bias: real[3];
+            }
+            @compose {
+                output = nn.deconv{data_format="NXC", filter_format="NXC"}(input, filter, bias);
+            }
+        }
+        """
+
+        self._test_conversion('deconv2d', code)
+
     def test_pool2d(self):
         code = """
         import nn;
@@ -275,6 +339,26 @@ class TestCases(TestEnv):
         """
 
         self._test_conversion('reduce2d', code)
+
+    def test_moments(self):
+        code = """
+        import nn;
+        graph G
+        {
+            @input {
+                input: real[4,224,224,3];
+            }
+            @output {
+                mean: real[4,1,1,3];
+                variance: real[4,1,1,3];
+            }
+            @compose {
+                mean, variance = math.moments{axes=[1, 2]}(input);
+            }
+        }
+        """
+
+        self._test_conversion('moments', code)
 
     def test_concat(self):
         code = """
@@ -788,3 +872,126 @@ class TestCases(TestEnv):
         """
 
         self._test_conversion('quantize', code)
+
+    def test_prelu(self):
+        code = """
+        import nn;
+        graph G
+        {
+            @input {
+                input: real[4,224,224,3];
+                alpha: real[3];
+            }
+            @output {
+                output: real[4,224,224,3];
+            }
+            @compose {
+                output = nn.prelu{axis=-1}(input, alpha);
+            }
+        }
+        """
+
+        self._test_conversion('prelu', code)
+
+    def test_argmin(self):
+        code = """
+        import nn;
+        graph G
+        {
+            @input {
+                input: real[4,224,224,3];
+            }
+            @output {
+                output: int[4,224,224,1];
+            }
+            @compose {
+                output = math.argmin{axis=-1}(input);
+            }
+        }
+        """
+
+        self._test_conversion('argmin', code)
+
+    def test_argmin_nd(self):
+        code = """
+        import nn;
+        graph G
+        {
+            @input {
+                input: real[4,224,224,3];
+            }
+            @output {
+                output1: int[4,1,1,3];
+                output2: int[4,1,1,3];
+            }
+            @compose {
+                [output1, output2] = math.argmin_nd{axes=[1,2]}(input);
+            }
+        }
+        """
+
+        self._test_conversion('argmin_nd', code)
+
+    def test_axpb(self):
+        code = """
+        import nn;
+        graph G
+        {
+            @input {
+                a: real[4,224,224,3];
+                x: real[];
+                b: real[3];
+            }
+            @output {
+                output: real[4,224,224,3];
+            }
+            @compose {
+                output = math.axpb(a, x, b);
+            }
+        }
+        """
+
+        self._test_conversion('axpb', code)
+
+    def test_axpby(self):
+        code = """
+        import nn;
+        graph G
+        {
+            @input {
+                a: real[];
+                x: real[4,224,224,3];
+                b: real[3];
+                y: real[4,224,224,3];
+            }
+            @output {
+                output: real[4,224,224,3];
+            }
+            @compose {
+                output = math.axpby(a, x, b, y);
+            }
+        }
+        """
+
+        self._test_conversion('axpby', code)
+
+    def test_clamp(self):
+        code = """
+        import nn;
+        graph G
+        {
+            @input {
+                x: real[4,224,224,3];
+                min: real[3];
+                max: real[3];
+            }
+            @output {
+                output: real[4,224,224,3];
+            }
+            @compose {
+                output = math.clamp(x, min, max);
+            }
+        }
+        """
+
+        self._test_conversion('clamp', code)

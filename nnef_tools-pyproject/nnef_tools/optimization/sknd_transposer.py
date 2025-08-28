@@ -42,12 +42,6 @@ class Transposer:
         for key, transform in six.iteritems(transforms):
             assert isinstance(transform, Transform)
 
-            if not isinstance(transform.inputs, tuple):
-                transform.inputs = (transform.inputs,)
-
-            if not isinstance(transform.outputs, tuple):
-                transform.outputs = (transform.outputs,)
-
             if isinstance(key, tuple):
                 for item in key:
                     unpacked[item] = transform
@@ -84,19 +78,31 @@ class Transposer:
                             usings[name] = self._evaluate(expr, op.attribs, op.inputs, op.outputs, usings)
 
                     attribs = dict(op.attribs)
-                    for name, expr in transform.attribs.items():
-                        value = self._evaluate(expr, op.attribs, op.inputs, op.outputs, usings)
-                        if value is not None:
-                            attribs[name] = value
+                    if isinstance(transform.attribs, str):
+                        value = self._evaluate(transform.attribs, op.attribs, op.inputs, op.outputs, usings)
+                        attribs.update(value)
+                    else:
+                        for name, expr in transform.attribs.items():
+                            value = self._evaluate(expr, op.attribs, op.inputs, op.outputs, usings)
+                            if value is not None:
+                                attribs[name] = value
 
-                    inputs = tuple(self._evaluate(expr, op.attribs, op.inputs, op.outputs, usings)
-                                   for expr in transform.inputs)
+                    if isinstance(transform.inputs, str):
+                        value = self._evaluate(transform.inputs, op.attribs, op.inputs, op.outputs, usings)
+                        inputs = value if isinstance(value, tuple) else (value,)
+                    else:
+                        inputs = tuple(self._evaluate(expr, op.attribs, op.inputs, op.outputs, usings)
+                                       for expr in transform.inputs)
 
-                    outputs = tuple(self._evaluate(expr, op.attribs, op.inputs, op.outputs, usings)
-                                    for expr in transform.outputs)
+                    if isinstance(transform.outputs, str):
+                        value = self._evaluate(transform.outputs, op.attribs, op.inputs, op.outputs, usings)
+                        outputs = value if isinstance(value, tuple) else (value,)
+                    else:
+                        outputs = tuple(self._evaluate(expr, op.attribs, op.inputs, op.outputs, usings)
+                                        for expr in transform.outputs)
 
-                    op.inputs = tuple(inputs)
-                    op.outputs = tuple(outputs)
+                    op.inputs = inputs
+                    op.outputs = outputs
                     op.attribs = attribs
 
                 elif len(op.inputs) == 1 and len(op.outputs) == 1:
@@ -110,8 +116,8 @@ class Transposer:
 
     def _evaluate(self, arg, attribs, inputs, outputs, usings):
         if isinstance(arg, str) and arg[0] == '!':
-            return eval(arg[1:], {'I': inputs, 'O': outputs, **attribs, **usings, **self._callables,
-                                  'np': np, 'math': math})
+            return eval(arg[1:], {'I': inputs, 'O': outputs, 'A': attribs, 'np': np, 'math': math,
+                                  **attribs, **usings, **self._callables})
         else:
             return arg
 
@@ -156,7 +162,13 @@ class Transposer:
         return tensor
 
     def transpose_output_like(self, tensor, reference):
-        return self.transpose_output(tensor) if self.transposed(reference) else tensor
+        if not self.transposed(reference):
+            return tensor
+
+        if isinstance(tensor, TensorPack):
+            return [self.transpose_output(item) for item in tensor]
+        else:
+            return self.transpose_output(tensor)
 
     def _pre_transpose(self, input, perm):
         shape = self.transpose_shape(input.shape)
@@ -266,50 +278,59 @@ _Transforms = Transposer.unpack_transforms({
      'math.lt', 'math.gt', 'math.le', 'math.ge', 'math.eq', 'math.ne', 'math.and', 'math.or', 'math.xor'):
         Transform(
             using={
-                'same_rank': '!I[0].rank == I[1].rank',
-                'lhs_offs': '!align_to_offset(lhs_align, I[0].rank, O[0].rank)',
-                'rhs_offs': '!align_to_offset(rhs_align, I[1].rank, O[0].rank)',
+                'rank': '!O[0].rank',
+                'transposing': '!transposed(I[0]) or transposed(I[1])',
             },
             inputs=(
-                '!transpose_input(I[0]) if needs_transpose(I[0], I[1]) and same_rank else I[0]',
-                '!transpose_input(I[1]) if needs_transpose(I[1], I[0]) and same_rank else I[1]',
+                '!transpose_input(I[0]) if transposing and not transposed(I[0]) and I[0].rank == rank else I[0]',
+                '!transpose_input(I[1]) if transposing and not transposed(I[1]) and I[1].rank == rank else I[1]',
             ),
-            outputs='!transpose_output(O[0]) if transposed(I[0]) or transposed(I[1]) else O[0]',
+            outputs='!transpose_output(O[0]) if transposing else O[0]',
             attribs={
-                'lhs_align': '!transpose_axis(lhs_offs, O[0].rank)'
-                             ' if needs_transpose(I[0], I[1]) and not same_rank else None',
-                'rhs_align': '!transpose_axis(rhs_offs, O[0].rank)'
-                             ' if needs_transpose(I[1], I[0]) and not same_rank else None',
+                'lhs_align': '!transpose_axis(align_to_offset(lhs_align, I[0].rank, rank), rank)'
+                             ' if transposing and I[0].rank != rank and I[0].rank != 0 else None',
+                'rhs_align': '!transpose_axis(align_to_offset(rhs_align, I[1].rank, rank), rank)'
+                             ' if transposing and I[1].rank != rank and I[1].rank != 0 else None',
             },
         ),
     'math.select':
         Transform(
             using={
-                'same_rank': '!I[1].rank == I[2].rank',
-                'cond_offs': '!align_to_offset(cond_align, I[0].rank, O[0].rank)',
-                'lhs_offs': '!align_to_offset(lhs_align, I[1].rank, O[0].rank)',
-                'rhs_offs': '!align_to_offset(rhs_align, I[2].rank, O[0].rank)',
+                'rank': '!O[0].rank',
+                'transposing': '!any(transposed(t) for t in I)',
+                'keys': ["cond_align", "lhs_align", "rhs_align"],
             },
-            inputs=(
-                '!I[0]',
-                '!transpose_input(I[1]) if needs_transpose(I[1], I[2]) and same_rank else I[1]',
-                '!transpose_input(I[2]) if needs_transpose(I[2], I[1]) and same_rank else I[2]',
-            ),
-            outputs='!transpose_output(O[0]) if transposed(I[1]) or transposed(I[2]) else O[0]',
-            attribs={
-                'lhs_align': '!transpose_axis(lhs_offs, O[0].rank)'
-                             ' if needs_transpose(I[1], I[2]) and not same_rank else None',
-                'rhs_align': '!transpose_axis(rhs_offs, O[0].rank)'
-                             ' if needs_transpose(I[2], I[1]) and not same_rank else None',
-            },
+            inputs='!tuple(transpose_input(t) if transposing and not transposed(t) and t.rank == rank else t'
+                   ' for t in I)',
+            outputs='!transpose_output(O[0]) if transposing else O[0]',
+            attribs='!{keys[i]: transpose_axis(align_to_offset(A[keys[i]], I[i].rank, rank), rank)'
+                    ' if transposing and I[i].rank != rank and I[i].rank != 0 else None'
+                    ' for i in range(len(I))}',
         ),
     ('math.min_reduce', 'math.max_reduce', 'math.sum_reduce', 'math.prod_reduce',
      'math.mean_reduce', 'math.lp_reduce', 'math.any_reduce', 'math.all_reduce'):
         Transform(
+            using={
+                'all_axes': '!axes == list(range(I[0].rank))',
+            },
             inputs='!I[0]',
-            outputs='!transpose_output_like(O[0], I[0])',
+            outputs='!transpose_output_like(O[0], I[0]) if not squeeze else O[0]',
             attribs={
-                'axes': '!transpose_axes_like(axes, I[0].rank, I[0])',
+                'axes': '!axes if all_axes else transpose_axes_like(axes, I[0].rank, I[0])',
+            },
+        ),
+    'math.moments':
+        Transform(
+            using={
+                'all_axes': '!axes == list(range(I[0].rank))',
+            },
+            inputs='!I[0]',
+            outputs=(
+                '!transpose_output_like(O[0], I[0]) if not squeeze else O[0]',
+                '!transpose_output_like(O[1], I[0]) if not squeeze else O[1]',
+            ),
+            attribs={
+                'axes': '!axes if all_axes else transpose_axes_like(axes, I[0].rank, I[0])',
             },
         ),
     ('math.sum_n', 'math.prod_n', 'math.min_n', 'math.max_n', 'math.argmin_n', 'math.argmax_n', 'math.any_n', 'math.all_n'):
@@ -564,5 +585,57 @@ _Transforms = Transposer.unpack_transforms({
             attribs={
                 'channel_axis': '!transpose_axis_like(channel_axis, I[0].rank, I[0])',
             },
+        ),
+    'nn.prelu':
+        Transform(
+            inputs=('!I[0]', '!I[1]'),
+            outputs='!transpose_output_like(O[0], I[0])',
+            attribs={
+                'axis': '!transpose_axis_like(axis, I[0].rank, I[0])',
+            },
+        ),
+    ('math.argmin', 'math.argmax'):
+        Transform(
+            inputs='!I[0] if not squeeze else undo_transpose(I[0])',
+            outputs='!transpose_output_like(O[0], I[0]) if not squeeze else O[0]',
+            attribs={
+                'axis': '!transpose_axis_like(axis, I[0].rank, I[0]) if not squeeze else axis',
+            },
+        ),
+    ('math.argmin_nd', 'math.argmax_nd'):
+        Transform(
+            inputs='!I[0] if not squeeze else undo_transpose(I[0])',
+            outputs='!transpose_output_like(O[0], I[0]) if not squeeze else O[0]',
+            attribs={
+                'axes': '!transpose_axes_like(axes, I[0].rank, I[0]) if not squeeze else axes',
+            },
+        ),
+    ('math.axpb', 'math.axpby'):
+        Transform(
+            using={
+                'rank': '!O[0].rank',
+                'transposing': '!any(transposed(t) for t in I)',
+                'keys': ["a_align", "x_align", "b_align", "y_align"],
+            },
+            inputs='!tuple(transpose_input(t) if transposing and not transposed(t) and t.rank == rank else t'
+                   ' for t in I)',
+            outputs='!transpose_output(O[0]) if transposing else O[0]',
+            attribs='!{keys[i]: transpose_axis(align_to_offset(A[keys[i]], I[i].rank, rank), rank)'
+                    ' if transposing and I[i].rank != rank and I[i].rank != 0 else None'
+                    ' for i in range(len(I))}',
+        ),
+    'math.clamp':
+        Transform(
+            using={
+                'rank': '!O[0].rank',
+                'transposing': '!any(transposed(t) for t in I)',
+                'keys': ["val_align", "min_align", "max_align"],
+            },
+            inputs='!tuple(transpose_input(t) if transposing and not transposed(t) and t.rank == rank else t'
+                   ' for t in I)',
+            outputs='!transpose_output(O[0]) if transposing else O[0]',
+            attribs='!{keys[i]: transpose_axis(align_to_offset(A[keys[i]], I[i].rank, rank), rank)'
+                    ' if transposing and I[i].rank != rank and I[i].rank != 0 else None'
+                    ' for i in range(len(I))}',
         ),
 })
