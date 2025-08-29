@@ -31,9 +31,8 @@ class Transform:
 
 class Transposer:
 
-    @staticmethod
-    def find_public_methods(obj):
-        methods = inspect.getmembers(obj, predicate=inspect.ismethod)
+    def find_public_methods(self):
+        methods = inspect.getmembers(self, predicate=inspect.ismethod)
         return {name: func for name, func in methods if not name.startswith('_')}
 
     @staticmethod
@@ -50,13 +49,16 @@ class Transposer:
 
         return unpacked
 
-    def __init__(self, source_format, target_format, source_filter_format, target_filter_format):
+    def __init__(self, source_format, target_format, source_filter_format, target_filter_format, skip_filters):
         self._transforms = _Transforms
-        self._callables = self.find_public_methods(self)
-        self._source_format = source_format
-        self._target_format = target_format
-        self._source_filter_format = source_filter_format
-        self._target_filter_format = target_filter_format
+        self._callables = self.find_public_methods()
+        self._properties = {
+            'source_format': source_format,
+            'target_format': target_format,
+            'source_filter_format': source_filter_format,
+            'target_filter_format': target_filter_format,
+            'skip_filters': skip_filters,
+        }
 
     def __call__(self, model, inputs_to_transpose=None):
         if inputs_to_transpose is None:
@@ -119,7 +121,7 @@ class Transposer:
     def _evaluate(self, arg, attribs, inputs, outputs, usings):
         if isinstance(arg, str) and arg[0] == '!':
             return eval(arg[1:], {'I': inputs, 'O': outputs, 'A': attribs, 'np': np, 'math': math,
-                                  **attribs, **usings, **self._callables})
+                                  **attribs, **usings, **self._properties, **self._callables})
         else:
             return arg
 
@@ -136,18 +138,6 @@ class Transposer:
         for i in range(len(perm)):
             permuted[perm[i]] = items[i]
         return type(items)(permuted)
-
-    def source_format(self):
-        return self._source_format
-
-    def target_format(self):
-        return self._target_format
-
-    def source_filter_format(self):
-        return self._source_filter_format
-
-    def target_filter_format(self):
-        return self._target_filter_format
 
     def permutation(self, rank):
         raise NotImplementedError()
@@ -247,8 +237,9 @@ class Transposer:
 
 class NXCtoNCX(Transposer):
 
-    def __init__(self):
-        super().__init__("NXC", "NCX", "XCN", "NCX")
+    def __init__(self, skip_filters=False):
+        super().__init__("NXC", "NCX", "XCN", "NCX",
+                         skip_filters=skip_filters)
 
     def permutation(self, rank):
         return [0, rank - 1] + list(range(1, rank - 1))
@@ -270,8 +261,9 @@ class NXCtoNCX(Transposer):
 
 class NCXtoNXC(Transposer):
 
-    def __init__(self):
-        super().__init__("NCX", "NXC", "NCX", "XCN")
+    def __init__(self, skip_filters=False):
+        super().__init__("NCX", "NXC", "NCX", "XCN",
+                         skip_filters=skip_filters)
 
     def permutation(self, rank):
         return [0] + list(range(2, rank)) + [1]
@@ -295,8 +287,8 @@ _Transforms = Transposer.unpack_transforms({
     ('nn.conv', 'nn.deconv'):
         Transform(
             using={
-                'needs_transpose': '!data_format == source_format()',
-                'filter_needs_transpose': '!filter_format == source_filter_format()',
+                'needs_transpose': '!data_format == source_format',
+                'filter_needs_transpose': '!filter_format == source_filter_format and not skip_filters',
             },
             inputs=(
                 '!transpose_input(I[0]) if needs_transpose else I[0]',
@@ -305,8 +297,8 @@ _Transforms = Transposer.unpack_transforms({
             ),
             outputs='!transpose_output(O[0]) if needs_transpose else O[0]',
             attribs={
-                'data_format': '!target_format() if needs_transpose else None',
-                'filter_format': '!target_filter_format() if needs_transpose and filter_needs_transpose else None',
+                'data_format': '!target_format if needs_transpose else None',
+                'filter_format': '!target_filter_format if needs_transpose and filter_needs_transpose else None',
             },
         ),
     ('nn.max_pool', 'nn.sum_pool', 'nn.avg_pool', 'nn.rms_pool', 'nn.lp_pool'):
@@ -536,12 +528,12 @@ _Transforms = Transposer.unpack_transforms({
     ('layout.space_to_batch', 'layout.batch_to_space', 'layout.space_to_depth', 'layout.depth_to_space'):
         Transform(
             using={
-                'needs_transpose': '!data_format == source_format()',
+                'needs_transpose': '!data_format == source_format',
             },
             inputs='!I[0]',
             outputs='!transpose_output(O[0]) if needs_transpose else O[0]',
             attribs={
-                'data_format': '!target_format() if needs_transpose else None',
+                'data_format': '!target_format if needs_transpose else None',
             },
         ),
     'nn.batch_norm':

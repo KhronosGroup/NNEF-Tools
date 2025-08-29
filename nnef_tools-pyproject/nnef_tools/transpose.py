@@ -18,11 +18,11 @@ from .io.skriptnd import Reader, Writer
 import os
 
 
-def get_transposer(source_format, target_format):
+def get_transposer(source_format, target_format, skip_filters):
     if source_format == "NXC" and target_format == "NCX":
-        return NXCtoNCX()
+        return NXCtoNCX(skip_filters=skip_filters)
     elif source_format == "NCX" and target_format == "NXC":
-        return NCXtoNXC()
+        return NCXtoNXC(skip_filters=skip_filters)
     else:
         return None
 
@@ -30,7 +30,7 @@ def get_transposer(source_format, target_format):
 def main(args):
     reader = Reader(atomic=True)
     writer = Writer()
-    transposer = get_transposer(args.input_format.upper(), args.output_format.upper())
+    transposer = get_transposer(args.input_format.upper(), args.output_format.upper(), args.skip_filters)
 
     name, ext = os.path.splitext(args.input_model)
     default_output_model = name + '.' + args.output_format + ext
@@ -53,6 +53,8 @@ if __name__ == '__main__':
                         choices=['nxc', 'ncx'], help='The data format of the output model')
     parser.add_argument('--inputs-to-transpose', type=int, nargs='+', default=None,
                         help='The indices of inputs that need transposing')
+    parser.add_argument('--skip-filters', action='store_true',
+                        help='Skip transposing convolution filters')
     args = parser.parse_args()
 
     exit(main(args))
