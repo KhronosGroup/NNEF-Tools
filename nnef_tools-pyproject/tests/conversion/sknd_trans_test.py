@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import unittest
 import sknd_test
 import skriptnd as sknd
 from nnef_tools.io import skriptnd as skriptnd_io
@@ -25,7 +26,7 @@ UNITTEST_FOLDER = os.path.normpath(os.path.join(os.path.dirname(__file__), '../.
 
 class TestEnv(sknd_test.TestEnv):
 
-    _network_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/trans/nets/') if UNITTEST_FOLDER else None
+    _network_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/tf/nets/') if UNITTEST_FOLDER else None
     _output_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/trans/ops/') if UNITTEST_FOLDER else None
 
     _NumpyDtype = {
@@ -995,3 +996,30 @@ class TestCases(TestEnv):
         """
 
         self._test_conversion('clamp', code)
+
+
+@unittest.skipIf(TestEnv._network_folder is None or not os.path.isdir(TestEnv._network_folder),
+                 "no network test folder provided")
+class NetworkTestCases(TestEnv):
+
+    def test_mobilenet_v1(self):
+        self._test_conversion_from_file(self._network_folder + 'mobilenet_v1.pb.nnef2')
+
+    def test_inception_v3(self):
+        self._test_conversion_from_file(self._network_folder + 'inception_v3.pb.nnef2')
+
+    def test_inception_v4(self):
+        self._test_conversion_from_file(self._network_folder + 'inception_v4.pb.nnef2')
+
+    def test_inception_resnet_v2(self):
+        self._test_conversion_from_file(self._network_folder + 'inception_resnet_v2.pb.nnef2')
+
+    def test_squeezenet(self):
+        self._test_conversion_from_file(self._network_folder + 'squeezenet.pb.nnef2')
+
+    def test_nasnet(self):
+        self._test_conversion_from_file(self._network_folder + 'nasnet.pb.nnef2')
+
+
+if __name__ == '__main__':
+    unittest.main()
