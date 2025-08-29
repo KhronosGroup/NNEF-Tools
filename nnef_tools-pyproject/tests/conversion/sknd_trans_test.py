@@ -246,11 +246,11 @@ class TestCases(TestEnv):
                 output: real[4,224,6];
             }
             @variable {
-                filter: real[6,5,3];
+                filter: real[5,3,6];
                 bias: real[6];
             }
             @compose {
-                output = nn.conv{data_format="NXC", filter_format="NXC"}(input, filter, bias);
+                output = nn.conv{data_format="NXC", filter_format="XCN"}(input, filter, bias);
             }
         }
         """
@@ -269,11 +269,11 @@ class TestCases(TestEnv):
                 output: real[4,224,224,6];
             }
             @variable {
-                filter: real[6,5,5,3];
+                filter: real[5,5,3,6];
                 bias: real[6];
             }
             @compose {
-                output = nn.conv{data_format="NXC", filter_format="NXC"}(input, filter, bias);
+                output = nn.conv{data_format="NXC", filter_format="XCN"}(input, filter, bias);
             }
         }
         """
@@ -292,11 +292,11 @@ class TestCases(TestEnv):
                 output: real[4,224,224,3];
             }
             @variable {
-                filter: real[6,5,5,3];
+                filter: real[5,5,3,6];
                 bias: real[3];
             }
             @compose {
-                output = nn.deconv{data_format="NXC", filter_format="NXC"}(input, filter, bias);
+                output = nn.deconv{data_format="NXC", filter_format="XCN"}(input, filter, bias);
             }
         }
         """

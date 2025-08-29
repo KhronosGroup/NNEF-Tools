@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import argparse
-from .optimization.sknd_transposer import NXCtoNCX
+from .optimization.sknd_transposer import NXCtoNCX, NCXtoNXC
 from .io.skriptnd import Reader, Writer
 import os
 
@@ -21,6 +21,8 @@ import os
 def get_transposer(source_format, target_format):
     if source_format == "NXC" and target_format == "NCX":
         return NXCtoNCX()
+    elif source_format == "NCX" and target_format == "NXC":
+        return NCXtoNXC()
     else:
         return None
 
