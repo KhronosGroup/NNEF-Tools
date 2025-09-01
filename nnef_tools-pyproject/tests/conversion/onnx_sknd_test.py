@@ -15,7 +15,7 @@
 from nnef_tools.io import onnx as onnx_io
 from nnef_tools.io import skriptnd as skriptnd_io
 from nnef_tools.conversion import onnx_to_sknd
-from nnef_tools.optimization import skriptnd_optimizer
+from nnef_tools.optimization import sknd_optimizer
 from nnef_tools.optimization import onnx_optimizer
 import sknd_test
 import numpy as np
@@ -61,7 +61,7 @@ class TestEnv(sknd_test.TestEnv):
         self._skriptnd_writer = skriptnd_io.Writer(operators=onnx_to_sknd.Converter.defined_operations(),
                                                    imports=onnx_to_sknd.Converter.defined_imports(),
                                                    inline_subgraphs=False)
-        self._skriptnd_optimizer = skriptnd_optimizer.Optimizer()
+        self._skriptnd_optimizer = sknd_optimizer.Optimizer()
         self._onnx_optimizer = onnx_optimizer.Optimizer()
         self._optimize = True
         self._execute = True

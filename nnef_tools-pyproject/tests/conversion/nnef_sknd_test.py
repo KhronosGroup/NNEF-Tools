@@ -15,7 +15,7 @@
 from nnef_tools.io import nnef as nnef_io
 from nnef_tools.io import skriptnd as skriptnd_io
 from nnef_tools.conversion import nnef_to_sknd
-from nnef_tools.optimization import skriptnd_optimizer as sknd_optimizer
+from nnef_tools.optimization import sknd_optimizer
 from nnef_tools.optimization import nnef_optimizer
 import unittest
 import sknd_test

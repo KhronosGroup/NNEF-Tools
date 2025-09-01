@@ -15,7 +15,7 @@
 from nnef_tools.io.tf import graphdef as tf_io
 from nnef_tools.io import skriptnd as sknd_io
 from nnef_tools.conversion import tf_to_sknd
-from nnef_tools.optimization import skriptnd_optimizer
+from nnef_tools.optimization import sknd_optimizer
 from nnef_tools.optimization import tf_optimizer
 from skriptnd import PlaceholderExpr
 from nnef_tools.io.tf.graphdef.protobuf import GraphDef
@@ -47,7 +47,7 @@ class TestEnv(sknd_test.TestEnv):
         self._sknd_writer = sknd_io.Writer(operators=tf_to_sknd.Converter.defined_operations(),
                                            imports=tf_to_sknd.Converter.defined_imports(),
                                            inline_subgraphs=False)
-        self._sknd_optimizer = skriptnd_optimizer.Optimizer()
+        self._sknd_optimizer = sknd_optimizer.Optimizer()
         self._tf_optimizer = tf_optimizer.Optimizer()
         self._optimize = False
         self._execute = True

@@ -129,7 +129,7 @@ def get_optimizer(format, custom_optimizers=None, dequantize=False):
         from .optimization.nnef_optimizer import Optimizer
         return Optimizer(custom_optimizers=custom_optimizers, dequantize=dequantize)
     elif format == 'sknd':
-        from .optimization.skriptnd_optimizer import Optimizer
+        from .optimization.sknd_optimizer import Optimizer
         return Optimizer(custom_optimizers=custom_optimizers, dequantize=dequantize)
     elif format == 'onnx':
         from .optimization.onnx_optimizer import Optimizer
