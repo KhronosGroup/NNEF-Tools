@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from nnef_tools.io import nnef as nnef_io
-from nnef_tools.io import skriptnd as skriptnd_io
+from nnef_tools.io import sknd as sknd_io
 from nnef_tools.conversion import nnef_to_sknd
 from nnef_tools.optimization import sknd_optimizer
 from nnef_tools.optimization import nnef_optimizer
@@ -74,9 +74,9 @@ class TestEnv(sknd_test.TestEnv):
         self._nnef_reader = nnef_io.Reader(decomposed=self._DecomposedForConversion)
         self._nnef_writer = nnef_io.Writer()
         self._nnef_to_sknd_converter = nnef_to_sknd.Converter()
-        self._sknd_reader = skriptnd_io.Reader(atomic=lambda name: not name.startswith('main.'))
-        self._sknd_writer = skriptnd_io.Writer(operators=nnef_to_sknd.Converter.defined_operations(),
-                                               inline_subgraphs=False)
+        self._sknd_reader = sknd_io.Reader(atomic=lambda name: not name.startswith('main.'))
+        self._sknd_writer = sknd_io.Writer(operators=nnef_to_sknd.Converter.defined_operations(),
+                                           inline_subgraphs=False)
         self._sknd_optimizer = sknd_optimizer.Optimizer(optimize_batch_norm=False)
         self._nnef_optimizer = nnef_optimizer.Optimizer()
         self._optimize = True

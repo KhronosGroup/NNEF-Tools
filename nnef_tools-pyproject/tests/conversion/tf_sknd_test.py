@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from nnef_tools.io.tf import graphdef as tf_io
-from nnef_tools.io import skriptnd as sknd_io
+from nnef_tools.io import sknd as sknd_io
 from nnef_tools.conversion import tf_to_sknd
 from nnef_tools.optimization import sknd_optimizer
 from nnef_tools.optimization import tf_optimizer

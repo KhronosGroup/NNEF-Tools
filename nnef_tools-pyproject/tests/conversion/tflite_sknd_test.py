@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import numpy as np
-from nnef_tools.io import skriptnd as sknd_io
+from nnef_tools.io import sknd as sknd_io
 from nnef_tools.io.tf import lite as lite_io
 from nnef_tools.conversion import tflite_to_sknd
 from nnef_tools.optimization import nnef_optimizer

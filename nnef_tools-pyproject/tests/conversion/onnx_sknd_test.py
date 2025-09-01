@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from nnef_tools.io import onnx as onnx_io
-from nnef_tools.io import skriptnd as skriptnd_io
+from nnef_tools.io import sknd as sknd_io
 from nnef_tools.conversion import onnx_to_sknd
 from nnef_tools.optimization import sknd_optimizer
 from nnef_tools.optimization import onnx_optimizer
@@ -57,10 +57,10 @@ class TestEnv(sknd_test.TestEnv):
         self._onnx_reader = onnx_io.Reader(simplify=False, enforce_output_shapes=True)
         self._onnx_writer = onnx_io.Writer()
         self._onnx_to_sknd_converter = onnx_to_sknd.Converter()
-        self._skriptnd_reader = skriptnd_io.Reader(atomic=lambda name: not name.startswith('main.'))
-        self._skriptnd_writer = skriptnd_io.Writer(operators=onnx_to_sknd.Converter.defined_operations(),
-                                                   imports=onnx_to_sknd.Converter.defined_imports(),
-                                                   inline_subgraphs=False)
+        self._skriptnd_reader = sknd_io.Reader(atomic=lambda name: not name.startswith('main.'))
+        self._skriptnd_writer = sknd_io.Writer(operators=onnx_to_sknd.Converter.defined_operations(),
+                                               imports=onnx_to_sknd.Converter.defined_imports(),
+                                               inline_subgraphs=False)
         self._skriptnd_optimizer = sknd_optimizer.Optimizer()
         self._onnx_optimizer = onnx_optimizer.Optimizer()
         self._optimize = True

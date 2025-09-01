@@ -24,7 +24,7 @@ import six
 
 def get_reader(input_format, atomic, decomposed, fold_constants, custom_shapes):
     if input_format == 'sknd':
-        from .io.skriptnd import Reader
+        from .io.sknd import Reader
         return Reader(atomic=atomic)
     elif input_format == 'nnef':
         from .io.nnef import Reader
@@ -44,7 +44,7 @@ def get_reader(input_format, atomic, decomposed, fold_constants, custom_shapes):
 
 def get_writer(output_format, compression, operators, dependencies, generate_operators, annotate_shapes):
     if output_format == 'sknd':
-        from .io.skriptnd import Writer
+        from .io.sknd import Writer
         return Writer(compression=compression, operators=operators)
     elif output_format == 'nnef':
         from .io.nnef import Writer

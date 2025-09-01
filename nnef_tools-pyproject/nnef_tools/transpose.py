@@ -14,7 +14,7 @@
 
 import argparse
 from .optimization.sknd_transposer import NXCtoNCX, NCXtoNXC
-from .io.skriptnd import Reader, Writer
+from .io.sknd import Reader, Writer
 import os
 
 
