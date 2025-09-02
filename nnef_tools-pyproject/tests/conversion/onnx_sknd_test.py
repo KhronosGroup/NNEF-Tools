@@ -25,7 +25,6 @@ import onnx
 import sys
 import os
 from onnx import helper, TensorProto
-from onnx.mapping import NP_TYPE_TO_TENSOR_TYPE
 
 
 UNITTEST_FOLDER = os.path.normpath(os.path.join(os.path.dirname(__file__), '../../../unittest/'))
@@ -113,7 +112,7 @@ class TestEnv(sknd_test.TestEnv):
             data = TestEnv._random_data(dtype, shape, range)
         elif not isinstance(data, np.ndarray):
             data = np.array(data)
-        return helper.make_tensor(name, NP_TYPE_TO_TENSOR_TYPE[np.dtype(dtype)], shape, vals=data.flat)
+        return helper.make_tensor(name, helper.np_dtype_to_tensor_dtype(np.dtype(dtype)), shape, vals=data.flat)
 
     @staticmethod
     def _create_onnx_model(name, nodes, inputs, outputs, constants, values, ranges, opset_version, ir_version):
