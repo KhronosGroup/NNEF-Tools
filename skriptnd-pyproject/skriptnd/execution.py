@@ -303,10 +303,6 @@ def _format_tensor_access(access, idx=None):
     return name + subscript + indices
 
 
-def _has_tensor_access(expr):
-    return any(isinstance(x, sknd.TensorAccess) for x in sknd.recursive_enumerate_expr(expr))
-
-
 def _format_nested_loops(contraction, indent):
     tuple_assign = isinstance(contraction.left.tensor, sknd.TensorPack) and contraction.left.item is None
 
@@ -329,9 +325,10 @@ def _format_nested_loops(contraction, indent):
     if index_guards:
         index_locals = list()
         value_locals = list()
+        locals_mapping = {name: value for name, value in contraction.locals}
         for local in contraction.locals:
             id, expr = local
-            if _has_tensor_access(expr):
+            if sknd.has_index_guards(expr, locals_mapping):
                 value_locals.append(local)
             else:
                 index_locals.append(local)

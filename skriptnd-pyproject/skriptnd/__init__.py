@@ -576,3 +576,14 @@ def _collect_index_guards_access(access, locals, guards):
             index = locals[index.name]
         if isinstance(index, sknd.BoundedExpr) and index.lower is None and index.upper is None:
             guards.append((access, dim))
+
+
+def has_index_guards(expr, locals):
+    for item in sknd.recursive_enumerate_expr(expr):
+        if isinstance(item, sknd.TensorAccess):
+            for dim, index in enumerate(item.indices):
+                if isinstance(index, sknd.IdentifierExpr) and index.name in locals:
+                    index = locals[index.name]
+                if isinstance(index, sknd.BoundedExpr) and index.lower is None and index.upper is None:
+                    return True
+    return False
