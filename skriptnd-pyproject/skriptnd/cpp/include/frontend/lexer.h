@@ -657,7 +657,7 @@ namespace sknd
         template<typename Pred>
         inline void read_while( Pred pred )
         {
-            while ( pred(_input.peek()) )
+            while ( _input.peek() != EOF && pred(_input.peek()) )
             {
                 _token += _input.get();
             }
