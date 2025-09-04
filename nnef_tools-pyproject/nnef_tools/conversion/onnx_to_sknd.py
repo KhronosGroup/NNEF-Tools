@@ -281,6 +281,13 @@ class Converter(_Converter):
         else:
             return self._pre_transpose(tensor, perm=[1, 0])
 
+    def unstack_input(self, tensor, axis=0):
+        count = tensor.shape[axis]
+        items = [Tensor(tensor.graph, dtype=tensor.dtype, shape=tensor.shape[:-1], quant=copy.deepcopy(tensor.quant))
+                 for _ in range(count)]
+        self._unstack_operation(tensor, items, axis=axis)
+        return items
+
     def stack_output(self, output, axis=0):
         input = Tensor(output.graph, dtype=output.dtype, shape=output.shape, quant=copy.deepcopy(output.quant))
         self._stack_operation(input, output, axis)
@@ -1231,6 +1238,27 @@ _Transforms = Converter.unpack_transforms({
             outputs='!O[0]',
             attribs={
                 'block_size': '!blocksize',
+            },
+        ),
+    'GridSample':
+        Transform(
+            type='image.grid_sample',
+            defaults={
+                'mode': 'linear',
+                'padding_mode': 'zeros',
+                'align_corners': 0,
+            },
+            inputs=(
+                '!I[0]',
+                '!list(reversed(unstack_input(I[1], axis=-1)))',
+            ),
+            outputs='!O[0]',
+            attribs={
+                'mode': '!mode.upper()',
+                'padding': '!"REFLECT" if padding_mode == "reflection" else'
+                           ' "REPLICATE" if padding_mode == "border" else'
+                           ' padding_mode.upper()',
+                'aligned': '!align_corners != 0',
             },
         ),
 })

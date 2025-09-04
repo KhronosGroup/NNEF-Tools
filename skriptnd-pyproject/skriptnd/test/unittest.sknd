@@ -2411,6 +2411,45 @@ graph resize_cubic {
     }
 }
 
+graph grid_sample_nearest {
+    @input {
+        input: real[4,3,64,64];
+        grid: real[4,100,100]..(2);
+    }
+    @output {
+        output: real[4,3,100,100];
+    }
+    @compose {
+        output = image.grid_sample{mode='NEAREST', padding='REPLICATE'}(input, grid);
+    }
+}
+
+graph grid_sample_linear {
+    @input {
+        input: real[4,3,64,64];
+        grid: real[4,100,100]..(2);
+    }
+    @output {
+        output: real[4,3,100,100];
+    }
+    @compose {
+        output = image.grid_sample{mode='LINEAR'}(input, grid);
+    }
+}
+
+graph grid_sample_cubic {
+    @input {
+        input: real[4,3,64,64];
+        grid: real[4,100,100]..(2);
+    }
+    @output {
+        output: real[4,3,100,100];
+    }
+    @compose {
+        output = image.grid_sample{mode='CUBIC'}(input, grid);
+    }
+}
+
 graph zero_point_linear_quantize {
     @input {
         input: real[4,32,224,224];

@@ -1318,6 +1318,68 @@ class TestCases(TestEnv):
         self._test_conversion('resize_linear_asymmetric', [node], [input], [output], constants=[sizes],
                               values={'sizes': [1, 3, 25, 25]})
 
+    def test_grid_sample_nearest(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 3, 64, 64])
+        grid = helper.make_tensor_value_info('grid', TensorProto.FLOAT, [4, 100, 100, 2])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 3, 100, 100])
+        node = helper.make_node(
+            op_type='GridSample',
+            inputs=['input', 'grid'],
+            outputs=['output'],
+            mode='nearest',
+            padding_mode='zeros',
+        )
+
+        self._test_conversion('grid_sample_nearest', [node], [input, grid], [output],
+                              input_range=[(0, 1), (-1, 1)], opset_version=22)
+
+    def test_grid_sample_nearest_aligned(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 3, 64, 64])
+        grid = helper.make_tensor_value_info('grid', TensorProto.FLOAT, [4, 100, 100, 2])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 3, 100, 100])
+        node = helper.make_node(
+            op_type='GridSample',
+            inputs=['input', 'grid'],
+            outputs=['output'],
+            mode='nearest',
+            padding_mode='zeros',
+            align_corners=1,
+        )
+
+        self._test_conversion('grid_sample_nearest-aligned', [node], [input, grid], [output],
+                              input_range=[(0, 1), (-1, 1)], opset_version=22)
+
+    def test_grid_sample_linear(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 3, 64, 64])
+        grid = helper.make_tensor_value_info('grid', TensorProto.FLOAT, [4, 100, 100, 2])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 3, 100, 100])
+        node = helper.make_node(
+            op_type='GridSample',
+            inputs=['input', 'grid'],
+            outputs=['output'],
+            mode='linear',
+            padding_mode='zeros',
+        )
+
+        self._test_conversion('grid_sample_linear', [node], [input, grid], [output],
+                              input_range=[(0, 1), (-1, 1)], opset_version=22)
+
+    def test_grid_sample_linear_aligned(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 3, 64, 64])
+        grid = helper.make_tensor_value_info('grid', TensorProto.FLOAT, [4, 100, 100, 2])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 3, 100, 100])
+        node = helper.make_node(
+            op_type='GridSample',
+            inputs=['input', 'grid'],
+            outputs=['output'],
+            mode='linear',
+            padding_mode='zeros',
+            align_corners=1,
+        )
+
+        self._test_conversion('grid_sample_linear-aligned', [node], [input, grid], [output],
+                              input_range=[(0, 1), (-1, 1)], opset_version=22)
+
     def test_cast(self):
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 4, 32, 32])
         output = helper.make_tensor_value_info('output', TensorProto.INT32, [1, 4, 32, 32])

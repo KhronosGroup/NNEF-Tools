@@ -406,3 +406,123 @@ operator avg_roi_pool {
         output: real[n,c,output_size..];
     }
 }
+
+
+# @section grid-sample-ops Grid Sampling Operators
+
+operator nearest_grid_sample {
+    @attrib {
+        padding: str = 'ZEROS';
+        aligned: bool = false;
+    }
+    @input {
+        input: real[n,c,s..(d)];
+        grid: real[n,z..(d)]..(d);
+    }
+    @output {
+        output: real[n,c,z..];
+    }
+    @using {
+        paddings = ['ZEROS', 'REFLECT', 'REPLICATE'];
+    }
+    @assert {
+        padding in paddings:
+            "'padding' must be one of {paddings}", padding;
+    }
+    @lower {
+        with
+            g = (grid[ni,zi..] + 1.0) * 0.5,                        # map [-1,1] to [0,1]
+            x = aligned ? g * real(s - 1) : g * real(s) - 0.5,      # map to pixel space
+            i = int(round(x)):                                      # round to nearest integer
+        output[ni,ci,zi..] = padding == 'REFLECT' ? input[ni,ci,|i <> -i : 2 * (s - 1) - i|..] :
+                             padding == 'REPLICATE' ? input[ni,ci,|i <> 0 : s - 1|..] :
+                             (i >= 0 && i < s) && .. ? input[ni,ci,i..] : 0.0,
+            ni < n, ci < c, zi < z;
+    }
+}
+
+operator linear_grid_sample {
+    @attrib {
+        padding: str = 'ZEROS';
+        aligned: bool = false;
+    }
+    @input {
+        input: real[n,c,s..(d)];
+        grid: real[n,z..(d)]..(d);
+    }
+    @output {
+        output: real[n,c,z..];
+    }
+    @using {
+        paddings = ['ZEROS', 'REFLECT', 'REPLICATE'];
+    }
+    @assert {
+        padding in paddings:
+            "'padding' must be one of {paddings}", padding;
+    }
+    @lower {
+        with
+            g = (grid[ni,zi..] + 1.0) * 0.5,                        # map [-1,1] to [0,1]
+            x = aligned ? g * real(s - 1) : g * real(s) - 0.5,      # map to pixel space
+            i = int(floor(x)) + j,                                  # map to nearby pixel
+            w = 1.0 - abs(real(i) - x):                             # calculate weights
+        output[ni,ci,zi..] += padding == 'REFLECT' ? w * .. * input[ni,ci,|i <> -i : 2 * (s - 1) - i|..] :
+                              padding == 'REPLICATE' ? w * .. * input[ni,ci,|i <> 0 : s - 1|..] :
+                              w * .. * input[ni,ci,|i|..],
+            ni < n, ci < c, zi < z, j < [2 ..(d)];
+    }
+}
+
+operator cubic_grid_sample {
+    @attrib {
+        padding: str = 'ZEROS';
+        aligned: bool = false;
+    }
+    @input {
+        input: real[n,c,s..(d)];
+        grid: real[n,z..(d)]..(d);
+    }
+    @output {
+        output: real[n,c,z..];
+    }
+    @using {
+        paddings = ['ZEROS', 'REFLECT', 'REPLICATE'];
+    }
+    @assert {
+        padding in paddings:
+            "'padding' must be one of {paddings}", padding;
+    }
+}
+
+operator grid_sample {
+    @attrib {
+        mode: str = 'LINEAR';
+        padding: str = 'ZEROS';
+        aligned: bool = false;
+    }
+    @input {
+        input: real[n,c,s..(d)];
+        grid: real[n,z..(d)]..(d);
+    }
+    @output {
+        output: real[n,c,z..];
+    }
+    @using {
+        modes = ['NEAREST', 'LINEAR', 'CUBIC'];
+        paddings = ['ZEROS', 'REFLECT', 'REPLICATE'];
+    }
+    @assert {
+        mode in modes:
+            "'mode' must be one of {modes}", mode;
+        padding in paddings:
+            "'padding' must be one of {paddings}", padding;
+    }
+    @compose {
+        output = if mode == 'NEAREST' then
+                     nearest_grid_sample{padding=padding, aligned=aligned}(input, grid)
+                 elif mode == 'LINEAR' then
+                     linear_grid_sample{padding=padding, aligned=aligned}(input, grid)
+                 else
+                     cubic_grid_sample{padding=padding, aligned=aligned}(input, grid);
+    }
+}
