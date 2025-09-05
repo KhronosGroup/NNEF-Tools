@@ -1261,4 +1261,19 @@ _Transforms = Converter.unpack_transforms({
                 'aligned': '!align_corners != 0',
             },
         ),
+    'CumSum':
+        Transform(
+            type='math.cumsum',
+            defaults={
+                'exclusive': 0,
+                'reverse': 0,
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'axis': '!arg_as_attrib(I[1])',
+                'exclusive': '!exclusive != 0',
+                'reverse': '!reverse != 0',
+            },
+        ),
 })

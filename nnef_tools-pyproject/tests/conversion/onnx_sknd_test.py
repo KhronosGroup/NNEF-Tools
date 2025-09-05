@@ -2015,6 +2015,47 @@ class TestCases(TestEnv):
 
         self._test_conversion('space_to_depth', [node], [input], [output])
 
+    def test_cumsum(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 16, 64, 64])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 16, 64, 64])
+        axis = helper.make_tensor_value_info('axis', TensorProto.INT64, [])
+        node = helper.make_node(
+            op_type='CumSum',
+            inputs=['input', 'axis'],
+            outputs=['output'],
+        )
+
+        self._test_conversion('cumsum', [node], [input], [output],
+                              constants=[axis], values={'axis': 1})
+
+    def test_cumsum_exclusive(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 16, 64, 64])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 16, 64, 64])
+        axis = helper.make_tensor_value_info('axis', TensorProto.INT64, [])
+        node = helper.make_node(
+            op_type='CumSum',
+            inputs=['input', 'axis'],
+            outputs=['output'],
+            exclusive=1,
+        )
+
+        self._test_conversion('cumsum-exclusive', [node], [input], [output],
+                              constants=[axis], values={'axis': 1})
+
+    def test_cumsum_reverse(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 16, 64, 64])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 16, 64, 64])
+        axis = helper.make_tensor_value_info('axis', TensorProto.INT64, [])
+        node = helper.make_node(
+            op_type='CumSum',
+            inputs=['input', 'axis'],
+            outputs=['output'],
+            reverse=1,
+        )
+
+        self._test_conversion('cumsum-reverse', [node], [input], [output],
+                              constants=[axis], values={'axis': 1})
+
 
 @unittest.skipIf(TestEnv._network_folder is None or not os.path.isdir(TestEnv._network_folder),
                  "no network test folder provided")

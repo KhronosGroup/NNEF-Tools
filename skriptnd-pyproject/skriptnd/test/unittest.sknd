@@ -2758,22 +2758,14 @@ graph nonzero_gather_add {
 }
 
 graph cumsum {
-    @attrib {
-        n: int = 5;
-        m: int = 6;
-    }
     @input {
-        data: real[n,m];
+        input: real[4,16,64,64];
     }
     @output {
-        sums: real[m]..(n);
+        output: real[4,16,64,64];
     }
     @compose {
-        items..(n) = layout.unstack{axis=0}(data);
-        _, sums = with sum: real[m] = 0.0 for item : items do {
-            next = math.add(sum, item);
-            yield next, next;
-        };
+        output = math.cumsum{axis=1}(input);
     }
 }
 

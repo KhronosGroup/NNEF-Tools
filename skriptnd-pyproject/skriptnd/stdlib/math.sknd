@@ -1887,3 +1887,36 @@ operator moments {
         variance = mean_reduce{axes=axes, squeeze=squeeze}(square);
     }
 }
+
+
+# @section cumulative-ops Cumulative Operators
+
+# @text Cumulative operators are similar to reduction operators, but keeping all intermediate steps. The outputs shape is the same as the input shape.
+
+# @item Cumulative summing
+
+operator cumsum {
+    @attrib {
+        axis: int;
+        exclusive: bool = false;
+        reverse: bool = false;
+    }
+    @input {
+        input: real[s..];
+    }
+    @output {
+        output: real[s..];
+    }
+    @using {
+        n = s[axis];
+        z = s[axis] <- 1;
+    }
+    @compose {
+        items..(n) = layout.unstack{axis=axis, squeeze=false}(input);
+        ~, sums = with sum: real[z..] = 0.0 for item : (reverse ? items[::-1] : items) do {
+            next = add(sum, item);
+            yield next, exclusive ? sum : next;
+        };
+        output = layout.stack{axis=axis, squeeze=true}(reverse ? sums[::-1] : sums);
+    }
+}
