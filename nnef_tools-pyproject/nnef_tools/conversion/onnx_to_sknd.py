@@ -88,6 +88,27 @@ operator onnx_global_lp_pool {
 }
 """
 
+ONNX_GRID_SAMPLE = """
+operator onnx_grid_sample {
+    @attrib {
+        mode: str;
+        padding: str;
+        aligned: bool;
+    }
+    @input {
+        input: real[n,c,s..(d)];
+        grid: real[n,z..(d),d];
+    }
+    @output {
+        output: real[n,c,z..];
+    }
+    @compose {
+        items..(d) = layout.unstack{axis=-1}(grid);
+        output = image.grid_sample{mode=mode, padding=padding, aligned=aligned}(input, items[::-1]);
+    }
+}
+"""
+
 
 class Converter(_Converter):
 
@@ -98,11 +119,12 @@ class Converter(_Converter):
             'onnx_global_avg_pool': ONNX_GLOBAL_AVG_POOL,
             'onnx_global_max_pool': ONNX_GLOBAL_MAX_POOL,
             'onnx_global_lp_pool': ONNX_GLOBAL_LP_POOL,
+            'onnx_grid_sample': ONNX_GRID_SAMPLE,
         }
 
     @staticmethod
     def defined_imports():
-        return {'nn', 'math'}
+        return {'nn', 'math', 'image'}
 
     @staticmethod
     def shape_expr_args(op_type):
@@ -1242,7 +1264,7 @@ _Transforms = Converter.unpack_transforms({
         ),
     'GridSample':
         Transform(
-            type='image.grid_sample',
+            type='onnx_grid_sample',
             defaults={
                 'mode': 'linear',
                 'padding_mode': 'zeros',
@@ -1250,7 +1272,7 @@ _Transforms = Converter.unpack_transforms({
             },
             inputs=(
                 '!I[0]',
-                '!list(reversed(unstack_input(I[1], axis=-1)))',
+                '!I[1]',
             ),
             outputs='!O[0]',
             attribs={
