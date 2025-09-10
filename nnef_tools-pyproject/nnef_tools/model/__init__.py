@@ -581,7 +581,7 @@ class Graph:
         seen = set()
         for op in self._operations:
             for tensor in _recursive_itemize(op.inputs):
-                if tensor.has_producer and tensor.producer not in seen:
+                if tensor is not None and tensor.has_producer and tensor.producer not in seen:
                     return False
             seen.add(op)
         return True
