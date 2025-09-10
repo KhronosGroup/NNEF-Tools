@@ -315,7 +315,10 @@ class Converter:
 
         op = Operation(self._graph, type=type, name=name, dtypes=dtypes, attribs=attribs, inputs=inputs, outputs=outputs,
                        custom=transform.custom)
-        self._graph.reverse(offset)
+
+        if len(self._graph.operations) - offset > 1:
+            self._graph.reverse(offset)
+
         return op
 
     def _mirror(self, op):
@@ -776,25 +779,28 @@ class ConverterToSkriptND(Converter):
 
     def _fix_shape_expr_args(self, model):
         for graph in model.graphs:
-            count = len(graph.operations)
-            for i in range(count):
+            i = 0
+            while i < len(graph.operations):
                 op = graph.operations[i]
                 for input in op.inputs:
                     if isinstance(input, list):
                         for item in input:
                             if item is not None and not item.has_producer and self._is_shape_expr(item):
-                                self._fix_shape_expr_arg(item, graph)
+                                i += self._fix_shape_expr_arg(item, graph, i)
                     else:
                         if input is not None and not input.has_producer and self._is_shape_expr(input):
-                            self._fix_shape_expr_arg(input, graph)
-            graph.sort()
+                            i += self._fix_shape_expr_arg(input, graph, i)
+                i += 1
 
-    def _fix_shape_expr_arg(self, arg, graph):
+    def _fix_shape_expr_arg(self, arg, graph, idx):
         expr = self.arg_as_attrib(arg)
         if expr.op == ShapeExpr.Op.Const:
             arg.set_data(expr.args[0], variable=False)
+            return 0
         else:
             Operation(graph, type="layout.constant", attribs={"shape": list(arg.shape), "value": expr}, inputs=(), outputs=(arg,))
+            graph.move_operation(len(graph.operations) - 1, idx)
+            return 1
 
     @staticmethod
     def _set_max_input_shapes(model, max_input_shapes):
