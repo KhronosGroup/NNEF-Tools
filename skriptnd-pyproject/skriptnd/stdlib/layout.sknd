@@ -498,7 +498,7 @@ operator broadcast {
         output: T[os..];
     }
     @using {
-        os = s[axes] <- shape;
+        os = s[axes] <- (shape is 1 ? s[axes] : shape);
     }
     @assert {
         axes >= -d && axes < d:
@@ -508,8 +508,8 @@ operator broadcast {
             "'axes' must be distinct", axes;
         shape > 0:
             "'shape' items must be positive", shape;
-        s[axes] is 1 || s[axes] == shape:
-            "input.shape must be 1 or equal to 'shape' at 'axes'",
+        s[axes] is 1 || shape is 1 || s[axes] == shape:
+            "input.shape or 'shape' must be 1 or the two must be equal at 'axes'",
             input.shape, axes, shape;
     }
     @lower {
