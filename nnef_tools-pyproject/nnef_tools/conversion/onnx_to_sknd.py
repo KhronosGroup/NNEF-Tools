@@ -1276,7 +1276,7 @@ _Transforms = Converter.unpack_transforms({
             ),
             outputs='!O[0]',
             attribs={
-                'mode': '!mode.upper()',
+                'mode': '!"LINEAR" if mode == "bilinear" else mode.upper()',
                 'padding': '!"REFLECT" if padding_mode == "reflection" else'
                            ' "REPLICATE" if padding_mode == "border" else'
                            ' padding_mode.upper()',
