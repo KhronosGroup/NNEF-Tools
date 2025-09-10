@@ -33,7 +33,7 @@ operator constant {
     @using {
         u = value := ..;
         prods = [1, shape[::-1]..] * ...;
-        strides = prods[d-1::-1];
+        strides = prods[::-1][1:];
     }
     @lower {
         output[i..] = u ?? value[(i * strides) + ..],
