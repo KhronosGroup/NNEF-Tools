@@ -149,7 +149,7 @@ class Optimizer:
         else:
             resolved = nd.transform_expr(shape, func)
             if referrer:
-                self._collect_shape_referenced_tensors_from_expr(shape, referrer)
+                self._collect_shape_referenced_tensors_from_expr(resolved, referrer)
         return resolved
 
     def _redirect_shape_references(self, target):
@@ -285,9 +285,12 @@ class Optimizer:
                         old_shape = self._reshape_shape(op.input.shape, op.attribs)
                         new_shape = tuple(old_shape[i] if s == 0 else s for i, s in enumerate(new_shape))
 
-                    consumer.attribs['shape'] = list(new_shape)
+                    new_shape = nd.ListExpr(list(new_shape), nd.Dtype.Int)
+                    consumer.attribs['shape'] = new_shape
                     del consumer.attribs['axis']
                     del consumer.attribs['rank']
+
+                    self._collect_shape_referenced_tensors_from_expr(new_shape, consumer)
 
                     changed |= self._bypass_and_remove(graph, op)
 
