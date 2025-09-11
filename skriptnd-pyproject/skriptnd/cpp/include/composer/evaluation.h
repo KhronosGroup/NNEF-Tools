@@ -468,6 +468,10 @@ namespace sknd
                 {
                     auto& select = as_select(expr);
                     TRY_DECL(cond, eval(*select.cond, symbols))
+                    if ( cond.is_literal() )
+                    {
+                        return eval(cond.as_bool() ? *select.left : *select.right, symbols);
+                    }
                     TRY_DECL(left, eval(*select.left, symbols))
                     TRY_DECL(right, eval(*select.right, symbols))
                     return ValueExpr::select(std::move(cond), std::move(left), std::move(right), size);
