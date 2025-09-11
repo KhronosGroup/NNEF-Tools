@@ -293,7 +293,19 @@ namespace sknd
     
     inline std::ostream& operator<<( std::ostream& os, const Assertion& assertion )
     {
-        os << assertion.condition << ": " << '"' << assertion.message << '"';
+        os << assertion.condition << ": ";
+        
+        os << '"';
+        int i = 0;
+        for ( auto& ch : assertion.message )
+        {
+            os << ch;
+            if ( ch == '{' )
+            {
+                os << assertion.args[i++];
+            }
+        }
+        os << '"';
         return os;
     }
 
