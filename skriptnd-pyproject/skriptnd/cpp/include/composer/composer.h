@@ -712,7 +712,7 @@ namespace sknd
                 
                 for ( size_t i = 0; i < component.loop->carries.size(); ++i )
                 {
-                    if ( locals[i]->shape != graph_outputs[i].shape() )
+                    if ( locals[i]->canonic_shape != graph_outputs[i].canonic_shape() )
                     {
                         return Error(position(component.operation),
                                      "shape %s of loop body output %d does not match shape %s of loop carried dependency %d",
