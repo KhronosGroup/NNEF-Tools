@@ -1912,8 +1912,9 @@ operator cumsum {
         z = s[axis] <- 1;
     }
     @compose {
+        zero = layout.uniform{shape=z}(0.0);
         items..(n) = layout.unstack{axis=axis, squeeze=false}(input);
-        ~, sums = with sum: real[z..] = 0.0 for item : (reverse ? items[::-1] : items) do {
+        ~, sums = with sum = zero for item : (reverse ? items[::-1] : items) do {
             next = add(sum, item);
             yield next, exclusive ? sum : next;
         };
