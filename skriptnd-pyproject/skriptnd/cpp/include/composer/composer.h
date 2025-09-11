@@ -3944,6 +3944,7 @@ namespace sknd
                     {
                         message += format.str.substr(offset, sub.first - offset);
                         TRY_DECL(x, eval_optional(*sub.second, symbols))
+                        simplify(x);
                         if ( x == nullptr || x.is_literal() || !args )
                         {
                             message += str(x);
@@ -3970,6 +3971,7 @@ namespace sknd
                         message += item.first.empty() ? str(*item.second) : item.first;
                         message += " = ";
                         TRY_DECL(x, eval_optional(*item.second, symbols))
+                        simplify(x);
                         if ( x == nullptr || x.is_literal() || !args )
                         {
                             message += str(x);
