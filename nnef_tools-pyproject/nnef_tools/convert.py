@@ -361,10 +361,18 @@ def main(args):
 
         tensor_mapping = converter.tensor_mapping() if args.tensor_mapping is not None and converter else None
 
+        output_model = args.output_model or default_output_model
+
         if args.optimize:
             custom_optimizers = get_custom_optimizers(args.custom_optimizers) if args.custom_optimizers is not None else None
             optimizer = get_optimizer(args.output_format, custom_optimizers=custom_optimizers, dequantize=args.dequantize)
             if optimizer:
+                if args.output_format != args.input_format:
+                    writer(model, output_model)
+                    reader = get_reader(args.output_format, atomic=lambda name: not name.startswith('main.'),
+                                        decomposed=[], custom_shapes={}, fold_constants=False)
+                    model = reader(output_model)
+
                 tensor_lookup = {tensor.name: tensor for tensor in model.tensors if tensor.name is not None} \
                     if args.tensor_mapping is not None else None
 
@@ -380,9 +388,11 @@ def main(args):
                     else:
                         tensor_mapping = {name: tensor.name for name, tensor in six.iteritems(tensor_lookup)
                                           if tensor.graph is model}
+            else:
+                print(f"No optimizer found for output format {args.output_format}")
 
-        writer(model, args.output_model or default_output_model)
-        print("Written '{}'".format(args.output_model or default_output_model))
+        writer(model, output_model)
+        print("Written '{}'".format(output_model))
 
         if args.tensor_mapping is not None:
             with open(args.tensor_mapping, 'w') as file:
@@ -392,10 +402,10 @@ def main(args):
 
         return 0
     except IOError as e:
-        print(e)
+        print(f"IO error: {e}")
         return -1
     except ConversionError as e:
-        print("Conversion error: " + str(e))
+        print(f"Conversion error: {e}")
         if e.details:
             for detail in e.details:
                 print(detail)
