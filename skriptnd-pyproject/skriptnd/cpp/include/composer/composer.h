@@ -490,6 +490,8 @@ namespace sknd
                 
                 std::vector<TensorRef> cond_inputs, branch_inputs;
                 
+                Dict<ValueExpr> local_placeholder_mapping;
+                
                 bool shortcut = false;
                 for ( size_t i = 0; i < component.branches.size() && !shortcut; ++i )
                 {
@@ -537,6 +539,8 @@ namespace sknd
                     
                     TRY_DECL(subgraph_idx, subgraph_inputs, compose_subgraph(consequent, operators, symbols, model, graph_idx, scope, label))
                     branch_graphs.push_back((int_t)subgraph_idx);
+                    
+                    auto& graph_inputs = model.graphs[subgraph_idx].inputs;
                     auto& graph_outputs = model.graphs[subgraph_idx].outputs;
                     
                     if ( branch_graphs.size() == 1 )
@@ -547,6 +551,8 @@ namespace sknd
                     {
                         TRY_CALL(update_branch_output_shapes(outputs, graph_outputs, model.graphs[graph_idx], component.position))
                     }
+                    collect_local_placeholder_mapping(graph_inputs, subgraph_inputs, local_placeholder_mapping);
+                    
                     branch_inputs.insert(branch_inputs.end(), subgraph_inputs.begin(), subgraph_inputs.end());
                     add_all(inputs, subgraph_inputs);
                 }
@@ -566,8 +572,11 @@ namespace sknd
                         TRY_DECL(subgraph_idx, subgraph_inputs, compose_subgraph(component.operation, operators, symbols, model, graph_idx, scope, label))
                         branch_graphs.push_back((int_t)subgraph_idx);
                         
+                        auto& graph_inputs = model.graphs[subgraph_idx].inputs;
                         auto& graph_outputs = model.graphs[subgraph_idx].outputs;
+                        
                         TRY_CALL(update_branch_output_shapes(outputs, graph_outputs, model.graphs[graph_idx], component.position))
+                        collect_local_placeholder_mapping(graph_inputs, subgraph_inputs, local_placeholder_mapping);
                         
                         branch_inputs.insert(branch_inputs.end(), subgraph_inputs.begin(), subgraph_inputs.end());
                         add_all(inputs, subgraph_inputs);
@@ -576,7 +585,8 @@ namespace sknd
                 
                 for ( auto& output : outputs )
                 {
-                    dereference(output);
+                    resolve_local_placeholders(output, local_placeholder_mapping);
+                    replace_null_shapes_with_placeholders(output);
                 }
                 
                 rename_results(component.results, outputs, scope);
@@ -708,23 +718,24 @@ namespace sknd
                 
                 add_all(locals, body_inputs);
                 
+                auto& graph_inputs = model.graphs[body_graph_idx].inputs;
                 auto& graph_outputs = model.graphs[body_graph_idx].outputs;
                 
-                for ( size_t i = 0; i < component.loop->carries.size(); ++i )
-                {
-                    if ( locals[i]->canonic_shape != graph_outputs[i].canonic_shape() )
-                    {
-                        return Error(position(component.operation),
-                                     "shape %s of loop body output %d does not match shape %s of loop carried dependency %d",
-                                     str(graph_outputs[i].shape()).c_str(), (int)i+1, str(locals[i]->shape).c_str(), (int)i+1);
-                    }
-                }
+                Dict<ValueExpr> local_placeholder_mapping;
+                collect_local_placeholder_mapping(graph_inputs, body_inputs, local_placeholder_mapping);
                 
                 std::vector<TensorRef> outputs(graph_outputs.size());
                 for ( size_t i = 0; i < component.loop->carries.size(); ++i )
                 {
                     outputs[i] = make_tensor_like(*graph, graph_outputs[i]);
-                    dereference(outputs[i]);
+                    resolve_local_placeholders(outputs[i], local_placeholder_mapping);
+                    
+                    if ( locals[i]->canonic_shape != outputs[i].canonic_shape() )
+                    {
+                        return Error(position(component.operation),
+                                     "shape %s of loop body output %d does not match shape %s of loop carried dependency %d",
+                                     str(graph_outputs[i].shape()).c_str(), (int)i+1, str(locals[i]->shape).c_str(), (int)i+1);
+                    }
                 }
                 
                 if ( repeats != nullptr )
@@ -744,12 +755,13 @@ namespace sknd
                         auto& output = *graph_outputs[i];
                         
                         auto shape = output.canonic_shape;
-                        dereference(shape, output.max_shape);
+                        resolve_local_placeholders(shape, output.max_shape, local_placeholder_mapping);
+                        auto canonic_shape = canonical(shape);
                         
-                        auto pack = make_tensor_pack(*graph, output.dtype, max_repeats, size, canonic_size, shape, shape, output.max_shape);
+                        auto pack = make_tensor_pack(*graph, output.dtype, max_repeats, size, canonic_size, shape, canonic_shape, output.max_shape);
                         for ( size_t k = 0; k < (size_t)max_repeats; ++k )
                         {
-                            pack->items[k] = make_tensor(*graph, output.dtype, shape, shape, output.max_shape);
+                            pack->items[k] = make_tensor(*graph, output.dtype, shape, canonic_shape, output.max_shape);
                         }
                         cache_tensor_pack(pack);
                         outputs[i] = TensorRef(pack);
@@ -950,6 +962,77 @@ namespace sknd
             return ValueExpr::list(std::move(values), Typename::Int);
         }
         
+        void collect_local_placeholder_mapping( const std::vector<TensorRef>& local_tensors, const std::vector<TensorRef>& context_tensors,
+                                               Dict<ValueExpr>& mapping )
+        {
+            for ( size_t i = 0; i < local_tensors.size(); ++i )
+            {
+                auto& local_tensor = local_tensors[i];
+                auto& context_tensor = context_tensors[i];
+                for ( size_t k = 0; k < local_tensor.rank(); ++k )
+                {
+                    auto& expr = local_tensor.shape()[k];
+                    if ( expr.kind() == ValueExpr::Placeholder )
+                    {
+                        auto& placeholder = expr.as_placeholder();
+                        mapping.insert(std::make_pair(placeholder.id, ValueExpr(ValueExpr::ShapeAccessExpr{ context_tensor, (int_t)k })));
+                    }
+                }
+                if ( local_tensor.packed() && local_tensor.size().kind() == ValueExpr::Placeholder )
+                {
+                    auto& placeholder = local_tensor.size().as_placeholder();
+                    mapping.insert(std::make_pair(placeholder.id, ValueExpr(ValueExpr::SizeAccessExpr{ context_tensor })));
+                }
+            }
+        }
+        
+        void resolve_local_placeholders( TensorRef& tensor, const Dict<ValueExpr>& mapping )
+        {
+            resolve_local_placeholders(tensor.canonic_shape(), tensor.max_shape(), mapping);
+            tensor.shape() = tensor.canonic_shape();
+            canonify(tensor.canonic_shape());
+            
+            if ( tensor.packed() )
+            {
+                resolve_local_placeholders(tensor.canonic_size(), (int_t)tensor.max_size(), mapping);
+                tensor.size() = tensor.canonic_size();
+                canonify(tensor.canonic_size());
+            }
+        }
+        
+        void resolve_local_placeholders( std::vector<ValueExpr>& shape, const std::vector<int_t>& max_shape, const Dict<ValueExpr>& mapping )
+        {
+            for ( size_t i = 0; i < shape.size(); ++i )
+            {
+                resolve_local_placeholders(shape[i], max_shape[i], mapping);
+            }
+        }
+        
+        void resolve_local_placeholders( ValueExpr& expr, const int_t& max_value, const Dict<ValueExpr>& mapping )
+        {
+            bool has_placeholders_left = false;
+            preorder_traverse(expr, [&]( ValueExpr& x )
+            {
+                if ( x.is_placeholder() )
+                {
+                    auto& placeholder = x.as_placeholder();
+                    auto it = mapping.find(placeholder.id);
+                    if ( it != mapping.end() )
+                    {
+                        x = it->second;
+                    }
+                    else
+                    {
+                        has_placeholders_left = true;
+                    }
+                }
+            });
+            if ( has_placeholders_left )
+            {
+                expr = new_placeholder_expr(max_value);
+            }
+        }
+        
         void add_all( std::vector<TensorRef>& items, const std::vector<TensorRef>& new_items )
         {
             for ( auto& item : new_items )
@@ -1113,7 +1196,7 @@ namespace sknd
             auto inputs = duplicate_tensors(graph, external_inputs, std::nullopt, {});
             for ( auto& input : inputs )
             {
-                dereference(input);
+                replace_dynamic_shapes_with_placeholders(input);
             }
             
             for ( size_t i = 0; i < external_inputs.size(); ++i )
@@ -1959,6 +2042,7 @@ namespace sknd
                 {
                     replace_tensor(item, oldRef, newRef);
                 }
+                tensor->canonic_shape = canonical(tensor->shape);
             }
             for ( auto& pack : graph.packs )
             {
@@ -1967,6 +2051,9 @@ namespace sknd
                     replace_tensor(item, oldRef, newRef);
                 }
                 replace_tensor(pack->size, oldRef, newRef);
+                
+                pack->canonic_shape = canonical(pack->shape);
+                pack->canonic_size = canonical(pack->size);
             }
             for ( auto& input : graph.inputs )
             {
@@ -4341,18 +4428,23 @@ namespace sknd
             return true;
         }
         
+        ValueExpr new_placeholder_expr( const int_t& max_value )
+        {
+            return ValueExpr::placeholder(next_placeholder_name(), max_value);
+        }
+        
         const ValueExpr& placeholder_for( const ValueExpr& expr, const int_t& max_value )
         {
             auto key = str(expr);
             auto it = _placeholders.find(key);
             if ( it == _placeholders.end() )
             {
-                it = _placeholders.emplace(key, ValueExpr::placeholder(next_placeholder_name(), max_value)).first;
+                it = _placeholders.emplace(key, new_placeholder_expr(max_value)).first;
             }
             return it->second;
         }
         
-        Shape& dereference( Shape& shape, const std::vector<int_t>& max_shape )
+        Shape& replace_dynamic_shapes_with_placeholders( Shape& shape, const std::vector<int_t>& max_shape )
         {
             for ( size_t i = 0; i < shape.size(); ++i )
             {
@@ -4364,20 +4456,48 @@ namespace sknd
             return shape;
         }
         
-        void dereference( TensorRef& tensor )
+        void replace_dynamic_shapes_with_placeholders( TensorRef& tensor )
         {
             if ( tensor.packed() )
             {
                 for ( size_t i = 0; i < tensor.max_size(); ++i )
                 {
-                    tensor[i].shape = dereference(tensor[i].canonic_shape, tensor[i].max_shape);
+                    tensor[i].shape = replace_dynamic_shapes_with_placeholders(tensor[i].canonic_shape, tensor[i].max_shape);
                 }
                 if ( !tensor.canonic_size().is_literal() )
                 {
                     tensor.size() = tensor.canonic_size() = placeholder_for(tensor.canonic_size(), tensor.max_size());
                 }
             }
-            tensor.shape() = dereference(tensor.canonic_shape(), tensor.max_shape());
+            tensor.shape() = replace_dynamic_shapes_with_placeholders(tensor.canonic_shape(), tensor.max_shape());
+        }
+        
+        Shape& replace_null_shapes_with_placeholders( Shape& shape, const std::vector<int_t>& max_shape )
+        {
+            for ( size_t i = 0; i < shape.size(); ++i )
+            {
+                if ( shape[i] == nullptr )
+                {
+                    shape[i] = new_placeholder_expr(max_shape[i]);
+                }
+            }
+            return shape;
+        }
+        
+        void replace_null_shapes_with_placeholders( TensorRef& tensor )
+        {
+            if ( tensor.packed() )
+            {
+                for ( size_t i = 0; i < tensor.max_size(); ++i )
+                {
+                    tensor[i].shape = replace_null_shapes_with_placeholders(tensor[i].canonic_shape, tensor[i].max_shape);
+                }
+                if ( tensor.canonic_size() == nullptr )
+                {
+                    tensor.size() = tensor.canonic_size() = new_placeholder_expr(tensor.max_size());
+                }
+            }
+            tensor.shape() = replace_null_shapes_with_placeholders(tensor.canonic_shape(), tensor.max_shape());
         }
         
         static Typename resolve_type( const Param& param, const Dict<Symbol>& symbols )

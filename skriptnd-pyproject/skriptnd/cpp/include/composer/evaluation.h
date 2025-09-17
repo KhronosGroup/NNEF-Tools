@@ -53,6 +53,9 @@ namespace sknd
         typedef std::function<TensorRef(const ValueExpr&, const Typename&)> AsTensor;
         typedef std::function<TensorRef(const Tensors&, const Typename&, const Shape&, const ValueExpr&)> AsTensorPack;
         
+        using Simplification::resolve;
+        using Simplification::resolved;
+        using Simplification::canonify;
         using Simplification::canonical;
         
     protected:
@@ -3212,23 +3215,33 @@ namespace sknd
             return shape;
         }
         
-        static Shape resolved( const Shape& shape )
+        static void resolve( Shape& shape )
         {
-            Shape resolved = shape;
-            for ( auto& item : resolved )
+            for ( auto& item : shape )
             {
                 resolve(item);
             }
+        }
+        
+        static Shape resolved( const Shape& shape )
+        {
+            Shape resolved = shape;
+            resolve(resolved);
             return resolved;
+        }
+        
+        static void canonify( Shape& shape )
+        {
+            for ( auto& item : shape )
+            {
+                canonify(item);
+            }
         }
         
         static Shape canonical( const Shape& shape )
         {
             Shape canonic = shape;
-            for ( auto& item : canonic )
-            {
-                canonify(item);
-            }
+            canonify(canonic);
             return canonic;
         }
         

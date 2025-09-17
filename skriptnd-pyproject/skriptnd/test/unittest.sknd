@@ -2769,6 +2769,18 @@ graph cumsum {
     }
 }
 
+graph dynamic_cumsum {
+    @input {
+        input: real[4,3,h|8,w|8];
+    }
+    @output {
+        output: real[4,3,h,w];
+    }
+    @compose {
+        output = math.cumsum{axis=1}(input);
+    }
+}
+
 graph mesh_grid {
     @input {
         in_x: real[5];
@@ -2780,5 +2792,48 @@ graph mesh_grid {
     }
     @compose {
         [out_x, out_y] = misc.mesh_grid([in_x, in_y]);
+    }
+}
+
+graph dynamic_conv {
+    @input {
+        input: real[4,32,h|224,w|224];
+    }
+    @variable {
+        filter: real[64,32,5,5];
+        bias: real[64];
+    }
+    @output {
+        output: real[4,64,h,w];
+    }
+    @compose {
+        output = nn.conv{}(input, filter, bias);
+    }
+}
+
+graph dynamic_if {
+    @input {
+        cond: bool[];
+        input: real[n|10];
+    }
+    @output {
+        output: real[n];
+    }
+    @compose {
+        inter = if cond then math.add(input, 1.0) else math.sub(input, 1.0);
+        output = math.mul(inter, 1.0);
+    }
+}
+
+graph dynamic_loop {
+    @input {
+        input: real[n|10];
+    }
+    @output {
+        output: real[n];
+    }
+    @compose {
+        inter = with prod = input do..(3) math.mul(prod, input);
+        output = math.add(inter, 1.0);
     }
 }
