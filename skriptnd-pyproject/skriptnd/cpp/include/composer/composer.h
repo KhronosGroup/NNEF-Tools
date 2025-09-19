@@ -932,7 +932,8 @@ namespace sknd
             {
                 TRY_DECL(attribs, inputs, outputs, compose_callable(component.operation, operators, symbols, model, graph_idx, graph_idx, scope, label))
                 rename_results(component.results, outputs, scope);
-                TRY_CALL(add_results_to_symbols(component.results, outputs, model.graphs[graph_idx], symbols, scope, component.position))
+                bool is_implicit_op = component.operation.is<Region>() && component.operation.as<Region>().components.empty();
+                TRY_CALL(add_results_to_symbols(component.results, outputs, model.graphs[graph_idx], symbols, scope, component.position, is_implicit_op))
                 return std::make_tuple(inputs, outputs);
             }
         }
@@ -1622,7 +1623,7 @@ namespace sknd
         
         Result<void> add_results_to_symbols( const std::vector<Packable<Typed>>& results, std::vector<TensorRef>& outputs,
                                             Graph& graph, Dict<Symbol>& symbols, const std::optional<std::string>& scope,
-                                            const Position& position )
+                                            const Position& position, bool is_implicit_op = false )
         {
             for ( size_t i = 0; i < results.size(); ++i )
             {
@@ -1690,9 +1691,11 @@ namespace sknd
                             {
                                 auto length = output.packed() ? output.size() - ValueExpr((int_t)result.size() - 1) : 0;
                                 TRY_CALL(deduce_repeats(item, output, symbols))
-                                TRY_CALL(deduce_shape(item, output, k, n, length, item.position, symbols))
+                                TRY_CALL(deduce_shape(item, output, k, n, length, item.position, symbols, is_implicit_op))
                                 TRY_DECL(item_shape, eval_shape(*item.shape, symbols))
                                 output.shape() = item_shape;
+                                output.canonic_shape() = canonical(item_shape);
+                                output.max_shape() = eval_shape_max(item_shape);
                                 if ( !item.name.empty() )
                                 {
                                     add_shape_symbols(item.name, item_shape, output_size, symbols);
@@ -1754,10 +1757,12 @@ namespace sknd
                         if ( !is_empty_pack )
                         {
                             TRY_CALL(deduce_shape(item, output, 0, output.packed() ? output.max_size() : 0, 
-                                                  output.packed() ? output.size() : 0, item.position, symbols))
+                                                  output.packed() ? output.size() : 0, item.position, symbols, is_implicit_op))
                         }
                         TRY_DECL(item_shape, eval_shape(*item.shape, symbols))
                         output.shape() = item_shape;
+                        output.canonic_shape() = canonical(item_shape);
+                        output.max_shape() = eval_shape_max(item_shape);
                         if ( !item.name.empty() )
                         {
                             add_shape_symbols(item.name, item_shape, output_size, symbols);
@@ -3588,7 +3593,7 @@ namespace sknd
         }
         
         Result<void> deduce_shape( const Typed& param, const TensorRef& tensor, const size_t offset, size_t const count,
-                                  const ValueExpr& size, const Position& position, Dict<Symbol>& symbols )
+                                  const ValueExpr& size, const Position& position, Dict<Symbol>& symbols, bool is_implicit_op = false )
         {
             if ( tensor == nullptr )
             {
@@ -3614,8 +3619,16 @@ namespace sknd
                     symbols.emplace(iden, Symbol(ValueExpr((int_t)tensor.rank()), Typename::Int));
                 }
                 
-                TRY_CALL(deduce_ranks(param, tensor.rank(), position, symbols))
-                TRY_CALL(deduce_extents(param, tensor, offset, count, size, position, symbols))
+                if ( is_implicit_op && tensor.rank() == 0 )
+                {
+                    TRY_CALL(deduce_zero_ranks(param, symbols))
+                    TRY_CALL(deduce_zero_extents(param, symbols))
+                }
+                else
+                {
+                    TRY_CALL(deduce_ranks(param, tensor.rank(), position, symbols))
+                    TRY_CALL(deduce_extents(param, tensor, offset, count, size, position, symbols))
+                }
             }
             return {};
         }
@@ -3679,6 +3692,30 @@ namespace sknd
                     }
                 }
             }
+        }
+        
+        Result<void> deduce_zero_ranks( const Typed& param, Dict<Symbol>& symbols )
+        {
+            for ( auto item : param.shape->extents )
+            {
+                if ( item->kind == Expr::Expand )
+                {
+                    auto count = as_expand(*item).count;
+                    if ( count )
+                    {
+                        auto& iden = Typing::find_affine_id(*count);
+                        if ( !iden.empty() )
+                        {
+                            auto it = symbols.find(iden);
+                            if ( it == symbols.end() )
+                            {
+                                symbols.emplace(iden, Symbol(ValueExpr((int_t)0), Typename::Int));
+                            }
+                        }
+                    }
+                }
+            }
+            return {};
         }
         
         Result<size_t> deduced_shape_rank( const Shapedef& shape, const Dict<Symbol>& symbols )
@@ -3973,6 +4010,34 @@ namespace sknd
                     }
                 }
             }
+        }
+        
+        Result<void> deduce_zero_extents( const Typed& param, Dict<Symbol>& symbols )
+        {
+            for ( auto item : param.shape->extents )
+            {
+                const bool expand = item->kind == Expr::Expand;
+                item = unwrapped(item);
+                
+                auto& iden = Typing::find_affine_id(*item);
+                if ( !iden.empty() )
+                {
+                    auto it = symbols.find(iden);
+                    if ( it == symbols.end() )
+                    {
+                        if ( expand )
+                        {
+                            symbols.emplace(iden, Symbol(ValueExpr(nullptr, 0, Typename::Int), Typename::Int));
+                        }
+                        else
+                        {
+                            return Error(item->position, "ambiguous deduction of shape component '%s' of param '%s' in implicit fill operation",
+                                         iden.c_str(), param.name.c_str());
+                        }
+                    }
+                }
+            }
+            return {};
         }
         
         Result<void> check_asserts( const std::vector<Assert>& asserts, const Dict<Symbol>& symbols, const Position& position,
