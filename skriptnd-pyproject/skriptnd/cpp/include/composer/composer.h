@@ -614,22 +614,8 @@ namespace sknd
                 std::vector<TensorRef> inputs;
                 for ( auto& [iden, expr] : component.loop->carries )
                 {
-                    if ( !is_tensor_expr(*expr, symbols) && iden.shape )
-                    {
-                        TRY_DECL(value, eval(*expr, symbols))
-                        TRY_DECL(shape, eval_shape(*iden.shape, symbols))
-                        if ( std::any_of(shape.begin(), shape.end(), []( const ValueExpr& x ){ return !x.is_literal(); }) )
-                        {
-                            return Error(iden.position, "loop carried dependency must not have dynamic shape");
-                        }
-                        auto tensor = make_constant(*graph, value, value.dtype(), shape);
-                        inputs.push_back(tensor);
-                    }
-                    else
-                    {
-                        TRY_DECL(tensor, eval(*expr, symbols, as_tensor(*graph), as_tensor_pack(*graph)))
-                        inputs.push_back(tensor);
-                    }
+                    TRY_DECL(tensor, eval(*expr, symbols, as_tensor(*graph), as_tensor_pack(*graph)))
+                    inputs.push_back(tensor);
                 }
                 for ( auto& [iden, expr] : component.loop->scans )
                 {
@@ -643,9 +629,24 @@ namespace sknd
                 for ( auto& [iden, expr] : component.loop->carries )
                 {
                     auto tensor = inputs[locals.size()];
-                    auto var = TensorRef(make_tensor(*graph, tensor.dtype(), tensor.shape(), tensor.canonic_shape(), tensor.max_shape(), {}, {}));
-                    symbols.insert_or_assign(iden.name, Symbol(var, tensor.dtype()));
-                    add_shape_symbols(iden.name, tensor.shape(), tensor.size_or_null(), symbols);
+                    
+                    TensorRef var;
+                    if ( iden.shape )
+                    {
+                        if ( tensor.rank() != 0 )
+                        {
+                            return Error(expr->position, "initializer must be 0-dimensional if shape is explicitly specified");
+                        }
+                        TRY_DECL(shape, eval_shape(*iden.shape, symbols))
+                        var = make_tensor(*graph, tensor.dtype(), shape, {});
+                    }
+                    else
+                    {
+                        var = make_tensor(*graph, tensor.dtype(), tensor.shape(), tensor.canonic_shape(), tensor.max_shape(), {}, {});
+                    }
+                    
+                    symbols.insert_or_assign(iden.name, Symbol(var, var.dtype()));
+                    add_shape_symbols(iden.name, var.shape(), var.size_or_null(), symbols);
                     locals.push_back(var);
                 }
                 
@@ -716,13 +717,17 @@ namespace sknd
                 
                 graph = &model.graphs[graph_idx];   // reset as it may have become invalid
                 
-                add_all(locals, body_inputs);
-                
                 auto& graph_inputs = model.graphs[body_graph_idx].inputs;
                 auto& graph_outputs = model.graphs[body_graph_idx].outputs;
                 
                 Dict<ValueExpr> local_placeholder_mapping;
                 collect_local_placeholder_mapping(graph_inputs, body_inputs, local_placeholder_mapping);
+                for ( auto& [iden, expr] : local_placeholder_mapping )
+                {
+                    resolve_access_to_tensors(expr, locals);
+                }
+                
+                add_all(locals, body_inputs);
                 
                 std::vector<TensorRef> outputs(graph_outputs.size());
                 for ( size_t i = 0; i < component.loop->carries.size(); ++i )
@@ -1031,6 +1036,26 @@ namespace sknd
             if ( has_placeholders_left )
             {
                 expr = new_placeholder_expr(max_value);
+            }
+        }
+        
+        void resolve_access_to_tensors( ValueExpr& expr, const std::vector<TensorRef>& tensors )
+        {
+            if ( expr.is_shape_access() )
+            {
+                auto& access = expr.as_shape_access();
+                if ( std::find(tensors.begin(), tensors.end(), access.tensor) != tensors.end() )
+                {
+                    expr = access.tensor.shape()[access.dim.as_int()];
+                }
+            }
+            else if ( expr.is_size_access() )
+            {
+                auto& access = expr.as_size_access();
+                if ( std::find(tensors.begin(), tensors.end(), access.pack) != tensors.end() )
+                {
+                    expr = access.pack.size();
+                }
             }
         }
         
