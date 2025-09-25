@@ -506,7 +506,7 @@ namespace sknd
             {
                 auto extent = shape.extents[i];
                 auto bound = shape.bounds[i];
-                bool spread = shape.spreads & (1 << i++);
+                bool spread = shape.spreads & (1 << i);
                 
                 if ( !extent )
                 {
@@ -991,6 +991,10 @@ namespace sknd
                         {
                             report_error(expr->position, "mismatch between declared and derived type of loop carried dependency (%s vs %s)",
                                          str(iden.type.name).c_str(), str(type->name).c_str());
+                        }
+                        if ( iden.shape )
+                        {
+                            check_shape_components(decls, *iden.shape, nullptr, true);
                         }
                         declare_symbol(decls, expr->position, iden.name, as_tensor(*type), *rank, Declaration::LoopLocal | Declaration::AllowShadowing);
                     }
