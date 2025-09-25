@@ -52,9 +52,25 @@ class Printer:
         return tensor.shape is not None and len(tensor.shape) == 0 and \
                tensor.value is not None and not isinstance(tensor.value, (np.ndarray, list))
 
-    def _format_value(self, value):
+    def _format_value(self, value, include_max=False):
         if value is None:
             return "~"  # null tensor
+        elif isinstance(value, _sknd.PlaceholderExpr):
+            s = '~'
+            if include_max:
+                s += '|'
+                s += self._format_value(value.max_value)
+            return s
+        elif isinstance(value, _sknd.ShapeAccess):
+            s = self._make_id(value.tensor.name)
+            if value.item is not None:
+                s += '[' + str(value.item) + ']'
+            s += '.shape'
+            if value.dim is not None:
+                s += '[' + str(value.dim) + ']'
+            return s
+        elif isinstance(value, _sknd.SizeAccess):
+            return self._make_id(value.pack.name) + '.size'
         elif isinstance(value, _sknd.Tensor):
             if self._can_inline(value):
                 if isinstance(value.value, bool):
@@ -81,13 +97,19 @@ class Printer:
         else:
             return str(value)
 
-    def _format_param(self, name, dtype, shape, default=None, optional=False, packed=False, repeats=None):
+    def _format_shape(self, shape, include_max=False, ignore_dynamic_shape=False):
+        return "[" + ",".join('~' if ignore_dynamic_shape and isinstance(s, _sknd.Expr) else
+                              self._format_value(s, include_max)
+                              for s in shape) + "]"
+
+    def _format_param(self, name, dtype, shape, default=None, optional=False, packed=False, repeats=None,
+                      include_shape_max=False, ignore_dynamic_shape=False):
         text = self._make_id(name) + ": "
         if optional:
             text += "optional "
         text += dtype.name.lower()
         if shape is not None:
-            text += "[" + ",".join(str(s) if s is not None else "~" for s in shape) + "]"
+            text += self._format_shape(shape, include_shape_max, ignore_dynamic_shape)
         if packed:
             text += ".."
         if repeats is not None:
@@ -96,20 +118,21 @@ class Printer:
             text += " = " + self._format_value(default)
         return text
 
-    def _format_result(self, result):
+    def _format_result(self, result, repeats):
         if result is None:
             return "~"
         elif isinstance(result, _sknd.Tensor):
             return self._make_id(result.name)
         elif isinstance(result, _sknd.TensorPack):
             if not result.name.startswith('.'):
-                return self._make_id(result.name) + "..(" + str(len(result)) + ")"
+                id = self._make_id(result.name)
+                return f"{id}..({repeats})" if repeats is not None else id
             else:
-                return "[" + ", ".join(self._format_result(r) for r in result) + "]"
+                return "[" + ", ".join(self._format_result(r, None) for r in result) + "]"
         elif isinstance(result, tuple):
-            return ", ".join(self._format_result(r) for r in result)
+            return ", ".join(self._format_result(r, repeats) for r in result)
         elif isinstance(result, list):
-            return "[" + ", ".join(self._format_result(r) for r in result) + "]"
+            return "[" + ", ".join(self._format_result(r, None) for r in result) + "]"
         else:
             assert False
 
@@ -155,29 +178,18 @@ class Printer:
             text += " as " + alias
         return text
 
-    def _format_decls(self, ids, tensors, sep):
-        return ", ".join("{id} {sep} {value}".format(id=id, sep=sep, value=self._format_value(tensor))
-                         for id, tensor in zip(ids, tensors))
-
     def _format_operation(self, results, name, dtypes, attribs, args, alias=None):
         if name == 'do':
             nvars = attribs['nvars']
             nscans = attribs['nscans']
             static_iters = attribs.get('iters')
             dynamic_iters = args[nvars + nscans]
-            repeats = '..(' + self._format_value(static_iters) + ')' \
-                if static_iters is not None and dynamic_iters is not None else ''
-            text = self._format_result(results[:nvars])
-            for result in results[nvars:]:
-                if len(text) != 0:
-                    text += ", "
-                if isinstance(result, (_sknd.Tensor, _sknd.TensorPack)):
-                    text += self._make_id(result.name) + repeats
-                else:
-                    text += self._format_result(result)
+            repeats = self._format_value(static_iters) \
+                if static_iters is not None and dynamic_iters is not None else None
+            text = self._format_result(results, repeats)
             text += " = "
         else:
-            text = self._format_result(results) + " = "
+            text = self._format_result(results, None) + " = "
 
         if name == 'if':
             conditions = attribs['cond_graphs']
@@ -224,15 +236,22 @@ class Printer:
 
             if nvars > 0:
                 ids = [self._make_id(tensor.name) for tensor in body.inputs[:nvars]]
-                initials = args[:nvars]
-                text += 'with ' + self._format_decls(ids, initials, '=')
+                inits = args[:nvars]
+                shapes = [f": {res.dtype.name.lower()}{self._format_shape(res.shape)}"
+                          if res.shape is not None and init.shape is not None and
+                             len(res.shape) != 0 and len(init.shape) == 0 else ''
+                          for init, res in zip(args[:nvars], results[:nvars])]
+                text += 'with '
+                text += ', '.join(f'{id}{shape} = {self._format_value(value)}'
+                                  for id, shape, value in zip(ids, shapes, inits))
 
             if nscans > 0:
-                ids = [self._make_id(tensor.name) for tensor in body.inputs[nvars:nvars+nscans]]
-                scans = args[nvars:nvars+nscans]
                 if nvars > 0:
                     text += ' '
-                text += 'for ' + self._format_decls(ids, scans, ':')
+                ids = [self._make_id(tensor.name) for tensor in body.inputs[nvars:nvars+nscans]]
+                scans = args[nvars:nvars+nscans]
+                text += 'for '
+                text += ', '.join(f'{id} : {self._format_value(value)}' for id, value in zip(ids, scans))
 
             if condition and pretest:
                 if nvars > 0 or nscans > 0:
@@ -274,21 +293,22 @@ class Printer:
         for input in graph.inputs:
             if isinstance(input, _sknd.TensorPack):
                 print("\t\t" + self._format_param(input.name, input.dtype, input.shape,
-                                                  packed=True, repeats=len(input)) + ";", file=file)
+                                                  packed=True, repeats=len(input),
+                                                  include_shape_max=True) + ";", file=file)
             elif not self._can_inline(input):
-                print("\t\t" + self._format_param(input.name, input.dtype, input.shape) + ";",
-                      file=file)
+                print("\t\t" + self._format_param(input.name, input.dtype, input.shape,
+                                                  include_shape_max=True) + ";", file=file)
         print("\t}", file=file)
 
         print("\t@output {", file=file)
         for output in graph.outputs:
-            shape = tuple(s if not isinstance(s, _sknd.Expr) else None for s in output.shape)
             if isinstance(output, _sknd.TensorPack):
-                print("\t\t" + self._format_param(output.name, output.dtype, shape,
-                                                  packed=True, repeats=len(output)) + ";", file=file)
+                print("\t\t" + self._format_param(output.name, output.dtype, output.shape,
+                                                  packed=True, repeats=len(output),
+                                                  ignore_dynamic_shape=True) + ";", file=file)
             else:
-                print("\t\t" + self._format_param(output.name, output.dtype, shape) + ";",
-                      file=file)
+                print("\t\t" + self._format_param(output.name, output.dtype, output.shape,
+                                                  ignore_dynamic_shape=True) + ";", file=file)
         print("\t}", file=file)
 
         if self._inline_subgraphs and idx == 0:

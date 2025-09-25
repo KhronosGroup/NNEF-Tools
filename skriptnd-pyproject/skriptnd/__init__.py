@@ -155,7 +155,7 @@ RangeExpr.packed = property(lambda expr: True)
 
 
 def _local_name(name):
-    return name[name.rfind('.')+1:]
+    return name[name.rfind('.', 1) + 1:]
 
 
 def _shape_access_str(x):
@@ -166,6 +166,10 @@ def _shape_access_str(x):
     if x.dim is not None:
         s += '[' + str(x.dim) + ']'
     return s
+
+
+def _size_access_str(x):
+    return _local_name(x.pack.name) + '.size'
 
 
 def _tensor_access_str(x):
@@ -179,7 +183,7 @@ def _tensor_access_str(x):
 PlaceholderExpr.__str__ = lambda x: (x.id if x.id and not x.id.startswith('.') else '~') + '|' + str(x.max_value)
 IdentifierExpr.__str__ = lambda x: _local_name(x.name)
 ReferenceExpr.__str__ = lambda x: _local_name(x.name)
-SizeAccess.__str__ = lambda x: _local_name(x.pack.name) + '.size'
+SizeAccess.__str__ = _size_access_str
 ShapeAccess.__str__ = _shape_access_str
 TensorAccess.__str__ = _tensor_access_str
 CastExpr.__str__ = lambda x: f"{x.dtype}({x.arg})"
