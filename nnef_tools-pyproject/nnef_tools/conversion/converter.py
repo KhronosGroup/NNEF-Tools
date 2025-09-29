@@ -344,7 +344,7 @@ class Converter:
         return attribs
 
     def _evaluate(self, attribs, inputs, outputs, arg, using={}):
-        if isinstance(arg, str) and arg[0] == '!':
+        if isinstance(arg, str) and len(arg) != 0 and arg[0] == '!':
             try:
                 return eval(arg[1:], {'I': inputs, 'O': outputs, **attribs, **using, **self._callables,
                                       'np': np, 'math': math})
