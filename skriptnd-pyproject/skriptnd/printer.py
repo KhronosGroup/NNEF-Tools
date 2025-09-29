@@ -278,7 +278,7 @@ class Printer:
                 text += ' while ' + self._format_subgraph(condition, cond_inputs)
 
         elif name == '':    # assignment
-            text += self._format_value(args[0])
+            text += self._format_value(args[0] if len(args) != 0 else attribs[''])
         else:
             text += self._format_invocation(name, args, dtypes, attribs, alias)
 
