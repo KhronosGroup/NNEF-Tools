@@ -772,6 +772,10 @@ namespace sknd
                         report_error(item.position, "mismatch between declared type '%s' and derived type '%s'",
                                      str(item.type.name).c_str(), str(type.name).c_str());
                     }
+                    if ( item.type.name != Typename::Type && !item.type.packed && type.packed )
+                    {
+                        report_error(item.position, "mismatch between non-packed declared type and packed derived type");
+                    }
                     
                     if ( item.shape )
                     {
