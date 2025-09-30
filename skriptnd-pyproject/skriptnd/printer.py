@@ -187,9 +187,10 @@ class Printer:
             repeats = self._format_value(static_iters) \
                 if static_iters is not None and dynamic_iters is not None else None
             text = self._format_result(results, repeats)
-            text += " = "
         else:
-            text = self._format_result(results, None) + " = "
+            text = self._format_result(results, None)
+
+        text += " = "
 
         if name == 'if':
             conditions = attribs['cond_graphs']
@@ -277,8 +278,8 @@ class Printer:
             if condition and not pretest:
                 text += ' while ' + self._format_subgraph(condition, cond_inputs)
 
-        elif name == '':    # assignment
-            text += self._format_value(args[0] if len(args) != 0 else attribs[''])
+        elif name == '=':    # assignment
+            text += self._format_value(args[0] if len(args) != 0 else attribs['value'])
         else:
             text += self._format_invocation(name, args, dtypes, attribs, alias)
 

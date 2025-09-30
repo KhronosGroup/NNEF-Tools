@@ -73,7 +73,7 @@ namespace sknd
                 {
                     TensorRef output = make_tensor(graph, type, {}, {});
                     _contexts.top().exprs.emplace(output, value);
-                    graph.operations.push_back(Operation{ "", {}, { std::make_pair("", value) }, {}, { output } });
+                    graph.operations.push_back(Operation{ "=", {}, { std::make_pair("value", value) }, {}, { output } });
                     return output;
                 }
             };
@@ -1314,7 +1314,7 @@ namespace sknd
                 if ( !intermediates.count(tensor) || std::find(outputs.begin(), outputs.begin() + i, tensor) != outputs.end() )
                 {
                     TensorRef output = make_tensor_like(graph, tensor, {}, {});
-                    graph.operations.push_back(Operation{ "", {}, {}, { tensor }, { output } });
+                    graph.operations.push_back(Operation{ "=", {}, {}, { tensor }, { output } });
                     tensor = output;
                 }
                 

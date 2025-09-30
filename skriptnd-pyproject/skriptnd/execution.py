@@ -889,7 +889,7 @@ def _format_intrinsic(op, indent, context):
         return _format_if(op, indent)
     elif op.name == 'do':
         return _format_do(op, indent, context)
-    elif op.name == '':
+    elif op.name == '=':
         return _format_copy(op, indent)
     elif op.name == 'layout.nonzero':
         return _format_nonzero(op, indent)
@@ -918,7 +918,7 @@ def _format_copy(op, indent):
         arg = op.inputs[0]
         rhs = _format_value_expr(arg.value) if _can_inline_tensor(arg) else _valid_id(arg.name)
     else:
-        rhs = _format_value_expr(op.attribs[""])
+        rhs = _format_value_expr(op.attribs["value"])
     return indent + f"{lhs} = {rhs};"
 
 
