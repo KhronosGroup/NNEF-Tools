@@ -354,7 +354,7 @@ namespace sknd
         
         os << " = ";
         
-        if ( op.name.empty() )
+        if ( op.name == "=" )
         {
             if ( !op.inputs.empty() )
             {
@@ -362,7 +362,7 @@ namespace sknd
             }
             else
             {
-                os << op.attribs.at("");
+                os << op.attribs.at("value");
             }
             os << ';';
             return os;
