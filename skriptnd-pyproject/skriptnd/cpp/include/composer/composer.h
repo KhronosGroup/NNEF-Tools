@@ -464,7 +464,7 @@ namespace sknd
                             remapped = SizeAccess{ value.as<TensorPack*>() };
                         }
                     }
-                    else if ( repeats != arg_repeats )
+                    else if ( canonical(repeats) != canonical(arg_repeats) )
                     {
                         return Error(expr->position, "mismatch between implied loop counts (%s vs %s)",
                                      str(repeats).c_str(), str(arg_repeats).c_str());
