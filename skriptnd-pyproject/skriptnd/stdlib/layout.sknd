@@ -24,7 +24,7 @@ operator tensor {
         T: type;
     }
     @attrib {
-        shape: int..(d);
+        shape: int..(d) = [];
         value: T..(shape * ..);
     }
     @output {
