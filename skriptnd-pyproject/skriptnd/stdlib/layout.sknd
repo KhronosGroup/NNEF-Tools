@@ -14,12 +14,12 @@
 
 # @title layout-ops Data Layout Operators
 
-# @section generator-ops Tensor Creation Operators
+# @section generator-ops Tensor Generator Operators
 
 
-# @item Constant of a given shape
+# @item Tensor of a given shape from a possibly dynamic value
 
-operator constant {
+operator tensor {
     @dtype {
         T: type;
     }

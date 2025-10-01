@@ -15,14 +15,14 @@
 import layer, image, layout, quant, math, algo, rand, nn, linalg, misc;
 
 
-graph constant {
+graph tensor {
     @input {
     }
     @output {
         output: real[10,20];
     }
     @compose {
-        output = layout.constant{shape=[10,20], value=42.0}();
+        output = layout.tensor{shape=[10,20], value=42.0}();
     }
 }
 

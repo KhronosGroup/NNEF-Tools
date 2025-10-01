@@ -1215,7 +1215,7 @@ _Transforms = Converter.unpack_transforms({
         ),
     'ConstantOfShape':
         Transform(
-            type='layout.constant',
+            type='layout.tensor',
             inputs=(),
             outputs='!O[0]',
             attribs={

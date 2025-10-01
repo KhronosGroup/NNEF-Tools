@@ -798,7 +798,7 @@ class ConverterToSkriptND(Converter):
             arg.set_data(expr.args[0], variable=False)
             return 0
         else:
-            Operation(graph, type="layout.constant", attribs={"shape": list(arg.shape), "value": expr}, inputs=(), outputs=(arg,))
+            Operation(graph, type="layout.tensor", attribs={"shape": list(arg.shape), "value": expr}, inputs=(), outputs=(arg,))
             graph.move_operation(len(graph.operations) - 1, idx)
             return 1
 
