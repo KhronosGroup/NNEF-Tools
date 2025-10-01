@@ -400,11 +400,11 @@ namespace sknd
             {
                 if ( dim )
                 {
-                    value = ValueExpr(ValueExpr::ShapeAccessExpr{ tensor, ValueExpr((int_t)*dim) });
+                    value = ShapeAccess{ tensor, ValueExpr((int_t)*dim) };
                 }
                 else
                 {
-                    value = ValueExpr(ValueExpr::SizeAccessExpr{ tensor });
+                    value = SizeAccess{ tensor };
                 }
             }
             else if ( value.is_list() )
@@ -414,7 +414,7 @@ namespace sknd
                     size_t k = 0;
                     for ( auto& item : value.as_list() )
                     {
-                        item = ValueExpr(ValueExpr::ShapeAccessExpr{ TensorRef((Tensor*)&tensor[k++]), ValueExpr((int_t)*dim) });
+                        item = ShapeAccess{ TensorRef((Tensor*)&tensor[k++]), ValueExpr((int_t)*dim) };
                     }
                 }
                 else
@@ -422,7 +422,7 @@ namespace sknd
                     size_t k = *dim;
                     for ( auto& item : value.as_list() )
                     {
-                        item = ValueExpr(ValueExpr::ShapeAccessExpr{ tensor, ValueExpr((int_t)k++) });
+                        item = ShapeAccess{ tensor, ValueExpr((int_t)k++) };
                     }
                 }
             }
@@ -981,7 +981,7 @@ namespace sknd
                     if ( expr.kind() == ValueExpr::Placeholder )
                     {
                         auto& placeholder = expr.as_placeholder();
-                        mapping.insert(std::make_pair(placeholder.id, ValueExpr(ValueExpr::ShapeAccessExpr{ context_tensor, (int_t)k })));
+                        mapping.insert(std::make_pair(placeholder.id, ValueExpr(ShapeAccess{ context_tensor, (int_t)k })));
                     }
                 }
                 if ( local_tensor.packed() && local_tensor.size().kind() == ValueExpr::Placeholder )
@@ -1225,11 +1225,6 @@ namespace sknd
                 replace_dynamic_shapes_with_placeholders(input);
             }
             
-            for ( size_t i = 0; i < external_inputs.size(); ++i )
-            {
-                replace_tensor(graph, external_inputs[i], inputs[i]);
-            }
-            
             if ( callable.is<Invocation>() && scope && !label.empty() )
             {
                 const Invocation& invocation = callable.as<Invocation>();
@@ -1243,6 +1238,11 @@ namespace sknd
             
             graph.inputs = std::move(inputs);
             graph.outputs = std::move(outputs);
+            
+            for ( size_t i = 0; i < external_inputs.size(); ++i )
+            {
+                replace_tensor(graph, external_inputs[i], graph.inputs[i]);
+            }
             
             _contexts.pop();
             
@@ -1314,6 +1314,7 @@ namespace sknd
                 if ( !intermediates.count(tensor) || std::find(outputs.begin(), outputs.begin() + i, tensor) != outputs.end() )
                 {
                     TensorRef output = make_tensor_like(graph, tensor, {}, {});
+                    replace_dynamic_shape_with_references(output, tensor);
                     graph.operations.push_back(Operation{ "=", {}, {}, { tensor }, { output } });
                     tensor = output;
                 }
@@ -4588,6 +4589,33 @@ namespace sknd
                 }
             }
             tensor.shape() = replace_null_shapes_with_placeholders(tensor.canonic_shape(), tensor.max_shape());
+        }
+        
+        void replace_dynamic_shape_with_references( TensorRef& tensor, const TensorRef& reference )
+        {
+            replace_dynamic_shape_with_references(tensor.shape(), reference);
+            if ( tensor.packed() )
+            {
+                for ( size_t i = 0; i < tensor.max_size(); ++i )
+                {
+                    replace_dynamic_shape_with_references(tensor[i].shape, reference);
+                }
+                if ( !tensor.size().is_literal() )
+                {
+                    tensor.size() = SizeAccess{ reference };
+                }
+            }
+        }
+        
+        void replace_dynamic_shape_with_references( Shape& shape, const TensorRef& reference )
+        {
+            for ( size_t i = 0; i < shape.size(); ++i )
+            {
+                if ( !shape[i].is_literal() )
+                {
+                    shape[i] = ShapeAccess{ reference, (int_t)i };
+                }
+            }
         }
         
         static Typename resolve_type( const Param& param, const Dict<Symbol>& symbols )
