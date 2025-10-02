@@ -155,24 +155,31 @@ namespace sknd
             }
             else if ( !is_tensor_expr(expr, symbols) )
             {
-                TRY_DECL(value, eval(expr, symbols))
+                TRY_DECL(value, eval(expr, symbols, idx))
                 auto type = eval_type(expr, symbols);
+                if ( !is_literal(value) )
+                {
+                    return Error(expr.position, "dynamic expression not allowed in this context");
+                }
                 return astensor(value, type);
             }
             else if ( expr.kind == Expr::Identifier && !idx )    // shortcut to avoid duplicating an existing pack
             {
                 auto& iden = as_identifier(expr);
                 auto& symbol = symbols.at(iden.name);
-                return symbol.is<ValueExpr>() ? astensor(symbol.as<ValueExpr>(), symbol.type) : symbol.as<TensorRef>();
+                if ( symbol.is<TensorRef>() )
+                {
+                    return symbol.as<TensorRef>();
+                }
             }
             
-            TRY_DECL(rank, eval_max_rank(expr, symbols))
-            if ( rank && !idx )
+            TRY_DECL(size, eval_dynamic_rank(expr, symbols))
+            if ( size != nullptr && !idx )
             {
-                TRY_DECL(tensors, eval_pack<Tensor*>(expr, symbols, *rank))
+                size_t rank = eval_shape_expr_max(canonical(size));
+                TRY_DECL(tensors, eval_pack<Tensor*>(expr, symbols, rank))
                 auto type = eval_type(expr, symbols);
                 TRY_DECL(shape, eval_shape_from_expr(expr, symbols))
-                TRY_DECL(size, eval_dynamic_rank(expr, symbols))
                 return aspack(tensors, type, shape, size);
             }
             else
