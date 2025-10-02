@@ -913,12 +913,10 @@ def _format_call(block, args, is_condition=False):
 
 
 def _format_copy(op, indent):
-    lhs = _valid_id(op.outputs[0].name)
-    if len(op.inputs):
-        arg = op.inputs[0]
-        rhs = _format_value_expr(arg.value) if _can_inline_tensor(arg) else _valid_id(arg.name)
-    else:
-        rhs = _format_value_expr(op.attribs["value"])
+    arg = op.inputs[0]
+    res = op.outputs[0]
+    lhs = _valid_id(res.name)
+    rhs = _format_value_expr(arg.value) if _can_inline_tensor(arg) else _valid_id(arg.name)
     return indent + f"{lhs} = {rhs};"
 
 

@@ -65,17 +65,7 @@ namespace sknd
         {
             return [&graph,this]( const ValueExpr& value, const Typename& type ) -> TensorRef
             {
-                if ( is_literal(value) )
-                {
-                    return make_constant(graph, value, type);
-                }
-                else
-                {
-                    TensorRef output = make_tensor(graph, type, {}, {});
-                    _contexts.top().exprs.emplace(output, value);
-                    graph.operations.push_back(Operation{ "=", {}, { std::make_pair("value", value) }, {}, { output } });
-                    return output;
-                }
+                return make_constant(graph, value, type);
             };
         }
         
@@ -1272,41 +1262,41 @@ namespace sknd
             {
                 TRY_DECL(_inputs, _outputs, compose(component, operators, locals, model, sub_graph_idx, scope, false))
                 
-                auto& tensor_value_exprs = _contexts.top().exprs;
                 for ( auto& input : _inputs )
                 {
-                    auto it = tensor_value_exprs.find(input);
-                    if ( it != tensor_value_exprs.end() )
+                    if ( is_implicit_constant(input) )
                     {
-                        add_accessed_tensors(it->second, inputs);
-                    }
-                    else if ( !input.is_constant() && !intermediates.count(input) && std::find(inputs.begin(), inputs.end(), input) == inputs.end() )
-                    {
-                        inputs.push_back(input);
+                        intermediates.insert(input);
                     }
                 }
                 for ( auto& output : _outputs )
                 {
                     intermediates.insert(output);
                 }
+                
+                for ( auto& input : _inputs )
+                {
+                    if ( !intermediates.count(input) && std::find(inputs.begin(), inputs.end(), input) == inputs.end() )
+                    {
+                        inputs.push_back(input);
+                    }
+                }
             }
             
             std::vector<TensorRef> outputs(region.yields.size());
             
             auto& graph = model.graphs[sub_graph_idx];
-            auto& tensor_value_exprs = _contexts.top().exprs;
             
             for ( size_t i = 0; i < region.yields.size(); ++i )
             {
                 auto& yield = *region.yields[i];
                 TRY_DECL(tensor, eval(yield, locals, as_tensor(graph), as_tensor_pack(graph)))
-                
-                auto it = tensor_value_exprs.find(tensor);
-                if ( it != tensor_value_exprs.end() )
+                if ( is_implicit_constant(tensor) )
                 {
-                    add_accessed_tensors(it->second, inputs);
+                    intermediates.insert(tensor);
                 }
-                else if ( !tensor.is_constant() && !intermediates.count(tensor) && std::find(inputs.begin(), inputs.end(), tensor) == inputs.end() )
+                
+                if ( !intermediates.count(tensor) && std::find(inputs.begin(), inputs.end(), tensor) == inputs.end() )
                 {
                     inputs.push_back(tensor);
                 }
@@ -4673,7 +4663,6 @@ namespace sknd
         {
             Dict<TensorRef> consts;
             std::unordered_map<Tensors,TensorPack*> packs;
-            std::unordered_map<TensorRef,ValueExpr> exprs;
         };
         
     private:

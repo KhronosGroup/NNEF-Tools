@@ -356,15 +356,7 @@ namespace sknd
         
         if ( op.name == "=" )
         {
-            if ( !op.inputs.empty() )
-            {
-                os << op.inputs.front().name();
-            }
-            else
-            {
-                os << op.attribs.at("value");
-            }
-            os << ';';
+            os << op.inputs.front().name() << ';';
             return os;
         }
         
