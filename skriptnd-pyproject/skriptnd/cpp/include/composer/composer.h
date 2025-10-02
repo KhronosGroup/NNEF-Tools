@@ -74,7 +74,7 @@ namespace sknd
             return [&graph,this]( const Tensors& tensors, const Typename& dtype, const Shape& shape,
                                  const ValueExpr& size ) -> TensorRef
             {
-                auto& packs = _contexts.top().packs;
+                auto& packs = _contexts.at(graph.name).packs;
                 auto it = packs.find(tensors);
                 if ( it != packs.end() )
                 {
@@ -85,7 +85,7 @@ namespace sknd
                 {
                     pack->items[i] = tensors[i];
                 }
-                cache_tensor_pack(pack);
+                cache_tensor_pack(graph, pack);
                 return TensorRef(pack);
             };
         }
@@ -210,8 +210,7 @@ namespace sknd
         
         void reset()
         {
-            _contexts = {};
-            _contexts.push({});
+            _contexts.clear();
             _subgraphs.clear();
             _placeholders.clear();
             _trace.clear();
@@ -226,6 +225,7 @@ namespace sknd
         
         Graph& new_graph( Model& model, const std::string& name )
         {
+            _contexts[name] = SubgraphContext();
             model.graphs.push_back(Graph{ name });
             return model.graphs.back();
         }
@@ -758,7 +758,7 @@ namespace sknd
                         {
                             pack->items[k] = make_tensor(*graph, output.dtype, shape, canonic_shape, output.max_shape);
                         }
-                        cache_tensor_pack(pack);
+                        cache_tensor_pack(*graph, pack);
                         outputs[i] = TensorRef(pack);
                     }
                 }
@@ -889,6 +889,8 @@ namespace sknd
                     
                     TRY_DECL(item_attribs, item_inputs, item_outputs, compose_callable(component.operation, operators, symbols, model, graph_idx, graph_idx, scope, label))
                     
+                    graph = &model.graphs[graph_idx];
+                    
                     if ( i == 0 )
                     {
                         const size_t nlocals = locals.size();
@@ -913,13 +915,13 @@ namespace sknd
                 
                 for ( size_t k = component.loop->carries.size(); k < outputs.size(); ++k )
                 {
-                    cache_tensor_pack(outputs[k].as<TensorPack*>());
+                    cache_tensor_pack(*graph, outputs[k].as<TensorPack*>());
                 }
                 
                 std::swap(symbols, saved_symbols);
                 
                 rename_results(component.results, outputs, scope);
-                TRY_CALL(add_results_to_symbols(component.results, outputs, model.graphs[graph_idx], symbols, scope, component.position))
+                TRY_CALL(add_results_to_symbols(component.results, outputs, *graph, symbols, scope, component.position))
                 
                 return std::make_tuple(inputs, outputs);
             }
@@ -1203,7 +1205,6 @@ namespace sknd
             }
             
             new_graph(model, graph_name);
-            _contexts.push({});
             
             TRY_DECL(attribs, external_inputs, outputs, compose_callable(callable, operators, symbols, model, parent_idx, graph_idx, scope, auto_label))
             
@@ -1233,8 +1234,6 @@ namespace sknd
             {
                 replace_tensor(graph, external_inputs[i], graph.inputs[i]);
             }
-            
-            _contexts.pop();
             
             if ( callable.is<Invocation>() )
             {
@@ -1688,7 +1687,7 @@ namespace sknd
                                 {
                                     pack->items[i] = (Tensor*)&output[k+i];
                                 }
-                                cache_tensor_pack(pack);
+                                cache_tensor_pack(graph, pack);
                                 
                                 if ( !item.name.empty() )
                                 {
@@ -3401,7 +3400,7 @@ namespace sknd
                     auto name = scoped_name(scope, param.name, i+1);
                     pack->items[i] = make_tensor(graph, type, shape, canonic_shape, max_shape, name, value.packed() ? value[i] : value, variable);
                 }
-                cache_tensor_pack(pack);
+                cache_tensor_pack(graph, pack);
                 return TensorRef(pack);
             }
             else
@@ -3453,9 +3452,9 @@ namespace sknd
             return graph.packs.back().get();
         }
         
-        void cache_tensor_pack( TensorPack* pack )
+        void cache_tensor_pack( const Graph& graph, TensorPack* pack )
         {
-            _contexts.top().packs.emplace(pack->items, pack);
+            _contexts.at(graph.name).packs.emplace(pack->items, pack);
         }
         
         TensorRef make_tensor_like( Graph& graph, const TensorRef& tensor, const std::optional<std::string>& scope = {},
@@ -3475,7 +3474,7 @@ namespace sknd
                     auto name = !iden.empty() ? scoped_name(scope, iden, i+1) : iden;
                     pack->items[i] = make_tensor(graph, tensor[i].dtype, tensor[i].shape, tensor[i].canonic_shape, tensor[i].max_shape, name);
                 }
-                cache_tensor_pack(pack);
+                cache_tensor_pack(graph, pack);
                 return pack;
             }
             else
@@ -3504,7 +3503,7 @@ namespace sknd
                 return TensorRef(nullptr);
             }
             
-            auto& consts = _contexts.top().consts;
+            auto& consts = _contexts.at(graph.name).consts;
             
             const std::string str = std::to_string(value);
             auto it = consts.find(str);
@@ -3517,7 +3516,7 @@ namespace sknd
                     {
                         pack->items[i] = make_tensor(graph, type, shape, {}, value[i]);
                     }
-                    cache_tensor_pack(pack);
+                    cache_tensor_pack(graph, pack);
                     it = consts.emplace(str, TensorRef(pack)).first;
                 }
                 else
@@ -4671,7 +4670,7 @@ namespace sknd
         const ErrorCallback _error;
         const OperationCallback _atomic;
         const OperationCallback _unroll;
-        std::stack<SubgraphContext> _contexts;
+        Dict<SubgraphContext> _contexts;
         Dict<SubgraphInfo> _subgraphs;
         Dict<ValueExpr> _placeholders;
         StackTrace _trace;
