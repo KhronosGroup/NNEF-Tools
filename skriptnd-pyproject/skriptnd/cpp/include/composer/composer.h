@@ -929,8 +929,7 @@ namespace sknd
             {
                 TRY_DECL(attribs, inputs, outputs, compose_callable(component.operation, operators, symbols, model, graph_idx, graph_idx, scope, label))
                 rename_results(component.results, outputs, scope);
-                bool is_implicit_op = component.operation.is<Region>() && component.operation.as<Region>().components.empty();
-                TRY_CALL(add_results_to_symbols(component.results, outputs, model.graphs[graph_idx], symbols, scope, component.position, is_implicit_op))
+                TRY_CALL(add_results_to_symbols(component.results, outputs, model.graphs[graph_idx], symbols, scope, component.position))
                 return std::make_tuple(inputs, outputs);
             }
         }
@@ -1638,7 +1637,7 @@ namespace sknd
         
         Result<void> add_results_to_symbols( const std::vector<Packable<Typed>>& results, std::vector<TensorRef>& outputs,
                                             Graph& graph, Dict<Symbol>& symbols, const std::optional<std::string>& scope,
-                                            const Position& position, bool is_implicit_op = false )
+                                            const Position& position )
         {
             for ( size_t i = 0; i < results.size(); ++i )
             {
@@ -1706,7 +1705,7 @@ namespace sknd
                             {
                                 auto length = output.packed() ? output.size() - ValueExpr((int_t)result.size() - 1) : 0;
                                 TRY_CALL(deduce_repeats(item, output, symbols))
-                                TRY_CALL(deduce_shape(item, output, k, n, length, item.position, symbols, is_implicit_op))
+                                TRY_CALL(deduce_shape(item, output, k, n, length, item.position, symbols))
                                 TRY_DECL(item_shape, eval_shape(*item.shape, symbols))
                                 output.shape() = item_shape;
                                 output.canonic_shape() = canonical(item_shape);
@@ -1772,7 +1771,7 @@ namespace sknd
                         if ( !is_empty_pack )
                         {
                             TRY_CALL(deduce_shape(item, output, 0, output.packed() ? output.max_size() : 0, 
-                                                  output.packed() ? output.size() : 0, item.position, symbols, is_implicit_op))
+                                                  output.packed() ? output.size() : 0, item.position, symbols))
                         }
                         TRY_DECL(item_shape, eval_shape(*item.shape, symbols))
                         output.shape() = item_shape;
@@ -3608,7 +3607,7 @@ namespace sknd
         }
         
         Result<void> deduce_shape( const Typed& param, const TensorRef& tensor, const size_t offset, size_t const count,
-                                  const ValueExpr& size, const Position& position, Dict<Symbol>& symbols, bool is_implicit_op = false )
+                                  const ValueExpr& size, const Position& position, Dict<Symbol>& symbols )
         {
             if ( tensor == nullptr )
             {
@@ -3634,16 +3633,8 @@ namespace sknd
                     symbols.emplace(iden, Symbol(ValueExpr((int_t)tensor.rank()), Typename::Int));
                 }
                 
-                if ( is_implicit_op && tensor.rank() == 0 )
-                {
-                    TRY_CALL(deduce_zero_ranks(param, symbols))
-                    TRY_CALL(deduce_zero_extents(param, symbols))
-                }
-                else
-                {
-                    TRY_CALL(deduce_ranks(param, tensor.rank(), position, symbols))
-                    TRY_CALL(deduce_extents(param, tensor, offset, count, size, position, symbols))
-                }
+                TRY_CALL(deduce_ranks(param, tensor.rank(), position, symbols))
+                TRY_CALL(deduce_extents(param, tensor, offset, count, size, position, symbols))
             }
             return {};
         }
