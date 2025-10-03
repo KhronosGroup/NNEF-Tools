@@ -180,6 +180,16 @@ def _tensor_access_str(x):
     return s
 
 
+def _enum_referenced(op):
+    for key, value in op.attribs.items():
+        if isinstance(value, Expr):
+            for x in recursive_enumerate_expr(value):
+                if isinstance(x, ShapeAccess):
+                    yield x.tensor
+                elif isinstance(x, SizeAccess):
+                    yield x.pack
+
+
 PlaceholderExpr.__str__ = lambda x: (x.id if x.id and not x.id.startswith('.') else '~') + '|' + str(x.max_value)
 IdentifierExpr.__str__ = lambda x: _local_name(x.name)
 ReferenceExpr.__str__ = lambda x: _local_name(x.name)
@@ -212,6 +222,7 @@ TensorPack.packed = property(lambda expr: True)
 
 Operation.constants = property(lambda op: (tensor for tensor in op.internals if tensor.is_constant))
 Operation.variables = property(lambda op: (tensor for tensor in op.internals if tensor.is_variable))
+Operation.referenced = property(_enum_referenced)
 
 Graph.variables = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_variable))
 Graph.constants = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_constant))
