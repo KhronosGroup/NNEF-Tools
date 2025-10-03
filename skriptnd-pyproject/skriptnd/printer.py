@@ -157,12 +157,8 @@ class Printer:
                 text += '\t\t}'
                 return text
         else:
-            args = list(inputs)
-            args = [item for item in args
-                    if (isinstance(item, _sknd.TensorPack) and len(item) > 0)
-                    or (isinstance(item, _sknd.Tensor) and not self._can_inline(item))]
             name = self._make_id(self._strip_scope(target.name, self._module_scope))
-            return self._format_invocation(name, args)
+            return self._format_invocation(name, inputs)
 
     def _format_invocation(self, name, args, dtypes=None, attribs=None, alias=None, label=None):
         text = ""
