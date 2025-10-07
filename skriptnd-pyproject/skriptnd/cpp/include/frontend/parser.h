@@ -520,7 +520,7 @@ namespace sknd
             return Param{ position, name, type, type_alias, rank, shape, repeats, repeats_bound, default_value, default_bounds };
         }
         
-        static Result<Shared<Shapedef>> parse_shape( Lexer& lexer, const std::string& name = std::string(), unsigned flags = 0 )
+        static Result<Shared<Shapedef>> parse_shape( Lexer& lexer, const std::string& name = {}, unsigned flags = 0 )
         {
             auto position = lexer.position();
             
