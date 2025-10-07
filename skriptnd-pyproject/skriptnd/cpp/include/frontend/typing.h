@@ -226,7 +226,7 @@ namespace sknd
                 check_param(param, decls, Lexer::Block::Constant);
                 if ( param.shape )
                 {
-                    check_shape_components(decls, *param.shape, param.repeats, true);
+                    check_shape_components(decls, *param.shape, param.repeats);
                 }
                 else
                 {
@@ -239,7 +239,7 @@ namespace sknd
                 check_param(param, decls, Lexer::Block::Variable);
                 if ( param.shape )
                 {
-                    check_shape_components(decls, *param.shape, param.repeats, true);
+                    check_shape_components(decls, *param.shape, param.repeats);
                 }
                 else
                 {
@@ -254,7 +254,7 @@ namespace sknd
                 if ( param.shape )
                 {
                     declare_dynamic_shape_components(decls, *param.shape);
-                    check_shape_components(decls, *param.shape, param.repeats, true);
+                    check_shape_components(decls, *param.shape, param.repeats, true, !op.graph);
                 }
                 else if ( !op.graph )
                 {
@@ -500,7 +500,8 @@ namespace sknd
             }
         }
         
-        void check_shape_components( const Dict<Declaration>& decls, const Shapedef& shape, const Shared<Expr>& repeats, bool enforce ) const
+        void check_shape_components( const Dict<Declaration>& decls, const Shapedef& shape, const Shared<Expr>& repeats,
+                                    bool enforce_check = true, bool enforce_bound = false ) const
         {
             for ( size_t i = 0; i < shape.extents.size(); ++i )
             {
@@ -508,50 +509,51 @@ namespace sknd
                 auto bound = shape.bounds[i];
                 bool spread = shape.spreads & (1 << i);
                 
-                if ( !extent )
+                if ( extent )
                 {
-                    continue;
+                    if ( extent->kind == Expr::Expand )
+                    {
+                        auto& expand = as_expand(*extent);
+                        if ( expand.count )
+                        {
+                            if ( !is_affine_expr(*expand.count) || enforce_check )
+                            {
+                                check_repeat(*expand.count, decls, true);
+                            }
+                        }
+                        extent = expand.item;
+                        
+                        if ( extent )
+                        {
+                            if ( !is_affine_expr(*extent) || enforce_check )
+                            {
+                                auto [type, rank] = check_extent(*extent, decls);
+                                if ( type && !type->packed && !expand.count )
+                                {
+                                    report_error(extent->position, "repeat count must be supplied if item is not a pack");
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if ( spread && !repeats )
+                        {
+                            report_error(extent->position, "packed item can only be spread across a packed parameter");
+                        }
+                        if ( !is_affine_expr(*extent) || enforce_check )
+                        {
+                            auto [type, rank] = check_extent(*extent, decls, repeats);
+                            if ( type && type->packed && !spread )
+                            {
+                                report_error(extent->position, "packed item must be expanded or spread in shape definitions");
+                            }
+                        }
+                    }
                 }
-                
-                if ( extent->kind == Expr::Expand )
+                else if ( !bound && enforce_bound )
                 {
-                    auto& expand = as_expand(*extent);
-                    if ( expand.count )
-                    {
-                        if ( !is_affine_expr(*expand.count) || enforce )
-                        {
-                            check_repeat(*expand.count, decls, true);
-                        }
-                    }
-                    extent = expand.item;
-                    if ( !extent )
-                    {
-                        continue;
-                    }
-                    
-                    if ( !is_affine_expr(*extent) || enforce )
-                    {
-                        auto [type, rank] = check_extent(*extent, decls);
-                        if ( type && !type->packed && !expand.count )
-                        {
-                            report_error(extent->position, "repeat count must be supplied if item is not a pack");
-                        }
-                    }
-                }
-                else
-                {
-                    if ( spread && !repeats )
-                    {
-                        report_error(extent->position, "packed item can only be spread across a packed parameter");
-                    }
-                    if ( !is_affine_expr(*extent) || enforce )
-                    {
-                        auto [type, rank] = check_extent(*extent, decls, repeats);
-                        if ( type && type->packed && !spread )
-                        {
-                            report_error(extent->position, "packed item must be expanded or spread in shape definitions");
-                        }
-                    }
+                    report_error(shape.position, "upper bound must be specified for dynamic shape components");
                 }
                 
                 if ( bound )
@@ -998,7 +1000,7 @@ namespace sknd
                         }
                         if ( iden.shape )
                         {
-                            check_shape_components(decls, *iden.shape, nullptr, true);
+                            check_shape_components(decls, *iden.shape, nullptr);
                         }
                         declare_symbol(decls, expr->position, iden.name, as_tensor(*type), *rank, Declaration::LoopLocal | Declaration::AllowShadowing);
                     }
