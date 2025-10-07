@@ -2229,12 +2229,12 @@ namespace sknd
                         const size_t count = eval_shape_expr_max(canonic_repeats);
                         TRY_CALL(check_shape_repeats(*param.shape, symbols, count))
                         
-                        if ( !compare_shapes(output.canonic_size(), canonic_repeats) )
+                        if ( !compare_shapes(canonic_repeats, output.canonic_size(), output.max_size()) )
                         {
                             return Error(param.repeats->position, "output pack length (%s) does not match declared output count (%s)",
                                          str(output.size()).c_str(), str(repeats).c_str());
                         }
-                        if ( can_replace_shape(output.canonic_size(), canonic_repeats) )
+                        if ( can_replace_shape(canonic_repeats, output.canonic_size()) )
                         {
                             output.size() = repeats;
                             output.canonic_size() = canonic_repeats;
@@ -2244,7 +2244,7 @@ namespace sknd
                     {
                         TRY_DECL(declared_shape, eval_shape(*param.shape, symbols, j))
                         auto canonic_shape = canonical(declared_shape);
-                        if ( !compare_shapes(output[j].canonic_shape, canonic_shape) )
+                        if ( !compare_shapes(canonic_shape, output[j].canonic_shape, output[j].max_shape) )
                         {
                             return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of item %d of output '%s'",
                                          str(output[j].shape).c_str(), str(declared_shape).c_str(), (int)j, param.name.c_str());
@@ -2256,7 +2256,7 @@ namespace sknd
                 {
                     TRY_DECL(declared_shape, eval_shape(*param.shape, symbols))
                     auto canonic_shape = canonical(declared_shape);
-                    if ( !compare_shapes(output->canonic_shape, canonic_shape) )
+                    if ( !compare_shapes(canonic_shape, output->canonic_shape, output->max_shape) )
                     {
                         return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of output '%s'",
                                      str(output->shape).c_str(), str(declared_shape).c_str(), param.name.c_str());
@@ -2267,7 +2267,7 @@ namespace sknd
             return Result<void>();
         }
         
-        bool compare_shapes( const Shape& composed_shape, const Shape& declared_shape )
+        bool compare_shapes( const Shape& declared_shape, const Shape& composed_shape, const std::vector<int_t>& max_shape )
         {
             if ( declared_shape.size() != composed_shape.size() )
             {
@@ -2275,7 +2275,7 @@ namespace sknd
             }
             for ( size_t i = 0; i < declared_shape.size(); ++i )
             {
-                if ( declared_shape[i] != nullptr && !compare_shapes(composed_shape[i], declared_shape[i]) )
+                if ( declared_shape[i] != nullptr && !compare_shapes(declared_shape[i], composed_shape[i], max_shape[i]) )
                 {
                     return false;
                 }
@@ -2283,11 +2283,11 @@ namespace sknd
             return true;
         }
         
-        bool compare_shapes( const ValueExpr& composed_shape, const ValueExpr& declared_shape )
+        bool compare_shapes( const ValueExpr& declared_shape, const ValueExpr& composed_shape, const int_t& max_shape )
         {
             if ( declared_shape.is_placeholder() && declared_shape.as_placeholder().id.empty() )
             {
-                return true;
+                return declared_shape.as_placeholder().max_value == max_shape;
             }
             else if ( composed_shape.is_literal() && declared_shape.is_placeholder() && composed_shape == declared_shape.as_placeholder().max_value )
             {
@@ -2296,7 +2296,7 @@ namespace sknd
             return composed_shape == declared_shape;
         }
         
-        bool can_replace_shape( const ValueExpr& composed_shape, const ValueExpr& declared_shape )
+        bool can_replace_shape( const ValueExpr& declared_shape, const ValueExpr& composed_shape )
         {
             if ( declared_shape.is_placeholder() && declared_shape.as_placeholder().id.empty() )
             {
@@ -2313,7 +2313,7 @@ namespace sknd
         {
             for ( size_t k = 0; k < canonic_shape.size(); ++k )
             {
-                if ( canonic_shape[k] != nullptr && can_replace_shape(tensor.canonic_shape[k], canonic_shape[k]) )
+                if ( canonic_shape[k] != nullptr && can_replace_shape(canonic_shape[k], tensor.canonic_shape[k]) )
                 {
                     tensor.shape[k] = shape[k];
                     tensor.canonic_shape[k] = canonic_shape[k];
