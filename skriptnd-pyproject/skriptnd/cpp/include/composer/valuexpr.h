@@ -1849,7 +1849,15 @@ namespace sknd
     
     inline std::ostream& operator<<( std::ostream& os, const ValueExpr::PlaceholderExpr& placeholder )
     {
-        os << placeholder.id << '|' << placeholder.max_value;
+        if ( !placeholder.id.empty() )
+        {
+            os << placeholder.id;
+        }
+        else
+        {
+            os << '~';
+        }
+        os << '|' << placeholder.max_value;
         return os;
     }
 
