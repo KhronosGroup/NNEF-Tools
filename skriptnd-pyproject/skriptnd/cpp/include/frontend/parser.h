@@ -481,7 +481,7 @@ namespace sknd
                         TRY_MOVE(repeats_bound, parse_expr(lexer))
                     }
                     
-                    if ( !repeats && (repeats_bound || block != Lexer::Block::Output) )
+                    if ( !repeats && block != Lexer::Block::Output )
                     {
                         repeats = std::make_shared<IdenfitierExpr>(position, "|" + name + "|");
                     }

@@ -921,7 +921,7 @@ namespace sknd
         void check_param( const Param& param, const Dict<Declaration>& decls, const Lexer::Block block ) const
         {
             bool declares_repeats = block == Lexer::Block::Attrib || block == Lexer::Block::Input;
-            if ( !declares_repeats && !param.repeats && param.type.packed )
+            if ( !declares_repeats && param.type.packed && !param.repeats && !param.repeats_bound )
             {
                 report_error(param.position, "repeat count must be defined");
             }
