@@ -292,7 +292,7 @@ class Printer:
                 print("\t\t" + self._format_param(input.name, input.dtype, input.shape,
                                                   packed=True, repeats=len(input),
                                                   include_shape_max=True) + ";", file=file)
-            elif not self._can_inline(input):
+            else:
                 print("\t\t" + self._format_param(input.name, input.dtype, input.shape,
                                                   include_shape_max=True) + ";", file=file)
         print("\t}", file=file)
