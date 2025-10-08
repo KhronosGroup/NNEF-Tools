@@ -1,0 +1,112 @@
+operator linear {
+    @input {
+        input: real[n,c];
+        filter: real[m,c];
+        bias: real[m];
+    }
+    @output {
+        output: real[n,m];
+    }
+    @lower {
+        output[i,j] = bias[j,],
+            i < n, j < m;
+        output[i,j] += input[i,k] * filter[j,k],
+            i < n, j < m, k < c;
+    }
+}
+
+operator relu {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = x[i..] > 0.0 ? x[i..] : 0.0,
+            i < s;
+    }
+}
+
+operator exp {
+    @input {
+        x: real[m,n];
+    }
+    @output {
+        y: real[m,n];
+    }
+    @lower {
+        y[i,j] = exp(x[i,j]),
+            i < m, j < n;
+    }
+}
+
+operator sum_rows {
+    @input {
+        x: real[m,n];
+    }
+    @output {
+        y: real[m];
+    }
+    @lower {
+        y[i,] += x[i,j],
+            i < m, j < n;
+    }
+}
+
+operator div_rows {
+    @input {
+        x: real[m,n];
+        y: real[m];
+    }
+    @output {
+        z: real[m,n];
+    }
+    @lower {
+        z[i,j] = x[i,j] / y[i,],
+            i < m, j < n;
+    }
+}
+
+operator softmax {
+    @input {
+        input: real[n,c];
+    }
+    @output {
+        output: real[n,c];
+    }
+    @compose {
+        exp = exp(input);
+        sum = sum_rows(exp);
+        output = div_rows(exp, sum);
+    }
+}
+
+
+graph Perceptron {
+    @attrib {
+        batch: int = 1;
+        features: int = 16 * 16;
+        hidden: int = 100;
+        classes: int = 10;
+    }
+    @input {
+        input: real[batch, features];
+    }
+    @output {
+        output: real[batch, classes];
+    }
+    @variable {
+        filter1: real[hidden, features];
+        bias1: real[hidden];
+        filter2: real[classes, hidden];
+        bias2: real[classes];
+    }
+    @compose {
+        layer1 = linear(input, filter1, bias1);
+        relu1 = relu(layer1);
+        layer2 = linear(relu1, filter2, bias2);
+        relu2 = relu(layer2);
+        output = softmax(relu2);
+    }
+}
