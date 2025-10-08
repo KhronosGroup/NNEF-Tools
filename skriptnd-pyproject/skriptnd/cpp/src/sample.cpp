@@ -81,6 +81,11 @@ int main( int argc, const char * argv[] )
     }
     
     auto graph_names = sknd::enum_graph_names(is);
+    if ( graph_names.empty() )
+    {
+        graph_names.push_back("");
+    }
+    
     for ( auto& graph_name : graph_names )
     {
         is.close();
