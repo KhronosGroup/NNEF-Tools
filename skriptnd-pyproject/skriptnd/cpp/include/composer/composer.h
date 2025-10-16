@@ -1294,12 +1294,16 @@ namespace sknd
                     intermediates.insert(tensor);
                 }
                 
-                if ( !intermediates.count(tensor) && std::find(inputs.begin(), inputs.end(), tensor) == inputs.end() )
+                bool is_input = std::find(inputs.begin(), inputs.end(), tensor) != inputs.end();
+                bool is_output = std::find(outputs.begin(), outputs.begin() + i, tensor) != outputs.begin() + i;
+                bool is_intermediate = intermediates.count(tensor);
+                
+                if ( !is_intermediate && !is_input )
                 {
                     inputs.push_back(tensor);
                 }
                 
-                if ( !intermediates.count(tensor) || std::find(outputs.begin(), outputs.begin() + i, tensor) != outputs.end() )
+                if ( !is_intermediate || is_output )
                 {
                     TensorRef output = make_tensor_like(graph, tensor, {}, {});
                     replace_dynamic_shape_with_references(output, tensor);
