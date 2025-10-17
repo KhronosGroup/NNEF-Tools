@@ -400,9 +400,11 @@ class SkriptNDExecutor(Executor):
 
     def __init__(self, model_path, target=None, device=None, atomic=None):
         import skriptnd as sknd
-        self.model = sknd.read_model(model_path, atomic=atomic)
+        self.model = sknd.read_model(model_path)
         if not self.model:
             raise IOError('Failed to read model')
+        if atomic is not None:
+            sknd.flatten_model(self.model, is_atomic=lambda op: op.name in atomic)
         if target is None or target == 'cpp':
             self.runner = sknd.compile_model(self.model)
         else:

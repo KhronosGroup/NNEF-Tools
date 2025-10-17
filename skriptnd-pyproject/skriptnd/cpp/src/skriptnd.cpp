@@ -62,27 +62,9 @@ namespace sknd
         return names;
     }
 
-    OperationCallback make_operation_callback( const std::set<std::string>& names )
-    {
-        return [&]( const std::string& name, const std::map<std::string,Typename>&,
-                   const std::map<std::string,ValueExpr>&, const std::vector<TensorRef>& )
-        {
-            return (bool)names.count(name);
-        };
-    }
-
-    OperationCallback make_operation_callback( std::set<std::string>&& names )
-    {
-        return [=]( const std::string& name, const std::map<std::string,Typename>&,
-                   const std::map<std::string,ValueExpr>&, const std::vector<TensorRef>& )
-        {
-            return (bool)names.count(name);
-        };
-    }
-    
     std::optional<Model> read_model( const std::string& path, const std::string& graph_name, const std::string& stdlib_path,
-                                    const ErrorCallback error, const OperationCallback atomic, const OperationCallback unroll,
-                                    const std::map<std::string, ValueExpr>& attribs ) noexcept
+                                    const ErrorCallback error, const std::map<std::string, ValueExpr>& attribs,
+                                    const unsigned flags ) noexcept
     {
         const std::string folder = path.back() != '\\' && path.back() != '/' ? path + "/" : path;
         
@@ -93,7 +75,7 @@ namespace sknd
             return std::nullopt;
         }
         
-        auto model = read_model(is, "main", graph_name, stdlib_path, folder, error, atomic, unroll, attribs);
+        auto model = read_model(is, "main", graph_name, stdlib_path, folder, error, attribs, flags);
         if ( model )
         {
             model->name = model_name_from_path(path);
@@ -104,8 +86,8 @@ namespace sknd
     
     std::optional<Model> read_model( std::istream& is, const std::string& module, const std::string& main_graph,
                                     const std::string& stdlib_path, const std::string& import_path,
-                                    const ErrorCallback error, const OperationCallback atomic, const OperationCallback unroll,
-                                    const std::map<std::string, ValueExpr>& attribs ) noexcept
+                                    const ErrorCallback error, const std::map<std::string, ValueExpr>& attribs,
+                                    const unsigned flags ) noexcept
     {
         size_t warning_count = 0;
         size_t error_count = 0;
@@ -155,7 +137,7 @@ namespace sknd
             return std::nullopt;
         }
         
-        Composer composer(counted_error, atomic, unroll);
+        Composer composer(counted_error, flags);
         auto model = composer(operators, scoped_graph_name, attribs);
         if ( !model )
         {
@@ -164,6 +146,35 @@ namespace sknd
         }
         
         return error_count ? std::optional<Model>() : std::move(*model);
+    }
+
+    void flatten_model( Model& model, const OperationFilter is_atomic ) noexcept
+    {
+        for ( auto& graph : model.graphs )
+        {
+            for ( auto it = graph.operations.begin(); it != graph.operations.end(); ++it )
+            {
+                if ( it->nodes > 1 )
+                {
+                    if ( is_atomic(*it) )
+                    {
+                        for ( auto itt = it + 1; itt < it + it->nodes; ++itt )
+                        {
+                            if ( itt->nodes == 1 )
+                            {
+                                std::move(itt->contractions.begin(), itt->contractions.end(), std::back_inserter(it->contractions));
+                            }
+                        }
+                        graph.operations.erase(it + 1, it + it->nodes);
+                        it->nodes = 1;
+                    }
+                    else
+                    {
+                        graph.operations.erase(it--);
+                    }
+                }
+            }
+        }
     }
 
     inline size_t item_bytes( const Typename dtype )

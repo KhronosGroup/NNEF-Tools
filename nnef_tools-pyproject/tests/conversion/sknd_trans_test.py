@@ -36,7 +36,7 @@ class TestEnv(sknd_test.TestEnv):
     }
 
     def setUp(self) -> None:
-        self._skriptnd_reader = sknd_io.Reader(atomic=True)
+        self._skriptnd_reader = sknd_io.Reader(atomic=lambda op: True)
         self._skriptnd_writer = sknd_io.Writer(inline_subgraphs=False)
         self._skriptnd_transposer = sknd_transposer.NXCtoNCX(skip_filters=False)
         self._execute = True

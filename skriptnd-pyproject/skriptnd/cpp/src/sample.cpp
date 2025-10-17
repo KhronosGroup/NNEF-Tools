@@ -45,8 +45,8 @@ int main( int argc, const char * argv[] )
     
     bool all = false;
     bool verbose = false;
-    sknd::OperationCallback atomic = sknd::FalseOperationCallback;
-    sknd::OperationCallback unroll = sknd::FalseOperationCallback;
+    bool atomic = false;
+    bool unroll = false;
     for ( size_t i = 2; i < argc; ++i )
     {
         const std::string arg = argv[i];
@@ -60,11 +60,11 @@ int main( int argc, const char * argv[] )
         }
         else if ( arg == "--atomic" )
         {
-            atomic = sknd::TrueOperationCallback;
+            atomic = true;
         }
         else if ( arg == "--unroll" )
         {
-            unroll = sknd::TrueOperationCallback;
+            unroll = true;
         }
     }
     
@@ -91,9 +91,13 @@ int main( int argc, const char * argv[] )
         is.close();
         is.open(fn);
         
-        auto model = sknd::read_model(is, module.c_str(), graph_name, "skriptnd/stdlib/", "", error_handler, atomic, unroll);
+        auto model = sknd::read_model(is, module.c_str(), graph_name, "skriptnd/stdlib/", "", error_handler);
         if ( model )
         {
+            if ( atomic )
+            {
+                sknd::flatten_model(*model, sknd::TrueOperationFilter);
+            }
             std::cout << "✅ Succesfully parsed graph '" + graph_name + "'" << std::endl;
             if ( verbose )
             {

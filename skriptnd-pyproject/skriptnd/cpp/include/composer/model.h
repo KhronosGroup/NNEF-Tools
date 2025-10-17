@@ -34,15 +34,6 @@
 namespace sknd
 {
 
-    typedef std::function<bool( const std::string& name, const std::map<std::string,Typename>& dtypes,
-                                const std::map<std::string,ValueExpr>& attribs, const std::vector<TensorRef>& inputs )> OperationCallback;
-
-    inline bool TrueOperationCallback( const std::string&, const std::map<std::string,Typename>&,
-                                       const std::map<std::string,ValueExpr>&, const std::vector<TensorRef>& ) { return true; }
-    inline bool FalseOperationCallback( const std::string&, const std::map<std::string,Typename>&,
-                                       const std::map<std::string,ValueExpr>&, const std::vector<TensorRef>& ) { return false; }
-    
-
     /*
      * Data structure to desribe a tensor assignment via unary/binary/ternary operations over multi-dimensional tensor accesses
      * A contraction may result in reduction or broadcasting accross any combination of dimensions depending on the index variables
@@ -120,6 +111,7 @@ namespace sknd
         std::vector<Contraction> contractions;                          // list of contractions that define the lowering of the operation
         std::vector<Assertion> asserts;                                 // list of dynamic asserts that need to be checked in run-time
         OrderedDict<ValueExpr> subexprs;                                // dictionary shared sub-expressions
+        size_t nodes = 1;                                               // size of the subtree that this operation represents
     };
     
     
@@ -311,13 +303,7 @@ namespace sknd
 
     inline std::ostream& operator<<( std::ostream& os, const Contraction& contraction )
     {
-        int indent = fetch_indent(os);
-        
-        std::string indentation;
-        for ( int i = 0; i < indent; ++i )
-        {
-            indentation += '\t';
-        }
+        const std::string indentation(fetch_indent(os), '\t');
         
         for ( auto& [iden, expr] : contraction.locals )
         {
@@ -343,6 +329,11 @@ namespace sknd
     
     inline std::ostream& operator<<( std::ostream& os, const Operation& op )
     {
+        auto indent = fetch_indent(os);
+        const std::string indentation(indent, '\t');
+        
+        os << indentation;
+        
         for ( size_t i = 0; i < op.outputs.size(); ++i )
         {
             if ( i )
@@ -356,7 +347,7 @@ namespace sknd
         
         if ( op.name == "=" )
         {
-            os << op.inputs.front().name() << ';';
+            os << op.inputs.front().name() << std::endl;
             return os;
         }
         
@@ -424,9 +415,35 @@ namespace sknd
                 os << input.name();
             }
         }
-        os << ')';
+        os << ')' << std::endl;
         
-        os << ';';
+        os << indentation << '{' << std::endl;
+        
+        for ( auto& assert : op.asserts )
+        {
+            os << indentation << "assert " << assert << ";" << std::endl;
+        }
+        
+        if ( op.nodes == 1 )
+        {
+            for ( auto& [name, expr] : op.subexprs )
+            {
+                os << indentation << '\t' << name << " = " << expr << std::endl;
+            }
+            for ( auto& contraction : op.contractions )
+            {
+                os << sknd::indent(indent + 1) << contraction << std::endl;
+            }
+        }
+        else
+        {
+            for ( auto it = &op + 1; it < &op + op.nodes; it += it->nodes )
+            {
+                os << sknd::indent(indent + 1) << *it;
+            }
+        }
+        
+        os << indentation << '}' << std::endl;
         
         return os;
     }
@@ -500,23 +517,12 @@ namespace sknd
         }
         
         os << "\t@compose {" << std::endl;
-        for ( auto& op : graph.operations )
+        
+        for ( size_t i = 0; i < graph.operations.size(); )
         {
-            for ( auto& assert : op.asserts )
-            {
-                os << "\t\t" << "assert " << assert << ";" << std::endl;
-            }
-            
-            os << "\t\t" << op << std::endl;
-            
-            for ( auto& [name, expr] : op.subexprs )
-            {
-                os << "\t\t\t" << name << " = " << expr << std::endl;
-            }
-            for ( auto& contraction : op.contractions )
-            {
-                os << indent(3) << contraction << std::endl;
-            }
+            auto& op = graph.operations[i];
+            os << indent(2) << op;
+            i += op.nodes;
         }
         os << "\t}" << std::endl;
         

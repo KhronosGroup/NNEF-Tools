@@ -46,18 +46,18 @@ int main( int argc, const char * argv[] )
     
     const std::string folder = argv[1];
     
-    sknd::OperationCallback atomic = sknd::FalseOperationCallback;
-    sknd::OperationCallback unroll = sknd::FalseOperationCallback;
+    bool atomic = false;
+    bool unroll = false;
     for ( size_t i = 2; i < argc; ++i )
     {
         const std::string arg = argv[i];
         if ( arg == "--atomic" )
         {
-            atomic = sknd::TrueOperationCallback;
+            atomic = true;
         }
         else if ( arg == "--unroll" )
         {
-            unroll = sknd::TrueOperationCallback;
+            unroll = true;
         }
     }
     
@@ -73,9 +73,13 @@ int main( int argc, const char * argv[] )
                 return -1;
             }
             
-            auto model = sknd::read_model(is, "main", "", "skriptnd/stdlib/", "", error_handler, atomic, unroll);
+            auto model = sknd::read_model(is, "main", "", "skriptnd/stdlib/", "", error_handler);
             if ( model )
             {
+                if ( atomic )
+                {
+                    sknd::flatten_model(*model, sknd::TrueOperationFilter);
+                }
                 std::cout << "✅ Succesfully parsed model " << entry.path().filename() << std::endl;
             }
             else

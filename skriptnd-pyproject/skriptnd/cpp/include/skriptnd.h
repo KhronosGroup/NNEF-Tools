@@ -19,6 +19,7 @@
 
 #include <set>
 #include <optional>
+#include "options.h"
 #include "model.h"
 #include "error.h"
 
@@ -26,19 +27,24 @@
 namespace sknd
 {
     
+    typedef std::function<bool( const Operation& )> OperationFilter;
+
+    inline bool TrueOperationFilter( const Operation& ) { return true; }
+    inline bool FalseOperationFilter( const Operation& ) { return false; }
+    
+
     std::string model_name_from_path( const std::string& path );
     std::vector<std::string> enum_graph_names( std::istream& is );
-
-    OperationCallback make_operation_callback( const std::set<std::string>& names );
-    OperationCallback make_operation_callback( std::set<std::string>&& names );
     
     std::optional<Model> read_model( const std::string& path, const std::string& graph_name, const std::string& stdlib_path,
-                                    const ErrorCallback error, const OperationCallback atomic = nullptr, const OperationCallback unroll = nullptr,
-                                    const std::map<std::string, sknd::ValueExpr>& attribs = {} ) noexcept;
+                                    const ErrorCallback error, const std::map<std::string, sknd::ValueExpr>& attribs = {},
+                                    const unsigned flags = DefaultCompilerFlags ) noexcept;
     std::optional<Model> read_model( std::istream& is, const std::string& module, const std::string& graph_name,
                                     const std::string& stdlib_path, const std::string& import_path,
-                                    const ErrorCallback error, const OperationCallback atomic = nullptr, const OperationCallback unroll = nullptr,
-                                    const std::map<std::string, sknd::ValueExpr>& attribs = {} ) noexcept;
+                                    const ErrorCallback error, const std::map<std::string, sknd::ValueExpr>& attribs = {},
+                                    const unsigned flags = DefaultCompilerFlags ) noexcept;
+
+    void flatten_model( Model& model, const OperationFilter is_atomic = FalseOperationFilter ) noexcept;
 
     bool read_tensor( std::istream& is, Tensor& tensor, std::string& error ) noexcept;
     bool write_tensor( std::ostream& os, const Tensor& tensor, std::string& error ) noexcept;

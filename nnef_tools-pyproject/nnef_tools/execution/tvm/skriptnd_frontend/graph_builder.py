@@ -168,7 +168,7 @@ class GraphBuilder:
 
                 # self.env.update(buffers=internals)
 
-                for op in self.graph.operations:
+                for op in self.graph.primitives:
                     op_attribs = OperationInfo(op.name,
                                                op.outputs,
                                                op.attribs,
@@ -236,7 +236,7 @@ class GraphBuilder:
         internals = ChainMap(self._create_tir_vars(self.tensors.maps[0]), params)
 
         body: list[tir.Stmt] = []
-        for op in self.graph.operations:
+        for op in self.graph.primitives:
             op_attribs = OperationInfo(op.name,
                                        op.outputs,
                                        op.attribs,

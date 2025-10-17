@@ -783,7 +783,7 @@ def _format_execution_code(operations, indent, context):
 
 
 def _is_trivial_block(block):
-    return len(block.operations) == 1 and block.operations[0].name == ''
+    return len(block.operations) == 1 and block.operations[0].name == '='
 
 
 def _format_block_params(inputs, outputs, context):
@@ -847,7 +847,7 @@ def _format_block_code(block, idx, indent, context, condition):
     type = "bool" if condition else "void"
     name = _valid_id(block.name) if idx else "execute"
     params = _format_block_params(block.inputs, block.outputs, context) if idx else ""
-    code = _format_execution_code(block.operations, indent, context)
+    code = _format_execution_code(block.primitives, indent, context)
     if condition:
         output = block.outputs[0]
         params += " = sknd::rt::condition_result<{rank}>()".format(rank=len(output.shape))
@@ -1033,7 +1033,7 @@ def _format_nms(op, indent):
 
 def _format_tensor_declarations(model, indent, context):
     auxiliaries = {contraction.left.tensor: _make_auxiliary_tensor(contraction.left.tensor, sknd.expr_dtype(contraction.right))
-                   for op in model.graphs[0].operations for contraction in op.contractions
+                   for op in model.graphs[0].primitives for contraction in op.contractions
                    if contraction.assignment == '<!' or contraction.assignment == '>!'}
 
     subgraph_io = {tensor.name for graph in model.graphs[1:] if len(graph.operations)

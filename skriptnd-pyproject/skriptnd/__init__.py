@@ -19,12 +19,16 @@ from .parser import *
 from .printer import *
 from .binary import *
 from .execution import *
+import typing
 import copy
 import os
 
 
 Dtype = _sknd.Dtype
 Position = _sknd.Position
+
+CompilerFlags = _sknd.CompilerFlags
+DefaultCompilerFlags = _sknd.DefaultCompilerFlags
 
 
 Model = _sknd.Model             # dataclass('Model', {
@@ -190,6 +194,37 @@ def _enum_referenced(op):
                     yield x.pack
 
 
+def _node_count(op):
+    nodes = 1
+    for comp in op.components:
+        nodes += _node_count(comp)
+    return nodes
+
+
+def _enum_components(graph):
+    i = 0
+    while i < len(graph.operations):
+        op = graph.operations[i]
+        i += _node_count(op)
+        yield op
+
+
+def _enum_primitives(op):
+    if op.is_primitive:
+        yield op
+    else:
+        for comp in op.components:
+            yield from _enum_primitives(comp)
+
+
+def _enum_atomics(operations, is_atomic):
+    for op in operations:
+        if op.is_primitive or is_atomic(op):
+            yield op
+        else:
+            yield from _enum_atomics(op.components, is_atomic)
+
+
 PlaceholderExpr.__str__ = lambda x: (x.id if x.id and not x.id.startswith('.') else '~') + '|' + str(x.max_value)
 IdentifierExpr.__str__ = lambda x: _local_name(x.name)
 ReferenceExpr.__str__ = lambda x: _local_name(x.name)
@@ -223,11 +258,16 @@ TensorPack.packed = property(lambda expr: True)
 Operation.constants = property(lambda op: (tensor for tensor in op.internals if tensor.is_constant))
 Operation.variables = property(lambda op: (tensor for tensor in op.internals if tensor.is_variable))
 Operation.referenced = property(_enum_referenced)
+Operation.is_primitive = property(lambda op: len(op.components) == 0)
+Operation.is_compound = property(lambda op: len(op.components) != 0)
+Operation.primitives = property(_enum_primitives)
 
 Graph.variables = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_variable))
 Graph.constants = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_constant))
 Graph.activations = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_activation))
 Graph.intermediates = property(lambda graph: (tensor for op in graph.operations for tensor in _itemize(op.outputs)))
+Graph.components = property(_enum_components)
+Graph.primitives = property(lambda graph: (op for op in graph.operations if op.is_primitive))
 
 Model.tensors = property(lambda model: (tensor for graph in model.graphs for tensor in graph.tensors))
 Model.packs = property(lambda model: (pack for graphs in model.graphs for pack in graphs.packs))
@@ -337,7 +377,7 @@ DtypeFromNumpy = {
 }
 
 
-def read_model(path, attribs=None, atomic=None, unroll=None, init_data=True):
+def read_model(path, attribs=None, init_data=True, flags=DefaultCompilerFlags):
     if not os.path.isfile(path) and not os.path.isdir(path):
         raise FileNotFoundError("Path '{}' does not exist".format(path))
 
@@ -345,15 +385,15 @@ def read_model(path, attribs=None, atomic=None, unroll=None, init_data=True):
     if isdir and path[-1] != '/' and path[-1] != '\\':
         path += '/'
 
-    model = parse_file(path, attribs=attribs, atomic=atomic, unroll=unroll)
+    model = parse_file(path, attribs=attribs, flags=flags)
     if model and init_data:
         _init_tensor_data(model.tensors, path if isdir else None)
 
     return model
 
 
-def scan_model(source, attribs=None, atomic=None, unroll=None, init_data=True):
-    model = parse_string(source, attribs=attribs, atomic=atomic, unroll=unroll)
+def scan_model(source, attribs=None, init_data=True, flags=DefaultCompilerFlags):
+    model = parse_string(source, attribs=attribs, flags=flags)
     if model and init_data:
         _init_tensor_data(model.tensors, None)
 
@@ -602,3 +642,17 @@ def has_index_guards(expr, locals):
                 if isinstance(index, sknd.BoundedExpr) and index.lower is None and index.upper is None:
                     return True
     return False
+
+
+def atomics(obj: typing.Union[sknd.Graph, sknd.Operation], is_atomic):
+    return _enum_atomics(obj.components, is_atomic)
+
+
+def flatten_model(model: sknd.Model, is_atomic):
+    for graph in model.graphs:
+        graph.operations = list(atomics(graph, is_atomic))
+        for op in graph.operations:
+            if not op.is_primitive:
+                for prim in op.primitives:
+                    op.contractions.extend(prim.contractions)
+                op.components = []

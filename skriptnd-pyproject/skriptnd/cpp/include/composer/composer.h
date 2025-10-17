@@ -20,6 +20,7 @@
 #include <stack>
 #include <unordered_set>
 #include "evaluation.h"
+#include "options.h"
 #include "operator.h"
 #include "typing.h"
 #include "print.h"
@@ -47,17 +48,6 @@ namespace sknd
     class Composer : private Evaluation
     {
         using Evaluation::has_undefined_symbols;
-        
-    public:
-        
-        enum Flags : unsigned
-        {
-            EliminateTrivialLoops = 0x01,
-            EliminateTrivialLocals = 0x02,
-            EliminateTrivialBounded = 0x04,
-        };
-        
-        static const unsigned DefaultFlags = EliminateTrivialLoops | EliminateTrivialLocals | EliminateTrivialBounded;
         
     private:
         
@@ -92,11 +82,8 @@ namespace sknd
         
     public:
         
-        Composer( const ErrorCallback error, 
-                 const OperationCallback atomic = nullptr,
-                 const OperationCallback unroll = nullptr,
-                 const unsigned flags = DefaultFlags )
-        : _error(error), _flags(flags), _atomic(atomic ? atomic : FalseOperationCallback), _unroll(unroll ? unroll : FalseOperationCallback) {}
+        Composer( const ErrorCallback error, const unsigned flags )
+        : _error(error), _flags(flags) {}
         
         Result<Model> operator()( const Dict<Operator>& operators, const std::string& graph_name,
                                  const Dict<ValueExpr>& attribs = {}, const Dict<Typename>& dtypes = {} )
@@ -1463,17 +1450,10 @@ namespace sknd
             
             TRY_CALL(add_placeholder_symbols(op.outputs, locals, !op.components.empty()))
             
-            bool is_private = op.name.front() == '_';
-            bool is_atomic = !is_private && !op.graph && _atomic(invocation.target, types, attribs, inputs);
-            bool is_compound = !op.components.empty();
-            bool is_primitive = !op.lowerings.empty();
-            
-            if ( is_compound && !is_atomic )
+            if ( !op.components.empty() )
             {
-                if ( op.graph )
-                {
-                    graph.asserts = std::move(asserts);
-                }
+                const size_t op_idx = graph.operations.size();
+                graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, {}, internals, {}, asserts, {} });
                 
                 const bool propagate_label = can_propagate_label(op, locals);
                 for ( auto& component : op.components )
@@ -1484,14 +1464,24 @@ namespace sknd
                 auto outputs = list_tensors(op.outputs, locals);
                 TRY_CALL(check_outputs(op.outputs, outputs, locals))
                 
-                auto& operation = model.graphs[graph_idx].operations.back(); // get graph again based on index as it may be invalidated by compose()
-                if ( unqualified_name(operation.name).front() == '_' )       // elevate private primitive
+                auto& graph = model.graphs[graph_idx];                      // get graph again based on index as it may be invalidated by compose()
+                graph.operations[op_idx].outputs = outputs;
+                graph.operations[op_idx].nodes = graph.operations.size() - op_idx;
+                assert(graph.operations[op_idx].nodes > 1);
+                
+                auto& operation = graph.operations.back();
+                if ( unqualified_name(operation.name).front() == '_' )      // elevate private primitive
                 {
                     operation.name = invocation.target;
                     operation.dtypes = types;
                     operation.attribs = attribs;
                     operation.inputs = inputs;
                     operation.outputs = outputs;
+                }
+                
+                if ( op.graph )
+                {
+                    graph.asserts = std::move(asserts);
                 }
 
                 return std::make_tuple(std::move(attribs), std::move(inputs), std::move(outputs));
@@ -1509,12 +1499,11 @@ namespace sknd
                     add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), locals);
                 }
                 
-                bool unroll_packs = has_tensor_packs(op) && _unroll(invocation.target, types, attribs, inputs);
-                TRY_DECL(contractions, eval_lowerings(op.lowerings, locals, graph, unroll_packs))
+                TRY_DECL(contractions, eval_lowerings(op.lowerings, locals, graph))
                 
                 auto subexprs = make_subexprs(collect_references(asserts, contractions, outputs, locals));
                 
-                if ( !(is_primitive && contractions.empty()) )
+                if ( !contractions.empty() || op.lowerings.empty() )
                 {
                     graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, outputs, internals,
                                                           contractions, asserts, std::move(subexprs) });
@@ -2774,8 +2763,7 @@ namespace sknd
             });
         }
         
-        Result<std::vector<Contraction>> eval_lowerings( const std::vector<Lowering>& lowerings, const Dict<Symbol>& symbols, Graph& graph,
-                                                        bool unroll_packs )
+        Result<std::vector<Contraction>> eval_lowerings( const std::vector<Lowering>& lowerings, const Dict<Symbol>& symbols, Graph& graph )
         {
             std::vector<Contraction> contractions;
             for ( size_t i = 0; i < lowerings.size(); ++i )
@@ -2787,20 +2775,20 @@ namespace sknd
                     if ( !has_init )
                     {
                         TRY_DECL(initializer, generate_initializer(lowering, symbols))
-                        TRY_CALL(eval_lowering_unrolled(initializer, symbols, graph, contractions, unroll_packs))
+                        TRY_CALL(eval_lowering_unrolled(initializer, symbols, graph, contractions))
                     }
                 }
-                TRY_CALL(eval_lowering_unrolled(lowering, symbols, graph, contractions, unroll_packs))
+                TRY_CALL(eval_lowering_unrolled(lowering, symbols, graph, contractions))
             }
             return contractions;
         }
         
         Result<void> eval_lowering_unrolled( const Lowering& lowering, const Dict<Symbol>& symbols, Graph& graph,
-                                            std::vector<Contraction>& contractions, bool unroll_packs )
+                                            std::vector<Contraction>& contractions )
         {
             if ( !lowering.unroll_count )
             {
-                return eval_lowering(lowering, symbols, graph, contractions, unroll_packs);
+                return eval_lowering(lowering, symbols, graph, contractions);
             }
             
             TRY_DECL(count, eval(*lowering.unroll_count, symbols))
@@ -2815,7 +2803,7 @@ namespace sknd
             {
                 _symbols.insert_or_assign(lowering.unroll_index, Symbol(ValueExpr((int_t)i), Typename::Int));
                 
-                TRY_CALL(eval_lowering(lowering, symbols, graph, contractions, unroll_packs))
+                TRY_CALL(eval_lowering(lowering, symbols, graph, contractions))
             }
             
             _symbols.erase(lowering.unroll_index);
@@ -2823,7 +2811,7 @@ namespace sknd
         }
         
         Result<void> eval_lowering( const Lowering& lowering, const Dict<Symbol>& symbols, Graph& graph, 
-                                   std::vector<Contraction>& contractions, bool unroll_packs )
+                                   std::vector<Contraction>& contractions )
         {
             auto& _symbols = const_cast<Dict<Symbol>&>(symbols);
             
@@ -2895,7 +2883,7 @@ namespace sknd
                 _symbols.erase(iden);
             }
             
-            if ( _flags & Flags::EliminateTrivialLoops )
+            if ( _flags & CompilerFlags::EliminateTrivialLoops )
             {
                 if ( std::any_of(bounds.begin(), bounds.end(), []( const auto& x ){ return x.second == 0; }) )
                 {
@@ -2930,7 +2918,7 @@ namespace sknd
                 }
             }
             
-            if ( _flags & Flags::EliminateTrivialLocals )
+            if ( _flags & CompilerFlags::EliminateTrivialLocals )
             {
                 for ( auto it = locals.begin(); it != locals.end(); )
                 {
@@ -2962,7 +2950,7 @@ namespace sknd
                 }
             }
             
-            if ( _flags & Flags::EliminateTrivialBounded )
+            if ( _flags & CompilerFlags::EliminateTrivialBoundedExprs )
             {
                 eliminate_triavial_bounded(left, bounds);
                 eliminate_triavial_bounded(right, bounds);
@@ -2996,7 +2984,7 @@ namespace sknd
             if ( !(right.is_tensor_access() && right.as_tensor_access().tensor == nullptr) )
             {
                 auto contraction = Contraction{ left.as_tensor_access(), right, cond, Lexer::str(lowering.op), locals, bounds, subscripts, axes };
-                if ( unroll_packs && !subscripts.empty() && can_unroll_pack_subscripts(contraction) )
+                if ( (_flags & UnrollPackLoops) && !subscripts.empty() && can_unroll_pack_subscripts(contraction) )
                 {
                     unroll_pack_subscripts(contraction, contractions);
                 }
@@ -4663,8 +4651,6 @@ namespace sknd
         
         unsigned _flags;
         const ErrorCallback _error;
-        const OperationCallback _atomic;
-        const OperationCallback _unroll;
         Dict<SubgraphContext> _contexts;
         Dict<SubgraphInfo> _subgraphs;
         Dict<ValueExpr> _placeholders;

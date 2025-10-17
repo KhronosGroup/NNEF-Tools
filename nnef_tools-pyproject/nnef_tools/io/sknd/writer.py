@@ -103,9 +103,7 @@ def _build_operation(operation, tensor_map):
 
     return sknd.Operation(name=operation.type, dtypes=dtypes, attribs=attribs,
                           inputs=tuple(remap_tensor(input, tensor_map) for input in operation.inputs),
-                          outputs=tuple(remap_tensor(output, tensor_map) for output in operation.outputs),
-                          contractions=[],
-                          asserts=[])
+                          outputs=tuple(remap_tensor(output, tensor_map) for output in operation.outputs))
 
 
 class Writer(object):

@@ -51,7 +51,7 @@ def _build_operation(graph, sknd_operation, tensor_map):
                      outputs=tuple(remap_tensor(output, tensor_map) for output in sknd_operation.outputs))
 
 
-def _build_graph(model, sknd_graph):
+def _build_graph(model, sknd_graph, atomic):
     graph = Graph(model, name=sknd_graph.name)
 
     tensor_map = {}
@@ -69,16 +69,16 @@ def _build_graph(model, sknd_graph):
     graph.inputs = tuple(remap_tensor(input, tensor_map) for input in sknd_graph.inputs)
     graph.outputs = tuple(remap_tensor(output, tensor_map) for output in sknd_graph.outputs)
 
-    for operation in sknd_graph.operations:
+    for operation in sknd.atomics(sknd_graph, atomic):
         _build_operation(graph, operation, tensor_map)
 
     return graph
 
 
-def _build_model(sknd_model):
+def _build_model(sknd_model, atomic):
     model = Model(name=sknd_model.name)
     for graph in sknd_model.graphs:
-        _build_graph(model, graph)
+        _build_graph(model, graph, atomic)
     return model
 
 
@@ -88,7 +88,7 @@ class Reader(object):
         self._atomic = atomic
 
     def __call__(self, filename, attribs=None, init_data=True):
-        sknd_model = sknd.read_model(filename, atomic=self._atomic, attribs=attribs, init_data=init_data)
+        sknd_model = sknd.read_model(filename, attribs=attribs, init_data=init_data)
         if sknd_model is None:
             raise IOError('could not read model')
-        return _build_model(sknd_model)
+        return _build_model(sknd_model, self._atomic)

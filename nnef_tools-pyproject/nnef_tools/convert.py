@@ -25,7 +25,7 @@ import six
 def get_reader(input_format, atomic, decomposed, fold_constants, custom_shapes):
     if input_format == 'sknd':
         from .io.sknd import Reader
-        return Reader(atomic=atomic)
+        return Reader(atomic=lambda op: op.name in atomic)
     elif input_format == 'nnef':
         from .io.nnef import Reader
         return Reader(custom_shapes=custom_shapes, decomposed=decomposed)

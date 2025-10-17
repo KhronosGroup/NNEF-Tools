@@ -35,11 +35,27 @@ class Printer:
         self._used_ids = {self._make_id(tensor.name) for tensor in model.tensors}
         self._next_shape_id = 0
 
-        self._print_graph(model, model.graphs[0], idx=0, file=file)
+        self._print_graph(model, model.graphs[0], main=True, file=file)
 
         if not self._inline_subgraphs:
-            for i, graph in enumerate(model.graphs[1:]):
-                self._print_graph(model, graph, idx=i + 1, file=file)
+            for graph in self._referenced_subgraphs(model):
+                self._print_graph(model, graph, main=False, file=file)
+
+    @staticmethod
+    def _referenced_subgraphs(model):
+        referenced = {model.graphs[0].name}
+        for graph in model.graphs:
+            if graph.name in referenced:
+                for op in graph.components:
+                    for value in op.attribs.values():
+                        if isinstance(value, _sknd.Graph):
+                            referenced.add(value.name)
+                        elif isinstance(value, list):
+                            for item in value:
+                                if isinstance(item, _sknd.Graph):
+                                    referenced.add(item.name)
+
+        return [graph for graph in model.graphs[1:] if graph.name in referenced]
 
     @staticmethod
     def _strip_scope(name, scope):
@@ -149,7 +165,7 @@ class Printer:
             else:
                 label = self._make_id(target.name)
                 text = label + ': {\n'
-                for op in target.operations:
+                for op in target.components:
                     text += "\t\t\t"
                     text += self._format_operation(op.outputs, op.name, op.dtypes.values(),
                                                    op.attribs, op.inputs) + ";\n"
@@ -281,7 +297,7 @@ class Printer:
 
         return text
 
-    def _print_graph(self, model, graph, idx, file):
+    def _print_graph(self, model, graph, main, file):
         self._block_scope = graph.name + '.'
 
         print("graph " + self._make_id(self._strip_scope(graph.name, self._module_scope)) + " {", file=file)
@@ -308,7 +324,7 @@ class Printer:
                                                   ignore_dynamic_shape=True) + ";", file=file)
         print("\t}", file=file)
 
-        if self._inline_subgraphs and idx == 0:
+        if self._inline_subgraphs and main:
             variables = model.variables
             constants = model.constants
         else:
@@ -332,7 +348,7 @@ class Printer:
             print("\t}", file=file)
 
         print("\t@compose {", file=file)
-        for op in graph.operations:
+        for op in graph.components:
             print("\t\t" + self._format_operation(op.outputs, op.name, op.dtypes.values(), op.attribs, op.inputs)
                   + ";", file=file)
         print("\t}", file=file)

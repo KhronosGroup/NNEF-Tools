@@ -51,6 +51,9 @@ static PyObject* DataClassField;
 static PyObject* Enum;
 static PyObject* Signature;
 
+static PyObject* CompilerFlags;
+static PyObject* DefaultCompilerFlags;
+
 static PyObject* Dtype;
 static PyObject* Position;
 static PyObject* Contraction;
@@ -202,7 +205,7 @@ static PyObject* makeDataClass( PyObject* module, const char* name,
 }
 
 static PyObject* makeEnum( PyObject* module, const char* name, std::initializer_list<const char*> fields,
-                           const size_t first_value = 0 )
+                           std::initializer_list<unsigned> values = {} )
 {
     PyObject* pyName = PY_STRING_FROM_CSTR(name);
 
@@ -211,7 +214,7 @@ static PyObject* makeEnum( PyObject* module, const char* name, std::initializer_
     for ( auto& field : fields )
     {
         PyObject* key = PY_STRING_FROM_CSTR(field);
-        PyObject* value = Py_BuildValue("i", (int)(first_value + i));
+        PyObject* value = Py_BuildValue("I", i < values.size() ? *(values.begin() + i) : (unsigned)i);
         PyObject* pair = makePyTuple(key, value);
         PyList_SetItem(pyFields, i++, pair);
     }
@@ -784,7 +787,9 @@ static PyObject* buildPyOperation( const sknd::Operation& op, BuildContext& cont
         PyList_SetItem(asserts, i, buildPyAssertion(op.asserts[i], context));
     }
 
-    return makePyObject(Operation, name, dtypes, attribs, inputs, outputs, internals, contractions, asserts, subexprs);
+    PyObject* components = Py_None;     // deferred
+
+    return makePyObject(Operation, name, dtypes, attribs, inputs, outputs, internals, contractions, asserts, subexprs, components);
 }
 
 static PyObject* buildPyGraph( const sknd::Graph& graph )
@@ -815,7 +820,33 @@ static PyObject* buildPyGraph( const sknd::Graph& graph )
         PyList_SetItem(operations, i, buildPyOperation(graph.operations[i], context));
     }
 
-    // deferred setting of shapes
+    // deferred setting of operation components
+    for ( size_t i = 0; i < graph.operations.size(); ++i )
+    {
+        auto& c_op = graph.operations[i];
+        PyObject* py_op = PyList_GetItem(operations, i);
+
+        size_t n = 0;
+        for ( size_t j = i + 1; j < i + c_op.nodes; ++n )
+        {
+            j += graph.operations[j].nodes;
+        }
+
+        PyObject* components = PyList_New(n);
+
+        size_t k = 0;
+        for ( size_t j = i + 1; j < i + c_op.nodes; ++k )
+        {
+            PyObject* comp = PyList_GetItem(operations, j);
+            Py_INCREF(comp);
+            PyList_SetItem(components, k, comp);
+            j += graph.operations[j].nodes;
+        }
+
+        PyObject_SetAttrString(py_op, "components", components);
+    }
+
+    // deferred setting of tensor shapes
     for ( auto& [c_tensor, py_tensor] : context.tensors )
     {
         PyObject* py_shape = buildPyShape(c_tensor->shape, context);
@@ -895,129 +926,19 @@ static size_t function_arg_count( PyObject* pyFunc )
     return length;
 }
 
-static sknd::OperationCallback make_operation_callback( PyObject* obj, const std::string& key )
-{
-    if ( obj == Py_None )
-    {
-        return sknd::FalseOperationCallback;
-    }
-    else if ( PyBool_Check(obj) )
-    {
-        return (bool)PyObject_IsTrue(obj) ? sknd::TrueOperationCallback : sknd::FalseOperationCallback;
-    }
-    else if ( PyList_Check(obj) || PyTuple_Check(obj) || PySet_Check(obj) )
-    {
-        return sknd::make_operation_callback(make_string_set_from_iterable(obj));
-    }
-    else if ( PyDict_Check(obj) )
-    {
-        return [=]( const std::string& name,
-                    const std::map<std::string,sknd::Typename>& dtypes,
-                    const std::map<std::string,sknd::ValueExpr>& attribs,
-                    const std::vector<sknd::TensorRef>& inputs )
-        {
-            PyObject* func = PyDict_GetItemString(obj, name.c_str());
-            if ( !func )
-            {
-                return false;
-            }
-            if ( PyBool_Check(func) )
-            {
-                return func == Py_True;
-            }
-            auto argc = function_arg_count(func);
-            if ( argc == 1 )
-            {
-                PyObject* pyName = buildPyStr(name.c_str());
-                PyObject* ret = callPyFunc(func, { pyName });
-                return (bool)PyObject_IsTrue(ret);
-            }
-            else if ( argc == 4 )
-            {
-                PyObject* pyName = buildPyStr(name.c_str());
-                PyObject* pyDtypes = buildPyDtypes(dtypes);
-                PyObject* pyAttribs = buildPyAttribs(attribs, EmptyBuildContext, true);
-                PyObject* pyShapes = buildPyShapes(inputs, EmptyBuildContext, true);
-                PyObject* ret = callPyFunc(func, { pyName, pyDtypes, pyAttribs, pyShapes });
-                return (bool)PyObject_IsTrue(ret);
-            }
-            else
-            {
-                return false;
-            }
-        };
-    }
-    else if ( PyFunction_Check(obj) )
-    {
-        auto argc = function_arg_count(obj);
-        if ( argc == 1 )
-        {
-            return [=]( const std::string& name,
-                        const std::map<std::string,sknd::Typename>& dtypes,
-                        const std::map<std::string,sknd::ValueExpr>& attribs,
-                        const std::vector<sknd::TensorRef>& inputs )
-            {
-                PyObject* pyName = buildPyStr(name.c_str());
-                PyObject* ret = callPyFunc(obj, { pyName });
-                return (bool)PyObject_IsTrue(ret);
-            };
-        }
-        else if ( argc == 4 )
-        {
-            return [=]( const std::string& name,
-                        const std::map<std::string,sknd::Typename>& dtypes,
-                        const std::map<std::string,sknd::ValueExpr>& attribs,
-                        const std::vector<sknd::TensorRef>& inputs )
-            {
-                PyObject* pyName = buildPyStr(name.c_str());
-                PyObject* pyDtypes = buildPyDtypes(dtypes);
-                PyObject* pyAttribs = buildPyAttribs(attribs, EmptyBuildContext, true);
-                PyObject* pyShapes = buildPyShapes(inputs, EmptyBuildContext, true);
-                PyObject* ret = callPyFunc(obj, { pyName, pyDtypes, pyAttribs, pyShapes });
-                return (bool)PyObject_IsTrue(ret);
-            };
-        }
-        else
-        {
-            const std::string message = "Paremeter '" + key + "' must take 1 or 4 arguments";
-            PyErr_SetString(PyExc_TypeError, message.c_str());
-            return NULL;
-        }
-    }
-    else
-    {
-        const std::string message = "Paremeter '" + key + "' must be either bool, list, tuple, set, dict or a callable";
-        PyErr_SetString(PyExc_TypeError, message.c_str());
-        return NULL;
-    }
-}
-
 
 static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool isFile )
 {
 	const char* input = nullptr;
 	const char* stdlib = nullptr;
-    PyObject* atomic = nullptr;
-    PyObject* unroll = nullptr;
     PyObject* attribs = nullptr;
     PyObject* error = nullptr;
+    unsigned flags = sknd::DefaultCompilerFlags;
 
-    static const char* kwlist[] = { "", "stdlib", "attribs", "atomic_callback", "unroll_callback", "error_callback", NULL };
+    static const char* kwlist[] = { "", "stdlib", "attribs", "error_callback", "flags", NULL };
 
-	if ( !PyArg_ParseTupleAndKeywords(args, kwargs, "s|sO!OOO!", (char**)kwlist, &input, &stdlib,
-	    &PyDict_Type, &attribs, &atomic, &unroll, &PyFunction_Type, &error) )
-    {
-        return NULL;
-    }
-
-    auto atomic_callback = make_operation_callback(atomic, "atomic_callback");
-    if ( !atomic_callback )
-    {
-        return NULL;
-    }
-
-    auto unroll_callback = make_operation_callback(unroll, "unroll_callback");
-    if ( !unroll_callback )
+	if ( !PyArg_ParseTupleAndKeywords(args, kwargs, "s|sO!O!I", (char**)kwlist, &input, &stdlib,
+	    &PyDict_Type, &attribs, &PyFunction_Type, &error, &flags) )
     {
         return NULL;
     }
@@ -1070,7 +991,7 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
             PyErr_SetString(PyExc_FileNotFoundError, message.c_str());
             return NULL;
         }
-        model = sknd::read_model(fs, module, "", stdlib, import_path, error_callback, atomic_callback, unroll_callback, attributes);
+        model = sknd::read_model(fs, module, "", stdlib, import_path, error_callback, attributes, flags);
         if ( model )
         {
             model->name = sknd::model_name_from_path(path);
@@ -1079,7 +1000,7 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
     else
     {
         std::stringstream ss(input);
-        model = sknd::read_model(ss, "main", "", stdlib, "", error_callback, atomic_callback, unroll_callback, attributes);
+        model = sknd::read_model(ss, "main", "", stdlib, "", error_callback, attributes);
     }
 
     return model ? buildPyModel(*model) : buildPyNone();
@@ -1161,6 +1082,12 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
     Signature = PyDict_GetItemString(inspect_dict, "signature");
     Py_DECREF(inspect);
 
+    CompilerFlags = makeEnum(module, "CompilerFlags",
+        { "EliminateTrivialLoops", "EliminateTrivialLocals", "EliminateTrivialBoundedExprs", "UnrollPackLoops" },
+        { sknd::EliminateTrivialLoops, sknd::EliminateTrivialLocals, sknd::EliminateTrivialBoundedExprs, sknd::UnrollPackLoops });
+    DefaultCompilerFlags = Py_BuildValue("I", sknd::DefaultCompilerFlags);
+    PyModule_AddObject(module, "DefaultCompilerFlags", DefaultCompilerFlags);
+
     Dtype = makeEnum(module, "Dtype", { "Type", "Arith", "Num", "Int", "Real", "Bool", "Str" });
     Position = makeDataClass(module, "Position", { "module", "line", "column" });
 
@@ -1192,8 +1119,8 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
     TensorPack = makeDataClass(module, "TensorPack", { "name", "dtype", "shape", "canonic_shape", "max_shape", "size", "canonic_size", "items" },
                                { buildPyInt(0), EmptyListDefault });
     Assertion = makeDataClass(module, "Assertion", { "condition", "message", "args" });
-    Operation = makeDataClass(module, "Operation", { "name", "dtypes", "attribs", "inputs", "outputs", "internals", "contractions", "asserts", "subexprs" },
-                              { EmptyDictDefault, EmptyDictDefault, EmptyTupleDefault, EmptyTupleDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault});
+    Operation = makeDataClass(module, "Operation", { "name", "dtypes", "attribs", "inputs", "outputs", "internals", "contractions", "asserts", "subexprs", "components" },
+                              { EmptyDictDefault, EmptyDictDefault, EmptyTupleDefault, EmptyTupleDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault });
     Graph = makeDataClass(module, "Graph", { "name", "operations", "inputs", "outputs", "tensors", "packs", "asserts" },
                           { EmptyListDefault, EmptyTupleDefault, EmptyTupleDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault });
     Model = makeDataClass(module, "Model", { "name", "graphs" }, { EmptyListDefault });
