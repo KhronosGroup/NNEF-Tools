@@ -1452,8 +1452,13 @@ namespace sknd
             
             if ( !op.components.empty() )
             {
+                bool inlined = unqualified_name(op.name).front() == '_';
+                
                 const size_t op_idx = graph.operations.size();
-                graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, {}, internals, {}, asserts, {}, 0, false });
+                if ( !inlined )
+                {
+                    graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, {}, internals, {}, asserts, {}, 0, false });
+                }
                 
                 const bool propagate_label = can_propagate_label(op, locals);
                 for ( auto& component : op.components )
@@ -1465,17 +1470,11 @@ namespace sknd
                 TRY_CALL(check_outputs(op.outputs, outputs, locals))
                 
                 auto& graph = model.graphs[graph_idx];                      // get graph again based on index as it may be invalidated by compose()
-                graph.operations[op_idx].outputs = outputs;
-                graph.operations[op_idx].nodes = graph.operations.size() - op_idx;
                 
-                auto& operation = graph.operations.back();
-                if ( unqualified_name(operation.name).front() == '_' )      // elevate private primitive
+                if ( !inlined )
                 {
-                    operation.name = invocation.target;
-                    operation.dtypes = types;
-                    operation.attribs = attribs;
-                    operation.inputs = inputs;
-                    operation.outputs = outputs;
+                    graph.operations[op_idx].outputs = outputs;
+                    graph.operations[op_idx].nodes = graph.operations.size() - op_idx;
                 }
                 
                 if ( op.graph )
