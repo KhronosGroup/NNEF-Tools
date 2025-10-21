@@ -272,6 +272,10 @@ namespace sknd
             {
                 report_error(op.position, "operator must not have both @lower and @compose blocks");
             }
+            if ( !op.lowerings.empty() && op.outputs.size() != 1 )
+            {
+                report_error(op.position, "primitive operator must have exactly 1 output");
+            }
             if ( op.components.empty() && op.name.front() == '_' )
             {
                 report_error(op.position, "module private operator must have @compose block");
