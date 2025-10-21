@@ -855,9 +855,9 @@ operator softmax {
 
 # @item LSTM
 
-# @text This is a module-private helper operator to describe a single step of an LSTM.
+# @text This is a helper operator to describe a single step of an LSTM.
 
-operator _lstm_step {
+operator lstm_step {
     @input {
         h0: real[b,n];
         c0: real[b,n];
@@ -885,9 +885,9 @@ operator _lstm_step {
     }
 }
 
-# @text This is a module-private helper operator to describe an LSTM iteration where each batch item has the same number of steps (which may be a static or dynamic count).
+# @text This is a helper operator to describe an LSTM iteration where each batch item has the same number of steps (which may be a static or dynamic count).
 
-operator _lstm_loop {
+operator lstm_loop {
     @input {
         X: real[s,b,c];
         W: real[4*n,c];
@@ -905,7 +905,7 @@ operator _lstm_loop {
     @compose {
         Xs..(s) = layout.unstack{axis=0}(X);
         hN, cN, hs = with hi = h0, ci = c0 for Xi : Xs do..(steps) {
-            h1, c1 = step: _lstm_step(hi, ci, Xi, W, R, B);
+            h1, c1 = step: lstm_step(hi, ci, Xi, W, R, B);
             yield h1, c1, h1;
         };
         Y = layout.stack{axis=0}(hs);
@@ -935,14 +935,14 @@ operator _jagged_lstm_loops {
         h0s: real[1,n]..(b) = layout.unstack{axis=0, squeeze=false}(h0);
         c0s: real[1,n]..(b) = layout.unstack{axis=0, squeeze=false}(c0);
         Ys..(b), hNs..(b), cNs..(b) = for Xi : Xs, h0i : h0s, c0i : c0s, cnt : counts do..(b)
-                                        item: _lstm_loop(Xi, W, R, B, h0i, c0i, cnt);
+                                      item: lstm_loop(Xi, W, R, B, h0i, c0i, cnt);
         Y = layout.stack{axis=1, squeeze=true}(Ys);
         hN = layout.stack{axis=0, squeeze=true}(hNs);
         cN = layout.stack{axis=0, squeeze=true}(cNs);
     }
 }
 
-# @text This is the public LSTM operator. The step count may be static (given by the first dimension of the input shape, same for all batch items) or dynamic if provided (potentially different for each batch item).
+# @text This is the top level LSTM operator. The step count may be static (given by the first dimension of the input shape, same for all batch items) or dynamic if provided (potentially different for each batch item).
 
 operator lstm {
     @input {
@@ -963,6 +963,6 @@ operator lstm {
         Y, hN, cN = if ?steps then
                         _jagged_lstm_loops(X, W, R, B, h0, c0, steps)
                     else
-                        _lstm_loop(X, W, R, B, h0, c0);
+                        lstm_loop(X, W, R, B, h0, c0);
     }
 }
