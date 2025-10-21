@@ -112,6 +112,7 @@ namespace sknd
         std::vector<Assertion> asserts;                                 // list of dynamic asserts that need to be checked in run-time
         OrderedDict<ValueExpr> subexprs;                                // dictionary shared sub-expressions
         size_t nodes = 1;                                               // size of the subtree that this operation represents
+        bool extrinsic = true;                                          // whether the operation is externally defined
     };
     
     

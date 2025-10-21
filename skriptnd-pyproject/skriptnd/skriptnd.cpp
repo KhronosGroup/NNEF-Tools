@@ -775,7 +775,7 @@ static PyObject* buildPyOperation( const sknd::Operation& op, BuildContext& cont
         PyList_SetItem(internals, i, buildPyTensorRef(op.internals[i], context));
     }
 
-    PyObject* contractions = PyList_New(op.contractions.size());
+    PyObject* contractions = op.extrinsic ? buildPyNone() : PyList_New(op.contractions.size());
     for ( size_t i = 0; i < op.contractions.size(); ++i )
     {
         PyList_SetItem(contractions, i, buildPyContraction(op.contractions[i], context));

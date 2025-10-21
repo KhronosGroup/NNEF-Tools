@@ -31,8 +31,6 @@ from .expression_builder import ExprBuilder, Environment
 from .high_level_op_lib import convert_map, NotInMapError, DimensionError, UnsupportedAttr
 from .contraction_builder import build_contraction, NotExpressibleError
 
-UNEXPRESSIBLE_OPERATIONS = ["top_k", "nonmax_suppress"]
-
 
 def from_skriptnd(model: str | sknd.Model | PathLike,
                   keep_params_in_input: bool = False,
@@ -394,25 +392,23 @@ class GraphBuilder:
 
     def _convert_op(self, op: sknd.Operation, internals: dict, op_attribs, get_stmt=False) -> relax.Call | tir.PrimFunc:
 
-        # subgraph ops
-        if op.name in ["if", "do"]:
-            call = self._handle_subgraph_op(op, op_attribs, internals)
-            return call
-
-        if op.name == "":
-            # same as a copy, can return with the same internal object
-            return internals[op.inputs[0].name]
+        if op.is_extrinsic:
+            # subgraph ops
+            if op.name in ["if", "do"]:
+                call = self._handle_subgraph_op(op, op_attribs, internals)
+                return call
+            elif op.name == "=":
+                # same as a copy, can return with the same internal object
+                return internals[op.inputs[0].name]
+            else:
+                return self.__hlop(op, op_attribs, internals)
 
         output = None
-        if not self.force_tir or op.name in UNEXPRESSIBLE_OPERATIONS:
+        if not self.force_tir:
             # try converting high level op
             try:
                 output = self.__hlop(op, op_attribs, internals)
             except (NotInMapError, DimensionError, UnsupportedAttr) as e:
-                if op.name in UNEXPRESSIBLE_OPERATIONS:
-                    # if top_k or nonmax_suppress high level fails,
-                    #   it can't be solved via the converter, re-raise error
-                    raise e
                 if isinstance(e, NotInMapError):
                     logging.log(logging.DEBUG, e)
                 else:

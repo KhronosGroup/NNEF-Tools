@@ -69,6 +69,7 @@ Operation = _sknd.Operation     # dataclass('Operation', {
                                 #   'contractions': List[Contraction],
                                 #   'asserts': List[Assertion],
                                 #   'subexprs': Dict[Expr],
+                                #   'components': List[Operation],
                                 # }))
 
 Contraction = _sknd.Contraction # dataclass('Contraction', {
@@ -260,6 +261,7 @@ Operation.variables = property(lambda op: (tensor for tensor in op.internals if 
 Operation.referenced = property(_enum_referenced)
 Operation.is_primitive = property(lambda op: len(op.components) == 0)
 Operation.is_compound = property(lambda op: len(op.components) != 0)
+Operation.is_extrinsic = property(lambda op: op.contractions is None)
 Operation.primitives = property(_enum_primitives)
 
 Graph.variables = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_variable))

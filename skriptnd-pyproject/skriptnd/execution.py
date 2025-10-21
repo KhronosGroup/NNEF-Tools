@@ -769,7 +769,7 @@ def _format_operation(op, indent, context):
     text += "".join(_format_pack_population(output, indent) for output in op.outputs
                     if output.name in deferred_packs)
     text += "".join(_format_shape_propagation(output, indent) for output in op.outputs)
-    text += _format_contractions(op, indent) if len(op.contractions) else _format_intrinsic(op, indent, context)
+    text += _format_intrinsic(op, indent, context) if op.is_extrinsic else _format_contractions(op, indent)
 
     return text
 
@@ -1033,7 +1033,7 @@ def _format_nms(op, indent):
 
 def _format_tensor_declarations(model, indent, context):
     auxiliaries = {contraction.left.tensor: _make_auxiliary_tensor(contraction.left.tensor, sknd.expr_dtype(contraction.right))
-                   for op in model.graphs[0].primitives for contraction in op.contractions
+                   for op in model.graphs[0].operations if op.contractions for contraction in op.contractions
                    if contraction.assignment == '<!' or contraction.assignment == '>!'}
 
     subgraph_io = {tensor.name for graph in model.graphs[1:] if len(graph.operations)

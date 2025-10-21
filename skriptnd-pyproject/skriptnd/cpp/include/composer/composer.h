@@ -1453,7 +1453,7 @@ namespace sknd
             if ( !op.components.empty() )
             {
                 const size_t op_idx = graph.operations.size();
-                graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, {}, internals, {}, asserts, {} });
+                graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, {}, internals, {}, asserts, {}, 0, false });
                 
                 const bool propagate_label = can_propagate_label(op, locals);
                 for ( auto& component : op.components )
@@ -1467,7 +1467,6 @@ namespace sknd
                 auto& graph = model.graphs[graph_idx];                      // get graph again based on index as it may be invalidated by compose()
                 graph.operations[op_idx].outputs = outputs;
                 graph.operations[op_idx].nodes = graph.operations.size() - op_idx;
-                assert(graph.operations[op_idx].nodes > 1);
                 
                 auto& operation = graph.operations.back();
                 if ( unqualified_name(operation.name).front() == '_' )      // elevate private primitive
@@ -1500,14 +1499,12 @@ namespace sknd
                 }
                 
                 TRY_DECL(contractions, eval_lowerings(op.lowerings, locals, graph))
-                
                 auto subexprs = make_subexprs(collect_references(asserts, contractions, outputs, locals));
+                bool extrinsic = op.lowerings.empty();
                 
-                if ( !contractions.empty() || op.lowerings.empty() )
-                {
-                    graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, outputs, internals,
-                                                          contractions, asserts, std::move(subexprs) });
-                }
+                graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, outputs, internals,
+                                                      contractions, asserts, std::move(subexprs), 1, extrinsic });
+                
                 return std::make_tuple(std::move(attribs), std::move(inputs), std::move(outputs));
             }
         }
