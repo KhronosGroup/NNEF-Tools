@@ -148,7 +148,23 @@ namespace sknd
             PolynomContext ctx;
             ctx.exprs.push_back(ValueExpr(nullptr));
             
-            return simplify_polynomial(expr, ctx);
+            if ( expr.packed() )
+            {
+                if ( !expr.is_list() )
+                {
+                    return false;
+                }
+                bool simplified = false;
+                for ( auto& item : expr.as_list() )
+                {
+                    simplified |= simplify_polynomial(item, ctx);
+                }
+                return simplified;
+            }
+            else
+            {
+                return simplify_polynomial(expr, ctx);
+            }
         }
         
         static bool simplify_polynomial( ValueExpr& expr, PolynomContext& ctx )
