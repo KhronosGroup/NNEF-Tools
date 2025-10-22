@@ -1452,7 +1452,7 @@ namespace sknd
             
             if ( !op.components.empty() )
             {
-                bool inlined = unqualified_name(op.name).front() == '_';
+                bool inlined = op.name.front() == '_';
                 
                 const size_t op_idx = graph.operations.size();
                 if ( !inlined )
@@ -1475,6 +1475,17 @@ namespace sknd
                 {
                     graph.operations[op_idx].outputs = outputs;
                     graph.operations[op_idx].nodes = graph.operations.size() - op_idx;
+                }
+                
+                auto& parent = graph.operations[op_idx];
+                auto& child = graph.operations.back();
+                if ( op.components.size() == 1 && unqualified_name(child.name).front() == '_' && !inlined )
+                {
+                    parent.contractions = std::move(child.contractions);
+                    parent.subexprs = std::move(child.subexprs);
+                    parent.extrinsic = child.extrinsic;
+                    parent.nodes = 1;
+                    graph.operations.pop_back();
                 }
                 
                 if ( op.graph )

@@ -276,22 +276,18 @@ namespace sknd
             {
                 report_error(op.position, "primitive operator must have exactly 1 output");
             }
-            if ( op.components.empty() && op.name.front() == '_' )
-            {
-                report_error(op.position, "module private operator must have @compose block");
-            }
             
-            
+            bool is_private = op.name.front() == '_';
             for ( auto& component : op.components )
             {
                 check_component(component, operators, decls, defs, false);
-                check_invocation_access(op.position.module, component);
+                check_invocation_access(op.position.module, component, operators, decls, !is_private && !op.graph && op.components.size() == 1);
             }
             
             for ( auto& component : op.updates )
             {
                 check_component(component, operators, decls, defs, true);
-                check_invocation_access(op.position.module, component);
+                check_invocation_access(op.position.module, component, operators, decls, !is_private && !op.graph && op.updates.size() == 1);
             }
             
             for ( auto& quantization : op.quantizations )
@@ -1984,41 +1980,60 @@ namespace sknd
             }
         }
         
-        void check_invocation_access( const std::string& module, const Component& component ) const
+        void check_invocation_access( const std::string& module, const Component& component, const Dict<Operator>& operators,
+                                     const Dict<Declaration>& decls, bool allow_private_primitives ) const
         {
             if ( component.branches.size() )
             {
                 for ( auto& item : component.branches )
                 {
-                    check_invocation_access(module, item.condition);
-                    check_invocation_access(module, item.consequent);
+                    allow_private_primitives &= !is_callable(item.condition) && is_static_expr(*item.condition.as<Region>().yields.front(), decls);
+                }
+                
+                for ( auto& item : component.branches )
+                {
+                    check_invocation_access(module, item.condition, operators, decls, false);
+                    check_invocation_access(module, item.consequent, operators, decls, allow_private_primitives);
                 }
             }
             else if ( component.loop )
             {
                 if ( component.loop->condition )
                 {
-                    check_invocation_access(module, *component.loop->condition);
+                    check_invocation_access(module, *component.loop->condition, operators, decls, false);
                 }
             }
-            check_invocation_access(module, component.operation);
+            check_invocation_access(module, component.operation, operators, decls, allow_private_primitives);
         }
         
-        void check_invocation_access( const std::string& module, const Callable& callable ) const
+        void check_invocation_access( const std::string& module, const Callable& callable, const Dict<Operator>& operators,
+                                     const Dict<Declaration>& decls, bool allow_private_primitives ) const
         {
             if ( callable.is<Invocation>() )
             {
                 auto& invocation = callable.as<Invocation>();
-                if ( !invocation.target.empty() )
+                auto pos = invocation.target.find_last_of('.');
+                auto target_module = invocation.target.substr(0, pos);
+                auto target_name = invocation.target.substr(pos + 1);
+                
+                if ( target_name.front() == '_' )
                 {
-                    auto pos = invocation.target.find_last_of('.');
-                    auto target_module = invocation.target.substr(0, pos);
-                    auto target_name = invocation.target.substr(pos + 1);
-                    
-                    if ( target_name[0] == '_' && target_module != module )
+                    if ( target_module != module )
                     {
                         report_error(invocation.position, "cannot invoke operator '%s' from module '%s' because it is private in module '%s'",
                                      invocation.target.c_str(), module.c_str(), target_module.c_str());
+                    }
+                    auto it = operators.find(invocation.target);
+                    if ( it != operators.end() )
+                    {
+                        auto& op = it->second;
+                        if ( op.components.empty() && !allow_private_primitives )
+                        {
+                            report_error(invocation.position, "private primitive operator '%s' cannot be invoked in "
+                                                              "a composition that has more than one items or "
+                                                              "an operator that itself is private",
+                                         invocation.target.c_str());
+                        }
                     }
                 }
             }
@@ -2027,7 +2042,7 @@ namespace sknd
                 auto& region = callable.as<Region>();
                 for ( auto& component : region.components )
                 {
-                    check_invocation_access(module, component);
+                    check_invocation_access(module, component, operators, decls, false);
                 }
             }
         }
