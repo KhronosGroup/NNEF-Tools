@@ -410,7 +410,7 @@ operator avg_roi_pool {
 
 # @section grid-sample-ops Grid Sampling Operators
 
-operator nearest_grid_sample {
+operator _nearest_grid_sample {
     @attrib {
         padding: str = 'ZEROS';
         aligned: bool = false;
@@ -441,7 +441,7 @@ operator nearest_grid_sample {
     }
 }
 
-operator linear_grid_sample {
+operator _linear_grid_sample {
     @attrib {
         padding: str = 'ZEROS';
         aligned: bool = false;
@@ -473,7 +473,7 @@ operator linear_grid_sample {
     }
 }
 
-operator cubic_grid_sample {
+operator _cubic_grid_sample {
     @attrib {
         padding: str = 'ZEROS';
         aligned: bool = false;
@@ -519,10 +519,10 @@ operator grid_sample {
     }
     @compose {
         output = if mode == 'NEAREST' then
-                     nearest_grid_sample{padding=padding, aligned=aligned}(input, grid)
+                     _nearest_grid_sample{padding=padding, aligned=aligned}(input, grid)
                  elif mode == 'LINEAR' then
-                     linear_grid_sample{padding=padding, aligned=aligned}(input, grid)
+                     _linear_grid_sample{padding=padding, aligned=aligned}(input, grid)
                  else
-                     cubic_grid_sample{padding=padding, aligned=aligned}(input, grid);
+                     _cubic_grid_sample{padding=padding, aligned=aligned}(input, grid);
     }
 }
