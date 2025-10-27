@@ -24,11 +24,6 @@ from tvm import tir, ir
 from .expression_builder import Environment, ExprBuilder
 
 
-class NotExpressibleError(Exception):
-    """ Raised when the contractions cannot be expressed in TIR (missing contraction list, atomic compound op) """
-    pass
-
-
 def _separate_contractions(contrs) -> dict[str, list[sknd.Contraction]]:
     """
     Separate contractions by output tensor and return a dict with output tensor name as key
@@ -63,9 +58,6 @@ def build_contraction(contractions: list[sknd.Contraction],
     :param return_stmt: return the Stmt instead of the PrimFunc
     :return: TIR PrimFunc or tuple of Stmt and list of function parameters
     """
-
-    if not contractions:
-        raise NotExpressibleError()
 
     # duplicate dyn shape vars to avoid casting issues of TVM (int64 -> int32)
     dyn_shape_vars = {k: tir.Var(k, "int32") for k in rx_dyn_shape_vars.keys()}

@@ -26,17 +26,32 @@ from tvm import relax, tir
 
 import skriptnd as sknd
 
-from . import convert_dtype, _atomics
+from . import convert_dtype
 from .expression_builder import ExprBuilder, Environment
 from .high_level_op_lib import convert_map, NotInMapError, DimensionError, UnsupportedAttr
-from .contraction_builder import build_contraction, NotExpressibleError
+from .contraction_builder import build_contraction
+
+
+_atomics = {
+    "image.area_downsample": lambda op: True,
+    "image.resize": lambda op: True,
+    "image.rescale": lambda op: True,
+    "math.mean_reduce": lambda op: True,
+    "nn.separable_conv": lambda op: True,
+    "nn.avg_pool": lambda op: all(axis != 0 and axis != 1 for axis in op.attribs.get("axes")),
+    "nn.batch_norm": lambda op: True,
+    "nn.local_response_norm": lambda op: len(op.attribs.get("axes")) == 1 and len(op.attribs.get("size")) == 1,
+}
+
+
+def is_atomic(op):
+    func = _atomics.get(op.name)
+    return func(op) if func else False
 
 
 def from_skriptnd(model: str | sknd.Model | PathLike,
-                  keep_params_in_input: bool = False,
                   keep_ts_names: bool = False,
                   contr_only: bool = False,
-                  atomics: dict[str, Callable[[...], bool] | bool] = None,
                   keep_intrin: dict[str, Callable[[...], bool] | bool] = None,
                   custom_converter_map: dict[str, Callable] = None,
                   ) -> tvm.IRModule:
@@ -49,7 +64,6 @@ def from_skriptnd(model: str | sknd.Model | PathLike,
     :param model: Either a path to a file, a string containing the model, or a SkriptND Model object
     :param keep_ts_names: whether to try to keep the names of the object in the module, default False (currently only main function name depends on it)
     :param contr_only: whether to force the conversion to use contractions only, default False
-    :param atomics: dictionary of atomic operations that can be handled by the consecutive transformation passes
     :param keep_intrin: dictionary of intrinsics that can be handled by a custom codegen
     :param custom_converter_map: dictionary of custom converters for high level operations, for detailed info see high_level_op_lib.py
     :return: TVM IRModule eqivalent of the input model
@@ -57,16 +71,15 @@ def from_skriptnd(model: str | sknd.Model | PathLike,
 
     # if input is str, try to resolve it
     if isinstance(model, (str, PathLike)):
+        flags = sknd.DefaultCompilerFlags | sknd.CompilerFlags.UnrollPackLoops
         if isinstance(model, PathLike) or path.isfile(model) or path.isdir(model):
-            model = sknd.read_model(model, unroll=True,
-                                    atomic={**_atomics, **(atomics or {})} if not contr_only else False)
+            model = sknd.read_model(model, flags=flags)
         else:
-            try:
-                model = sknd.parse_string(model, unroll=True,
-                                          atomic={**_atomics, **(atomics or {})} if not contr_only else False)
-            except Exception as e:
-                raise ValueError(f"Invalid model string: {model}") from e
-
+            model = sknd.parse_string(model, flags=flags)
+        if not model:
+            raise ValueError(f"Failed to read model")
+        if not contr_only:
+            sknd.flatten_model(model, is_atomic=is_atomic)
     if not isinstance(model, sknd.Model):
         raise ValueError(f"Invalid model: {model}")
 

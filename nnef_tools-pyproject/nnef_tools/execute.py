@@ -408,7 +408,9 @@ class SkriptNDExecutor(Executor):
         if target is None or target == 'cpp':
             self.runner = sknd.compile_model(self.model)
         else:
-            from .execution.tvm import VirtualMachine
+            from .execution.tvm import VirtualMachine, is_atomic
+            if atomic is None:
+                sknd.flatten_model(self.model, is_atomic=is_atomic)
             self.runner = VirtualMachine(self.model, target=target, device=device)
 
     def input_info(self):

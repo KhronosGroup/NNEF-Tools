@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .skriptnd_frontend import from_skriptnd
+from .skriptnd_frontend import from_skriptnd, is_atomic
 import tvm
 
 
