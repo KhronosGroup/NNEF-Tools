@@ -270,12 +270,14 @@ Graph.activations = property(lambda graph: (tensor for tensor in graph.tensors i
 Graph.intermediates = property(lambda graph: (tensor for op in graph.operations for tensor in _itemize(op.outputs)))
 Graph.components = property(_enum_components)
 Graph.primitives = property(lambda graph: (op for op in graph.operations if op.is_primitive))
+Graph.is_flat = property(lambda graph: all(op.is_primitive for op in graph.operations))
 
 Model.tensors = property(lambda model: (tensor for graph in model.graphs for tensor in graph.tensors))
 Model.packs = property(lambda model: (pack for graphs in model.graphs for pack in graphs.packs))
 Model.variables = property(lambda model: (tensor for tensor in model.tensors if tensor.is_variable))
 Model.constants = property(lambda model: (tensor for tensor in model.tensors if tensor.is_constant))
 Model.activations = property(lambda model: (tensor for tensor in model.tensors if tensor.is_activation))
+Model.is_flat = property(lambda model: all(graph.is_flat for graph in model.graphs))
 
 
 ListExpr.__len__ = lambda expr: len(expr.items)
@@ -650,11 +652,14 @@ def atomics(obj: typing.Union[sknd.Graph, sknd.Operation], is_atomic):
     return _enum_atomics(obj.components, is_atomic)
 
 
-def flatten_model(model: sknd.Model, is_atomic):
+def flatten_model(model: sknd.Model, is_atomic=None):
     for graph in model.graphs:
-        graph.operations = list(atomics(graph, is_atomic))
-        for op in graph.operations:
-            if not op.is_primitive:
-                for prim in op.primitives:
-                    op.contractions.extend(prim.contractions)
-                op.components = []
+        if is_atomic is None:
+            graph.operations = list(graph.primitives)
+        else:
+            graph.operations = list(atomics(graph, is_atomic))
+            for op in graph.operations:
+                if not op.is_primitive:
+                    for prim in op.primitives:
+                        op.contractions.extend(prim.contractions)
+                    op.components = []
