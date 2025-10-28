@@ -2868,7 +2868,7 @@ namespace sknd
             TRY_DECL(is_null, eval_null(*lowering.right, symbols))
             if ( is_null )
             {
-                return Result<void>();
+                return {};
             }
             
             TRY_DECL(left, eval(*lowering.left, symbols))
@@ -2988,19 +2988,22 @@ namespace sknd
                 }
             }
             
-            if ( !(right.is_tensor_access() && right.as_tensor_access().tensor == nullptr) )
+            if ( right.is_tensor_access() && right.as_tensor_access().tensor == nullptr )
             {
-                auto contraction = Contraction{ left.as_tensor_access(), right, cond, Lexer::str(lowering.op), locals, bounds, subscripts, axes };
-                if ( (_flags & UnrollPackLoops) && !subscripts.empty() && can_unroll_pack_subscripts(contraction) )
-                {
-                    unroll_pack_subscripts(contraction, contractions);
-                }
-                else
-                {
-                    contractions.push_back(std::move(contraction));
-                }
+                return {};
             }
-            return Result<void>();
+            
+            auto contraction = Contraction{ left.as_tensor_access(), right, cond, Lexer::str(lowering.op), locals, bounds, subscripts, axes };
+            if ( (_flags & UnrollPackLoops) && !subscripts.empty() && can_unroll_pack_subscripts(contraction) )
+            {
+                unroll_pack_subscripts(contraction, contractions);
+            }
+            else
+            {
+                contractions.push_back(std::move(contraction));
+            }
+            
+            return {};
         }
         
         size_t find_arg_axis( const TensorAccess& access, const std::vector<std::pair<std::string,ValueExpr>>& bounds )
