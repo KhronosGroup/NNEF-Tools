@@ -326,10 +326,10 @@ namespace sknd
         void declare_symbol( Dict<Declaration>& decls, const Position& position, const std::string& name, const Type& type,
                             const Shared<Expr>& repeats, const unsigned flags, const Shared<Expr>& cond = nullptr ) const
         {
-            auto ins = decls.emplace(name, Declaration{ position, type, repeats, cond, flags });
-            if ( !ins.second )
+            auto [it, inserted] = decls.emplace(name, Declaration{ position, type, repeats, cond, flags });
+            if ( !inserted )    // already declared
             {
-                Declaration& decl = ins.first->second;
+                Declaration& decl = it->second;
                 if ( (decl.flags & Declaration::Inherited) || (flags & Declaration::AllowShadowing) )
                 {
                     decl = Declaration{ position, type, repeats, cond, flags };
@@ -386,20 +386,27 @@ namespace sknd
                     }
                 }
             }
-            else if ( type.tensor )
+            else
             {
-                if ( type.packed )
+                if ( type.packed && !repeats )
                 {
-                    declare_symbol(decls, position, name + ".size", make_type(Typename::Int, type.optional, false, false), nullptr,
-                                   Declaration::Shape | Declaration::Implicit);
+                    report_error(position, "could not determine symbolic length of packed output '%s'", name.c_str());
                 }
-                else
+                if ( type.tensor )
                 {
-                    auto shape_rank = std::make_shared<IdenfitierExpr>(position, name + ".rank");
-                    declare_symbol(decls, position, name + ".shape", make_type(Typename::Int, type.optional, false, true), shape_rank,
-                                   Declaration::Shape | Declaration::Implicit);
-                    declare_symbol(decls, position, name + ".rank", make_type(Typename::Int, type.optional, false, false), nullptr,
-                                   Declaration::Shape | Declaration::Implicit);
+                    if ( type.packed )
+                    {
+                        declare_symbol(decls, position, name + ".size", make_type(Typename::Int, type.optional, false, false), nullptr,
+                                       Declaration::Shape | Declaration::Implicit);
+                    }
+                    else
+                    {
+                        auto shape_rank = std::make_shared<IdenfitierExpr>(position, name + ".rank");
+                        declare_symbol(decls, position, name + ".shape", make_type(Typename::Int, type.optional, false, true), shape_rank,
+                                       Declaration::Shape | Declaration::Implicit);
+                        declare_symbol(decls, position, name + ".rank", make_type(Typename::Int, type.optional, false, false), nullptr,
+                                       Declaration::Shape | Declaration::Implicit);
+                    }
                 }
             }
         }
@@ -720,12 +727,6 @@ namespace sknd
                             
                             if ( !item.name.empty() )
                             {
-                                if ( pack && !pack_size )
-                                {
-                                    report_error(item.position, "could not determine symbolic length of packed output '%s'",
-                                                 item.name.c_str());
-                                }
-                                
                                 declare_symbol(decls, item.position, item.name, pack ? as_packed(type) : as_non_packed(type), pack_size, Declaration::Result);
                             }
                             
@@ -787,11 +788,6 @@ namespace sknd
                     
                     if ( !item.name.empty() )
                     {
-                        if ( type.packed && !count )
-                        {
-                            report_error(item.position, "could not determine symbolic length of packed output '%s'",
-                                         item.name.c_str());
-                        }
                         declare_symbol(decls, item.position, item.name, type, type.packed ? count : nullptr, Declaration::Result);
                     }
                 }

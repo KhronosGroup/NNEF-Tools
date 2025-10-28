@@ -2325,7 +2325,7 @@ namespace sknd
         {
             for ( auto item : shape.extents )
             {
-                if ( item->kind != Expr::Expand && item->kind != Expr::Range )
+                if ( item != nullptr && item->kind != Expr::Expand && item->kind != Expr::Range )
                 {
                     TRY_DECL(rank, eval_max_rank<true>(*item, symbols))
                     if ( rank && *rank != repeats )
