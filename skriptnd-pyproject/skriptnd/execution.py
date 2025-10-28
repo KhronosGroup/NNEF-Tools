@@ -315,7 +315,12 @@ def _format_nested_loops(contraction, indent):
             tensor = _valid_id(contraction.left.tensor.name)
             return indent + f"{tensor} = {value};"
 
-    loops = "".join(indent + k * "\t" + "for ( int {i} = 0; {i} < {n}; ++{i} )\n".format(i=id, n=_format_value_expr(bound))
+    dynamic_output_shapes = {_valid_id(x.id) for x in sknd.recursive_enumerate_expr(contraction.left)
+                             if _is_placeholder(x)}
+    dynamic_shape_init = "".join(indent + f"int {id} = 0;\n" for id in dynamic_output_shapes)
+
+    loops = dynamic_shape_init
+    loops += "".join(indent + k * "\t" + "for ( int {i} = 0; {i} < {n}; ++{i} )\n".format(i=id, n=_format_value_expr(bound))
                     for k, (id, bound) in enumerate(contraction.bounds))
 
     indent += len(contraction.bounds) * "\t"
@@ -359,13 +364,17 @@ def _format_nested_loops(contraction, indent):
         loops += indent + "if ( {} )\n".format(_format_value_expr(contraction.condition))
         indent += "\t"
 
+    dynamic_shape_increments = "".join(indent + f"{id}++;\n" for id in dynamic_output_shapes)
+
     if tuple_assign:
         loops += indent[:-1] + "{\n"
         for i in range(contraction.left.tensor.max_size):
             loops += _format_contraction_assignment(contraction, indent, i)
+        loops += dynamic_shape_increments
         loops += indent[:-1] + "}\n"
     else:
         loops += _format_contraction_assignment(contraction, indent)
+        loops += dynamic_shape_increments
 
     if contraction.condition:
         indent = indent[:-1]
@@ -483,6 +492,8 @@ def _format_value_expr(expr, bracket=True, extent=None):
         return f"{expr}f"
     elif isinstance(expr, str):
         return f'"{expr}"'
+    elif isinstance(expr, sknd.PlaceholderExpr):
+        return _valid_id(expr.id)
     elif isinstance(expr, sknd.IdentifierExpr):
         return _valid_id(expr.name)
     elif isinstance(expr, sknd.ReferenceExpr):
@@ -690,6 +701,17 @@ def _format_shape_propagation(output, indent):
     return text
 
 
+def _format_shape_definition(output, indent):
+    text = ""
+    if any(_is_placeholder(item) for item in output.shape):
+        shape = ", ".join(_format_value_expr(expr, bracket=False) if not sknd.expr_is_packed(expr) else "-1"
+                          for expr in output.shape)
+        text += indent + f"{_valid_id(output.name)}.reshape({shape});\n"
+    if isinstance(output, sknd.TensorPack):
+        text += "".join(_format_shape_definition(item, indent) for item in output)
+    return text
+
+
 def _is_dynamic_size(expr):
     return not isinstance(expr, int)
 
@@ -770,6 +792,8 @@ def _format_operation(op, indent, context):
                     if output.name in deferred_packs)
     text += "".join(_format_shape_propagation(output, indent) for output in op.outputs)
     text += _format_intrinsic(op, indent, context) if op.is_extrinsic else _format_contractions(op, indent)
+    if op.is_primitive and not op.is_extrinsic:
+        text += "".join(_format_shape_definition(output, indent) for output in op.outputs)
 
     return text
 
