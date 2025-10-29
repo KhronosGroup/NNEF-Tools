@@ -315,10 +315,18 @@ namespace sknd
                 case Expr::Access:
                 {
                     auto& access = as_access(expr);
-                    TRY_DECL(rank, eval_dynamic_rank(*access.tensor, symbols))
-                    if ( rank != nullptr )
+                    TRY_DECL(tensor_rank, eval_dynamic_rank(*access.tensor, symbols))
+                    if ( tensor_rank != nullptr )
                     {
                         return {};
+                    }
+                    for ( auto& index : access.indices )
+                    {
+                        TRY_DECL(index_rank, eval_dynamic_rank(*index, symbols))
+                        if ( index_rank != nullptr )
+                        {
+                            return {};
+                        }
                     }
                     break;
                 }
@@ -598,6 +606,7 @@ namespace sknd
                                      (int)indices_rank, (int)tensor.rank());
                     }
                     
+                    std::optional<size_t> size = tensor.max_size_or_null();
                     std::vector<ValueExpr> indices;
                     for ( auto& index : access.indices )
                     {
@@ -613,12 +622,16 @@ namespace sknd
                         }
                         else
                         {
-                            TRY_DECL(ix, eval_item(*index, symbols))
+                            TRY_DECL(ix, eval(*index, symbols))
                             indices.push_back(ix);
+                            if ( ix.packed() )
+                            {
+                                size = ix.max_size_or_null();
+                            }
                         }
                     }
                     
-                    return ValueExpr(TensorAccess{ tensor, std::move(indices) }, tensor.dtype(), tensor.max_size_or_null());
+                    return ValueExpr(TensorAccess{ tensor, std::move(indices) }, tensor.dtype(), size);
                 }
                 case Expr::Range:
                 {

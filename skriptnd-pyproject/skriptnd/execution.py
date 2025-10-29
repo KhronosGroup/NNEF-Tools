@@ -290,25 +290,23 @@ def _ensure_positive_axis(axis, rank):
 
 
 def _format_tensor_access(access, idx=None):
-    packed = isinstance(access.tensor, sknd.TensorPack)
-    if not packed and _can_inline_tensor(access.tensor):
+    is_pack = isinstance(access.tensor, sknd.TensorPack)
+    if not is_pack and _can_inline_tensor(access.tensor):
         return _format_value_expr(access.tensor.value)
 
-    tensor = access.tensor[idx] if idx is not None else access.tensor
+    tensor = access.tensor.items[idx] if is_pack and idx is not None else access.tensor
     name = _valid_id(tensor.name)
     subscript = "[" + _format_value_expr(access.item) + "]" if access.item is not None else ""
-    indices = "(" + ", ".join(_format_value_expr(index, extent=tensor.shape[dim])
+    indices = "(" + ", ".join(_format_value_expr(index[idx] if sknd.expr_is_packed(index) else index, extent=tensor.shape[dim])
                               for dim, index in enumerate(access.indices)) + ")"
 
     return name + subscript + indices
 
 
 def _format_nested_loops(contraction, indent):
-    tuple_assign = isinstance(contraction.left.tensor, sknd.TensorPack) and contraction.left.item is None
-
     if isinstance(contraction.right, (int, float, bool)) and len(contraction.locals) == 0:
         value = _format_value_expr(contraction.right)
-        if tuple_assign:
+        if contraction.left.packed and isinstance(contraction.left.tensor, sknd.TensorPack):
             return "\n".join(indent + f"{_valid_id(tensor.name)} = {value};"
                              for tensor in contraction.left.tensor.items)
         else:
@@ -366,9 +364,9 @@ def _format_nested_loops(contraction, indent):
 
     dynamic_shape_increments = "".join(indent + f"{id}++;\n" for id in dynamic_output_shapes)
 
-    if tuple_assign:
+    if contraction.left.packed:
         loops += indent[:-1] + "{\n"
-        for i in range(contraction.left.tensor.max_size):
+        for i in range(contraction.left.max_size):
             loops += _format_contraction_assignment(contraction, indent, i)
         loops += dynamic_shape_increments
         loops += indent[:-1] + "}\n"

@@ -1403,7 +1403,17 @@ namespace sknd
             case TensorAccess:
             {
                 auto& access = as_tensor_access();
-                return access.tensor.packed() && access.item == nullptr && !access.tensor.size().is_literal();
+                if ( access.tensor.packed() && access.item == nullptr )
+                {
+                    return !access.tensor.size().is_literal();
+                }
+                else
+                {
+                    return std::any_of(access.indices.begin(), access.indices.end(), []( auto& index )
+                    {
+                        return index.packed() && index.has_dynamic_size();
+                    });
+                }
             }
             case Unary:
             {
@@ -1491,7 +1501,21 @@ namespace sknd
             case TensorAccess:
             {
                 auto& access = as_tensor_access();
-                return access.tensor.packed() && access.item == nullptr ? access.tensor.size() : nullptr;
+                if ( access.tensor.packed() && access.item == nullptr )
+                {
+                    return access.tensor.size();
+                }
+                else
+                {
+                    for ( auto& item : access.indices )
+                    {
+                        if ( item.packed() )
+                        {
+                            return item.size();
+                        }
+                    }
+                    return nullptr;
+                }
             }
             case Unary:
             {
