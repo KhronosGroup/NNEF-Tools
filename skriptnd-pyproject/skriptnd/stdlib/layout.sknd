@@ -916,14 +916,11 @@ operator gather_nd {
     @output {
         output: T[b..,z..,t..];
     }
-    @using {
-        di = [0:d];
-    }
     @assert {
         batch_dims >= 0: "'batch_dims' must be non-negative", batch_dims;
     }
     @lower {
-        output[bi..,zi..,ti..] = data[bi..,indices[bi..,zi..,di]..,ti..],
+        output[bi..,zi..,ti..] = data[bi..,indices[bi..,zi..,:]..,ti..],
             bi < b, zi < z, ti < t;
     }
 }
@@ -973,16 +970,13 @@ operator scatter_nd {
     @output {
         output: T[b..,s..,t..];
     }
-    @using {
-        di = [0:d];
-    }
     @assert {
         batch_dims >= 0: "'batch_dims' must be non-negative", batch_dims;
     }
     @lower {
         output[bi..,si..,ti..] = data[bi..,si..,ti..],
             bi < b, si < s, ti < t;
-        output[bi..,indices[bi..,zi..,di]..,ti..] := updates[bi..,zi..,ti..],
+        output[bi..,indices[bi..,zi..,:]..,ti..] := updates[bi..,zi..,ti..],
             bi < b, zi < z, ti < t;
     }
 }
