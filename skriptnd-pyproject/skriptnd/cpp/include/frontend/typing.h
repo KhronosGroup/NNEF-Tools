@@ -3145,7 +3145,6 @@ namespace sknd
                         return tensor_rank;
                     }
                     
-                    if ( access.tensor )
                     for ( auto& index : access.indices )
                     {
                         if ( index->kind != Expr::Expand )
