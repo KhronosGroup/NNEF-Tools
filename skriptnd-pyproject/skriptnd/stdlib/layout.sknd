@@ -861,7 +861,6 @@ operator shuffle {
 # @item Finding indices where data is non-zero
 
 # @text This operator produces an output of dynamic size depending on the actual data contained in the input.
-# @text It cannot be defined using affine index notation, hence it needs to be defined as an intrinsic operator in an actual compiler implementation.
 
 operator nonzero {
     @dtype {
@@ -871,7 +870,11 @@ operator nonzero {
         input: T[s..(d)];
     }
     @output {
-        index: int[d,~|(s * ..)];
+        index: int[d,k|(s * ..)];
+    }
+    @lower {
+        index[:,k] = i,
+            i < s | input[i..] != T(0);
     }
 }
 
