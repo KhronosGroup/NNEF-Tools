@@ -929,6 +929,11 @@ namespace sknd
         {
             auto position = lexer.position();
             
+            if ( (flags & Flags::IsIndex) && lexer.is_token(Operator::Colon) )
+            {
+                return parse_range_expr(lexer, nullptr, true);
+            }
+            
             Shared<Expr> item;
             bool parenthesized = false;
             
@@ -996,12 +1001,6 @@ namespace sknd
                 TRY_CALL(lexer.accept())
                 return (Shared<Expr>)std::make_shared<AccessExpr>(position, array, std::vector<Shared<Expr>>());
             }
-            else if ( lexer.is_token(Operator::Colon) )
-            {
-                TRY_DECL(range, parse_range_expr(lexer, nullptr, true))
-                TRY_CALL(lexer.accept(Operator::RightBracket))
-                return (Shared<Expr>)std::make_shared<IndexExpr>(position, array, range);
-            }
             
             TRY_DECL(index, parse_list_item(lexer, Flags::IsIndex))
             if ( index->kind == Expr::Expand || lexer.is_token(Operator::Comma) )
@@ -1046,7 +1045,8 @@ namespace sknd
             auto position = first ? first->position : lexer.position();
             
             TRY_CALL(lexer.accept(Operator::Colon))
-            TRY_DECL(last, (indexing && lexer.is_token(Operator::RightBracket)) || lexer.is_token(Operator::Colon) ? Shared<Expr>() : parse_expr(lexer))
+            TRY_DECL(last, (indexing && lexer.is_oneof(Operator::RightBracket, Operator::Comma)) || lexer.is_token(Operator::Colon) ? 
+                     Shared<Expr>() : parse_expr(lexer))
             TRY_DECL(strided, lexer.accept_if(Operator::Colon))
             TRY_DECL(stride, strided ? parse_expr(lexer) : Shared<Expr>())
             return (Shared<Expr>)std::make_shared<RangeExpr>(position, first, last, stride);
