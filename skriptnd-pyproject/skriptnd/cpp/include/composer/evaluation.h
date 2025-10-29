@@ -2581,11 +2581,6 @@ namespace sknd
                     return *rank;
                 }
             }
-            else if ( item.kind == Expr::Range )
-            {
-                TRY_DECL(rank, eval_max_rank(item, symbols))
-                return *rank;
-            }
             else
             {
                 return 1;
