@@ -417,13 +417,14 @@ operator _nearest_grid_sample {
     }
     @input {
         input: real[n,c,s..(d)];
-        grid: real[n,z..(d)]..(d);
+        grid: real[n,z..(d),d];
     }
     @output {
         output: real[n,c,z..];
     }
     @using {
         paddings = ['ZEROS', 'REFLECT', 'REPLICATE'];
+        di = [d-1:-1:-1];
     }
     @assert {
         padding in paddings:
@@ -431,7 +432,7 @@ operator _nearest_grid_sample {
     }
     @lower {
         with
-            g = (grid[ni,zi..] + 1.0) * 0.5,                        # map [-1,1] to [0,1]
+            g = (grid[ni,zi..,di] + 1.0) * 0.5,                     # map [-1,1] to [0,1]
             x = aligned ? g * real(s - 1) : g * real(s) - 0.5,      # map to pixel space
             i = int(round(x)):                                      # round to nearest integer
         output[ni,ci,zi..] = padding == 'REFLECT' ? input[ni,ci,|i <> -i : 2 * (s - 1) - i|..] :
@@ -448,13 +449,14 @@ operator _linear_grid_sample {
     }
     @input {
         input: real[n,c,s..(d)];
-        grid: real[n,z..(d)]..(d);
+        grid: real[n,z..(d),d];
     }
     @output {
         output: real[n,c,z..];
     }
     @using {
         paddings = ['ZEROS', 'REFLECT', 'REPLICATE'];
+        di = [d-1:-1:-1];
     }
     @assert {
         padding in paddings:
@@ -462,7 +464,7 @@ operator _linear_grid_sample {
     }
     @lower {
         with
-            g = (grid[ni,zi..] + 1.0) * 0.5,                        # map [-1,1] to [0,1]
+            g = (grid[ni,zi..,di] + 1.0) * 0.5,                     # map [-1,1] to [0,1]
             x = aligned ? g * real(s - 1) : g * real(s) - 0.5,      # map to pixel space
             i = int(floor(x)) + j,                                  # map to nearby pixel
             w = 1.0 - abs(real(i) - x):                             # calculate weights
@@ -480,7 +482,7 @@ operator _cubic_grid_sample {
     }
     @input {
         input: real[n,c,s..(d)];
-        grid: real[n,z..(d)]..(d);
+        grid: real[n,z..(d),d];
     }
     @output {
         output: real[n,c,z..];
@@ -502,7 +504,7 @@ operator grid_sample {
     }
     @input {
         input: real[n,c,s..(d)];
-        grid: real[n,z..(d)]..(d);
+        grid: real[n,z..(d),d];
     }
     @output {
         output: real[n,c,z..];

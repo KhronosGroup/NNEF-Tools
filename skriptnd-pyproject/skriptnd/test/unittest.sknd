@@ -2414,7 +2414,7 @@ graph resize_cubic {
 graph grid_sample_nearest {
     @input {
         input: real[4,3,64,64];
-        grid: real[4,100,100]..(2);
+        grid: real[4,100,100,2];
     }
     @output {
         output: real[4,3,100,100];
@@ -2427,7 +2427,7 @@ graph grid_sample_nearest {
 graph grid_sample_linear {
     @input {
         input: real[4,3,64,64];
-        grid: real[4,100,100]..(2);
+        grid: real[4,100,100,2];
     }
     @output {
         output: real[4,3,100,100];
@@ -2440,7 +2440,7 @@ graph grid_sample_linear {
 graph grid_sample_cubic {
     @input {
         input: real[4,3,64,64];
-        grid: real[4,100,100]..(2);
+        grid: real[4,100,100,2];
     }
     @output {
         output: real[4,3,100,100];
