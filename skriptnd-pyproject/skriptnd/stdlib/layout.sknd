@@ -873,7 +873,7 @@ operator nonzero {
         index: int[d,k|(s * ..)];
     }
     @lower {
-        index[:,k] = i,
+        index[:d,k] = i,
             i < s | input[i..] != T(0);
     }
 }

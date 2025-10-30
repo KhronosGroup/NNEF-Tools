@@ -1358,6 +1358,16 @@ namespace sknd
                 check_tensor_expr(*lowering.right, decls);
             }
             
+            if ( *left_rank == nullptr && *right_rank != nullptr )
+            {
+                report_error(lowering.position, "left-hand-side is not packed but right-hand-side is packed");
+            }
+            else if ( *left_rank != nullptr && *right_rank != nullptr && !ranks_equal(**left_rank, **right_rank, decls) )
+            {
+                report_error(lowering.position, "rank of left-hand-side does no match that of right-hand-side (%s vs %s)",
+                             str(**left_rank).c_str(), str(**right_rank).c_str());
+            }
+            
             if ( lowering.condition )
             {
                 auto [cond_type, cond_rank] = check_expr(*lowering.condition, decls, AllowTensorOperators);
