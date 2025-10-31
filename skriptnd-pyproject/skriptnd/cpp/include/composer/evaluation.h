@@ -636,21 +636,6 @@ namespace sknd
                                 indices.push_back(ix);
                             }
                         }
-                        else if ( index->kind == Expr::Range && !as_range(*index).last )
-                        {
-                            TRY_DECL(tensor, eval(*access.tensor, symbols, as_null_tensor, as_null_tensor_pack))
-                            auto last = tensor.canonic_shape()[k];
-                            
-                            auto& range = as_range(*index);
-                            TRY_DECL(first, range.first ? eval(*range.first, symbols) : ValueExpr(0))
-                            TRY_DECL(stride, range.stride ? eval(*range.stride, symbols) : ValueExpr(1))
-                            if ( stride == 0 )
-                            {
-                                return Error(expr.position, "zero stride in index range");
-                            }
-                            auto ix = ValueExpr(ValueExpr::RangeExpr{ std::move(first), std::move(last), std::move(stride) }, Typename::Int, size);
-                            indices.push_back(ix);
-                        }
                         else
                         {
                             TRY_DECL(ix, eval(*index, symbols))
@@ -2201,23 +2186,10 @@ namespace sknd
                     {
                         if ( index->kind != Expr::Expand )
                         {
-                            if ( index->kind == Expr::Range && !as_range(*index).last )
+                            TRY_DECL(index_rank, eval_dynamic_rank(*index, symbols))
+                            if ( index_rank != nullptr )
                             {
-                                TRY_DECL(tensor, eval(*access.tensor, symbols, as_null_tensor, as_null_tensor_pack))
-                                auto& last = tensor.canonic_shape()[k];
-                                
-                                auto& range = as_range(*index);
-                                TRY_DECL(first, range.first ? eval_item(*range.first, symbols) : ValueExpr(0))
-                                TRY_DECL(stride, range.stride ? eval_item(*range.stride, symbols) : ValueExpr(1))
-                                return stride.is_literal() && stride.as_int() < 0 ? ceil_div(first - last, -stride) : ceil_div(last - first, stride);
-                            }
-                            else
-                            {
-                                TRY_DECL(index_rank, eval_dynamic_rank(*index, symbols))
-                                if ( index_rank != nullptr )
-                                {
-                                    return index_rank;
-                                }
+                                return index_rank;
                             }
                         }
                         TRY_DECL(rank, shape_item_rank(*index, symbols))

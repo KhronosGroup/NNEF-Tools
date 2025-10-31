@@ -2325,7 +2325,7 @@ namespace sknd
         {
             for ( auto item : shape.extents )
             {
-                if ( item != nullptr && item->kind != Expr::Expand && item->kind != Expr::Range )
+                if ( item != nullptr && item->kind != Expr::Expand )
                 {
                     TRY_DECL(rank, eval_max_rank<true>(*item, symbols))
                     if ( rank && *rank != repeats )
@@ -4255,7 +4255,7 @@ namespace sknd
                     shape[k++] = nullptr;
                     continue;
                 }
-                bool packed = item->kind == Expr::Expand || item->kind == Expr::Range;
+                bool packed = item->kind == Expr::Expand;
                 TRY_DECL(count, shape_item_rank(*item, symbols))
                 item = unwrapped(item);
                 for ( size_t i = 0; i < count; ++i )

@@ -62,6 +62,7 @@ namespace sknd
             
             Position position;
             Type type;
+            Shared<Shapedef> shape;
             Shared<Expr> repeats;
             Shared<Expr> cond;
             unsigned flags;
@@ -92,14 +93,14 @@ namespace sknd
             for ( auto& param : op.dtypes )
             {
                 check_type_param(param);
-                declare_symbol(decls, param.position, param.name, make_type(param.base_type), nullptr, Declaration::Dtype);
+                declare_symbol(decls, param.position, param.name, make_type(param.base_type), nullptr, nullptr, Declaration::Dtype);
             }
             
             for ( auto& param : op.attribs )
             {
                 if ( !is_deferred_attrib(param) )
                 {
-                    declare_symbol(decls, param.position, param.name, param.type, param.repeats, Declaration::Attrib);
+                    declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Attrib);
                 }
             }
             
@@ -120,7 +121,7 @@ namespace sknd
             {
                 if ( is_deferred_attrib(param) )
                 {
-                    declare_symbol(decls, param.position, param.name, param.type, param.repeats, Declaration::Attrib);
+                    declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Attrib);
                     if ( param.repeats )
                     {
                         declare_repeats(decls, param);
@@ -138,7 +139,7 @@ namespace sknd
             for ( size_t i = 0; i < op.inputs.size(); ++i )
             {
                 auto& param = op.inputs[(*order)[i]];
-                declare_symbol(decls, param.position, param.name, param.type, param.repeats, Declaration::Input);
+                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Input);
                 if ( param.repeats && (!op.graph || param.repeats_bound) )
                 {
                     if ( main )
@@ -232,7 +233,7 @@ namespace sknd
                 {
                     report_error(param.position, "constants must have their shape specified");
                 }
-                declare_symbol(decls, param.position, param.name, param.type, param.repeats, Declaration::Constant);
+                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Constant);
             }
             for ( auto& param : op.variables )
             {
@@ -245,12 +246,12 @@ namespace sknd
                 {
                     report_error(param.position, "variables must have their shape specified");
                 }
-                declare_symbol(decls, param.position, param.name, param.type, param.repeats, Declaration::Variable);
+                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Variable);
             }
             for ( auto& param : op.outputs )
             {
                 check_param(param, decls, Lexer::Block::Output);
-                declare_symbol(decls, param.position, param.name, param.type, param.repeats, Declaration::Output);
+                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Output);
                 if ( param.shape )
                 {
                     declare_dynamic_shape_components(decls, *param.shape);
@@ -324,15 +325,15 @@ namespace sknd
     private:
         
         void declare_symbol( Dict<Declaration>& decls, const Position& position, const std::string& name, const Type& type,
-                            const Shared<Expr>& repeats, const unsigned flags, const Shared<Expr>& cond = nullptr ) const
+                            const Shared<Shapedef> shape, const Shared<Expr>& repeats, const unsigned flags, const Shared<Expr>& cond = nullptr ) const
         {
-            auto [it, inserted] = decls.emplace(name, Declaration{ position, type, repeats, cond, flags });
+            auto [it, inserted] = decls.emplace(name, Declaration{ position, type, shape, repeats, cond, flags });
             if ( !inserted )    // already declared
             {
                 Declaration& decl = it->second;
                 if ( (decl.flags & Declaration::Inherited) || (flags & Declaration::AllowShadowing) )
                 {
-                    decl = Declaration{ position, type, repeats, cond, flags };
+                    decl = Declaration{ position, type, shape, repeats, cond, flags };
                 }
                 else
                 {
@@ -396,15 +397,15 @@ namespace sknd
                 {
                     if ( type.packed )
                     {
-                        declare_symbol(decls, position, name + ".size", make_type(Typename::Int, type.optional, false, false), nullptr,
+                        declare_symbol(decls, position, name + ".size", make_type(Typename::Int, type.optional, false, false), nullptr, nullptr,
                                        Declaration::Shape | Declaration::Implicit);
                     }
                     else
                     {
                         auto shape_rank = std::make_shared<IdenfitierExpr>(position, name + ".rank");
-                        declare_symbol(decls, position, name + ".shape", make_type(Typename::Int, type.optional, false, true), shape_rank,
+                        declare_symbol(decls, position, name + ".shape", make_type(Typename::Int, type.optional, false, true), nullptr, shape_rank,
                                        Declaration::Shape | Declaration::Implicit);
-                        declare_symbol(decls, position, name + ".rank", make_type(Typename::Int, type.optional, false, false), nullptr,
+                        declare_symbol(decls, position, name + ".rank", make_type(Typename::Int, type.optional, false, false), nullptr, nullptr,
                                        Declaration::Shape | Declaration::Implicit);
                     }
                 }
@@ -450,7 +451,7 @@ namespace sknd
                             if ( !iden.empty() )
                             {
                                 auto type = make_type(Typename::Int, optional, false, false);
-                                declare_symbol(decls, count->position, iden, type, nullptr, Declaration::Shape);
+                                declare_symbol(decls, count->position, iden, type, nullptr, nullptr, Declaration::Shape);
                             }
                         }
                     }
@@ -471,7 +472,7 @@ namespace sknd
                         }
                     }
                     auto type = make_type(Typename::Int, optnal, false, packed);
-                    declare_symbol(decls, item->position, iden, type, count, Declaration::Shape, cond);
+                    declare_symbol(decls, item->position, iden, type, nullptr, count, Declaration::Shape, cond);
                 }
             }
         }
@@ -487,7 +488,7 @@ namespace sknd
                     if ( extent->kind == Expr::Identifier )
                     {
                         auto& iden = as_identifier(*extent).name;
-                        declare_symbol(decls, extent->position, iden, make_type(Typename::Int), nullptr,
+                        declare_symbol(decls, extent->position, iden, make_type(Typename::Int), nullptr, nullptr,
                                        Declaration::Shape | Declaration::Implicit);
                     }
                     else
@@ -503,7 +504,7 @@ namespace sknd
             if ( rank )
             {
                 auto& iden = as_identifier(*rank).name;
-                declare_symbol(decls, rank->position, iden, make_type(Typename::Int), nullptr, Declaration::Shape);
+                declare_symbol(decls, rank->position, iden, make_type(Typename::Int), nullptr, nullptr, Declaration::Shape);
             }
         }
         
@@ -641,7 +642,7 @@ namespace sknd
             if ( !iden.empty() )
             {
                 auto type = make_type(Typename::Int, param.type.optional, false, false);
-                declare_symbol(decls, param.repeats->position, iden, type, nullptr, Declaration::Shape);
+                declare_symbol(decls, param.repeats->position, iden, type, nullptr, nullptr, Declaration::Shape);
                 
                 if ( param.repeats_bound )
                 {
@@ -727,7 +728,7 @@ namespace sknd
                             
                             if ( !item.name.empty() )
                             {
-                                declare_symbol(decls, item.position, item.name, pack ? as_packed(type) : as_non_packed(type), pack_size, Declaration::Result);
+                                declare_symbol(decls, item.position, item.name, pack ? as_packed(type) : as_non_packed(type), item.shape, pack_size, Declaration::Result);
                             }
                             
                             if ( item.shape )
@@ -788,7 +789,7 @@ namespace sknd
                     
                     if ( !item.name.empty() )
                     {
-                        declare_symbol(decls, item.position, item.name, type, type.packed ? count : nullptr, Declaration::Result);
+                        declare_symbol(decls, item.position, item.name, type, item.shape, type.packed ? count : nullptr, Declaration::Result);
                     }
                 }
             }
@@ -859,18 +860,18 @@ namespace sknd
                         count = std::make_shared<BinaryExpr>(item->position, count, size, Lexer::Operator::Divide);
                         for ( auto part : as_zip(*item).items )
                         {
-                            declare_symbol(decls, part->position, as_identifier(*part).name, item_type, count, Declaration::Using);
+                            declare_symbol(decls, part->position, as_identifier(*part).name, item_type, nullptr, count, Declaration::Using);
                         }
                     }
                     else
                     {
-                        declare_symbol(decls, item->position, as_identifier(*item).name, item_type, count, Declaration::Using);
+                        declare_symbol(decls, item->position, as_identifier(*item).name, item_type, nullptr, count, Declaration::Using);
                     }
                 }
             }
             else
             {
-                declare_symbol(decls, usage.position, as_identifier(*usage.identifier).name, *type, *rank, Declaration::Using);
+                declare_symbol(decls, usage.position, as_identifier(*usage.identifier).name, *type, nullptr, *rank, Declaration::Using);
             }
         }
         
@@ -998,7 +999,7 @@ namespace sknd
                         {
                             check_shape_components(decls, *iden.shape, nullptr);
                         }
-                        declare_symbol(decls, expr->position, iden.name, as_tensor(*type), *rank, Declaration::LoopLocal | Declaration::AllowShadowing);
+                        declare_symbol(decls, expr->position, iden.name, as_tensor(*type), iden.shape, *rank, Declaration::LoopLocal | Declaration::AllowShadowing);
                     }
                 }
                 
@@ -1011,13 +1012,13 @@ namespace sknd
                         {
                             report_error(expr->position, "scan input declaration must be of packed type");
                         }
-                        declare_symbol(decls, expr->position, iden, as_non_packed(*type), nullptr, Declaration::LoopLocal | Declaration::AllowShadowing);
+                        declare_symbol(decls, expr->position, iden, as_non_packed(*type), nullptr, nullptr, Declaration::LoopLocal | Declaration::AllowShadowing);
                     }
                 }
                 if ( component.loop->index )
                 {
                     auto type = make_type(Typename::Int, false, !component.loop->unroll, false);
-                    declare_symbol(decls, component.loop->index->position, component.loop->index->name, type, nullptr, Declaration::LoopLocal | Declaration::AllowShadowing);
+                    declare_symbol(decls, component.loop->index->position, component.loop->index->name, type, nullptr, nullptr, Declaration::LoopLocal | Declaration::AllowShadowing);
                 }
                 if ( component.loop->condition )
                 {
@@ -1171,7 +1172,7 @@ namespace sknd
                     {
                         report_error(expr->position, "default value bound expression cannot be of optional type");
                     }
-                    declare_symbol(locals, expr->position, id, *type, *rank, Declaration::Unrolled);
+                    declare_symbol(locals, expr->position, id, *type, nullptr, *rank, Declaration::Unrolled);
                 }
             }
             
@@ -1310,7 +1311,7 @@ namespace sknd
             {
                 if ( check_repeat(*lowering.unroll_count, decls) )
                 {
-                    declare_symbol(decls, lowering.unroll_count->position, lowering.unroll_index, make_type(Typename::Int), nullptr, Declaration::LoopLocal);
+                    declare_symbol(decls, lowering.unroll_count->position, lowering.unroll_index, make_type(Typename::Int), nullptr, nullptr, Declaration::LoopLocal);
                 }
             }
             
@@ -1323,21 +1324,22 @@ namespace sknd
                     {
                         report_error(expr->position, "expected non-optional expression for index bounds");
                     }
-                    declare_symbol(decls, expr->position, iden, *type, *rank, Declaration::TensorIndex);
+                    declare_symbol(decls, expr->position, iden, *type, nullptr, *rank, Declaration::TensorIndex);
                     check_extent(*expr, decls);
                 }
             }
             
             for ( auto& [iden, expr] : lowering.locals )
             {
+                check_tensor_expr(*expr, decls);
                 auto [type, rank] = check_expr(*expr, decls, AllowTensorOperators | AllowBounded);
                 if ( type && rank )
                 {
-                    check_tensor_expr(*expr, decls);
-                    declare_symbol(decls, expr->position, iden, *type, *rank, Declaration::LoopLocal);
+                    declare_symbol(decls, expr->position, iden, *type, nullptr, *rank, Declaration::LoopLocal);
                 }
             }
             
+            check_tensor_expr(*lowering.left, decls);
             auto [left_type, left_rank] = check_expr(*lowering.left, decls, AllowTensorOperators);
             if ( left_type && left_rank )
             {
@@ -1345,18 +1347,16 @@ namespace sknd
                 {
                     report_error(lowering.position, "expected non-optional expression on left-hand-side");
                 }
-                auto tensor = check_tensor_access(*lowering.left, decls);
+                auto& access = as_access(*lowering.left);
+                auto tensor = access.tensor->kind == Expr::Index ? as_index(*access.tensor).array : access.tensor;
                 if ( tensor )
                 {
                     define_symbol(defs, tensor->position, as_identifier(*tensor).name, lowering.op != Lexer::Operator::Assign);
                 }
             }
             
+            check_tensor_expr(*lowering.right, decls);
             auto [right_type, right_rank] = check_expr(*lowering.right, decls, AllowTensorOperators);
-            if ( right_type && right_rank )
-            {
-                check_tensor_expr(*lowering.right, decls);
-            }
             
             if ( *left_rank == nullptr && *right_rank != nullptr )
             {
@@ -1370,6 +1370,7 @@ namespace sknd
             
             if ( lowering.condition )
             {
+                check_tensor_expr(*lowering.condition, decls);
                 auto [cond_type, cond_rank] = check_expr(*lowering.condition, decls, AllowTensorOperators);
                 if ( cond_type && cond_rank )
                 {
@@ -1381,7 +1382,6 @@ namespace sknd
                     {
                         report_error(lowering.condition->position, "expected non-packed expression in condition");
                     }
-                    check_tensor_expr(*lowering.condition, decls);
                 }
             }
             
@@ -1412,14 +1412,18 @@ namespace sknd
             }
         }
         
-        void check_tensor_expr( const Expr& expr, Dict<Declaration>& decls ) const
+        void check_tensor_expr( const Expr& expr, const Dict<Declaration>& decls ) const
         {
+            recurse(expr, [&]( const Expr& x ){ check_tensor_expr(x, decls); });
             if ( expr.kind == Expr::Fold )
             {
                 auto& fold = as_fold(expr);
                 check_has_no_tensor_access(*fold.pack);
             }
-            return recurse(expr, [&]( const Expr& x ){ check_tensor_expr(x, decls); });
+            else if ( expr.kind == Expr::Access )
+            {
+                check_tensor_access(expr, decls);
+            }
         }
         
         Result<std::string> check_tensor_iden( const Expr& expr, const Dict<Declaration>& decls ) const
@@ -1441,7 +1445,7 @@ namespace sknd
             return tensor;
         }
         
-        Shared<Expr> check_tensor_access( const Expr& expr, Dict<Declaration>& decls ) const
+        Shared<Expr> check_tensor_access( const Expr& expr, const Dict<Declaration>& decls ) const
         {
             auto& access = as_access(expr);
             
@@ -1457,6 +1461,91 @@ namespace sknd
             for ( auto& index : access.indices )
             {
                 check_tensor_index(*index, decls, true);
+            }
+            
+            auto it = decls.find(*iden);
+            if ( it != decls.end() )
+            {
+                auto& shape = it->second.shape;
+                bool same_layout = access.indices.size() == shape->extents.size();
+                
+                for ( size_t i = 0; i < access.indices.size(); ++i )
+                {
+                    auto& index = access.indices[i];
+                    if ( index->kind == Expr::Range )
+                    {
+                        auto& range = as_range(*index);
+                        if ( (!range.first || !range.last) && range.stride && range.stride->kind != Expr::Literal )
+                        {
+                            report_error(index->position, "stride must be integer literal if any range limits are implicit");
+                        }
+                        bool reversed = range.stride && range.stride->kind == Expr::Literal && as_int(*range.stride).value < 0;
+                        if ( reversed )
+                        {
+                            if ( !range.first )
+                            {
+                                if ( same_layout )
+                                {
+                                    auto one = std::make_shared<IntExpr>(range.position, 1);
+                                    const_cast<Shared<Expr>&>(range.first) = std::make_shared<BinaryExpr>(range.position, shape->extents[i], one, Lexer::Operator::Minus);
+                                }
+                                else
+                                {
+                                    report_error(index->position, "rank of range index could not be derived");
+                                }
+                            }
+                            if ( !range.last )
+                            {
+                                const_cast<Shared<Expr>&>(range.last) = std::make_shared<IntExpr>(range.position, -1);
+                            }
+                        }
+                        else
+                        {
+                            if ( !range.first )
+                            {
+                                const_cast<Shared<Expr>&>(range.first) = std::make_shared<IntExpr>(range.position, 0);
+                            }
+                            if ( !range.last )
+                            {
+                                if ( same_layout )
+                                {
+                                    const_cast<Shared<Expr>&>(range.last) = shape->extents[i];
+                                }
+                                else
+                                {
+                                    report_error(index->position, "rank of range index could not be derived");
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if ( same_layout )
+                {
+                    for ( size_t i = 0; i < access.indices.size(); ++i )
+                    {
+                        auto& index = access.indices[i];
+                        auto& extent = shape->extents[i];
+                        if ( index->kind != Expr::Expand && extent->kind == Expr::Expand )
+                        {
+                            report_error(index->position, "index is not packed but corresponding shape item is packed");
+                        }
+                        if ( index->kind == Expr::Expand && extent->kind != Expr::Expand )
+                        {
+                            report_error(index->position, "index is packed but corresponding shape item is not packed");
+                        }
+                        if ( index->kind == Expr::Expand && extent->kind == Expr::Expand )
+                        {
+                            auto index_rank = eval_rank(*index, decls);
+                            auto extent_rank = eval_rank(*extent, decls);
+                            if ( index_rank && extent_rank && !ranks_equal(**index_rank, **extent_rank, decls) )
+                            {
+                                report_error(index->position, "index rank does not match corresponding shape item rank (%s vs %s)",
+                                             str(**index_rank).c_str(), str(**extent_rank).c_str());
+                            }
+                        }
+                    }
+                }
             }
             
             return tensor;
