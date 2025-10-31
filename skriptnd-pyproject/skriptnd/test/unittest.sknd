@@ -848,10 +848,10 @@ graph argmin_nd {
         input: real[1,16,224,224];
     }
     @output {
-        output: int[1,16,1,1]..(2);
+        output: int[1,16,1,1,2];
     }
     @compose {
-        output..(2) = math.argmin_nd{axes=[2,3]}(input);
+        output = math.argmin_nd{axes=[2,3]}(input);
     }
 }
 
@@ -872,10 +872,10 @@ graph argmax_nd {
         input: real[1,16,224,224];
     }
     @output {
-        output: int[1,16,1,1]..(2);
+        output: int[1,16,1,1,2];
     }
     @compose {
-        output..(2) = math.argmax_nd{axes=[2,3]}(input);
+        output = math.argmax_nd{axes=[2,3]}(input);
     }
 }
 
