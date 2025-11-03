@@ -19,6 +19,37 @@
 #include "runtime.h"
 
 
+std::vector<std::string> enum_potential_graph_names( std::istream& is )
+{
+    std::vector<std::string> graphs;
+    
+    std::string token;
+    bool is_graph = false;
+    while ( is.peek() != EOF )
+    {
+        while ( std::isspace(is.peek()) )
+        {
+            is.get();
+        }
+        
+        token.clear();
+        while ( is.peek() != EOF && !std::isspace(is.peek()) )
+        {
+            token += is.get();
+        }
+        
+        if ( is_graph && !token.empty() )
+        {
+            graphs.push_back(token);
+        }
+        
+        is_graph = token == "graph";
+    }
+    
+    return graphs;
+}
+
+
 int main( int argc, const char * argv[] )
 {
     auto error_handler = [&]( const sknd::Position& position, const std::string& message, const sknd::StackTrace& stacktrace, const bool warning )
@@ -80,10 +111,11 @@ int main( int argc, const char * argv[] )
         return -1;
     }
     
-    auto graph_names = sknd::enum_graph_names(is);
+    auto graph_names = all ? enum_potential_graph_names(is) : std::vector<std::string>{ "" };
     if ( graph_names.empty() )
     {
-        graph_names.push_back("");
+        std::cout << "Could not find graph in file: " << fn << std::endl;
+        return -2;
     }
     
     for ( auto& graph_name : graph_names )
@@ -107,10 +139,6 @@ int main( int argc, const char * argv[] )
         else
         {
             std::cout << "❌ Parse failed for graph '" + graph_name + "'" << std::endl;
-        }
-        if ( !all )
-        {
-            break;
         }
     }
     

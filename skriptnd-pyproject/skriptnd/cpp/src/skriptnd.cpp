@@ -31,36 +31,6 @@ namespace sknd
         auto beg = path.find_last_of("\\/", end - 1) + 1;
         return path.substr(beg, end - beg);
     }
-    
-    std::vector<std::string> enum_graph_names( std::istream& is )
-    {
-        std::vector<std::string> names;
-        
-        Lexer lexer(is, "");
-        while ( !lexer.empty() )
-        {
-            bool graph = lexer.is_token(Lexer::Keyword::Graph);
-            if ( !lexer.accept() )
-            {
-                return {};
-            }
-            if ( graph )
-            {
-                const std::string id = lexer.token();
-                auto result = lexer.accept_if(Lexer::Category::Identifier);
-                if ( !result )
-                {
-                    return {};
-                }
-                if ( *result )
-                {
-                    names.push_back(id);
-                }
-            }
-        }
-        
-        return names;
-    }
 
     std::optional<Model> read_model( const std::string& path, const std::string& graph_name, const std::string& stdlib_path,
                                     const ErrorCallback error, const std::map<std::string, ValueExpr>& attribs,
@@ -111,7 +81,7 @@ namespace sknd
             return std::nullopt;
         }
         
-        auto graph_name = !main_graph.empty() ? main_graph : graph_names.front();
+        auto graph_name = !main_graph.empty() ? main_graph : !graph_names.empty() ? graph_names.front() : "";
         auto scoped_graph_name = module + "." + graph_name;
         
         Typing typing(counted_error);
@@ -126,7 +96,7 @@ namespace sknd
         
         if ( graph_names.empty() )
         {
-            error(Position(), "could not find graph definition", {}, false);
+            error(Position{ module }, "could not find graph definition", {}, false);
             return std::nullopt;
         }
         

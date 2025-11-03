@@ -34,7 +34,6 @@ namespace sknd
     
 
     std::string model_name_from_path( const std::string& path );
-    std::vector<std::string> enum_graph_names( std::istream& is );
     
     std::optional<Model> read_model( const std::string& path, const std::string& graph_name, const std::string& stdlib_path,
                                     const ErrorCallback error, const std::map<std::string, sknd::ValueExpr>& attribs = {},
