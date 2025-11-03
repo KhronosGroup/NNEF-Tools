@@ -105,7 +105,7 @@ namespace sknd
         };
         
         Parser parser(stdlib_path, import_path, counted_error);
-        auto [operators, graph_names] = parser(is, module);
+        auto [operators, imports, graph_names] = parser(is, module);
         if ( error_count )
         {
             return std::nullopt;
@@ -117,7 +117,7 @@ namespace sknd
         Typing typing(counted_error);
         for ( auto& [key, op] : operators )
         {
-            typing.check_operator(op, operators, key == scoped_graph_name);
+            typing.check_operator(op, operators, imports, key == scoped_graph_name);
         }
         if ( error_count )
         {

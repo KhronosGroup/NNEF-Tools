@@ -475,6 +475,11 @@ namespace sknd
         {
             return _position;
         }
+        
+        const std::string& module() const
+        {
+            return _position.module;
+        }
 
     private:
         

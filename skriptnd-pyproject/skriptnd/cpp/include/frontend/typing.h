@@ -84,7 +84,8 @@ namespace sknd
         {
         }
         
-        void check_operator( const Operator& op, const Dict<Operator>& operators, const bool main ) const
+        void check_operator( const Operator& op, const Dict<Operator>& operators, const Dict<std::set<std::string>>& imports,
+                            const bool main ) const
         {
             Dict<Declaration> decls;
             std::vector<bool> checked(op.asserts.size(), false);
@@ -282,13 +283,13 @@ namespace sknd
             for ( auto& component : op.components )
             {
                 check_component(component, operators, decls, defs, false);
-                check_invocation_access(op.position.module, component, operators, decls, !is_private && !op.graph && op.components.size() == 1);
+                check_invocation_access(op.position.module, component, operators, imports, decls, !is_private && !op.graph && op.components.size() == 1);
             }
             
             for ( auto& component : op.updates )
             {
                 check_component(component, operators, decls, defs, true);
-                check_invocation_access(op.position.module, component, operators, decls, !is_private && !op.graph && op.updates.size() == 1);
+                check_invocation_access(op.position.module, component, operators, imports, decls, !is_private && !op.graph && op.updates.size() == 1);
             }
             
             for ( auto& quantization : op.quantizations )
@@ -2076,7 +2077,7 @@ namespace sknd
         }
         
         void check_invocation_access( const std::string& module, const Component& component, const Dict<Operator>& operators,
-                                     const Dict<Declaration>& decls, bool allow_private_primitives ) const
+                                     const Dict<std::set<std::string>>& imports, const Dict<Declaration>& decls, bool allow_private_primitives ) const
         {
             if ( component.branches.size() )
             {
@@ -2087,22 +2088,22 @@ namespace sknd
                 
                 for ( auto& item : component.branches )
                 {
-                    check_invocation_access(module, item.condition, operators, decls, false);
-                    check_invocation_access(module, item.consequent, operators, decls, allow_private_primitives);
+                    check_invocation_access(module, item.condition, operators, imports, decls, false);
+                    check_invocation_access(module, item.consequent, operators, imports, decls, allow_private_primitives);
                 }
             }
             else if ( component.loop )
             {
                 if ( component.loop->condition )
                 {
-                    check_invocation_access(module, *component.loop->condition, operators, decls, false);
+                    check_invocation_access(module, *component.loop->condition, operators, imports, decls, false);
                 }
             }
-            check_invocation_access(module, component.operation, operators, decls, allow_private_primitives);
+            check_invocation_access(module, component.operation, operators, imports, decls, allow_private_primitives);
         }
         
         void check_invocation_access( const std::string& module, const Callable& callable, const Dict<Operator>& operators,
-                                     const Dict<Declaration>& decls, bool allow_private_primitives ) const
+                                     const Dict<std::set<std::string>>& imports, const Dict<Declaration>& decls, bool allow_private_primitives ) const
         {
             if ( callable.is<Invocation>() )
             {
@@ -2110,6 +2111,12 @@ namespace sknd
                 auto pos = invocation.target.find_last_of('.');
                 auto target_module = invocation.target.substr(0, pos);
                 auto target_name = invocation.target.substr(pos + 1);
+                
+                if ( target_module != module && !imports.at(module).count(target_module) )
+                {
+                    report_error(invocation.position, "module '%s' is not imported in module '%s'",
+                                 target_module.c_str(), module.c_str());
+                }
                 
                 if ( target_name.front() == '_' )
                 {
@@ -2137,7 +2144,7 @@ namespace sknd
                 auto& region = callable.as<Region>();
                 for ( auto& component : region.components )
                 {
-                    check_invocation_access(module, component, operators, decls, false);
+                    check_invocation_access(module, component, operators, imports, decls, false);
                 }
             }
         }

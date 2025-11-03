@@ -53,6 +53,9 @@ namespace sknd
 
         static constexpr const char* FileExtension = ".sknd";
         
+        template<typename T>
+        using Dict = std::map<std::string,T>;
+        
     public:
         
         Parser( const std::string& stdlib_path, const std::string& import_path, const ErrorCallback error )
@@ -60,25 +63,28 @@ namespace sknd
         {
         }
         
-        std::pair<std::map<std::string,sknd::Operator>,std::vector<std::string>> operator()( std::istream& is, const std::string& module )
+        std::tuple<Dict<sknd::Operator>,Dict<std::set<std::string>>,std::vector<std::string>>
+        operator()( std::istream& is, const std::string& module )
         {
-            std::set<std::string> imports;
-            std::map<std::string,sknd::Operator> operators;
+            Dict<std::set<std::string>> imports;
+            Dict<sknd::Operator> operators;
             std::vector<std::string> graphs;
+            
+            imports[module] = {};
             
             Lexer lexer(is, module);
             
             parse_module(lexer, imports, operators, graphs, true);
-            return std::make_pair(std::move(operators), std::move(graphs));
+            return std::make_tuple(std::move(operators), std::move(imports), std::move(graphs));
         }
         
     private:
         
-        bool import_module( const std::string& module, std::set<std::string>& imports, std::map<std::string,sknd::Operator>& operators,
+        bool import_module( const std::string& module, Dict<std::set<std::string>>& imports, Dict<sknd::Operator>& operators,
                            std::vector<std::string>& graphs )
         {
-            auto insert = imports.insert(module);
-            if ( insert.second )
+            auto [it, inserted] = imports.emplace(module, std::set<std::string>());
+            if ( inserted )
             {
                 std::ifstream is;
                 is.open(_stdlib_path + module + FileExtension);
@@ -93,13 +99,13 @@ namespace sknd
                     return false;
                 }
                 
-                Lexer lexer(is, *insert.first);
+                Lexer lexer(is, module);
                 parse_module(lexer, imports, operators, graphs, false);
             }
             return true;
         }
         
-        void parse_module( Lexer& lexer, std::set<std::string>& imports, std::map<std::string,sknd::Operator>& operators, 
+        void parse_module( Lexer& lexer, Dict<std::set<std::string>>& imports, Dict<sknd::Operator>& operators,
                           std::vector<std::string>& graphs, const bool main )
         {
             while ( lexer.is_token(Keyword::Import) )
@@ -139,7 +145,7 @@ namespace sknd
             }
         }
         
-        Result<void> parse_import( Lexer& lexer, std::set<std::string>& imports, std::map<std::string,sknd::Operator>& operators,
+        Result<void> parse_import( Lexer& lexer, Dict<std::set<std::string>>& imports, Dict<sknd::Operator>& operators,
                                   std::vector<std::string>& graphs )
         {
             TRY_CALL(lexer.accept())
@@ -155,6 +161,8 @@ namespace sknd
                 }
                 TRY_DECL(is_comma, lexer.accept_if(Operator::Comma))
                 more = is_comma;
+                
+                imports.at(lexer.module()).insert(name);
             }
             while ( more );
             
