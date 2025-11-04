@@ -911,6 +911,8 @@ namespace sknd
         ValueExpr at( const size_t idx ) const;
         ValueExpr at( const ValueExpr& idx ) const;
         
+        ValueExpr slice( const size_t first, const size_t last, const size_t stride = 1 ) const;
+        
         template<typename T = real_t, typename = std::enable_if_t<std::is_same_v<T,real_t> || std::is_same_v<T,int_t>>>
         bool is_infinity() const
         {
@@ -1656,8 +1658,7 @@ namespace sknd
                 auto& fold = as_fold();
                 if ( fold.accumulate )
                 {
-                    auto pack = ValueExpr(SliceExpr{ fold.pack, ValueExpr((int_t)0), ValueExpr((int_t)idx+1) }, dtype(), idx + 1);
-                    return ValueExpr(FoldExpr{ fold.op, pack, false }, dtype());
+                    return ValueExpr(FoldExpr{ fold.op, fold.pack.slice(0, idx + 1), false }, dtype());
                 }
                 else
                 {
@@ -1832,6 +1833,91 @@ namespace sknd
                 throw std::invalid_argument("operator[] called on invalid ValueExpr");
             }
         }
+    }
+
+    inline ValueExpr ValueExpr::slice( const size_t first, const size_t last, const size_t stride ) const
+    {
+        const size_t size = (last - first) / stride;
+        switch ( kind() )
+        {
+            case Null:
+            case Literal:
+            case Placeholder:
+            case Identifier:
+            case SizeAccess:
+            case TensorAccess:
+            case Bounded:
+            case Uniform:
+            {
+                return *this;
+            }
+            case ShapeAccess:
+            case Reference:
+            case Concat:
+            {
+                return ValueExpr(SliceExpr{ *this, (int_t)first, (int_t)last, (int_t)stride }, dtype(), size);
+            }
+            case List:
+            {
+                auto& list = as_list();
+                std::vector<ValueExpr> items(size);
+                for ( size_t i = 0; i < size; ++i )
+                {
+                    items[i] = list[first + i * stride];
+                }
+                return ValueExpr::list(items, dtype());
+            }
+            case Unary:
+            {
+                auto& unary = as_unary();
+                return ValueExpr(UnaryExpr{ unary.op, unary.arg.slice(first, last, stride) }, dtype(), size);
+            }
+            case Binary:
+            {
+                auto& binary = as_binary();
+                return ValueExpr(BinaryExpr{ binary.op, binary.left.slice(first, last, stride), binary.right.slice(first, last, stride) }, dtype(), size);
+            }
+            case Select:
+            {
+                auto& select = as_select();
+                return ValueExpr(SelectExpr{ select.cond.slice(first, last, stride), select.left.slice(first, last, stride), select.right.slice(first, last, stride) }, dtype(), size);
+            }
+            case Fold:
+            {
+                auto& fold = as_fold();
+                if ( fold.accumulate )
+                {
+                    return ValueExpr(FoldExpr{ fold.op, fold.pack.slice(first, last, stride), true }, dtype(), size);
+                }
+                else
+                {
+                    return *this;
+                }
+            }
+            case Cast:
+            {
+                auto& cast = as_cast();
+                return ValueExpr(CastExpr{ cast.dtype, cast.arg.slice(first, last, stride) }, dtype(), size);
+            }
+            case Slice:
+            {
+                auto& slice = as_slice();
+                return ValueExpr(SliceExpr{ slice.pack, slice.first + (int_t)first, slice.last + (int_t)last, slice.stride * (int_t)stride }, dtype(), size);
+            }
+            case Subscript:
+            {
+                auto& subscript = as_subscript();
+                return subscript.pack.at(subscript.index.slice(first, last, stride));
+            }
+            case Range:
+            {
+                auto range = as_range();
+                return ValueExpr(RangeExpr{ range.first + (int_t)first, range.first + (int_t)last, range.stride * (int_t)stride }, dtype(), size);
+            }
+        }
+
+        assert(false);
+        return *this;
     }
     
     
