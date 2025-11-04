@@ -930,6 +930,11 @@ namespace sknd
         bool is_binary( const std::string& op ) const;
         bool is_fold( const std::string& op ) const;
         
+        void resize( const size_t size )
+        {
+            _size = (size_type)size;
+        }
+        
     private:
         
         template<typename T, typename = std::enable_if_t<is_typename<T>>>

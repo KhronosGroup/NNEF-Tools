@@ -825,6 +825,25 @@ namespace sknd
                             expr = fold_constants_fold(op, fold.accumulate, pack);
                             return true;
                         }
+                        else if ( !fold.accumulate )
+                        {
+                            if ( fold.pack.is_list() )
+                            {
+                                simplified |= remove_null_elements(op, expr.dtype(), fold.pack.as_list());
+                                fold.pack.resize(fold.pack.as_list().size());
+                            }
+                            if ( items.size() == 1 )
+                            {
+                                expr = items.front();
+                                return true;
+                            }
+                            else if ( items.size() == 2 )
+                            {
+                                expr = ValueExpr::binary(fold.op, items[0], items[1], expr.dtype());
+                                simplify_heuristic<false>(expr);
+                                return true;
+                            }
+                        }
                     }
                     else if ( pack.is_uniform() )
                     {
@@ -1627,6 +1646,44 @@ namespace sknd
                     return nullptr;
                 }
             }
+        }
+        
+        static bool remove_null_elements( const Lexer::Operator op, const Typename dtype, std::vector<ValueExpr>& items )
+        {
+            switch ( op )
+            {
+                case Lexer::Operator::Plus:
+                {
+                    return dtype == Typename::Real ? remove_value(items, (real_t)0) : remove_value(items, (int_t)0);
+                }
+                case Lexer::Operator::Multiply:
+                {
+                    return dtype == Typename::Real ? remove_value(items, (real_t)1) : remove_value(items, (int_t)1);
+                }
+                case Lexer::Operator::And:
+                {
+                    return remove_value(items, (bool_t)true);
+                }
+                case Lexer::Operator::Or:
+                {
+                    return remove_value(items, (bool_t)false);
+                }
+                default:
+                {
+                    assert(false);
+                }
+            }
+        }
+        
+        static bool remove_value( std::vector<ValueExpr>& items, const ValueExpr& value )
+        {
+            auto it = std::remove(items.begin(), items.end(), value);
+            if ( it == items.end() )
+            {
+                return false;
+            }
+            items.erase(it, items.end());
+            return true;
         }
         
         template<template<typename> class F, typename T>
