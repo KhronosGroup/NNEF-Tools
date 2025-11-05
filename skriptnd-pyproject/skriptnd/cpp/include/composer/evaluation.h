@@ -141,7 +141,7 @@ namespace sknd
                 }
                 else
                 {
-                    TRY_DECL(items, eval_pack(expr, symbols, (size_t)rank.as_int()))
+                    TRY_DECL(items, eval_pack(expr, symbols, (size_t)rank.as_int(), true))
                     if ( items.empty() && rank.as_int() != 0 )
                     {
                         return eval_dynamic_pack(expr, symbols, rank);
@@ -210,7 +210,7 @@ namespace sknd
     private:
         
         template<typename T = ValueExpr>
-        static Result<std::vector<T>> eval_pack( const Expr& expr, const Dict<Symbol>& symbols, const size_t rank )
+        static Result<std::vector<T>> eval_pack( const Expr& expr, const Dict<Symbol>& symbols, const size_t rank, bool allow_dynamic_fallback = false )
         {
             switch ( expr.kind )
             {
@@ -221,7 +221,7 @@ namespace sknd
                     if ( symbol.is<ValueExpr>() )
                     {
                         auto& expr = symbol.as<ValueExpr>();
-                        if ( !expr.is_literal() && !expr.is_list() )
+                        if ( !expr.is_literal() && !expr.is_list() && allow_dynamic_fallback )
                         {
                             return {};  // eval as dynamic pack
                         }
@@ -328,18 +328,18 @@ namespace sknd
                 {
                     auto& access = as_access(expr);
                     TRY_DECL(tensor_rank, eval_dynamic_rank(*access.tensor, symbols))
-                    if ( tensor_rank != nullptr )
+                    if ( tensor_rank != nullptr && allow_dynamic_fallback )
                     {
                         return {};
                     }
                     for ( auto& index : access.indices )
                     {
-                        if ( index->kind == Expr::Range )
+                        if ( index->kind == Expr::Range && allow_dynamic_fallback )
                         {
                             return {};
                         }
                         TRY_DECL(index_rank, eval_dynamic_rank(*index, symbols))
-                        if ( index_rank != nullptr )
+                        if ( index_rank != nullptr && allow_dynamic_fallback )
                         {
                             return {};
                         }
@@ -438,7 +438,8 @@ namespace sknd
             if constexpr( std::is_same_v<T,ValueExpr> )
             {
                 bool non_literals = std::all_of(values.begin(), values.end(), []( const ValueExpr& x ){ return !x.is_literal(); });
-                if ( non_literals && values.size() > 1 && (expr.kind == Expr::Unary || expr.kind == Expr::Binary || expr.kind == Expr::Select) )
+                if ( allow_dynamic_fallback && non_literals && values.size() > 1 &&
+                    (expr.kind == Expr::Unary || expr.kind == Expr::Binary || expr.kind == Expr::Select) )
                 {
                     return {};  // turn into dynamic expr
                 }
