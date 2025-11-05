@@ -118,6 +118,7 @@ int main( int argc, const char * argv[] )
         return -2;
     }
     
+    size_t failed = 0;
     for ( auto& graph_name : graph_names )
     {
         is.close();
@@ -130,7 +131,7 @@ int main( int argc, const char * argv[] )
             {
                 sknd::flatten_model(*model, sknd::TrueOperationFilter);
             }
-            std::cout << "✅ Succesfully parsed graph '" + graph_name + "'" << std::endl;
+            std::cout << "✅ Succesfully parsed model '" + graph_name + "'" << std::endl;
             if ( verbose )
             {
                 std::cout << *model << std::endl;
@@ -138,7 +139,20 @@ int main( int argc, const char * argv[] )
         }
         else
         {
-            std::cout << "❌ Parse failed for graph '" + graph_name + "'" << std::endl;
+            std::cout << "❌ Parse failed for model '" + graph_name + "'" << std::endl;
+            ++failed;
+        }
+    }
+    
+    if ( all )
+    {
+        if ( failed )
+        {
+            std::cout << failed << " models failed" << std::endl;
+        }
+        else
+        {
+            std::cout << "All models parsed successfully" << std::endl;
         }
     }
     
