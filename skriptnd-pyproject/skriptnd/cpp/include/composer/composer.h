@@ -3812,13 +3812,14 @@ namespace sknd
             }
             else
             {
-                return ValueExpr(ShapeAccess{ tensor, (int_t)dim }, Typename::Int, tensor.packed() ? tensor.max_size() : (std::optional<size_t>)std::nullopt);
+                return ValueExpr(ShapeAccess{ tensor, (int_t)dim }, Typename::Int, value.max_size_or_null());
             }
         }
         
         Result<void> deduce_extents( const Typed& param, const TensorRef tensor, size_t offset, size_t count,
                                     const ValueExpr& size, const Position& position, Dict<Symbol>& symbols )
         {
+            auto& shape = tensor.shape();
             auto& canonic_shape = tensor.canonic_shape();
             
             size_t k = 0, idx = 0;
@@ -3851,18 +3852,18 @@ namespace sknd
                 {
                     if ( bool_count )
                     {
-                        shape_value = rank ? canonic_shape[k] : nullptr;
+                        shape_value = rank ? shape[k] : nullptr;
                     }
                     else
                     {
-                        shape_value = ValueExpr(canonic_shape.data() + k, rank, Typename::Int);
+                        shape_value = ValueExpr(shape.data() + k, rank, Typename::Int);
                         for ( size_t i = 0; i < rank; ++i )
                         {
                             if ( shape_value[i].is_list() )
                             {
-                                auto& canonical_value = tensor.canonic_shape()[k+i];
-                                assert(canonical_value.is_list());
-                                if ( !all_equal(canonical_value.as_list()) )
+                                auto& canonic_value = canonic_shape[k+i];
+                                assert(canonic_value.is_list());
+                                if ( !all_equal(canonic_value.as_list()) )
                                 {
                                     return Error(position, "ambiguous deduction of shape component %d due to non-uniform pack item shape: %s",
                                                  (int)k+i, std::to_string(shape_value[i]).c_str());
@@ -3874,16 +3875,11 @@ namespace sknd
                 }
                 else if ( spread )
                 {
-                    std::vector<ValueExpr> items(count);
-                    for ( size_t i = 0; i < count; ++i )
-                    {
-                        items[i] = tensor[i + offset].canonic_shape[k];
-                    }
-                    shape_value = ValueExpr::list(std::move(items), Typename::Int);
+                    shape_value = shape[k];
                 }
                 else
                 {
-                    shape_value = canonic_shape[k];
+                    shape_value = shape[k];
                     if ( shape_value.is_list() )
                     {
                         if ( !all_equal(shape_value.as_list()) )
@@ -3994,10 +3990,10 @@ namespace sknd
                 k += rank;
             }
             
-            if ( k != canonic_shape.size() )
+            if ( k != shape.size() )
             {
                 return Error(position, "deduced rank %d for parameter '%s' does not match actual rank %d",
-                             (int)k, param.name.c_str(), (int)canonic_shape.size());
+                             (int)k, param.name.c_str(), (int)shape.size());
             }
             return Result<void>();
         }
@@ -4250,7 +4246,7 @@ namespace sknd
             size_t k = 0;
             for ( auto item : shapedef.extents )
             {
-                if ( !item )
+                if ( !item )    // output shape of graph that will be derived by composition
                 {
                     shape[k++] = nullptr;
                     continue;

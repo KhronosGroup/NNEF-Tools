@@ -877,20 +877,13 @@ namespace sknd
             auto& value = symbol.as<ValueExpr>();
             if ( value.packed() )
             {
-                if ( idx )
+                assert(idx);
+                if ( endswith(iden.name, ".shape") && !value[*idx].is_literal() )
                 {
-                    if ( endswith(iden.name, ".shape") && !value[*idx].is_literal() )
-                    {
-                        auto& tensor = symbols.at(iden.name.substr(0, iden.name.length() - 6)).as<TensorRef>();
-                        return ValueExpr(ShapeAccess{ tensor, (int_t)*idx });
-                    }
-                    return value.at(*idx);
+                    auto& tensor = symbols.at(iden.name.substr(0, iden.name.length() - 6)).as<TensorRef>();
+                    return ValueExpr(ShapeAccess{ tensor, (int_t)*idx });
                 }
-                else
-                {
-                    auto reference = ValueExpr(ValueExpr::ReferenceExpr{ iden.name, &value }, symbol.type);
-                    return ValueExpr(ValueExpr::SubscriptExpr{ std::move(reference), ValueExpr((int_t)*idx) }, symbol.type);
-                }
+                return value.at(*idx);
             }
             else
             {
@@ -1870,9 +1863,12 @@ namespace sknd
                 case ValueExpr::Literal:
                 case ValueExpr::Identifier:
                 case ValueExpr::SizeAccess:
-                case ValueExpr::TensorAccess:
                 {
                     return expr;
+                }
+                case ValueExpr::TensorAccess:
+                {
+                    return expr.packed() ? nullptr : expr;
                 }
                 case ValueExpr::Reference:
                 {
@@ -1884,22 +1880,14 @@ namespace sknd
                     auto& access = expr.as_shape_access();
                     if ( !access.tensor.packed() )
                     {
-                        return expr;
+                        return expr.packed() ? nullptr : expr;
                     }
                     if ( access.tensor.max_size() == 0 || !access.dim.is_literal() )
                     {
                         return nullptr;
                     }
-                    auto& first = access.tensor[0].canonic_shape[access.dim.as_int()];
-                    for ( size_t i = 1; i < access.tensor.max_size(); ++i )
-                    {
-                        auto& item = access.tensor[i].canonic_shape[access.dim.as_int()];
-                        if ( item != first )
-                        {
-                            return nullptr;
-                        }
-                    }
-                    return access.tensor.shape()[access.dim.as_int()];
+                    auto dim = access.dim.as_int();
+                    return access.tensor.shape()[dim].packed() ? nullptr : expr;
                 }
                 case ValueExpr::Cast:
                 {
