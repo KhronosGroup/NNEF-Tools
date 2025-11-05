@@ -61,6 +61,8 @@ int main( int argc, const char * argv[] )
         }
     }
     
+    size_t passed = 0;
+    size_t failed = 0;
     for ( auto& entry : std::filesystem::recursive_directory_iterator(folder) )
     {
         if ( entry.is_directory() && entry.path().extension() == ".nnef2" )
@@ -81,12 +83,23 @@ int main( int argc, const char * argv[] )
                     sknd::flatten_model(*model, sknd::TrueOperationFilter);
                 }
                 std::cout << "✅ Succesfully parsed model " << entry.path().filename() << std::endl;
+                ++passed;
             }
             else
             {
                 std::cout << "❌ Failed to parse " << entry.path().filename() << std::endl;
+                ++failed;
             }
         }
+    }
+    
+    if ( failed )
+    {
+        std::cout << failed << " test cases failed, " << passed << " passed" << std::endl;
+    }
+    else
+    {
+        std::cout << "All test cases passed" << std::endl;
     }
     
     return 0;
