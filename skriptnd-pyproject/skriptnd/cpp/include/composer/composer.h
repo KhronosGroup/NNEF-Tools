@@ -2671,6 +2671,8 @@ namespace sknd
             }
             else
             {
+                auto& iden = as_identifier(*usage.identifier);
+                
                 if ( value.packed() && usage.rank )
                 {
                     TRY_DECL(declared_rank, eval(*usage.rank, symbols))
@@ -2682,7 +2684,7 @@ namespace sknd
                 }
                 TRY_DECL(size, eval_dynamic_rank<true>(*usage.expr, symbols))
                 auto symbol = value == nullptr ? NullSymbol : Symbol(value, type, result_rank, size);
-                symbols.emplace(as_identifier(*usage.identifier).name, symbol);
+                symbols.emplace(iden.name, symbol);
             }
             if ( value.packed() && result_rank && *result_rank != value.max_size() )
             {
