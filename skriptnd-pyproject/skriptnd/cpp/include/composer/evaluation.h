@@ -1899,15 +1899,15 @@ namespace sknd
                     {
                         return nullptr;
                     }
-                    auto value = access.tensor[0].shape[access.dim.as_int()];
+                    auto first = access.tensor[0].canonic_shape[access.dim.as_int()];
                     for ( size_t i = 1; i < access.tensor.max_size(); ++i )
                     {
-                        if ( access.tensor[i].shape[access.dim.as_int()] != value )
+                        if ( access.tensor[i].canonic_shape[access.dim.as_int()] != first )
                         {
                             return nullptr;
                         }
                     }
-                    return value;
+                    return access.tensor.shape()[access.dim.as_int()];
                 }
                 case ValueExpr::Cast:
                 {
@@ -3090,8 +3090,8 @@ namespace sknd
             {
                 return false;
             }
-            auto& first = items.front();
-            return std::all_of(items.begin() + 1, items.end(), [&first]( const ValueExpr& item ){ return item == first; });
+            auto first = canonical(items.front());
+            return std::all_of(items.begin() + 1, items.end(), [&first]( const ValueExpr& item ){ return canonical(item) == first; });
         }
         
         template<typename T>
