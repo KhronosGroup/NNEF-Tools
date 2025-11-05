@@ -133,26 +133,13 @@ namespace sknd
             {
                 return eval_item(expr, symbols, idx);
             }
-            else if ( rank.is_literal() )
+            else if ( rank.is_literal() && idx )
             {
-                if ( idx )
-                {
-                    return eval_item(expr, symbols, idx);
-                }
-                else
-                {
-                    TRY_DECL(items, eval_pack(expr, symbols, (size_t)rank.as_int(), true))
-                    if ( items.empty() && rank.as_int() != 0 )
-                    {
-                        return eval_dynamic_pack(expr, symbols, rank);
-                    }
-                    auto type = eval_type(expr, symbols);
-                    return ValueExpr::list(std::move(items), type);
-                }
+                return eval_item(expr, symbols, idx);
             }
             else
             {
-                TRY_DECL(value, eval_dynamic_pack(expr, symbols, rank))
+                TRY_DECL(value, eval_pack(expr, symbols, rank))
                 return idx ? value.at(*idx) : value;
             }
         }
@@ -189,7 +176,7 @@ namespace sknd
             if ( size != nullptr && !idx )
             {
                 size_t rank = eval_shape_expr_max(canonical(size));
-                TRY_DECL(tensors, eval_pack<Tensor*>(expr, symbols, rank))
+                TRY_DECL(tensors, eval_items<Tensor*>(expr, symbols, rank))
                 auto type = eval_type(expr, symbols);
                 TRY_DECL(shape, eval_shape_from_expr(expr, symbols))
                 return aspack(tensors, type, shape, size);
@@ -210,28 +197,14 @@ namespace sknd
     private:
         
         template<typename T = ValueExpr>
-        static Result<std::vector<T>> eval_pack( const Expr& expr, const Dict<Symbol>& symbols, const size_t rank, bool allow_dynamic_fallback = false )
+        static Result<std::vector<T>> eval_items( const Expr& expr, const Dict<Symbol>& symbols, const size_t rank )
         {
             switch ( expr.kind )
             {
-                case Expr::Identifier:
-                {
-                    auto& iden = as_identifier(expr);
-                    auto& symbol = symbols.at(iden.name);
-                    if ( symbol.is<ValueExpr>() )
-                    {
-                        auto& expr = symbol.as<ValueExpr>();
-                        if ( !expr.is_literal() && !expr.is_list() && allow_dynamic_fallback )
-                        {
-                            return {};  // eval as dynamic pack
-                        }
-                    }
-                    break;
-                }
                 case Expr::Expand:
                 {
                     auto& expand = as_expand(expr);
-                    return eval_pack<T>(*expand.item, symbols, rank);
+                    return eval_items<T>(*expand.item, symbols, rank);
                 }
                 case Expr::List:
                 {
@@ -269,7 +242,7 @@ namespace sknd
                         TRY_DECL(length, eval_static_rank(*contain.pack, symbols))
                         if ( is_tensor_expr(*contain.item, symbols) )
                         {
-                            TRY_DECL(pack, eval_pack<Tensor*>(*contain.pack, symbols, *length))
+                            TRY_DECL(pack, eval_items<Tensor*>(*contain.pack, symbols, *length))
                             
                             std::vector<ValueExpr> values(rank);
                             for ( size_t i = 0; i < rank; ++i )
@@ -281,7 +254,7 @@ namespace sknd
                         }
                         else
                         {
-                            TRY_DECL(pack, eval_pack(*contain.pack, symbols, *length))
+                            TRY_DECL(pack, eval_items(*contain.pack, symbols, *length))
                             
                             std::vector<ValueExpr> values(rank);
                             for ( size_t i = 0; i < rank; ++i )
@@ -304,7 +277,7 @@ namespace sknd
                     }
                     
                     TRY_DECL(length, eval_static_rank(*indexer.index, symbols))
-                    TRY_DECL(mask, eval_pack(*indexer.index, symbols, *length))
+                    TRY_DECL(mask, eval_items(*indexer.index, symbols, *length))
                     if ( !is_literal(mask) )
                     {
                         return Error(expr.position, "index mask must not depend on dynamic shapes");
@@ -323,28 +296,6 @@ namespace sknd
                         }
                     }
                     return values;
-                }
-                case Expr::Access:
-                {
-                    auto& access = as_access(expr);
-                    TRY_DECL(tensor_rank, eval_dynamic_rank(*access.tensor, symbols))
-                    if ( tensor_rank != nullptr && allow_dynamic_fallback )
-                    {
-                        return {};
-                    }
-                    for ( auto& index : access.indices )
-                    {
-                        if ( index->kind == Expr::Range && allow_dynamic_fallback )
-                        {
-                            return {};
-                        }
-                        TRY_DECL(index_rank, eval_dynamic_rank(*index, symbols))
-                        if ( index_rank != nullptr && allow_dynamic_fallback )
-                        {
-                            return {};
-                        }
-                    }
-                    break;
                 }
                 case Expr::Fold:
                 {
@@ -401,7 +352,7 @@ namespace sknd
                         return Error(expr.position, "index must not depend on dynamic shapes in substitution expression");
                     }
                     
-                    TRY_DECL(value, eval_pack<T>(*substitute.pack, symbols, rank))
+                    TRY_DECL(value, eval_items<T>(*substitute.pack, symbols, rank))
                     auto length = value.size();
                     if ( index.packed() )
                     {
@@ -435,33 +386,129 @@ namespace sknd
                 values[i] = item;
             }
             
-            if constexpr( std::is_same_v<T,ValueExpr> )
-            {
-                bool non_literals = std::all_of(values.begin(), values.end(), []( const ValueExpr& x ){ return !x.is_literal(); });
-                if ( allow_dynamic_fallback && non_literals && values.size() > 1 &&
-                    (expr.kind == Expr::Unary || expr.kind == Expr::Binary || expr.kind == Expr::Select) )
-                {
-                    return {};  // turn into dynamic expr
-                }
-            }
-            
             return values;
         }
         
-        static Result<ValueExpr> eval_dynamic_pack( const Expr& expr, const Dict<Symbol>& symbols, const ValueExpr& rank )
+        static Result<ValueExpr> eval_pack( const Expr& expr, const Dict<Symbol>& symbols, const ValueExpr& rank )
         {
+            switch ( expr.kind )
+            {
+                case Expr::Identifier:
+                {
+                    auto& iden = as_identifier(expr);
+                    auto& symbol = symbols.at(iden.name);
+                    if ( symbol.is<ValueExpr>() )
+                    {
+                        auto& value = symbol.as<ValueExpr>();
+                        if ( value.is_shape_access() || value.is_uniform() )
+                        {
+                            return value;
+                        }
+                        else if ( !value.is_literal() && !value.is_list() )
+                        {
+                            return ValueExpr(ValueExpr::ReferenceExpr{ iden.name, &value }, value.dtype(), value.max_size());
+                        }
+                    }
+                    break;
+                }
+                case Expr::Access:
+                {
+                    auto& access = as_access(expr);
+                    TRY_DECL(tensor, eval(*access.tensor, symbols, nullptr, nullptr))
+                    
+                    size_t indices_rank = 0;
+                    for ( auto& index : access.indices )
+                    {
+                        TRY_DECL(index_rank, shape_item_rank(*index, symbols))
+                        indices_rank += index_rank;
+                    }
+                    
+                    if ( indices_rank != tensor.rank() )
+                    {
+                        return Error(expr.position, "tensor index rank (%d) does not match shape rank (%d)",
+                                     (int)indices_rank, (int)tensor.rank());
+                    }
+                    
+                    auto size = tensor.max_size_or_null();
+                    
+                    size_t k = 0;
+                    std::vector<ValueExpr> indices;
+                    for ( auto& index : access.indices )
+                    {
+                        TRY_DECL(rank, shape_item_rank(*index, symbols))
+                        if ( index->kind == Expr::Expand )
+                        {
+                            const Expr& item = *as_expand(*index).item;
+                            for ( size_t i = 0; i < rank; ++i )
+                            {
+                                TRY_DECL(ix, eval_item(item, symbols, i))
+                                indices.push_back(ix);
+                            }
+                        }
+                        else
+                        {
+                            TRY_DECL(ix, eval(*index, symbols))
+                            indices.push_back(ix);
+                            if ( ix.packed() )
+                            {
+                                size = ix.max_size();
+                            }
+                        }
+                        k += rank;
+                    }
+                    
+                    return ValueExpr(TensorAccess{ tensor, std::move(indices) }, tensor.dtype(), size);
+                }
+                case Expr::Fold:
+                {
+                    auto& fold = as_fold(expr);
+                    if ( rank.is_literal() )
+                    {
+                        auto type = eval_type(expr, symbols);
+                        if ( rank.as_int() == 0 )
+                        {
+                            return ValueExpr::list({}, type);
+                        }
+                        TRY_DECL(items, eval_items(expr, symbols, rank.as_int()))
+                        if ( !items.empty() )
+                        {
+                            return ValueExpr::list(std::move(items), type);
+                        }
+                    }
+                    if ( !allows_dynamic_fold(fold.op) )
+                    {
+                        return Error(expr.position, "fold expression with operator '%s' must not be of dynamic length");
+                    }
+                    TRY_DECL(pack, eval(*fold.pack, symbols))
+                    return ValueExpr::fold(Lexer::str(fold.op), pack, pack.max_size());
+                }
+                default:
+                {
+                    break;
+                }
+            }
+            
+            if ( rank.is_literal() )
+            {
+                TRY_DECL(items, eval_items(expr, symbols, rank.as_int()))
+                
+                bool non_literals = std::all_of(items.begin(), items.end(), []( const ValueExpr& x ){ return !x.is_literal(); });
+                bool element_wise = expr.kind == Expr::Unary || expr.kind == Expr::Binary || expr.kind == Expr::Select || expr.kind == Expr::Cast;
+                bool make_dynamic = element_wise && non_literals && items.size() > 1;
+                if ( !make_dynamic )
+                {
+                    auto type = eval_type(expr, symbols);
+                    return ValueExpr::list(std::move(items), type);
+                }
+            }
+            
             auto size = eval_shape_expr_max(canonical(rank));
             switch ( expr.kind )
             {
                 case Expr::Identifier:
                 {
                     auto& iden = as_identifier(expr);
-                    auto& value = symbols.at(iden.name).as<ValueExpr>();
-                    if ( value.is_shape_access() || value.is_uniform() )
-                    {
-                        return value;
-                    }
-                    return ValueExpr(ValueExpr::ReferenceExpr{ iden.name, &value }, value.dtype(), value.max_size());
+                    return symbols.at(iden.name).as<ValueExpr>();
                 }
                 case Expr::Expand:
                 {
@@ -474,7 +521,7 @@ namespace sknd
                     }
                     else
                     {
-                        return eval_dynamic_pack(*expand.item, symbols, rank);
+                        return eval_pack(*expand.item, symbols, rank);
                     }
                 }
                 case Expr::Cast:
@@ -510,16 +557,6 @@ namespace sknd
                     TRY_DECL(left, eval(*select.left, symbols))
                     TRY_DECL(right, eval(*select.right, symbols))
                     return ValueExpr::select(std::move(cond), std::move(left), std::move(right), size);
-                }
-                case Expr::Fold:
-                {
-                    auto& fold = as_fold(expr);
-                    if ( !allows_dynamic_fold(fold.op) )
-                    {
-                        return Error(expr.position, "fold expression with operator '%s' must not be of dynamic length");
-                    }
-                    TRY_DECL(pack, eval(*fold.pack, symbols))
-                    return ValueExpr::fold(Lexer::str(fold.op), pack, size);
                 }
                 case Expr::List:
                 {
@@ -604,48 +641,6 @@ namespace sknd
                         TRY_DECL(index, eval(*indexer.index, symbols))
                         return ValueExpr(ValueExpr::SubscriptExpr{ std::move(pack), std::move(index) }, type, size);
                     }
-                }
-                case Expr::Access:
-                {
-                    auto& access = as_access(expr);
-                    TRY_DECL(tensor, eval(*access.tensor, symbols, nullptr, nullptr))
-                    
-                    size_t indices_rank = 0;
-                    for ( auto& index : access.indices )
-                    {
-                        TRY_DECL(index_rank, shape_item_rank(*index, symbols))
-                        indices_rank += index_rank;
-                    }
-                    
-                    if ( indices_rank != tensor.rank() )
-                    {
-                        return Error(expr.position, "tensor index rank (%d) does not match shape rank (%d)",
-                                     (int)indices_rank, (int)tensor.rank());
-                    }
-                    
-                    size_t k = 0;
-                    std::vector<ValueExpr> indices;
-                    for ( auto& index : access.indices )
-                    {
-                        TRY_DECL(rank, shape_item_rank(*index, symbols))
-                        if ( index->kind == Expr::Expand )
-                        {
-                            const Expr& item = *as_expand(*index).item;
-                            for ( size_t i = 0; i < rank; ++i )
-                            {
-                                TRY_DECL(ix, eval_item(item, symbols, i))
-                                indices.push_back(ix);
-                            }
-                        }
-                        else
-                        {
-                            TRY_DECL(ix, eval(*index, symbols))
-                            indices.push_back(ix);
-                        }
-                        k += rank;
-                    }
-                    
-                    return ValueExpr(TensorAccess{ tensor, std::move(indices) }, tensor.dtype(), size);
                 }
                 case Expr::Range:
                 {
@@ -1717,7 +1712,7 @@ namespace sknd
                 TRY_DECL(item, eval_item(*fold.pack, symbols, i))
                 assert(item != nullptr);
                 
-                if ( !item.is_literal() && allows_dynamic_fold(fold.op) )
+                if ( !item.is_literal() )
                 {
                     return {};
                 }
@@ -1738,7 +1733,7 @@ namespace sknd
         static Result<ValueExpr> eval_is_sorted( const Expr& expr, const Dict<Symbol>& symbols )
         {
             TRY_DECL(rank, eval_max_rank(expr, symbols))
-            TRY_DECL(items, eval_pack(expr, symbols, *rank))
+            TRY_DECL(items, eval_items(expr, symbols, *rank))
             auto type = eval_type(expr, symbols);
             switch ( type )
             {
@@ -1768,7 +1763,7 @@ namespace sknd
         static Result<ValueExpr> eval_is_unique( const Expr& expr, const Dict<Symbol>& symbols )
         {
             TRY_DECL(rank, eval_max_rank(expr, symbols))
-            TRY_DECL(items, eval_pack(expr, symbols, *rank))
+            TRY_DECL(items, eval_items(expr, symbols, *rank))
             auto type = eval_type(expr, symbols);
             switch ( type )
             {
@@ -1812,14 +1807,9 @@ namespace sknd
             {
                 return eval_uniform_value_empty(expr, symbols);
             }
-            else if ( rank.is_literal() )
-            {
-                TRY_DECL(pack, eval_pack(expr, symbols, (size_t)rank.as_int()))
-                return is_uniform(pack) ? pack.front() : ValueExpr(nullptr);
-            }
             else
             {
-                TRY_DECL(pack, eval_dynamic_pack(expr, symbols, rank))
+                TRY_DECL(pack, eval_pack(expr, symbols, rank))
                 return uniform_value(pack);
             }
         }
@@ -1867,7 +1857,7 @@ namespace sknd
                 }
                 default:
                 {
-                    TRY_DECL(pack, eval_dynamic_pack(expr, symbols, 0))
+                    TRY_DECL(pack, eval_pack(expr, symbols, 0))
                     return uniform_value(pack);
                 }
             }
@@ -1900,10 +1890,11 @@ namespace sknd
                     {
                         return nullptr;
                     }
-                    auto first = access.tensor[0].canonic_shape[access.dim.as_int()];
+                    auto& first = access.tensor[0].canonic_shape[access.dim.as_int()];
                     for ( size_t i = 1; i < access.tensor.max_size(); ++i )
                     {
-                        if ( access.tensor[i].canonic_shape[access.dim.as_int()] != first )
+                        auto& item = access.tensor[i].canonic_shape[access.dim.as_int()];
+                        if ( item != first )
                         {
                             return nullptr;
                         }
@@ -1978,7 +1969,16 @@ namespace sknd
                 case ValueExpr::List:
                 {
                     auto& items = expr.as_list();
-                    return is_uniform(items) ? items.front() : ValueExpr(nullptr);
+                    if ( items.empty() )
+                    {
+                        return nullptr;
+                    }
+                    auto first = canonical(items.front());
+                    bool is_uniform = std::all_of(items.begin() + 1, items.end(), [&first]( const ValueExpr& item )
+                    {
+                        return canonical(item) == first;
+                    });
+                    return is_uniform ? items.front() : nullptr;
                 }
                 case ValueExpr::Concat:
                 {
@@ -2135,7 +2135,7 @@ namespace sknd
                                          (int)*index_length, (int)*array_length);
                         }
                         
-                        TRY_DECL(mask, eval_pack(*index.index, symbols, *index_length))
+                        TRY_DECL(mask, eval_items(*index.index, symbols, *index_length))
                         if ( !is_literal(mask) )
                         {
                             return Error(expr.position, "index mask must not depend on dynamic shapes");
@@ -2594,7 +2594,7 @@ namespace sknd
                 }
                 else
                 {
-                    TRY_DECL(rank, eval_max_rank(item, symbols))
+                    TRY_DECL(rank, eval_static_rank(item, symbols))
                     return *rank;
                 }
             }
@@ -3083,16 +3083,6 @@ namespace sknd
             {
                 return cmp((T)x, (T)y);
             });
-        }
-        
-        static bool is_uniform( const std::vector<ValueExpr>& items )
-        {
-            if ( items.empty() )
-            {
-                return false;
-            }
-            auto first = canonical(items.front());
-            return std::all_of(items.begin() + 1, items.end(), [&first]( const ValueExpr& item ){ return canonical(item) == first; });
         }
         
         template<typename T>
