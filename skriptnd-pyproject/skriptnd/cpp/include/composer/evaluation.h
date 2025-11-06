@@ -404,7 +404,7 @@ namespace sknd
                         {
                             return value;
                         }
-                        else if ( !value.is_literal() && !value.is_list() )
+                        else if ( value.is_fold() )
                         {
                             return ValueExpr(ValueExpr::ReferenceExpr{ iden.name, &value }, value.dtype(), value.max_size());
                         }
@@ -1794,7 +1794,7 @@ namespace sknd
             TRY_DECL(rank, eval_dynamic_rank(expr, symbols))
             if ( rank == nullptr )
             {
-                return eval(expr, symbols);
+                return eval_item(expr, symbols);
             }
             else if ( rank == 0 )
             {
