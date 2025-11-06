@@ -425,7 +425,7 @@ namespace sknd
             }
             for ( auto& [iden, expr] : component.loop->scans )
             {
-                TRY_DECL(arg_repeats, eval_dynamic_rank<true>(*expr, symbols))
+                TRY_DECL(arg_repeats, eval_rank<true>(*expr, symbols))
                 if ( arg_repeats != nullptr )
                 {
                     if ( repeats == nullptr )
@@ -1413,7 +1413,7 @@ namespace sknd
                     if ( arg && eval_type(*arg, eval_symbols) != Typename::Type )
                     {
                         TRY_DECL(shape, eval_shape_from_expr(*arg, eval_symbols))
-                        TRY_DECL(size, eval_dynamic_rank(*arg, eval_symbols))
+                        TRY_DECL(size, eval_rank(*arg, eval_symbols))
                         add_shape_symbols(param.name, shape, size, locals);
                     }
                 }
@@ -2327,7 +2327,7 @@ namespace sknd
             {
                 if ( item != nullptr && item->kind != Expr::Expand )
                 {
-                    TRY_DECL(rank, eval_max_rank<true>(*item, symbols))
+                    TRY_DECL(rank, eval_rank_max<true>(*item, symbols))
                     if ( rank && *rank != repeats )
                     {
                         return Error(item->position, "length of spread item (%d) does not match repeat count of parameter (%d)",
@@ -2666,7 +2666,7 @@ namespace sknd
                 }
                 if ( !has_flexible_item )
                 {
-                    TRY_MOVE(result_rank, eval_max_rank(list, symbols))
+                    TRY_MOVE(result_rank, eval_rank_max(list, symbols))
                 }
             }
             else
@@ -2680,9 +2680,9 @@ namespace sknd
                 }
                 else
                 {
-                    TRY_MOVE(result_rank, eval_max_rank<true>(*usage.expr, symbols))
+                    TRY_MOVE(result_rank, eval_rank_max<true>(*usage.expr, symbols))
                 }
-                TRY_DECL(size, eval_dynamic_rank<true>(*usage.expr, symbols))
+                TRY_DECL(size, eval_rank<true>(*usage.expr, symbols))
                 auto symbol = value == nullptr ? NullSymbol : Symbol(value, type, result_rank, size);
                 symbols.emplace(iden.name, symbol);
             }
@@ -2725,13 +2725,13 @@ namespace sknd
             
             for ( auto& [iden, expr] : lowering.bounds )
             {
-                TRY_DECL(rank, eval_static_rank(*expr, symbols))
+                TRY_DECL(rank, eval_rank_static(*expr, symbols))
                 _symbols.emplace(iden, Symbol(LoopIndex{}, rank));
             }
             for ( auto& [iden, expr] : lowering.locals )
             {
                 const Typename type = eval_type(*expr, symbols);
-                TRY_DECL(rank, eval_max_rank(*expr, symbols))
+                TRY_DECL(rank, eval_rank_max(*expr, symbols))
                 _symbols.emplace(iden, Symbol(LoopLocal(), type, rank));
             }
             
@@ -2828,7 +2828,7 @@ namespace sknd
             
             for ( auto& [iden, expr] : lowering.bounds )
             {
-                TRY_DECL(rank, eval_static_rank(*expr, symbols))
+                TRY_DECL(rank, eval_rank_static(*expr, symbols))
                 if ( rank )
                 {
                     for ( size_t i = 0; i < *rank; ++i )
@@ -2850,7 +2850,7 @@ namespace sknd
             for ( auto& [iden, expr] : lowering.locals )
             {
                 const Typename type = eval_type(*expr, symbols);
-                TRY_DECL(rank, eval_max_rank(*expr, symbols))
+                TRY_DECL(rank, eval_rank_max(*expr, symbols))
                 if ( rank )
                 {
                     for ( size_t i = 0; i < *rank; ++i )
@@ -3771,13 +3771,13 @@ namespace sknd
                 }
                 else
                 {
-                    TRY_DECL(rank, eval_max_rank(item, symbols))
+                    TRY_DECL(rank, eval_rank_max(item, symbols))
                     return *rank;
                 }
             }
             else if ( item.kind == Expr::Range )
             {
-                TRY_DECL(rank, eval_max_rank(item, symbols))
+                TRY_DECL(rank, eval_rank_max(item, symbols))
                 return *rank;
             }
             else

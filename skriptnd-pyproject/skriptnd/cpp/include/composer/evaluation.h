@@ -128,7 +128,7 @@ namespace sknd
         
         static Result<ValueExpr> eval( const Expr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx = std::nullopt )
         {
-            TRY_DECL(rank, eval_dynamic_rank(expr, symbols))
+            TRY_DECL(rank, eval_rank(expr, symbols))
             if ( rank == nullptr )
             {
                 return eval_item(expr, symbols, idx);
@@ -172,7 +172,7 @@ namespace sknd
                 }
             }
             
-            TRY_DECL(size, eval_dynamic_rank(expr, symbols))
+            TRY_DECL(size, eval_rank(expr, symbols))
             if ( size != nullptr && !idx )
             {
                 size_t rank = eval_shape_expr_max(canonical(size));
@@ -217,7 +217,7 @@ namespace sknd
                     {
                         if ( item->kind == Expr::Expand || item->kind == Expr::Range )
                         {
-                            TRY_DECL(rank, eval_max_rank(*item, symbols))
+                            TRY_DECL(rank, eval_rank_max(*item, symbols))
                             assert(rank);
                             for ( size_t i = 0; i < rank; ++i )
                             {
@@ -239,7 +239,7 @@ namespace sknd
                     {
                         auto& contain = as_contain(expr);
                         
-                        TRY_DECL(length, eval_static_rank(*contain.pack, symbols))
+                        TRY_DECL(length, eval_rank_static(*contain.pack, symbols))
                         if ( is_tensor_expr(*contain.item, symbols) )
                         {
                             TRY_DECL(pack, eval_items<Tensor*>(*contain.pack, symbols, *length))
@@ -276,7 +276,7 @@ namespace sknd
                         break;
                     }
                     
-                    TRY_DECL(length, eval_static_rank(*indexer.index, symbols))
+                    TRY_DECL(length, eval_rank_static(*indexer.index, symbols))
                     TRY_DECL(mask, eval_items(*indexer.index, symbols, *length))
                     if ( !is_literal(mask) )
                     {
@@ -608,7 +608,7 @@ namespace sknd
                         }
                         else if ( stride.as_int() < 0 )
                         {
-                            TRY_DECL(length, eval_dynamic_rank(*indexer.array, symbols))
+                            TRY_DECL(length, eval_rank(*indexer.array, symbols))
                             first = length - 1;
                         }
                         else
@@ -623,7 +623,7 @@ namespace sknd
                         }
                         else if ( stride.as_int() > 0 )
                         {
-                            TRY_MOVE(last, eval_dynamic_rank(*indexer.array, symbols))
+                            TRY_MOVE(last, eval_rank(*indexer.array, symbols))
                         }
                         else if ( stride.as_int() < 0 )
                         {
@@ -915,7 +915,7 @@ namespace sknd
             {
                 if ( item->kind == Expr::Expand || item->kind == Expr::Range )
                 {
-                    TRY_DECL(rank, eval_max_rank(*item, symbols))
+                    TRY_DECL(rank, eval_rank_max(*item, symbols))
                     assert(rank);
                     if ( idx < k + *rank )
                     {
@@ -939,7 +939,7 @@ namespace sknd
         {
             if ( expand.count )
             {
-                TRY_DECL(rank, eval_max_rank(*expand.item, symbols))
+                TRY_DECL(rank, eval_rank_max(*expand.item, symbols))
                 return rank ? eval_item<T>(*expand.item, symbols, idx) : eval_item<T>(*expand.item, symbols);
             }
             else
@@ -1009,7 +1009,7 @@ namespace sknd
                     }
                     else
                     {
-                        TRY_DECL(rank, eval_static_rank(*expr.index, symbols))
+                        TRY_DECL(rank, eval_rank_static(*expr.index, symbols))
                         if ( rank )
                         {
                             std::string result;
@@ -1069,7 +1069,7 @@ namespace sknd
             }
             else
             {
-                TRY_DECL(rank, eval_dynamic_rank(*expr.array, symbols))
+                TRY_DECL(rank, eval_rank(*expr.array, symbols))
                 auto length = eval_shape_expr_max(canonical(rank));
                 
                 ValueExpr index_value;
@@ -1320,7 +1320,7 @@ namespace sknd
         
         static Result<ValueExpr> eval_item( const ContainExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
         {
-            TRY_DECL(length, eval_static_rank(*expr.pack, symbols))
+            TRY_DECL(length, eval_rank_static(*expr.pack, symbols))
             
             if ( is_tensor_expr(*expr.item, symbols) )
             {
@@ -1573,7 +1573,7 @@ namespace sknd
                 return Error(expr.position, "index must not depend on dynamic shapes in substitution expression");
             }
             
-            TRY_DECL(rank, eval_static_rank(*expr.pack, symbols))
+            TRY_DECL(rank, eval_rank_static(*expr.pack, symbols))
             auto length = *rank;
             
             if ( index.packed() )
@@ -1608,7 +1608,7 @@ namespace sknd
         static Result<ValueExpr> eval_fold( const FoldExpr& fold, const Dict<Symbol>& symbols, const std::optional<size_t> idx,
                                            const std::optional<T> init = std::nullopt )
         {
-            TRY_DECL(dynamic_rank, eval_dynamic_rank(*fold.pack, symbols))
+            TRY_DECL(dynamic_rank, eval_rank(*fold.pack, symbols))
             assert(dynamic_rank != nullptr);
             if ( !dynamic_rank.is_literal() )
             {
@@ -1619,7 +1619,7 @@ namespace sknd
             const F<T> func;
             auto literal_value = init;
             ValueExpr expr_value;
-            TRY_DECL(rank, fold.cumulative ? std::optional<size_t>(*idx + 1) : eval_max_rank(*fold.pack, symbols))
+            TRY_DECL(rank, fold.cumulative ? std::optional<size_t>(*idx + 1) : eval_rank_max(*fold.pack, symbols))
             
             size_t terms = 0;
             for ( size_t i = 0; i < rank; ++i )
@@ -1672,7 +1672,7 @@ namespace sknd
         static Result<ValueExpr> eval_arg_fold( const FoldExpr& fold, const Dict<Symbol>& symbols )
         {
             const F<T> func;
-            TRY_DECL(rank, eval_max_rank(*fold.pack, symbols))
+            TRY_DECL(rank, eval_rank_max(*fold.pack, symbols))
             if ( rank == 0 )
             {
                 return ValueExpr::null();
@@ -1725,7 +1725,7 @@ namespace sknd
         template<template<typename> class C>
         static Result<ValueExpr> eval_is_sorted( const Expr& expr, const Dict<Symbol>& symbols )
         {
-            TRY_DECL(rank, eval_max_rank(expr, symbols))
+            TRY_DECL(rank, eval_rank_max(expr, symbols))
             TRY_DECL(items, eval_items(expr, symbols, *rank))
             auto type = eval_type(expr, symbols);
             switch ( type )
@@ -1755,7 +1755,7 @@ namespace sknd
         
         static Result<ValueExpr> eval_is_unique( const Expr& expr, const Dict<Symbol>& symbols )
         {
-            TRY_DECL(rank, eval_max_rank(expr, symbols))
+            TRY_DECL(rank, eval_rank_max(expr, symbols))
             TRY_DECL(items, eval_items(expr, symbols, *rank))
             auto type = eval_type(expr, symbols);
             switch ( type )
@@ -1791,7 +1791,7 @@ namespace sknd
         
         static Result<ValueExpr> eval_uniform_value( const Expr& expr, const Dict<Symbol>& symbols )
         {
-            TRY_DECL(rank, eval_dynamic_rank(expr, symbols))
+            TRY_DECL(rank, eval_rank(expr, symbols))
             if ( rank == nullptr )
             {
                 return eval_item(expr, symbols);
@@ -2014,9 +2014,9 @@ namespace sknd
     public:
         
         template<bool Optional = false>
-        static Result<std::optional<size_t>> eval_static_rank( const Expr& expr, const Dict<Symbol>& symbols )
+        static Result<std::optional<size_t>> eval_rank_static( const Expr& expr, const Dict<Symbol>& symbols )
         {
-            TRY_DECL(rank, eval_dynamic_rank<Optional>(expr, symbols))
+            TRY_DECL(rank, eval_rank<Optional>(expr, symbols))
             if ( rank == nullptr )
             {
                 return (std::optional<size_t>)std::nullopt;
@@ -2029,14 +2029,14 @@ namespace sknd
         }
         
         template<bool Optional = false>
-        static Result<std::optional<size_t>> eval_max_rank( const Expr& expr, const Dict<Symbol>& symbols )
+        static Result<std::optional<size_t>> eval_rank_max( const Expr& expr, const Dict<Symbol>& symbols )
         {
-            TRY_DECL(rank, eval_dynamic_rank<Optional>(expr, symbols))
+            TRY_DECL(rank, eval_rank<Optional>(expr, symbols))
             return rank == nullptr ? (std::optional<size_t>)std::nullopt : (std::optional<size_t>)eval_shape_expr_max(canonical(rank));
         }
         
         template<bool Optional = false>
-        static Result<ValueExpr> eval_dynamic_rank( const Expr& expr, const Dict<Symbol>& symbols )
+        static Result<ValueExpr> eval_rank( const Expr& expr, const Dict<Symbol>& symbols )
         {
             if constexpr( Optional )
             {
@@ -2063,7 +2063,7 @@ namespace sknd
                     {
                         if ( item->kind == Expr::Expand || item->kind == Expr::Range )
                         {
-                            TRY_DECL(len, eval_dynamic_rank(*item, symbols))
+                            TRY_DECL(len, eval_rank(*item, symbols))
                             if ( len.is_literal() )
                             {
                                 literal_rank += len.as_int();
@@ -2101,7 +2101,7 @@ namespace sknd
                     }
                     else
                     {
-                        return eval_dynamic_rank(*expand.item, symbols);
+                        return eval_rank(*expand.item, symbols);
                     }
                 }
                 case Expr::Index:
@@ -2115,8 +2115,8 @@ namespace sknd
                     }
                     else if ( index_type == Typename::Bool )
                     {
-                        TRY_DECL(array_length, eval_static_rank(*index.array, symbols))
-                        TRY_DECL(index_length, eval_static_rank(*index.index, symbols))
+                        TRY_DECL(array_length, eval_rank_static(*index.array, symbols))
+                        TRY_DECL(index_length, eval_rank_static(*index.index, symbols))
                         if ( index_length != array_length )
                         {
                             return Error(expr.position, "incompatible mask length and pack length (%d vs %d)",
@@ -2133,7 +2133,7 @@ namespace sknd
                     else if ( index.index->kind == Expr::Range )
                     {
                         auto& range = as_range(*index.index);
-                        TRY_DECL(length, eval_dynamic_rank(*index.array, symbols))
+                        TRY_DECL(length, eval_rank(*index.array, symbols))
                         
                         TRY_DECL(stride, range.stride ? eval_item(*range.stride, symbols) : ValueExpr(1))
                         if ( !stride.is_literal() && (!range.first || !range.last) )
@@ -2158,13 +2158,13 @@ namespace sknd
                     }
                     else
                     {
-                        return eval_dynamic_rank(*index.index, symbols);
+                        return eval_rank(*index.index, symbols);
                     }
                 }
                 case Expr::Access:
                 {
                     auto& access = as_access(expr);
-                    TRY_DECL(tensor_rank, eval_dynamic_rank(*access.tensor, symbols))
+                    TRY_DECL(tensor_rank, eval_rank(*access.tensor, symbols))
                     if ( tensor_rank != nullptr )
                     {
                         return tensor_rank;
@@ -2175,7 +2175,7 @@ namespace sknd
                     {
                         if ( index->kind != Expr::Expand )
                         {
-                            TRY_DECL(index_rank, eval_dynamic_rank(*index, symbols))
+                            TRY_DECL(index_rank, eval_rank(*index, symbols))
                             if ( index_rank != nullptr )
                             {
                                 return index_rank;
@@ -2200,7 +2200,7 @@ namespace sknd
                     ValueExpr rank;
                     for ( size_t i = 0; i < zip.items.size(); ++i )
                     {
-                        TRY_DECL(item_rank, eval_dynamic_rank(*zip.items[i], symbols))
+                        TRY_DECL(item_rank, eval_rank(*zip.items[i], symbols))
                         if ( item_rank != nullptr )
                         {
                             if ( rank == nullptr )
@@ -2223,13 +2223,13 @@ namespace sknd
                     {
                         return ValueExpr::null();
                     }
-                    return eval_dynamic_rank(*unary.arg, symbols);
+                    return eval_rank(*unary.arg, symbols);
                 }
                 case Expr::Binary:
                 {
                     auto& binary = as_binary(expr);
-                    TRY_DECL(left, eval_dynamic_rank(*binary.left, symbols))
-                    TRY_DECL(right, eval_dynamic_rank(*binary.right, symbols))
+                    TRY_DECL(left, eval_rank(*binary.left, symbols))
+                    TRY_DECL(right, eval_rank(*binary.right, symbols))
                     if ( left != nullptr && right != nullptr && left != right )
                     {
                         return Error(expr.position, "incompatible pack lengths in binary expression '%s' ('%s' vs '%s')",
@@ -2240,9 +2240,9 @@ namespace sknd
                 case Expr::Select:
                 {
                     auto& select = as_select(expr);
-                    TRY_DECL(cond, eval_dynamic_rank(*select.cond, symbols))
-                    TRY_DECL(left, eval_dynamic_rank(*select.left, symbols))
-                    TRY_DECL(right, select.right ? eval_dynamic_rank(*select.right, symbols) : ValueExpr::null())
+                    TRY_DECL(cond, eval_rank(*select.cond, symbols))
+                    TRY_DECL(left, eval_rank(*select.left, symbols))
+                    TRY_DECL(right, select.right ? eval_rank(*select.right, symbols) : ValueExpr::null())
                     if ( cond != nullptr )
                     {
                         if ( left != nullptr && right != nullptr && left != right )
@@ -2286,18 +2286,18 @@ namespace sknd
                     TRY_DECL(is_null, eval_null(*coalesce.condition, symbols))
                     if ( !is_null )
                     {
-                        return eval_dynamic_rank(*coalesce.condition, symbols);
+                        return eval_rank(*coalesce.condition, symbols);
                     }
                     else
                     {
-                        return eval_dynamic_rank(*coalesce.alternate, symbols);
+                        return eval_rank(*coalesce.alternate, symbols);
                     }
                 }
                 case Expr::Identity:
                 {
                     auto& identity = as_identity(expr);
-                    TRY_DECL(left, eval_dynamic_rank(*identity.left, symbols))
-                    TRY_DECL(right, eval_dynamic_rank(*identity.right, symbols))
+                    TRY_DECL(left, eval_rank(*identity.left, symbols))
+                    TRY_DECL(right, eval_rank(*identity.right, symbols))
                     if ( left != nullptr && right != nullptr && left != right )
                     {
                         return Error(expr.position, "incompatible pack lengths in 'is' expression ('%s' vs '%s')",
@@ -2308,31 +2308,31 @@ namespace sknd
                 case Expr::Contain:
                 {
                     auto& contain = as_contain(expr);
-                    return eval_dynamic_rank(*contain.item, symbols);
+                    return eval_rank(*contain.item, symbols);
                 }
                 case Expr::Fold:
                 {
                     auto& fold = as_fold(expr);
-                    return fold.cumulative ? eval_dynamic_rank(*fold.pack, symbols) : ValueExpr(nullptr);
+                    return fold.cumulative ? eval_rank(*fold.pack, symbols) : ValueExpr(nullptr);
                 }
                 case Expr::Cast:
                 {
                     auto& cast = as_cast(expr);
-                    return cast.arg ? eval_dynamic_rank(*cast.arg, symbols) : ValueExpr(nullptr);
+                    return cast.arg ? eval_rank(*cast.arg, symbols) : ValueExpr(nullptr);
                 }
                 case Expr::Builtin:
                 {
                     auto& builtin = as_builtin(expr);
-                    return eval_dynamic_rank(*builtin.arg, symbols);
+                    return eval_rank(*builtin.arg, symbols);
                 }
                 case Expr::Bounded:
                 {
                     auto& bounded = as_bounded(expr);
-                    TRY_DECL(index_rank, eval_dynamic_rank(*bounded.index, symbols))
+                    TRY_DECL(index_rank, eval_rank(*bounded.index, symbols))
                     
                     if ( bounded.lower_value )
                     {
-                        TRY_DECL(lower_rank, eval_dynamic_rank(*bounded.lower_value, symbols))
+                        TRY_DECL(lower_rank, eval_rank(*bounded.lower_value, symbols))
                         if ( index_rank != nullptr && lower_rank != nullptr && lower_rank != index_rank )
                         {
                             return Error(expr.position, "incompatible pack lengths in bounded expression for index and lower value ('%s' vs '%s')",
@@ -2341,7 +2341,7 @@ namespace sknd
                     }
                     if ( bounded.upper_value )
                     {
-                        TRY_DECL(upper_rank, eval_dynamic_rank(*bounded.upper_value, symbols))
+                        TRY_DECL(upper_rank, eval_rank(*bounded.upper_value, symbols))
                         if ( index_rank != nullptr && upper_rank != nullptr && upper_rank != index_rank )
                         {
                             return Error(expr.position, "incompatible pack lengths in bounded expression for index and upper value ('%s' vs '%s')",
@@ -2353,9 +2353,9 @@ namespace sknd
                 case Expr::Substitute:
                 {
                     auto& substitute = as_substitute(expr);
-                    TRY_DECL(pack_rank, eval_dynamic_rank(*substitute.pack, symbols))
-                    TRY_DECL(index_rank, eval_dynamic_rank(*substitute.index, symbols))
-                    TRY_DECL(value_rank, eval_dynamic_rank(*substitute.value, symbols))
+                    TRY_DECL(pack_rank, eval_rank(*substitute.pack, symbols))
+                    TRY_DECL(index_rank, eval_rank(*substitute.index, symbols))
+                    TRY_DECL(value_rank, eval_rank(*substitute.value, symbols))
                     if ( index_rank != nullptr && value_rank != nullptr && index_rank != value_rank )
                     {
                         return Error(expr.position, "incompatible pack lengths in substitution expression for index and value ('%s' vs '%s')",
@@ -2537,7 +2537,7 @@ namespace sknd
                     {
                         return true;
                     }
-                    TRY_DECL(rank, eval_max_rank(*fold.pack, symbols))
+                    TRY_DECL(rank, eval_rank_max(*fold.pack, symbols))
                     return *rank == 0;
                 }
             }
@@ -2582,7 +2582,7 @@ namespace sknd
                 }
                 else
                 {
-                    TRY_DECL(rank, eval_static_rank(item, symbols))
+                    TRY_DECL(rank, eval_rank_static(item, symbols))
                     return *rank;
                 }
             }
