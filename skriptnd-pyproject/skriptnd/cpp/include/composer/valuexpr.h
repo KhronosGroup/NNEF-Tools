@@ -1404,11 +1404,26 @@ namespace sknd
             }
             case ShapeAccess:
             {
+                if ( !packed() )
+                {
+                    return false;
+                }
                 auto& access = as_shape_access();
-                return access.tensor.packed() && !access.tensor.size().is_literal();
+                if ( access.tensor.packed() && access.item == nullptr )
+                {
+                    return !access.tensor.size().is_literal();
+                }
+                else
+                {
+                    return false;
+                }
             }
             case TensorAccess:
             {
+                if ( !packed() )
+                {
+                    return false;
+                }
                 auto& access = as_tensor_access();
                 if ( access.tensor.packed() && access.item == nullptr )
                 {
@@ -1502,11 +1517,26 @@ namespace sknd
             }
             case ShapeAccess:
             {
+                if ( !packed() )
+                {
+                    return nullptr;
+                }
                 auto& access = as_shape_access();
-                return access.tensor.packed() ? access.tensor.size() : nullptr;
+                if ( access.tensor.packed() && access.item == nullptr )
+                {
+                    return access.tensor.size();
+                }
+                else
+                {
+                    return nullptr;
+                }
             }
             case TensorAccess:
             {
+                if ( !packed() )
+                {
+                    return nullptr;
+                }
                 auto& access = as_tensor_access();
                 if ( access.tensor.packed() && access.item == nullptr )
                 {
@@ -1633,14 +1663,18 @@ namespace sknd
             }
             case ShapeAccess:
             {
+                if ( !packed() )
+                {
+                    return *this;
+                }
                 auto& access = as_shape_access();
-                if ( access.tensor.packed() )
+                if ( access.tensor.packed() && access.item == nullptr )
                 {
                     return ValueExpr(ShapeAccessExpr{ (Tensor*)&access.tensor[idx], access.dim }, dtype());
                 }
                 else
                 {
-                    return *this;
+                    return ValueExpr(ShapeAccessExpr{ access.tensor, (int_t)idx, access.item }, dtype());
                 }
             }
             case Unary:
@@ -1727,14 +1761,18 @@ namespace sknd
             }
             case ShapeAccess:
             {
+                if ( !packed() )
+                {
+                    return *this;
+                }
                 auto& access = as_shape_access();
-                if ( access.tensor.packed() )
+                if ( access.tensor.packed() && access.item == nullptr )
                 {
                     return ValueExpr(ShapeAccessExpr{ access.tensor, access.dim, idx }, dtype());
                 }
                 else
                 {
-                    return *this;
+                    return ValueExpr(ShapeAccessExpr{ access.tensor, idx, access.item }, dtype());
                 }
             }
             case Unary:
