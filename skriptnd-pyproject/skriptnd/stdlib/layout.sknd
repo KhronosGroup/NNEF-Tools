@@ -344,8 +344,7 @@ operator concat {
     }
     @using {
         u = z := ..;
-        sums = z + ...;
-        offs = [0, sums..];
+        offs = [0, z..] + ...;
     }
     @lower {
         output[si..,(u * ni ?? offs[ni]) + zi,ti..] = inputs[ni][si..,zi,ti..],
@@ -386,8 +385,7 @@ operator split {
     }
     @using {
         u = sizes := ..;
-        sums = sizes + ...;
-        offs = [0, sums..];
+        offs = [0, sizes..] + ...;
     }
     @lower {
         outputs[ni][si..,zi,ti..] = input[si..,(u * ni ?? offs[ni]) + zi,ti..],
