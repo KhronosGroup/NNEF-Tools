@@ -62,4 +62,4 @@ def execution_test():
     print("Done", output.dtype, output.shape)
 
 
-roundtrip_test()
+compile_test()
