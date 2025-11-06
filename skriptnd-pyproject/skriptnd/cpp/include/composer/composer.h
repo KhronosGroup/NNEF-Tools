@@ -1331,8 +1331,7 @@ namespace sknd
                 {
                     auto& value = it->second;
                     auto type = resolve_type(param, locals);
-                    auto size = eval_dynamic_rank(value);
-                    locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), size));
+                    locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), value.size()));
                 }
             }
             
@@ -2459,8 +2458,7 @@ namespace sknd
                     }
                     
                     auto type = resolve_type(param, locals);
-                    auto size = eval_dynamic_rank(value);
-                    locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), size));
+                    locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), value.size()));
                     attribs.emplace(param.name, value);
                 }
                 if ( param.repeats )

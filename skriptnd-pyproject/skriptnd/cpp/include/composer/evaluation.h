@@ -2192,7 +2192,7 @@ namespace sknd
                     TRY_DECL(first, range.first ? eval_item(*range.first, symbols) : ValueExpr(0))
                     TRY_DECL(last, eval_item(*range.last, symbols))
                     TRY_DECL(stride, range.stride ? eval_item(*range.stride, symbols) : ValueExpr(1))
-                    return stride.is_literal() && stride.as_int() < 0 ? ceil_div(first - last, -stride) : ceil_div(last - first, stride);
+                    return ceil_div(last - first, stride);
                 }
                 case Expr::Zip:
                 {
@@ -2589,84 +2589,6 @@ namespace sknd
             else
             {
                 return 1;
-            }
-        }
-        
-        static ValueExpr eval_dynamic_rank( const ValueExpr& expr )
-        {
-            if ( !expr.packed() )
-            {
-                return ValueExpr(nullptr);
-            }
-            switch ( expr.kind() )
-            {
-                case ValueExpr::ShapeAccess:
-                {
-                    auto& access = expr.as_shape_access();
-                    return access.tensor.size();
-                }
-                case ValueExpr::Reference:
-                {
-                    auto& ref = expr.as_reference();
-                    return eval_dynamic_rank(*ref.target);
-                }
-                case ValueExpr::List:
-                {
-                    auto& list = expr.as_list();
-                    return ValueExpr((int_t)list.size());
-                }
-                case ValueExpr::Unary:
-                {
-                    auto& unary = expr.as_unary();
-                    return eval_dynamic_rank(unary.arg);
-                }
-                case ValueExpr::Binary:
-                {
-                    auto& binary = expr.as_binary();
-                    return eval_dynamic_rank(binary.left.packed() ? binary.left : binary.right);
-                }
-                case ValueExpr::Select:
-                {
-                    auto& select = expr.as_select();
-                    return eval_dynamic_rank(select.cond.packed() ? select.cond : select.left.packed() ? select.left : select.right);
-                }
-                case ValueExpr::Fold:
-                {
-                    auto& fold = expr.as_fold();
-                    return eval_dynamic_rank(fold.pack);
-                }
-                case ValueExpr::Concat:
-                {
-                    auto& concat = expr.as_concat();
-                    ValueExpr const_rank;
-                    ValueExpr expr_rank;
-                    for ( auto& item : concat.items )
-                    {
-                        auto item_rank = eval_dynamic_rank(item);
-                        if ( item_rank.is_literal() )
-                        {
-                            const_rank = const_rank == nullptr ? item_rank.as_int() : const_rank.as_int() + item_rank.as_int();
-                        }
-                        else
-                        {
-                            expr_rank = expr_rank == nullptr ? item_rank : expr_rank + item_rank;
-                        }
-                    }
-                    return const_rank != nullptr ? expr_rank + const_rank : expr_rank;
-                }
-                case ValueExpr::Slice:
-                {
-                    auto& slice = expr.as_slice();
-                    return slice.last - slice.first;
-                }
-                case ValueExpr::Uniform:
-                {
-                    return expr.as_uniform().size;
-                }
-                default:
-                {
-                    return ValueExpr(nullptr);
-                }
             }
         }
         
