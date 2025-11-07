@@ -126,21 +126,17 @@ namespace sknd
         
     public:
         
-        static Result<ValueExpr> eval( const Expr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx = std::nullopt )
+        static Result<ValueExpr> eval( const Expr& expr, const Dict<Symbol>& symbols )
         {
             TRY_DECL(rank, eval_rank(expr, symbols))
             if ( rank == nullptr )
             {
-                return eval_item(expr, symbols, idx);
-            }
-            else if ( rank.is_literal() && idx )
-            {
-                return eval_item(expr, symbols, idx);
+                return eval_item(expr, symbols);
             }
             else
             {
                 TRY_DECL(value, eval_pack(expr, symbols, rank))
-                return idx ? value.at(*idx) : value;
+                return value;
             }
         }
         
@@ -154,7 +150,7 @@ namespace sknd
             }
             else if ( !is_tensor_expr(expr, symbols) )
             {
-                TRY_DECL(value, eval(expr, symbols, idx))
+                TRY_DECL(value, eval_item(expr, symbols, idx))
                 auto type = eval_type(expr, symbols);
                 if ( !is_literal(value) )
                 {
@@ -188,13 +184,11 @@ namespace sknd
             }
         }
         
-        static Result<ValueExpr> eval_optional( const Expr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx = std::nullopt )
+        static Result<ValueExpr> eval_optional( const Expr& expr, const Dict<Symbol>& symbols )
         {
             TRY_DECL(is_null, eval_null(expr, symbols))
-            return is_null ? ValueExpr(nullptr) : eval(expr, symbols, idx);
+            return is_null ? ValueExpr(nullptr) : eval(expr, symbols);
         }
-        
-    private:
         
         template<typename T = ValueExpr>
         static Result<std::vector<T>> eval_items( const Expr& expr, const Dict<Symbol>& symbols, const size_t rank )
@@ -388,6 +382,8 @@ namespace sknd
             
             return values;
         }
+        
+    private:
         
         static Result<ValueExpr> eval_pack( const Expr& expr, const Dict<Symbol>& symbols, const ValueExpr& rank )
         {

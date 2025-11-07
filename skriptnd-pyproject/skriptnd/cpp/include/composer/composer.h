@@ -253,11 +253,11 @@ namespace sknd
                 if ( count )
                 {
                     TRY_DECL(size, eval(*count, symbols))
-                    std::vector<ValueExpr> items(size.as_int());
+                    TRY_DECL(items, eval_items(bound, symbols, size.as_int()))
+                    
                     for ( size_t i = 0; i < items.size(); ++i )
                     {
-                        TRY_DECL(max_value, eval(bound, symbols, i))
-                        items[i] = ValueExpr::placeholder(composed ? "" : next_placeholder_name(), max_value);
+                        items[i] = ValueExpr::placeholder(composed ? "" : next_placeholder_name(), items[i]);
                     }
                     symbols.emplace(iden, Symbol(ValueExpr::list(std::move(items), Typename::Int), Typename::Int));
                 }
@@ -857,20 +857,12 @@ namespace sknd
                     }
                     for ( auto& [iden, expr] : component.loop->scans )
                     {
-                        if ( is_tensor_expr(*expr, symbols) )
+                        TRY_DECL(tensor, eval(*expr, symbols, as_tensor(*graph), as_tensor_pack(*graph), i))
+                        symbols.insert_or_assign(iden, Symbol(tensor, tensor.dtype()));
+                        
+                        if ( i == 0 )
                         {
-                            TRY_DECL(tensor, eval(*expr, symbols, as_tensor(*graph), as_tensor_pack(*graph), i))
-                            symbols.insert_or_assign(iden, Symbol(tensor, tensor.dtype()));
-                            
-                            if ( i == 0 )
-                            {
-                                locals.push_back(tensor);
-                            }
-                        }
-                        else
-                        {
-                            TRY_DECL(value, eval(*expr, symbols, i))
-                            symbols.insert_or_assign(iden, Symbol(value, value.dtype()));
+                            locals.push_back(tensor);
                         }
                     }
                     
@@ -2239,17 +2231,23 @@ namespace sknd
                             output.canonic_size() = canonic_repeats;
                         }
                     }
+                    
+                    TRY_DECL(declared_shape, eval_shape(*param.shape, symbols))
+                    auto canonic_shape = canonical(declared_shape);
+                    
                     for ( size_t j = 0; j < output.max_size(); ++j )
                     {
-                        TRY_DECL(declared_shape, eval_shape(*param.shape, symbols, j))
-                        auto canonic_shape = canonical(declared_shape);
-                        if ( !compare_shapes(canonic_shape, output[j].canonic_shape, output[j].max_shape) )
+                        auto declared_shape_j = item_shape(declared_shape, j);
+                        auto canonic_shape_j = item_shape(canonic_shape, j);
+                        if ( !compare_shapes(canonic_shape_j, output[j].canonic_shape, output[j].max_shape) )
                         {
                             return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of item %d of output '%s'",
-                                         str(output[j].shape).c_str(), str(declared_shape).c_str(), (int)j, param.name.c_str());
+                                         str(output[j].shape).c_str(), str(declared_shape_j).c_str(), (int)j, param.name.c_str());
                         }
-                        replace_shape(output[j], declared_shape, canonic_shape);
+                        replace_shape(output[j], declared_shape_j, canonic_shape_j);
                     }
+                    
+                    replace_shape(*output.as<TensorPack*>(), declared_shape, canonic_shape);
                 }
                 else
                 {
@@ -2316,6 +2314,18 @@ namespace sknd
                 {
                     tensor.shape[k] = shape[k];
                     tensor.canonic_shape[k] = canonic_shape[k];
+                }
+            }
+        }
+        
+        void replace_shape( TensorPack& pack, const Shape& shape, const Shape& canonic_shape )
+        {
+            for ( size_t k = 0; k < canonic_shape.size(); ++k )
+            {
+                if ( canonic_shape[k] != nullptr && can_replace_shape(canonic_shape[k], pack.canonic_shape[k]) )
+                {
+                    pack.shape[k] = shape[k];
+                    pack.canonic_shape[k] = canonic_shape[k];
                 }
             }
         }
@@ -2829,10 +2839,10 @@ namespace sknd
                 TRY_DECL(rank, eval_rank_static(*expr, symbols))
                 if ( rank )
                 {
+                    TRY_DECL(value, eval_items(*expr, symbols, *rank))
                     for ( size_t i = 0; i < *rank; ++i )
                     {
-                        TRY_DECL(value, eval(*expr, symbols, i))
-                        bounds.push_back(std::make_pair(iden + "_" + std::to_string(i+1), simplified(std::move(value))));
+                        bounds.push_back(std::make_pair(iden + "_" + std::to_string(i+1), simplified(std::move(value[i]))));
                     }
                 }
                 else
@@ -2851,10 +2861,10 @@ namespace sknd
                 TRY_DECL(rank, eval_rank_max(*expr, symbols))
                 if ( rank )
                 {
+                    TRY_DECL(value, eval_items(*expr, symbols, *rank))
                     for ( size_t i = 0; i < *rank; ++i )
                     {
-                        TRY_DECL(value, eval(*expr, symbols, i))
-                        locals.emplace_back(iden + "_" + std::to_string(i+1), simplified(std::move(value)));
+                        locals.emplace_back(iden + "_" + std::to_string(i+1), simplified(std::move(value[i])));
                     }
                 }
                 else
@@ -3266,11 +3276,11 @@ namespace sknd
         }
         
         Result<ValueExpr> eval_default_value( const Expr& expr, const std::vector<std::pair<std::string,Shared<Expr>>>& bounds,
-                                             const Shape& shape, const Dict<Symbol>& symbols, std::optional<size_t> idx = std::nullopt )
+                                             const Shape& shape, const Dict<Symbol>& symbols )
         {
             if ( bounds.empty() )
             {
-                TRY_DECL(value, eval(expr, symbols, idx))
+                TRY_DECL(value, eval(expr, symbols))
                 if ( value.packed() )
                 {
                     size_t volume = 1;
@@ -3395,11 +3405,11 @@ namespace sknd
                 
                 for ( size_t i = 0; i < max_size; ++i )
                 {
-                    TRY_DECL(shape, eval_shape(*param.shape, symbols, i))
-                    auto canonic_shape = canonical(shape);
-                    auto max_shape = eval_shape_max_checked(canonic_shape, param.shape->position);
+                    auto shape_i = item_shape(shape, i);
+                    auto canonic_shape_i = item_shape(canonic_shape, i);
+                    auto max_shape = eval_shape_max_checked(canonic_shape_i, param.shape->position);
                     auto name = scoped_name(scope, param.name, i+1);
-                    pack->items[i] = make_tensor(graph, type, shape, canonic_shape, max_shape, name, value.packed() ? value[i] : value, variable);
+                    pack->items[i] = make_tensor(graph, type, shape_i, canonic_shape_i, max_shape, name, value.packed() ? value[i] : value, variable);
                 }
                 cache_tensor_pack(graph, pack);
                 return TensorRef(pack);
@@ -4237,8 +4247,7 @@ namespace sknd
             return dtypes;
         }
         
-        Result<Shape> eval_shape( const Shapedef& shapedef, const Dict<Symbol>& symbols,
-                                        const std::optional<size_t> idx = std::nullopt )
+        Result<Shape> eval_shape( const Shapedef& shapedef, const Dict<Symbol>& symbols )
         {
             TRY_DECL(rank, shape_rank(shapedef, symbols))
             Shape shape(rank);
@@ -4251,20 +4260,18 @@ namespace sknd
                     shape[k++] = nullptr;
                     continue;
                 }
-                bool packed = item->kind == Expr::Expand;
-                TRY_DECL(count, shape_item_rank(*item, symbols))
-                item = unwrapped(item);
-                for ( size_t i = 0; i < count; ++i )
+                
+                TRY_DECL(value, eval_shape_expr(*item, symbols))
+                
+                if ( item->kind == Expr::Expand )
                 {
-                    TRY_DECL(value, item ? eval_shape_expr(*item, symbols, packed ? i : idx) : ValueExpr(nullptr))
-                    if ( value.is_literal() )
+                    for ( size_t i = 0; i < value.max_size(); ++i )
                     {
-                        auto extent = value.as_int();
-                        if ( extent < 0 )
-                        {
-                            return Error(item->position, "extent must be non-negative; found %d", (int)extent);
-                        }
+                        shape[k++] = value.at(i);
                     }
+                }
+                else
+                {
                     shape[k++] = value;
                 }
             }
@@ -4272,11 +4279,38 @@ namespace sknd
             return shape;
         }
         
-        Result<ValueExpr> eval_shape_expr( const Expr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx = std::nullopt )
+        Shape item_shape( const Shape& pack_shape, const size_t idx )
+        {
+            Shape shape(pack_shape.size());
+            for ( size_t i = 0; i < shape.size(); ++i )
+            {
+                shape[i] = pack_shape[i].packed() ? pack_shape[i].at(idx) : pack_shape[i];
+            }
+            return shape;
+        }
+        
+        Result<ValueExpr> eval_shape_expr( const Expr& expr, const Dict<Symbol>& symbols )
         {
             TRY_CALL(check_shape_expr(expr, symbols))
-            TRY_DECL(value, eval(expr, symbols, idx))
+            TRY_DECL(value, eval(expr, symbols))
             simplify(value);
+            
+            if ( value.packed() )
+            {
+                for ( size_t i = 0; i < value.max_size(); ++i )
+                {
+                    auto val = value.at(i);
+                    if ( val.is_literal() && val.as_int() < 0 )
+                    {
+                        return Error(expr.position, "extent must be non-negative; found %d", (int)val.as_int());
+                    }
+                }
+            }
+            else if ( value.is_literal() && value.as_int() < 0 )
+            {
+                return Error(expr.position, "extent must be non-negative; found %d", (int)value.as_int());
+            }
+            
             return value;
         }
         
