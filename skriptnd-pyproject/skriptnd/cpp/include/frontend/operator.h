@@ -127,7 +127,7 @@ namespace sknd
         const Pairs<std::string,Shared<Expr>> scans;
         const Shared<Callable> condition;
         const Shared<Expr> count;
-        const Shared<IdenfitierExpr> index;
+        const Shared<IdentifierExpr> index;
         const bool pretest;
         const bool unroll;
     };

@@ -491,14 +491,14 @@ namespace sknd
                     
                     if ( !repeats && block != Lexer::Block::Output )
                     {
-                        repeats = std::make_shared<IdenfitierExpr>(position, "|" + name + "|");
+                        repeats = std::make_shared<IdentifierExpr>(position, "|" + name + "|");
                     }
                     
                     TRY_CALL(lexer.accept(Operator::RightParen))
                 }
                 else if ( block != Lexer::Block::Output )
                 {
-                    repeats = std::make_shared<IdenfitierExpr>(position, "|" + name + "|");
+                    repeats = std::make_shared<IdentifierExpr>(position, "|" + name + "|");
                 }
             }
             
@@ -567,7 +567,7 @@ namespace sknd
                     
                     if ( !extent && (bound || (flags & Flags::IsDecl)) )
                     {
-                        extent = (Shared<Expr>)std::make_shared<IdenfitierExpr>(pos, name + ".shape:" + std::to_string(extents.size()));
+                        extent = (Shared<Expr>)std::make_shared<IdentifierExpr>(pos, name + ".shape:" + std::to_string(extents.size()));
                     }
                     
                     TRY_DECL(expand, lexer.accept_if(Operator::Dots))
@@ -576,7 +576,7 @@ namespace sknd
                         TRY_DECL(count, lexer.is_token(Operator::LeftParen) || !extent ? parse_paren(lexer, parse_expr) : Shared<Expr>())
                         if ( !count && extent->kind == Expr::Identifier && (flags & Flags::IsDecl) )
                         {
-                            count = std::make_shared<IdenfitierExpr>(pos, "|" + as_identifier(*extent).name + "|");
+                            count = std::make_shared<IdentifierExpr>(pos, "|" + as_identifier(*extent).name + "|");
                         }
                         extent = (Shared<Expr>)std::make_shared<ExpandExpr>(pos, extent, count);
                     }
@@ -699,11 +699,11 @@ namespace sknd
                             return Error(lexer.position(), "expected identifier 'shape' or 'rank' or 'size'");
                         }
                         TRY_CALL(lexer.accept(Category::Identifier))
-                        expr = (Shared<Expr>)std::make_shared<IdenfitierExpr>(position, name + "." + member);
+                        expr = (Shared<Expr>)std::make_shared<IdentifierExpr>(position, name + "." + member);
                     }
                     else
                     {
-                        expr = (Shared<Expr>)std::make_shared<IdenfitierExpr>(position, name);
+                        expr = (Shared<Expr>)std::make_shared<IdentifierExpr>(position, name);
                     }
                     
                     while ( lexer.is_token(Operator::LeftBracket) )
@@ -824,7 +824,7 @@ namespace sknd
             auto position = lexer.position();
             
             TRY_DECL(name, parse_identifier(lexer))
-            return (Shared<Expr>)std::make_shared<IdenfitierExpr>(position, name);
+            return (Shared<Expr>)std::make_shared<IdentifierExpr>(position, name);
         }
         
         static Result<Shared<Expr>> parse_str_expr( Lexer& lexer )
@@ -973,7 +973,7 @@ namespace sknd
                 if ( !count && !(flags & Flags::IsUsing) && item->kind == Expr::Identifier && (flags & Flags::IsDecl) )
                 {
                     auto& iden = as_identifier(*item);
-                    count = std::make_shared<IdenfitierExpr>(position, "|" + iden.name + "|");
+                    count = std::make_shared<IdentifierExpr>(position, "|" + iden.name + "|");
                 }
                 return (Shared<Expr>)std::make_shared<ExpandExpr>(position, item, count);
             }
@@ -1285,7 +1285,7 @@ namespace sknd
                 }
                 else
                 {
-                    Shared<Expr> prim = std::make_shared<IdenfitierExpr>(position, iden);
+                    Shared<Expr> prim = std::make_shared<IdentifierExpr>(position, iden);
                     while ( lexer.is_token(Operator::LeftBracket) )
                     {
                         TRY_DECL(index, parse_index_expr(lexer, prim))
@@ -1450,9 +1450,9 @@ namespace sknd
             }
         }
         
-        static Result<std::pair<Shared<IdenfitierExpr>,Shared<Expr>>> parse_iter_count( Lexer& lexer, bool allow_omit_count )
+        static Result<std::pair<Shared<IdentifierExpr>,Shared<Expr>>> parse_iter_count( Lexer& lexer, bool allow_omit_count )
         {
-            Shared<IdenfitierExpr> index;
+            Shared<IdentifierExpr> index;
             Shared<Expr> count;
             
             TRY_DECL(bounded, lexer.accept_if(Operator::Dots))
@@ -1462,7 +1462,7 @@ namespace sknd
                 TRY_DECL(expr, parse_expr(lexer))
                 if ( expr->kind == Expr::Identifier && lexer.is_token(Operator::RightArrow) )
                 {
-                    index = std::dynamic_pointer_cast<const IdenfitierExpr>(expr);
+                    index = std::dynamic_pointer_cast<const IdentifierExpr>(expr);
                     TRY_CALL(lexer.accept())
                     if ( !allow_omit_count || !lexer.is_token(Operator::RightParen) )
                     {

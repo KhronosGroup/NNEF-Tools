@@ -403,7 +403,7 @@ namespace sknd
                     }
                     else
                     {
-                        auto shape_rank = std::make_shared<IdenfitierExpr>(position, name + ".rank");
+                        auto shape_rank = std::make_shared<IdentifierExpr>(position, name + ".rank");
                         declare_symbol(decls, position, name + ".shape", make_type(Typename::Int, type.optional, false, true), nullptr, shape_rank,
                                        Declaration::Shape | Declaration::Implicit);
                         declare_symbol(decls, position, name + ".rank", make_type(Typename::Int, type.optional, false, false), nullptr, nullptr,
@@ -1251,7 +1251,7 @@ namespace sknd
             }
         }
         
-        static const IdenfitierExpr& get_tensor_access_iden( Shared<Expr> expr )
+        static const IdentifierExpr& get_tensor_access_iden( Shared<Expr> expr )
         {
             while ( expr->kind == Expr::Index || expr->kind == Expr::Access )
             {
@@ -2437,7 +2437,7 @@ namespace sknd
             return literal.type;
         }
         
-        static Result<Type> eval_type( const IdenfitierExpr& iden, const Dict<Declaration>& decls )
+        static Result<Type> eval_type( const IdentifierExpr& iden, const Dict<Declaration>& decls )
         {
             auto& name = iden.name;
             auto it = decls.find(name);

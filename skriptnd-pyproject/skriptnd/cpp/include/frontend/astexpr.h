@@ -146,9 +146,9 @@ namespace sknd
     };
 
 
-    struct IdenfitierExpr : public Expr
+    struct IdentifierExpr : public Expr
     {
-        IdenfitierExpr( const Position& position, const std::string& name )
+        IdentifierExpr( const Position& position, const std::string& name )
         : Expr(position, Identifier), name(name)
         {
         }
@@ -635,9 +635,9 @@ namespace sknd
         return static_cast<const StrExpr&>(expr);
     }
     
-    inline const IdenfitierExpr& as_identifier( const Expr& expr )
+    inline const IdentifierExpr& as_identifier( const Expr& expr )
     {
-        return static_cast<const IdenfitierExpr&>(expr);
+        return static_cast<const IdentifierExpr&>(expr);
     }
     
     inline const ListExpr& as_list( const Expr& expr )

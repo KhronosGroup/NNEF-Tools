@@ -861,7 +861,7 @@ namespace sknd
         }
         
         template<typename T = ValueExpr, typename = std::enable_if_t<std::is_same_v<T,ValueExpr>>>
-        static Result<ValueExpr> eval_item( const IdenfitierExpr& iden, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const IdentifierExpr& iden, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
         {
             auto& symbol = symbols.at(iden.name);
             if ( symbol.is<LoopIndex>() || symbol.is<LoopLocal>() )
@@ -888,7 +888,7 @@ namespace sknd
         }
         
         template<typename T, typename = std::enable_if_t<std::is_same_v<T,Tensor*>>>
-        static Result<Tensor*> eval_item( const IdenfitierExpr& iden, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<Tensor*> eval_item( const IdentifierExpr& iden, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
         {
             auto& symbol = symbols.at(iden.name);
             auto& values = symbol.as<TensorRef>();
@@ -896,7 +896,7 @@ namespace sknd
         }
         
         template<typename T, typename = std::enable_if_t<std::is_same_v<T,TensorRef>>>
-        static Result<TensorRef> eval( const IdenfitierExpr& iden, const Dict<Symbol>& symbols, const std::optional<size_t> idx = std::nullopt )
+        static Result<TensorRef> eval( const IdentifierExpr& iden, const Dict<Symbol>& symbols, const std::optional<size_t> idx = std::nullopt )
         {
             auto& symbol = symbols.at(iden.name);
             auto& values = symbol.as<TensorRef>();
