@@ -42,31 +42,47 @@ namespace sknd
         
     public:
         
+        template<bool Recursive = true>
         static void simplify( ValueExpr& expr )
         {
-            simplify_heuristic(expr);
-            if ( simplify_polynomial(expr) )
+            if ( expr.is_list() )
             {
-                while ( simplify_heuristic(expr) )
+                for ( auto& item : expr.as_list() )
                 {
-                    if ( !simplify_polynomial(expr) )
+                    simplify<Recursive>(item);
+                }
+            }
+            else
+            {
+                simplify_heuristic<Recursive>(expr);
+                if constexpr(Recursive)
+                {
+                    if ( simplify_polynomial(expr) )
                     {
-                        break;
+                        while ( simplify_heuristic(expr) )
+                        {
+                            if ( !simplify_polynomial(expr) )
+                            {
+                                break;
+                            }
+                        }
                     }
                 }
             }
         }
         
+        template<bool Recursive = true>
         static ValueExpr simplified( const ValueExpr& expr )
         {
             auto simplified = expr;
-            simplify(simplified);
+            simplify<Recursive>(simplified);
             return simplified;
         }
         
+        template<bool Recursive = true>
         static ValueExpr simplified( ValueExpr&& expr )
         {
-            simplify(expr);
+            simplify<Recursive>(expr);
             return expr;
         }
         
