@@ -1645,6 +1645,7 @@ namespace sknd
 
     inline ValueExpr ValueExpr::at( const size_t idx ) const
     {
+        assert(idx < _size);
         switch ( kind() )
         {
             case Null:
@@ -1841,6 +1842,7 @@ namespace sknd
 
     inline const ValueExpr& ValueExpr::operator[]( const size_t i ) const
     {
+        assert(i < _size);
         switch ( kind() )
         {
             case List:
