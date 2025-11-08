@@ -47,6 +47,8 @@ namespace sknd
         template<typename T>
         using Dict = std::map<std::string,T>;
         
+        typedef std::unordered_map<const Expr*, ValueExpr> Cache;
+        
         typedef std::vector<ValueExpr> Shape;
         
         typedef std::vector<Tensor*> Tensors;
@@ -150,7 +152,7 @@ namespace sknd
             }
             else if ( !is_tensor_expr(expr, symbols) )
             {
-                TRY_DECL(value, eval_item(expr, symbols, idx))
+                TRY_DECL(value, eval_item(expr, symbols, idx, nullptr))
                 auto type = eval_type(expr, symbols);
                 if ( !is_literal(value) )
                 {
@@ -179,7 +181,7 @@ namespace sknd
             }
             else
             {
-                TRY_DECL(tensor, eval_item<Tensor*>(expr, symbols, idx))
+                TRY_DECL(tensor, eval_item<Tensor*>(expr, symbols, idx, nullptr))
                 return TensorRef(tensor);
             }
         }
@@ -211,18 +213,17 @@ namespace sknd
                     {
                         if ( item->kind == Expr::Expand || item->kind == Expr::Range )
                         {
-                            TRY_DECL(rank, eval_rank_max(*item, symbols))
-                            assert(rank);
-                            for ( size_t i = 0; i < rank; ++i )
+                            TRY_DECL(count, eval_rank_max(*item, symbols))
+                            TRY_DECL(items, eval_items<T>(*item, symbols, *count));
+                            for ( size_t i = 0; i < count; ++i )
                             {
-                                TRY_DECL(value, eval_item<T>(*item, symbols, i));
-                                values[k++] = value;
+                                values[k++] = std::move(items[i]);
                             }
                         }
                         else
                         {
-                            TRY_DECL(value, eval_item<T>(*item, symbols))
-                            values[k++] = value;
+                            TRY_DECL(item, eval_item<T>(*item, symbols))
+                            values[k++] = std::move(item);
                         }
                     }
                     return values;
@@ -237,24 +238,23 @@ namespace sknd
                         if ( is_tensor_expr(*contain.item, symbols) )
                         {
                             TRY_DECL(pack, eval_items<Tensor*>(*contain.pack, symbols, *length))
+                            TRY_DECL(items, eval_items<Tensor*>(*contain.item, symbols, rank))
                             
                             std::vector<ValueExpr> values(rank);
                             for ( size_t i = 0; i < rank; ++i )
                             {
-                                TRY_DECL(item, eval_item<Tensor*>(*contain.item, symbols, i))
-                                values[i] = ValueExpr(std::find(pack.begin(), pack.end(), item) != pack.end());
+                                values[i] = ValueExpr(std::find(pack.begin(), pack.end(), items[i]) != pack.end());
                             }
                             return values;
                         }
                         else
                         {
                             TRY_DECL(pack, eval_items(*contain.pack, symbols, *length))
+                            TRY_DECL(values, eval_items(*contain.item, symbols, rank))
                             
-                            std::vector<ValueExpr> values(rank);
                             for ( size_t i = 0; i < rank; ++i )
                             {
-                                TRY_DECL(item, eval_item(*contain.item, symbols, i))
-                                values[i] = ValueExpr(std::find(pack.begin(), pack.end(), item) != pack.end());
+                                values[i] = ValueExpr(std::find(pack.begin(), pack.end(), values[i]) != pack.end());
                             }
                             return values;
                         }
@@ -280,13 +280,14 @@ namespace sknd
                     const size_t count = std::count_if(mask.begin(), mask.end(), []( const ValueExpr& x ){ return x.as_bool();});
                     std::vector<T> values(count);
                     
+                    TRY_DECL(items, eval_items<T>(*indexer.array, symbols, mask.size()))
+                    
                     size_t k = 0;
                     for ( size_t i = 0; i < mask.size(); ++i )
                     {
                         if ( mask[i].as_bool() )
                         {
-                            TRY_DECL(item, eval_item<T>(*indexer.array, symbols, i))
-                            values[k++] = std::move(item);
+                            values[k++] = std::move(items[i]);
                         }
                     }
                     return values;
@@ -350,12 +351,12 @@ namespace sknd
                     auto length = value.size();
                     if ( index.packed() )
                     {
+                        TRY_DECL(items, eval_items<T>(*substitute.value, symbols, index.max_size()))
                         for ( size_t i = 0; i < index.max_size(); ++i )
                         {
-                            TRY_DECL(item, eval_item<T>(*substitute.value, symbols, i))
                             auto idx = index[i].as_int();
                             TRY_CALL(check_index_range(idx, length, substitute.index->position))
-                            value[idx] = item;
+                            value[idx] = std::move(items[i]);
                         }
                     }
                     else
@@ -363,7 +364,7 @@ namespace sknd
                         TRY_DECL(item, eval_item<T>(*substitute.value, symbols))
                         auto idx = index.as_int();
                         TRY_CALL(check_index_range(idx, length, substitute.index->position))
-                        value[idx] = item;
+                        value[idx] = std::move(item);
                     }
                     return value;
                 }
@@ -373,10 +374,11 @@ namespace sknd
                 }
             }
             
+            Cache cache;
             std::vector<T> values(rank);
             for ( size_t i = 0; i < rank; ++i )
             {
-                TRY_DECL(item, eval_item<T>(expr, symbols, i));
+                TRY_DECL(item, eval_item<T>(expr, symbols, i, &cache));
                 values[i] = item;
             }
             
@@ -435,16 +437,17 @@ namespace sknd
                         if ( index->kind == Expr::Expand )
                         {
                             const Expr& item = *as_expand(*index).item;
+                            TRY_DECL(ix, eval_items(item, symbols, rank))
+                            
                             for ( size_t i = 0; i < rank; ++i )
                             {
-                                TRY_DECL(ix, eval_item(item, symbols, i))
-                                indices.push_back(ix);
+                                indices.push_back(std::move(ix[i]));
                             }
                         }
                         else
                         {
                             TRY_DECL(ix, eval(*index, symbols))
-                            indices.push_back(ix);
+                            indices.push_back(std::move(ix));
                             if ( ix.packed() )
                             {
                                 size = ix.max_size();
@@ -670,9 +673,53 @@ namespace sknd
             }
         }
         
-        template<typename T = ValueExpr, typename = std::enable_if_t<std::is_same_v<T,ValueExpr>>>
-        static Result<ValueExpr> eval_item( const Expr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx = std::nullopt )
+        static bool can_eval_itemwise( const Expr& expr, const Dict<Symbol>& symbols )
         {
+            switch ( expr.kind )
+            {
+                case Expr::Fold:
+                {
+                    auto& fold = as_fold(expr);
+                    return !fold.cumulative;
+                }
+                case Expr::List:
+                {
+                    auto& list = as_list(expr);
+                    return std::all_of(list.items.begin(), list.items.end(), []( const Shared<Expr> item )
+                    {
+                        return item->kind != Expr::Expand && item->kind != Expr::Range;
+                    });
+                }
+                default:
+                {
+                    return true;
+                }
+            }
+        }
+        
+        template<typename T = ValueExpr>
+        static Result<T> eval_item( const Expr& expr, const Dict<Symbol>& symbols )
+        {
+            return eval_item<T>(expr, symbols, std::nullopt, nullptr);
+        }
+        
+        template<typename T = ValueExpr, typename = std::enable_if_t<std::is_same_v<T,ValueExpr>>>
+        static Result<ValueExpr> eval_item( const Expr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
+        {
+            if constexpr( std::is_same_v<T,ValueExpr> )
+            {
+                if ( idx && !can_eval_itemwise(expr, symbols) )
+                {
+                    auto it = cache->find(&expr);
+                    if ( it == cache->end() )
+                    {
+                        TRY_DECL(value, eval(expr, symbols))
+                        it = cache->emplace(&expr, std::move(value)).first;
+                    }
+                    return it->second.at(*idx);
+                }
+            }
+            
             switch ( expr.kind )
             {
                 case Expr::Literal:
@@ -681,120 +728,120 @@ namespace sknd
                 }
                 case Expr::Identifier:
                 {
-                    return eval_item(as_identifier(expr), symbols, idx);
+                    return eval_item(as_identifier(expr), symbols, idx, cache);
                 }
                 case Expr::List:
                 {
-                    return eval_item(as_list(expr), symbols, idx);
+                    return eval_item(as_list(expr), symbols, idx, cache);
                 }
                 case Expr::Expand:
                 {
-                    return eval_item(as_expand(expr), symbols, idx);
+                    return eval_item(as_expand(expr), symbols, idx, cache);
                 }
                 case Expr::Index:
                 {
-                    return eval_item(as_index(expr), symbols, idx);
+                    return eval_item(as_index(expr), symbols, idx, cache);
                 }
                 case Expr::Access:
                 {
-                    return eval_item(as_access(expr), symbols, idx);
+                    return eval_item(as_access(expr), symbols, idx, cache);
                 }
                 case Expr::Range:
                 {
-                    return eval_item(as_range(expr), symbols, idx);
+                    return eval_item(as_range(expr), symbols, idx, cache);
                 }
                 case Expr::Zip:
                 {
-                    return eval_item(as_zip(expr), symbols, idx);
+                    return eval_item(as_zip(expr), symbols, idx, cache);
                 }
                 case Expr::Unary:
                 {
-                    return eval_item(as_unary(expr), symbols, idx);
+                    return eval_item(as_unary(expr), symbols, idx, cache);
                 }
                 case Expr::Binary:
                 {
-                    return eval_item(as_binary(expr), symbols, idx);
+                    return eval_item(as_binary(expr), symbols, idx, cache);
                 }
                 case Expr::Select:
                 {
-                    return eval_item(as_select(expr), symbols, idx);
+                    return eval_item(as_select(expr), symbols, idx, cache);
                 }
                 case Expr::Coalesce:
                 {
-                    return eval_item(as_coalesce(expr), symbols, idx);
+                    return eval_item(as_coalesce(expr), symbols, idx, cache);
                 }
                 case Expr::Identity:
                 {
-                    return eval_item(as_identity(expr), symbols, idx);
+                    return eval_item(as_identity(expr), symbols, idx, cache);
                 }
                 case Expr::Contain:
                 {
-                    return eval_item(as_contain(expr), symbols, idx);
+                    return eval_item(as_contain(expr), symbols, idx, cache);
                 }
                 case Expr::Fold:
                 {
-                    return eval_item(as_fold(expr), symbols, idx);
+                    return eval_item(as_fold(expr), symbols, idx, cache);
                 }
                 case Expr::Cast:
                 {
-                    return eval_item(as_cast(expr), symbols, idx);
+                    return eval_item(as_cast(expr), symbols, idx, cache);
                 }
                 case Expr::Builtin:
                 {
-                    return eval_item(as_builtin(expr), symbols, idx);
+                    return eval_item(as_builtin(expr), symbols, idx, cache);
                 }
                 case Expr::Format:
                 {
-                    return eval_item(as_format(expr), symbols, idx);
+                    return eval_item(as_format(expr), symbols, idx, cache);
                 }
                 case Expr::Bounded:
                 {
-                    return eval_item(as_bounded(expr), symbols, idx);
+                    return eval_item(as_bounded(expr), symbols, idx, cache);
                 }
                 case Expr::Substitute:
                 {
-                    return eval_item(as_substitute(expr), symbols, idx);
+                    return eval_item(as_substitute(expr), symbols, idx, cache);
                 }
             }
             return ValueExpr::null();
         }
         
         template<typename T, typename = std::enable_if_t<std::is_same_v<T,Tensor*>>>
-        static Result<Tensor*> eval_item( const Expr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx = std::nullopt )
+        static Result<Tensor*> eval_item( const Expr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             switch ( expr.kind )
             {
                 case Expr::Identifier:
                 {
-                    return eval_item<Tensor*>(as_identifier(expr), symbols, idx);
+                    return eval_item<Tensor*>(as_identifier(expr), symbols, idx, cache);
                 }
                 case Expr::List:
                 {
-                    return eval_item<Tensor*>(as_list(expr), symbols, idx);
+                    return eval_item<Tensor*>(as_list(expr), symbols, idx, cache);
                 }
                 case Expr::Expand:
                 {
-                    return eval_item<Tensor*>(as_expand(expr), symbols, idx);
+                    return eval_item<Tensor*>(as_expand(expr), symbols, idx, cache);
                 }
                 case Expr::Index:
                 {
-                    return eval_item<Tensor*>(as_index(expr), symbols, idx);
+                    return eval_item<Tensor*>(as_index(expr), symbols, idx, cache);
                 }
                 case Expr::Zip:
                 {
-                    return eval_item<Tensor*>(as_zip(expr), symbols, idx);
+                    return eval_item<Tensor*>(as_zip(expr), symbols, idx, cache);
                 }
                 case Expr::Select:
                 {
-                    return eval_item<Tensor*>(as_select(expr), symbols, idx);
+                    return eval_item<Tensor*>(as_select(expr), symbols, idx, cache);
                 }
                 case Expr::Coalesce:
                 {
-                    return eval_item<Tensor*>(as_coalesce(expr), symbols, idx);
+                    return eval_item<Tensor*>(as_coalesce(expr), symbols, idx, cache);
                 }
                 case Expr::Substitute:
                 {
-                    return eval_item<Tensor*>(as_substitute(expr), symbols, idx);
+                    return eval_item<Tensor*>(as_substitute(expr), symbols, idx, cache);
                 }
                 default:
                 {
@@ -830,38 +877,8 @@ namespace sknd
             }
         }
         
-        static Result<ValueExpr> eval_item( const LiteralExpr& literal, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
-        {
-            switch ( literal.type.name )
-            {
-                case Typename::Int:
-                {
-                    return ValueExpr(static_cast<const IntExpr&>(literal).value);
-                }
-                case Typename::Real:
-                {
-                    return ValueExpr(static_cast<const RealExpr&>(literal).value);
-                }
-                case Typename::Bool:
-                {
-                    return ValueExpr(static_cast<const BoolExpr&>(literal).value);
-                }
-                case Typename::Str:
-                {
-                    return ValueExpr(static_cast<const StrExpr&>(literal).value);
-                }
-                case Typename::Type:
-                case Typename::Arith:
-                case Typename::Num:
-                {
-                    break;
-                }
-            }
-            return Error(literal.position, "invalid eval");
-        }
-        
         template<typename T = ValueExpr, typename = std::enable_if_t<std::is_same_v<T,ValueExpr>>>
-        static Result<ValueExpr> eval_item( const IdentifierExpr& iden, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const IdentifierExpr& iden, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             auto& symbol = symbols.at(iden.name);
             if ( symbol.is<LoopIndex>() || symbol.is<LoopLocal>() )
@@ -888,7 +905,7 @@ namespace sknd
         }
         
         template<typename T, typename = std::enable_if_t<std::is_same_v<T,Tensor*>>>
-        static Result<Tensor*> eval_item( const IdentifierExpr& iden, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<Tensor*> eval_item( const IdentifierExpr& iden, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             auto& symbol = symbols.at(iden.name);
             auto& values = symbol.as<TensorRef>();
@@ -904,7 +921,7 @@ namespace sknd
         }
         
         template<typename T = ValueExpr>
-        static Result<T> eval_item( const ListExpr& list, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<T> eval_item( const ListExpr& list, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             size_t k = 0;
             for ( auto& item : list.items )
@@ -915,7 +932,7 @@ namespace sknd
                     assert(rank);
                     if ( idx < k + *rank )
                     {
-                        return eval_item<T>(*item, symbols, *idx - k);
+                        return eval_item<T>(*item, symbols, *idx - k, cache);
                     }
                     k += *rank;
                 }
@@ -931,28 +948,28 @@ namespace sknd
         }
         
         template<typename T = ValueExpr>
-        static Result<T> eval_item( const ExpandExpr& expand, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<T> eval_item( const ExpandExpr& expand, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             if ( expand.count )
             {
                 TRY_DECL(rank, eval_rank_max(*expand.item, symbols))
-                return rank ? eval_item<T>(*expand.item, symbols, idx) : eval_item<T>(*expand.item, symbols);
+                return rank ? eval_item<T>(*expand.item, symbols, idx, cache) : eval_item<T>(*expand.item, symbols);
             }
             else
             {
-                return eval_item<T>(*expand.item, symbols, idx);
+                return eval_item<T>(*expand.item, symbols, idx, cache);
             }
         }
         
         template<typename T = ValueExpr>
-        static Result<T> eval_item( const IndexExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<T> eval_item( const IndexExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             if constexpr( std::is_same_v<T,ValueExpr> )
             {
                 auto array_type = eval_type(*expr.array, symbols);
                 if ( array_type == Typename::Str )
                 {
-                    TRY_DECL(array, eval_item(*expr.array, symbols, idx))
+                    TRY_DECL(array, eval_item(*expr.array, symbols, idx, cache))
                     auto& str = array.as_str();
                     auto length = (int_t)str.length();
                     
@@ -1008,16 +1025,17 @@ namespace sknd
                         TRY_DECL(rank, eval_rank_static(*expr.index, symbols))
                         if ( rank )
                         {
+                            TRY_DECL(index_value, eval_items(*expr.index, symbols, *rank))
+                            
                             std::string result;
                             for ( size_t i = 0; i < *rank; ++i )
                             {
-                                TRY_DECL(index_value, eval_item(*expr.index, symbols, i))
-                                if ( !index_value.is_literal() )
+                                if ( !index_value[i].is_literal() )
                                 {
                                     return Error(expr.index->position, "index must not depend on dynamic shapes");
                                 }
                                 
-                                auto index = index_value.as_int();
+                                auto index = index_value[i].as_int();
                                 TRY_CALL(check_index_range(index, length, expr.index->position))
                                 
                                 result += str[index];
@@ -1057,7 +1075,7 @@ namespace sknd
                     {
                         if ( k++ == idx )
                         {
-                            return eval_item<T>(*expr.array, symbols, i);
+                            return eval_item<T>(*expr.array, symbols, i, cache);
                         }
                     }
                 }
@@ -1071,11 +1089,11 @@ namespace sknd
                 ValueExpr index_value;
                 if ( expr.index->kind == Expr::Range )
                 {
-                    TRY_MOVE(index_value, eval_item(as_range(*expr.index), symbols, idx, length))
+                    TRY_MOVE(index_value, eval_item(as_range(*expr.index), symbols, idx, cache, length))
                 }
                 else
                 {
-                    TRY_MOVE(index_value, eval_item(*expr.index, symbols, idx))
+                    TRY_MOVE(index_value, eval_item(*expr.index, symbols, idx, cache))
                 }
                 
                 if ( !index_value.is_literal() )
@@ -1107,18 +1125,18 @@ namespace sknd
                 auto index = index_value.as_int();
                 TRY_CALL(check_index_range(index, length, expr.index->position))
                 
-                return eval_item<T>(*expr.array, symbols, index);
+                return eval_item<T>(*expr.array, symbols, index, cache);
             }
         }
         
-        static Result<ValueExpr> eval_item( const AccessExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const AccessExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             ValueExpr item;
             TensorRef tensor;
             if ( expr.tensor->kind == Expr::Index )
             {
                 auto& indexer = as_index(*expr.tensor);
-                TRY_DECL(subscript, eval_item(*indexer.index, symbols, idx))
+                TRY_DECL(subscript, eval_item(*indexer.index, symbols, idx, cache))
                 if ( subscript.is_literal() )
                 {
                     TRY_MOVE(tensor, eval<TensorRef>(as_identifier(*indexer.array), symbols, subscript.as_int()))
@@ -1154,23 +1172,24 @@ namespace sknd
                 {
                     const Expr& item = *as_expand(*index).item;
                     TRY_DECL(repeats, shape_item_rank(*index, symbols))
+                    TRY_DECL(ix, eval_items(item, symbols, repeats))
+                    
                     for ( size_t i = 0; i < repeats; ++i )
                     {
-                        TRY_DECL(ix, eval_item(item, symbols, i))
-                        indices.push_back(ix);
+                        indices.push_back(std::move(ix[i]));
                     }
                 }
                 else
                 {
-                    TRY_DECL(ix, eval_item(*index, symbols, idx))
-                    indices.push_back(ix);
+                    TRY_DECL(ix, eval_item(*index, symbols, idx, cache))
+                    indices.push_back(std::move(ix));
                 }
             }
             
             return ValueExpr(TensorAccess{ tensor, std::move(indices), std::move(item) }, tensor.dtype());
         }
         
-        static Result<ValueExpr> eval_item( const RangeExpr& range, const Dict<Symbol>& symbols, const std::optional<size_t> idx,
+        static Result<ValueExpr> eval_item( const RangeExpr& range, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache,
                                            const std::optional<size_t> length = std::nullopt )
         {
             TRY_DECL(stride, range.stride ? eval_item(*range.stride, symbols) : ValueExpr(1))
@@ -1185,14 +1204,14 @@ namespace sknd
         }
         
         template<typename T = ValueExpr>
-        static Result<T> eval_item( const ZipExpr& zip, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<T> eval_item( const ZipExpr& zip, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             auto k = *idx % zip.items.size();
             auto i = *idx / zip.items.size();
-            return eval_item<T>(*zip.items[k], symbols, i);
+            return eval_item<T>(*zip.items[k], symbols, i, cache);
         }
         
-        static Result<ValueExpr> eval_item( const UnaryExpr& unary, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const UnaryExpr& unary, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             if ( unary.op == Lexer::Operator::Question )
             {
@@ -1200,7 +1219,7 @@ namespace sknd
                 return ValueExpr(!symbol.is_null());
             }
             
-            TRY_DECL(arg, eval_item(*unary.arg, symbols, idx))
+            TRY_DECL(arg, eval_item(*unary.arg, symbols, idx, cache))
             assert(arg != nullptr);
             
             if ( unary.op == Lexer::Operator::Plus )
@@ -1217,9 +1236,9 @@ namespace sknd
             }
         }
         
-        static Result<ValueExpr> eval_item( const BinaryExpr& binary, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const BinaryExpr& binary, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
-            TRY_DECL(left, eval_item(*binary.left, symbols, idx))
+            TRY_DECL(left, eval_item(*binary.left, symbols, idx, cache))
             assert(left != nullptr);
             
             if ( left.is_literal() )    // shortcuts without evaluating right
@@ -1234,7 +1253,7 @@ namespace sknd
                 }
             }
             
-            TRY_DECL(right, eval_item(*binary.right, symbols, idx))
+            TRY_DECL(right, eval_item(*binary.right, symbols, idx, cache))
             assert(right != nullptr);
             
             if ( right.is_literal() )   // error checks
@@ -1268,19 +1287,19 @@ namespace sknd
         }
         
         template<typename T = ValueExpr>
-        static Result<T> eval_item( const SelectExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<T> eval_item( const SelectExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
-            TRY_DECL(cond, eval_item(*expr.cond, symbols, idx))
+            TRY_DECL(cond, eval_item(*expr.cond, symbols, idx, cache))
             assert(cond != nullptr);
             
             if ( cond.is_literal() )
             {
-                return cond.as_bool() ? eval_item<T>(*expr.left, symbols, idx) : expr.right ? eval_item<T>(*expr.right, symbols, idx) : T();
+                return cond.as_bool() ? eval_item<T>(*expr.left, symbols, idx, cache) : expr.right ? eval_item<T>(*expr.right, symbols, idx, cache) : T();
             }
             else if constexpr ( std::is_same_v<T,ValueExpr> )
             {
-                TRY_DECL(left, eval_item(*expr.left, symbols, idx))
-                TRY_DECL(right, eval_item(*expr.right, symbols, idx))
+                TRY_DECL(left, eval_item(*expr.left, symbols, idx, cache))
+                TRY_DECL(right, eval_item(*expr.right, symbols, idx, cache))
                 return ValueExpr::select(std::move(cond), std::move(left), std::move(right));
             }
             else
@@ -1290,85 +1309,74 @@ namespace sknd
         }
         
         template<typename T = ValueExpr>
-        static Result<T> eval_item( const CoalesceExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<T> eval_item( const CoalesceExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             TRY_DECL(is_null, eval_null(*expr.condition, symbols))
-            return !is_null ? eval_item<T>(*expr.condition, symbols, idx) : eval_item<T>(*expr.alternate, symbols, idx);
+            return !is_null ? eval_item<T>(*expr.condition, symbols, idx, cache) : eval_item<T>(*expr.alternate, symbols, idx, cache);
         }
         
-        static Result<ValueExpr> eval_item( const IdentityExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const IdentityExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             if ( is_tensor_expr(*expr.left, symbols) )
             {
-                TRY_DECL(left, eval_item<Tensor*>(*expr.left, symbols, idx))
-                TRY_DECL(right, eval_item<Tensor*>(*expr.right, symbols, idx))
+                TRY_DECL(left, eval_item<Tensor*>(*expr.left, symbols, idx, cache))
+                TRY_DECL(right, eval_item<Tensor*>(*expr.right, symbols, idx, cache))
                 
                 return ValueExpr(left == right);
             }
             else
             {
-                TRY_DECL(left, eval_item(*expr.left, symbols, idx))
-                TRY_DECL(right, eval_item(*expr.right, symbols, idx))
+                TRY_DECL(left, eval_item(*expr.left, symbols, idx, cache))
+                TRY_DECL(right, eval_item(*expr.right, symbols, idx, cache))
                 
                 return ValueExpr(left == right);
             }
         }
         
-        static Result<ValueExpr> eval_item( const ContainExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const ContainExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             TRY_DECL(length, eval_rank_static(*expr.pack, symbols))
             
             if ( is_tensor_expr(*expr.item, symbols) )
             {
-                TRY_DECL(lookup, eval_item<Tensor*>(*expr.item, symbols, idx))
-                for ( size_t i = 0; i < *length; ++i )
-                {
-                    TRY_DECL(item, eval_item<Tensor*>(*expr.pack, symbols, i))
-                    if ( item == lookup )
-                    {
-                        return ValueExpr(true);
-                    }
-                }
+                TRY_DECL(lookup, eval_item<Tensor*>(*expr.item, symbols, idx, cache))
+                TRY_DECL(items, eval_items<Tensor*>(*expr.pack, symbols, *length))
+                
+                return ValueExpr(std::find(items.begin(), items.end(), lookup) != items.end());
             }
             else
             {
-                TRY_DECL(lookup, eval_item(*expr.item, symbols, idx))
-                for ( size_t i = 0; i < *length; ++i )
-                {
-                    TRY_DECL(item, eval_item(*expr.pack, symbols, i))
-                    if ( item == lookup )
-                    {
-                        return ValueExpr(true);
-                    }
-                }
+                TRY_DECL(lookup, eval_item(*expr.item, symbols, idx, cache))
+                TRY_DECL(items, eval_items(*expr.pack, symbols, *length))
+                
+                return ValueExpr(std::find(items.begin(), items.end(), lookup) != items.end());
             }
-            return ValueExpr(false);
         }
         
-        static Result<ValueExpr> eval_item( const FoldExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const FoldExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             const Typename type = eval_type(expr, symbols);
             switch ( expr.op )
             {
                 case Lexer::Operator::Plus:
                 {
-                    return type == Typename::Real ? eval_fold<std::plus>(expr, symbols, idx, (real_t)0) :
-                                                    eval_fold<std::plus>(expr, symbols, idx, (int_t)0);
+                    return type == Typename::Real ? eval_fold<std::plus>(expr, symbols, idx, cache, (real_t)0) :
+                                                    eval_fold<std::plus>(expr, symbols, idx, cache, (int_t)0);
                 }
                 case Lexer::Operator::Multiply:
                 {
-                    return type == Typename::Real ? eval_fold<std::multiplies>(expr, symbols, idx, (real_t)1) :
-                                                    eval_fold<std::multiplies>(expr, symbols, idx, (int_t)1);
+                    return type == Typename::Real ? eval_fold<std::multiplies>(expr, symbols, idx, cache, (real_t)1) :
+                                                    eval_fold<std::multiplies>(expr, symbols, idx, cache, (int_t)1);
                 }
                 case Lexer::Operator::Min:
                 {
-                    return type == Typename::Real ? eval_fold<minimize,real_t>(expr, symbols, idx) :
-                                                    eval_fold<minimize,int_t>(expr, symbols, idx);
+                    return type == Typename::Real ? eval_fold<minimize,real_t>(expr, symbols, idx, cache) :
+                                                    eval_fold<minimize,int_t>(expr, symbols, idx, cache);
                 }
                 case Lexer::Operator::Max:
                 {
-                    return type == Typename::Real ? eval_fold<maximize,real_t>(expr, symbols, idx) :
-                                                    eval_fold<maximize,int_t>(expr, symbols, idx);
+                    return type == Typename::Real ? eval_fold<maximize,real_t>(expr, symbols, idx, cache) :
+                                                    eval_fold<maximize,int_t>(expr, symbols, idx, cache);
                 }
                 case Lexer::Operator::ArgMin:
                 {
@@ -1382,11 +1390,11 @@ namespace sknd
                 }
                 case Lexer::Operator::And:
                 {
-                    return eval_fold<std::logical_and>(expr, symbols, idx, (bool_t)true);
+                    return eval_fold<std::logical_and>(expr, symbols, idx, cache, (bool_t)true);
                 }
                 case Lexer::Operator::Or:
                 {
-                    return eval_fold<std::logical_or>(expr, symbols, idx, (bool_t)false);
+                    return eval_fold<std::logical_or>(expr, symbols, idx, cache, (bool_t)false);
                 }
                 case Lexer::Operator::Less:
                 {
@@ -1424,7 +1432,7 @@ namespace sknd
             return Error(expr.position, "invalid fold eval");
         }
         
-        static Result<ValueExpr> eval_item( const CastExpr& cast, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const CastExpr& cast, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             const Typename type = is_abstract(cast.base) ? symbols.at(cast.type).type : cast.base;
             
@@ -1455,7 +1463,7 @@ namespace sknd
                 }
             }
             
-            TRY_DECL(arg, eval_item(*cast.arg, symbols, idx))
+            TRY_DECL(arg, eval_item(*cast.arg, symbols, idx, cache))
             assert(arg != nullptr);
             
             if ( arg.dtype() == type )
@@ -1500,9 +1508,9 @@ namespace sknd
             return Error(cast.position, "invalid cast eval");
         }
         
-        static Result<ValueExpr> eval_item( const BuiltinExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const BuiltinExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
-            TRY_DECL(arg, eval_item(*expr.arg, symbols, idx))
+            TRY_DECL(arg, eval_item(*expr.arg, symbols, idx, cache))
             assert(arg != nullptr);
             
             if ( !arg.is_literal() )
@@ -1524,14 +1532,14 @@ namespace sknd
             }
         }
         
-        static Result<ValueExpr> eval_item( const FormatExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const FormatExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             std::string result;
             size_t offset = 0;
             for ( auto& sub : expr.subs )
             {
                 result += expr.str.substr(offset, sub.first - offset);
-                TRY_DECL(value, eval_item(*sub.second, symbols, idx))
+                TRY_DECL(value, eval_item(*sub.second, symbols, idx, cache))
                 assert(value != nullptr);
                 if ( !value.is_literal() )
                 {
@@ -1544,23 +1552,23 @@ namespace sknd
             return ValueExpr(result);
         }
         
-        static Result<ValueExpr> eval_item( const BoundedExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<ValueExpr> eval_item( const BoundedExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
-            TRY_DECL(arg, eval_item(*expr.index, symbols, idx))
+            TRY_DECL(arg, eval_item(*expr.index, symbols, idx, cache))
             ValueExpr lower, upper;
             if ( expr.lower_value )
             {
-                TRY_MOVE(lower, eval_item(*expr.lower_value, symbols, idx))
+                TRY_MOVE(lower, eval_item(*expr.lower_value, symbols, idx, cache))
             }
             if ( expr.upper_value )
             {
-                TRY_MOVE(upper, eval_item(*expr.upper_value, symbols, idx))
+                TRY_MOVE(upper, eval_item(*expr.upper_value, symbols, idx, cache))
             }
             return ValueExpr::bounded(std::move(arg), std::move(lower), std::move(upper));
         }
         
         template<typename T = ValueExpr>
-        static Result<T> eval_item( const SubstituteExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx )
+        static Result<T> eval_item( const SubstituteExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             TRY_DECL(index, eval(*expr.index, symbols))
             assert(index != nullptr);
@@ -1581,7 +1589,7 @@ namespace sknd
                     
                     if ( i == idx )
                     {
-                        return eval_item<T>(*expr.value, symbols, k);
+                        return eval_item<T>(*expr.value, symbols, k, cache);
                     }
                 }
             }
@@ -1595,13 +1603,13 @@ namespace sknd
                     return eval_item<T>(*expr.value, symbols);
                 }
             }
-            return eval_item<T>(*expr.pack, symbols, idx);
+            return eval_item<T>(*expr.pack, symbols, idx, cache);
         }
         
     private:
         
         template<template<typename> class F, typename T>
-        static Result<ValueExpr> eval_fold( const FoldExpr& fold, const Dict<Symbol>& symbols, const std::optional<size_t> idx,
+        static Result<ValueExpr> eval_fold( const FoldExpr& fold, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache,
                                            const std::optional<T> init = std::nullopt )
         {
             TRY_DECL(dynamic_rank, eval_rank(*fold.pack, symbols))
@@ -1615,14 +1623,12 @@ namespace sknd
             const F<T> func;
             auto literal_value = init;
             ValueExpr expr_value;
-            TRY_DECL(rank, fold.cumulative ? std::optional<size_t>(*idx + 1) : eval_rank_max(*fold.pack, symbols))
+            auto rank = fold.cumulative ? *idx + 1 : dynamic_rank.as_int();
+            TRY_DECL(items, eval_items(*fold.pack, symbols, rank))
             
             size_t terms = 0;
-            for ( size_t i = 0; i < rank; ++i )
+            for ( auto& item : items )
             {
-                TRY_DECL(item, eval_item(*fold.pack, symbols, i))
-                assert(item != nullptr);
-                
                 if ( item.is_literal() )
                 {
                     if ( is_shortcut(fold.op, (T)item) )
@@ -1637,14 +1643,13 @@ namespace sknd
                 }
                 else
                 {
-                    expr_value = expr_value == nullptr ? item : ValueExpr::binary(Lexer::str(fold.op), std::move(expr_value), std::move(item));
+                    expr_value = expr_value == nullptr ? item : ValueExpr::binary(Lexer::str(fold.op), std::move(expr_value), item);
                     ++terms;
                 }
                 
-                if ( terms > 4 )
+                if ( terms > 2 )
                 {
-                    TRY_DECL(pack, eval(*fold.pack, symbols))
-                    return ValueExpr::fold(Lexer::str(fold.op), std::move(pack));
+                    return ValueExpr::fold(Lexer::str(fold.op), ValueExpr::list(std::move(items), typename_of<T>::value));
                 }
             }
             
@@ -1659,9 +1664,10 @@ namespace sknd
         }
         
         template<template<typename> class F, typename T>
-        static Result<ValueExpr> eval_fold( const FoldExpr& fold, const Dict<Symbol>& symbols, const std::optional<size_t> idx, const T init )
+        static Result<ValueExpr> eval_fold( const FoldExpr& fold, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache,
+                                           const T init )
         {
-            return eval_fold<F>(fold, symbols, idx, std::optional<T>(init));
+            return eval_fold<F>(fold, symbols, idx, cache, std::optional<T>(init));
         }
         
         template<template<typename> class F, typename T>
@@ -1671,17 +1677,16 @@ namespace sknd
             TRY_DECL(rank, eval_rank_max(*fold.pack, symbols))
             if ( rank == 0 )
             {
-                return ValueExpr::null();
+                return ValueExpr(nullptr);
             }
-            TRY_DECL(init, eval_item(*fold.pack, symbols, 0))
-            assert(init != nullptr);
-            T value = (T)init;
+            
+            TRY_DECL(items, eval_items(*fold.pack, symbols, *rank))
+            
+            T value = (T)items.front();
             size_t idx = 0;
             for ( size_t i = 1; i < rank; ++i )
             {
-                TRY_DECL(item, eval_item(*fold.pack, symbols, i))
-                assert(item != nullptr);
-                auto new_value = func(value, (T)item);
+                auto new_value = func(value, (T)items[i]);
                 if ( new_value != value )
                 {
                     idx = i;
@@ -1695,27 +1700,21 @@ namespace sknd
         static Result<std::vector<ValueExpr>> eval_accumulate( const FoldExpr& fold, const Dict<Symbol>& symbols, const size_t rank )
         {
             const F<T> func;
-            std::vector<ValueExpr> values(rank);
+            
+            TRY_DECL(items, eval_items(*fold.pack, symbols, rank))
             for ( size_t i = 0; i < rank; ++i )
             {
-                TRY_DECL(item, eval_item(*fold.pack, symbols, i))
-                assert(item != nullptr);
-                
-                if ( !item.is_literal() )
+                if ( !items[i].is_literal() )
                 {
                     return {};
                 }
                 
-                if ( i == 0 )
+                if ( i != 0 )
                 {
-                    values[i] = item;
-                }
-                else
-                {
-                    values[i] = func((T)values[i-1], (T)item);
+                    items[i] = func((T)items[i-1], (T)items[i]);
                 }
             }
-            return values;
+            return items;
         }
         
         template<template<typename> class C>
