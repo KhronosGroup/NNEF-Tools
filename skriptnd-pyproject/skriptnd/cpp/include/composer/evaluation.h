@@ -1612,9 +1612,9 @@ namespace sknd
         static Result<ValueExpr> eval_fold( const FoldExpr& fold, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache,
                                            const std::optional<T> init = std::nullopt )
         {
-            TRY_DECL(dynamic_rank, eval_rank(*fold.pack, symbols))
-            assert(dynamic_rank != nullptr);
-            if ( !dynamic_rank.is_literal() )
+            TRY_DECL(rank, eval_rank(*fold.pack, symbols))
+            assert(rank != nullptr);
+            if ( !rank.is_literal() )
             {
                 TRY_DECL(pack, eval(*fold.pack, symbols))
                 return ValueExpr::fold(Lexer::str(fold.op), std::move(pack));
@@ -1623,8 +1623,8 @@ namespace sknd
             const F<T> func;
             auto literal_value = init;
             ValueExpr expr_value;
-            auto rank = fold.cumulative ? *idx + 1 : dynamic_rank.as_int();
-            TRY_DECL(items, eval_items(*fold.pack, symbols, rank))
+            auto count = fold.cumulative ? *idx + 1 : rank.as_int();
+            TRY_DECL(items, eval_items(*fold.pack, symbols, count))
             
             size_t terms = 0;
             for ( auto& item : items )
