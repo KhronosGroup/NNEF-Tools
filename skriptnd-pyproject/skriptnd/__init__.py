@@ -235,14 +235,14 @@ ReferenceExpr.__str__ = lambda x: _local_name(x.name)
 SizeAccess.__str__ = _size_access_str
 ShapeAccess.__str__ = _shape_access_str
 TensorAccess.__str__ = _tensor_access_str
-CastExpr.__str__ = lambda x: f"{x.dtype}({x.arg})"
+CastExpr.__str__ = lambda x: f"{x.dtype.name.lower()}({x.arg})"
 UnaryExpr.__str__ = lambda x: f"{x.op}({x.arg})"
 BinaryExpr.__str__ = lambda x: f"({x.left} {x.op} {x.right})"
 SelectExpr.__str__ = lambda x: f"({x.cond} ? {x.left} : {x.right})"
 FoldExpr.__str__ = lambda x: f"( {x.pack} {x.op} {'...' if x.packed else '..'} )"
 ListExpr.__str__ = lambda x: f"[{', '.join(str(item) for item in x.items)}]"
 BoundedExpr.__str__ = lambda x: f"|{x.value} <> {x.lower} : {x.upper}|" if x.lower is not None and x.upper is not None else f"|{x.value}|"
-ConcatExpr.__str__ = lambda x: f"[{', '.join(f'{item}..' for item in x.items)}]"
+ConcatExpr.__str__ = lambda x: f"[{', '.join(f'{item}..' if expr_is_packed(item) else str(item) for item in x.items)}]"
 SliceExpr.__str__ = lambda x: f"{x.pack}[{x.first}:{x.last}{':'+str(x.stride) if x.stride != 1 else ''}]"
 SubscriptExpr.__str__ = lambda x: f"{x.pack}[{x.index}]"
 UniformExpr.__str__ = lambda x: f"[{x.value} ..({x.size})]"
