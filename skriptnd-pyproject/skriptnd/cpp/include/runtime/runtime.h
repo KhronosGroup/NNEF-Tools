@@ -1026,8 +1026,8 @@ namespace sknd
             
         public:
             
-            SliceExpr( const pack_type& pack, const size_t first, const size_t last, const size_t stride )
-            : _pack(pack), _first(first), _size((last - first) / stride), _stride(stride)
+            SliceExpr( const pack_type& pack, const int first, const int last, const int stride )
+            : _pack(pack), _first(first), _stride(stride), _size((last - first) / stride)
             {
             }
             
@@ -1044,9 +1044,9 @@ namespace sknd
         private:
             
             const pack_type& _pack;
-            const size_t _first;
+            const int _first;
+            const int _stride;
             const size_t _size;
-            const size_t _stride;
         };
     
     
@@ -1061,8 +1061,8 @@ namespace sknd
             
         public:
             
-            RangeExpr( const size_t first, const size_t last, const size_t stride )
-            : _first(first), _size((last - first) / stride), _stride(stride)
+            RangeExpr( const int first, const int last, const int stride )
+            : _first(first), _stride(stride), _size((last - first) / stride)
             {
             }
             
@@ -1078,9 +1078,9 @@ namespace sknd
             
         private:
             
-            const size_t _first;
+            const int _first;
+            const int _stride;
             const size_t _size;
-            const size_t _stride;
         };
     
     
@@ -1276,13 +1276,13 @@ namespace sknd
         }
     
         template<typename P>
-        inline SliceExpr<P> slice( const P& pack, const size_t first, const size_t last, const size_t stride = 1 )
+        inline SliceExpr<P> slice( const P& pack, const int first, const int last, const int stride = 1 )
         {
             return SliceExpr<P>(pack, first, last, stride);
         }
     
         template<size_t M>
-        inline RangeExpr<M> range( const size_t first, const size_t last, const size_t stride = 1 )
+        inline RangeExpr<M> range( const int first, const int last, const int stride = 1 )
         {
             return RangeExpr<M>(first, last, stride);
         }
