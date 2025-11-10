@@ -131,15 +131,7 @@ namespace sknd
         static Result<ValueExpr> eval( const Expr& expr, const Dict<Symbol>& symbols )
         {
             TRY_DECL(rank, eval_rank(expr, symbols))
-            if ( rank == nullptr )
-            {
-                return eval_item(expr, symbols);
-            }
-            else
-            {
-                TRY_DECL(value, eval_pack(expr, symbols, rank))
-                return value;
-            }
+            return rank != nullptr ? eval_pack(expr, symbols, rank) : eval_item(expr, symbols);
         }
         
         static Result<TensorRef> eval( const Expr& expr, const Dict<Symbol>& symbols, const AsTensor& astensor, const AsTensorPack aspack,
@@ -297,41 +289,12 @@ namespace sknd
                     auto& fold = as_fold(expr);
                     if constexpr( std::is_same_v<T,ValueExpr> )
                     {
-                        auto type = eval_type(expr, symbols);
-                        switch ( fold.op )
+                        TRY_DECL(items, eval_items(*fold.pack, symbols, rank))
+                        if ( is_literal(items) )
                         {
-                            case Lexer::Operator::Plus:
-                            {
-                                return type == Typename::Real ? eval_accumulate<std::plus,real_t>(fold, symbols, rank) :
-                                                                eval_accumulate<std::plus,int_t>(fold, symbols, rank);
-                            }
-                            case Lexer::Operator::Multiply:
-                            {
-                                return type == Typename::Real ? eval_accumulate<std::multiplies,real_t>(fold, symbols, rank) :
-                                                                eval_accumulate<std::multiplies,int_t>(fold, symbols, rank);
-                            }
-                            case Lexer::Operator::Min:
-                            {
-                                return type == Typename::Real ? eval_accumulate<minimize,real_t>(fold, symbols, rank) :
-                                                                eval_accumulate<minimize,int_t>(fold, symbols, rank);
-                            }
-                            case Lexer::Operator::Max:
-                            {
-                                return type == Typename::Real ? eval_accumulate<maximize,real_t>(fold, symbols, rank) :
-                                                                eval_accumulate<maximize,int_t>(fold, symbols, rank);
-                            }
-                            case Lexer::Operator::And:
-                            {
-                                return eval_accumulate<std::logical_and,bool_t>(fold, symbols, rank);
-                            }
-                            case Lexer::Operator::Or:
-                            {
-                                return eval_accumulate<std::logical_or,bool_t>(fold, symbols, rank);
-                            }
-                            default:
-                            {
-                                return Error(expr.position, "invalid fold eval");
-                            }
+                            auto type = eval_type(expr, symbols);
+                            eval_accumulate(items, fold.op, type);
+                            return items;
                         }
                     }
                     break;
@@ -389,6 +352,19 @@ namespace sknd
         
         static Result<ValueExpr> eval_pack( const Expr& expr, const Dict<Symbol>& symbols, const ValueExpr& rank )
         {
+            bool elementwise = expr.kind == Expr::Unary || expr.kind == Expr::Binary || expr.kind == Expr::Select || expr.kind == Expr::Cast;
+            bool always_itemwise = expr.kind == Expr::Identity || expr.kind == Expr::Contain || expr.kind == Expr::Zip ||
+                                   expr.kind == Expr::Substitute || expr.kind == Expr::Coalesce || expr.kind == Expr::Bounded;
+            if ( rank.is_literal() && (elementwise || always_itemwise) )
+            {
+                TRY_DECL(items, eval_items(expr, symbols, rank.as_int()))
+                if ( always_itemwise || is_literal(items) )
+                {
+                    auto type = eval_type(expr, symbols);
+                    return ValueExpr::list(std::move(items), type);
+                }
+            }
+            
             switch ( expr.kind )
             {
                 case Expr::Identifier:
@@ -397,15 +373,7 @@ namespace sknd
                     auto& symbol = symbols.at(iden.name);
                     if ( symbol.is<ValueExpr>() )
                     {
-                        auto& value = symbol.as<ValueExpr>();
-                        if ( value.is_shape_access() || value.is_uniform() )
-                        {
-                            return value;
-                        }
-                        else if ( value.is_fold() )
-                        {
-                            return ValueExpr(ValueExpr::ReferenceExpr{ iden.name, &value }, value.dtype(), value.max_size());
-                        }
+                        return symbol.as<ValueExpr>();
                     }
                     break;
                 }
@@ -461,73 +429,50 @@ namespace sknd
                 case Expr::Fold:
                 {
                     auto& fold = as_fold(expr);
-                    if ( rank.is_literal() )
-                    {
-                        auto type = eval_type(expr, symbols);
-                        if ( rank.as_int() == 0 )
-                        {
-                            return ValueExpr::list({}, type);
-                        }
-                        TRY_DECL(items, eval_items(expr, symbols, rank.as_int()))
-                        if ( !items.empty() )
-                        {
-                            return ValueExpr::list(std::move(items), type);
-                        }
-                    }
-                    if ( !allows_dynamic_fold(fold.op) )
+                    if ( !rank.is_literal() && !allows_dynamic_fold(fold.op) )
                     {
                         return Error(expr.position, "fold expression with operator '%s' must not be of dynamic length");
                     }
+                    
                     TRY_DECL(pack, eval(*fold.pack, symbols))
-                    return ValueExpr::fold(Lexer::str(fold.op), pack, pack.max_size());
-                }
-                default:
-                {
-                    break;
-                }
-            }
-            
-            if ( rank.is_literal() )
-            {
-                TRY_DECL(items, eval_items(expr, symbols, rank.as_int()))
-                
-                bool non_literals = std::all_of(items.begin(), items.end(), []( const ValueExpr& x ){ return !x.is_literal(); });
-                bool element_wise = expr.kind == Expr::Unary || expr.kind == Expr::Binary || expr.kind == Expr::Select || expr.kind == Expr::Cast;
-                bool make_dynamic = element_wise && non_literals && items.size() > 1;
-                if ( !make_dynamic )
-                {
-                    auto type = eval_type(expr, symbols);
-                    return ValueExpr::list(std::move(items), type);
-                }
-            }
-            
-            auto size = eval_shape_expr_max(canonical(rank));
-            switch ( expr.kind )
-            {
-                case Expr::Identifier:
-                {
-                    auto& iden = as_identifier(expr);
-                    return symbols.at(iden.name).as<ValueExpr>();
+                    if ( pack.is_list() )
+                    {
+                        auto& items = pack.as_list();
+                        if ( is_literal(items) )
+                        {
+                            auto type = eval_type(expr, symbols);
+                            eval_accumulate(items, fold.op, type);
+                            return ValueExpr::list(std::move(items), type);
+                        }
+                    }
+                    assert(pack.packed());
+                    auto size = pack.max_size();
+                    return ValueExpr::fold(Lexer::str(fold.op), pack, size);
                 }
                 case Expr::Expand:
                 {
                     auto& expand = as_expand(expr);
                     if ( expand.count )
                     {
-                        TRY_DECL(item, eval(*expand.item, symbols))
-                        TRY_DECL(count, eval(*expand.count, symbols))
-                        return ValueExpr::uniform(item, count, size);
+                        if ( !rank.is_literal() )
+                        {
+                            TRY_DECL(item, eval(*expand.item, symbols))
+                            auto size = eval_shape_expr_max(canonical(rank));
+                            return ValueExpr::uniform(item, rank, size);
+                        }
                     }
                     else
                     {
                         return eval_pack(*expand.item, symbols, rank);
                     }
+                    break;
                 }
                 case Expr::Cast:
                 {
                     auto& cast = as_cast(expr);
                     TRY_DECL(arg, eval(*cast.arg, symbols))
                     const Typename type = is_abstract(cast.base) ? symbols.at(cast.type).type : cast.base;
+                    auto size = arg.max_size_or_null();
                     return ValueExpr(ValueExpr::CastExpr{ type, std::move(arg) }, type, size);
                 }
                 case Expr::Unary:
@@ -535,6 +480,7 @@ namespace sknd
                     auto& unary = as_unary(expr);
                     TRY_DECL(arg, eval(*unary.arg, symbols))
                     auto type = arg.dtype();
+                    auto size = arg.max_size_or_null();
                     return ValueExpr::unary(Lexer::str(unary.op), std::move(arg), type, size);
                 }
                 case Expr::Binary:
@@ -543,6 +489,7 @@ namespace sknd
                     TRY_DECL(left, eval(*binary.left, symbols))
                     TRY_DECL(right, eval(*binary.right, symbols))
                     auto type = left.dtype();
+                    auto size = left.packed() ? left.max_size() : right.max_size_or_null();
                     return ValueExpr::binary(Lexer::str(binary.op), std::move(left), std::move(right), type, size);
                 }
                 case Expr::Select:
@@ -555,42 +502,73 @@ namespace sknd
                     }
                     TRY_DECL(left, eval(*select.left, symbols))
                     TRY_DECL(right, eval(*select.right, symbols))
+                    auto size = cond.packed() ? cond.max_size() : left.packed() ? left.max_size() : right.max_size_or_null();
                     return ValueExpr::select(std::move(cond), std::move(left), std::move(right), size);
                 }
                 case Expr::List:
                 {
                     auto& list = as_list(expr);
                     auto type = eval_type(expr, symbols);
+                    
                     if ( list.items.empty() )
                     {
                         return ValueExpr::list({}, type);
                     }
-                    else if ( list.items.size() == 1 )
+                    else if ( list.items.size() == 1 && list.items.front()->kind == Expr::Expand )
                     {
                         return eval(*list.items.front(), symbols);
                     }
+                    
+                    size_t size = 0;
+                    std::vector<ValueExpr> items(list.items.size());
+                    for ( size_t i = 0; i < items.size(); ++i )
+                    {
+                        TRY_DECL(item, eval(*list.items[i], symbols))
+                        size += item.packed() ? item.max_size() : 1;
+                        items[i] = std::move(item);
+                    }
+                    
+                    if ( std::all_of(items.begin(), items.end(), []( const ValueExpr& x ){ return is_literal(x); }) )
+                    {
+                        std::vector<ValueExpr> values(size);
+                        size_t k = 0;
+                        for ( auto& item : items )
+                        {
+                            if ( item.is_literal() )
+                            {
+                                values[k++] = std::move(item);
+                            }
+                            else if ( item.is_list() )
+                            {
+                                auto& list = item.as_list();
+                                for ( size_t i = 0; i < list.size(); ++i )
+                                {
+                                    values[k++] = std::move(list[i]);
+                                }
+                            }
+                            else
+                            {
+                                for ( size_t i = 0; i < item.max_size(); ++i )
+                                {
+                                    values[k++] = item.at(i);
+                                }
+                            }
+                        }
+                        return ValueExpr::list(std::move(values), type);
+                    }
                     else
                     {
-                        std::vector<ValueExpr> items(list.items.size());
-                        for ( size_t i = 0; i < items.size(); ++i )
-                        {
-                            TRY_DECL(item, eval(*list.items[i], symbols))
-                            items[i] = std::move(item);
-                        }
                         return ValueExpr(ValueExpr::ConcatExpr{ std::move(items) }, type, size);
                     }
+                    break;
                 }
                 case Expr::Index:
                 {
                     auto& indexer = as_index(expr);
-                    
-                    TRY_DECL(pack, eval(*indexer.array, symbols))
-                    auto type = pack.dtype();
-                    
                     if ( indexer.index->kind == Expr::Range )
                     {
                         auto& range = as_range(*indexer.index);
-                        TRY_DECL(stride, eval(*range.stride, symbols))
+                        TRY_DECL(stride, range.stride ? eval(*range.stride, symbols) : ValueExpr(1))
                         if ( !stride.is_literal() && (!range.first || !range.last) )
                         {
                             return Error(expr.position, "range begin and end must be explicitly supplied if stride depends on dynamic shapes");
@@ -633,13 +611,17 @@ namespace sknd
                             return Error(expr.position, "zero stride in range");
                         }
                         
+                        if ( first.is_literal() && last.is_literal() && stride.is_literal() )
+                        {
+                            break;
+                        }
+                        
+                        TRY_DECL(pack, eval(*indexer.array, symbols))
+                        auto type = pack.dtype();
+                        auto size = eval_shape_expr_max(canonical(rank));
                         return ValueExpr(ValueExpr::SliceExpr{ std::move(pack), std::move(first), std::move(last), std::move(stride) }, type, size);
                     }
-                    else
-                    {
-                        TRY_DECL(index, eval(*indexer.index, symbols))
-                        return ValueExpr(ValueExpr::SubscriptExpr{ std::move(pack), std::move(index) }, type, size);
-                    }
+                    break;
                 }
                 case Expr::Range:
                 {
@@ -651,6 +633,11 @@ namespace sknd
                     {
                         return Error(expr.position, "zero stride in range");
                     }
+                    if ( first.is_literal() && last.is_literal() && stride.is_literal() )
+                    {
+                        break;
+                    }
+                    auto size = eval_shape_expr_max(canonical(rank));
                     return ValueExpr(ValueExpr::RangeExpr{ std::move(first), std::move(last), std::move(stride) }, Typename::Int, size);
                 }
                 case Expr::Zip:
@@ -668,15 +655,25 @@ namespace sknd
                 default:
                 {
                     assert(false);
-                    return ValueExpr(nullptr);
                 }
             }
+            
+            assert(rank.is_literal());
+            TRY_DECL(items, eval_items(expr, symbols, rank.as_int()))
+            auto type = eval_type(expr, symbols);
+            return ValueExpr::list(std::move(items), type);
         }
         
         static bool can_eval_itemwise( const Expr& expr, const Dict<Symbol>& symbols )
         {
             switch ( expr.kind )
             {
+                case Expr::Identifier:
+                {
+                    auto& iden = as_identifier(expr);
+                    auto& symbol = symbols.at(iden.name);
+                    return !symbol.is<ValueExpr>() || symbol.as<ValueExpr>().is_list();
+                }
                 case Expr::Fold:
                 {
                     auto& fold = as_fold(expr);
@@ -1697,24 +1694,82 @@ namespace sknd
         }
         
         template<template<typename> class F, typename T>
-        static Result<std::vector<ValueExpr>> eval_accumulate( const FoldExpr& fold, const Dict<Symbol>& symbols, const size_t rank )
+        static void eval_accumulate( std::vector<ValueExpr>& items )
         {
             const F<T> func;
-            
-            TRY_DECL(items, eval_items(*fold.pack, symbols, rank))
-            for ( size_t i = 0; i < rank; ++i )
+            for ( size_t i = 1; i < items.size(); ++i )
             {
-                if ( !items[i].is_literal() )
+                items[i] = func((T)items[i-1], (T)items[i]);
+            }
+        }
+        
+        static void eval_accumulate( std::vector<ValueExpr>& items, const Lexer::Operator op, const Typename type )
+        {
+            switch ( op )
+            {
+                case Lexer::Operator::Plus:
                 {
-                    return {};
+                    if ( type == Typename::Real )
+                    {
+                        eval_accumulate<std::plus,real_t>(items);
+                    }
+                    else
+                    {
+                        eval_accumulate<std::plus,int_t>(items);
+                    }
+                    break;
                 }
-                
-                if ( i != 0 )
+                case Lexer::Operator::Multiply:
                 {
-                    items[i] = func((T)items[i-1], (T)items[i]);
+                    if ( type == Typename::Real )
+                    {
+                        eval_accumulate<std::multiplies,real_t>(items);
+                    }
+                    else
+                    {
+                        eval_accumulate<std::multiplies,int_t>(items);
+                    }
+                    break;
+                }
+                case Lexer::Operator::Min:
+                {
+                    if ( type == Typename::Real )
+                    {
+                        eval_accumulate<minimize,real_t>(items);
+                    }
+                    else
+                    {
+                        eval_accumulate<minimize,int_t>(items);
+                    }
+                    break;
+                }
+                case Lexer::Operator::Max:
+                {
+                    if ( type == Typename::Real )
+                    {
+                        eval_accumulate<maximize,real_t>(items);
+                    }
+                    else
+                    {
+                        eval_accumulate<maximize,int_t>(items);
+                    }
+                    break;
+                }
+                case Lexer::Operator::And:
+                {
+                    eval_accumulate<std::logical_and,bool_t>(items);
+                    break;
+                }
+                case Lexer::Operator::Or:
+                {
+                    eval_accumulate<std::logical_or,bool_t>(items);
+                    break;
+                }
+                default:
+                {
+                    assert(false);
                 }
             }
-            return items;
         }
         
         template<template<typename> class C>
@@ -1855,8 +1910,10 @@ namespace sknd
         {
             switch ( expr.kind() )
             {
+                case ValueExpr::Null:
                 case ValueExpr::Literal:
                 case ValueExpr::Identifier:
+                case ValueExpr::Placeholder:
                 case ValueExpr::SizeAccess:
                 {
                     return expr;
@@ -1882,7 +1939,12 @@ namespace sknd
                         return nullptr;
                     }
                     auto dim = access.dim.as_int();
-                    return access.tensor.shape()[dim].packed() ? nullptr : expr;
+                    auto& extent = access.tensor.shape()[dim];
+                    if ( extent.is_placeholder() )
+                    {
+                        return access;
+                    }
+                    return uniform_value(extent);
                 }
                 case ValueExpr::Cast:
                 {
@@ -1997,9 +2059,15 @@ namespace sknd
                 }
                 case ValueExpr::Uniform:
                 {
-                    return expr.as_uniform().value;
+                    auto& uniform = expr.as_uniform();
+                    return uniform.value;
                 }
-                default:
+                case ValueExpr::Range:
+                {
+                    auto& range = expr.as_range();
+                    return range.stride == 0 ? range.first : nullptr;
+                }
+                case ValueExpr::Bounded:
                 {
                     return nullptr;
                 }
@@ -2482,8 +2550,8 @@ namespace sknd
                 }
                 case Expr::Bounded:
                 {
-                    assert(false);
-                    return Typename::Type;
+                    auto& bounded = as_bounded(expr);
+                    return eval_type(*bounded.index, symbols);
                 }
             }
 
@@ -2584,6 +2652,62 @@ namespace sknd
             else
             {
                 return 1;
+            }
+        }
+        
+        Result<ValueExpr> eval_shape_expr( const Expr& expr, const Dict<Symbol>& symbols )
+        {
+            TRY_DECL(rank, eval_rank(expr, symbols))
+            if ( rank == nullptr )
+            {
+                TRY_DECL(value, eval_item(expr, symbols))
+                simplify(value);
+                
+                if ( value.is_literal() && value.as_int() < 0 )
+                {
+                    return Error(expr.position, "extent must be non-negative; found %d", (int)value.as_int());
+                }
+                return value;
+            }
+            else if ( rank.is_literal() )
+            {
+                TRY_DECL(items, eval_items(expr, symbols, rank.as_int()))
+                for ( auto& item : items )
+                {
+                    simplify(item);
+                    if ( item.is_literal() && item.as_int() < 0 )
+                    {
+                        return Error(expr.position, "extent must be non-negative; found %d", (int)item.as_int());
+                    }
+                }
+                auto type = eval_type(expr, symbols);
+                auto value = ValueExpr::list(std::move(items), type);
+                return value;
+            }
+            else    // spread
+            {
+                TRY_DECL(value, eval_pack(expr, symbols, rank))
+                if ( value.is_list() )
+                {
+                    for ( auto& item : value.as_list() )
+                    {
+                        simplify(item);
+                        if ( item.is_literal() && item.as_int() < 0 )
+                        {
+                            return Error(expr.position, "extent must be non-negative; found %d", (int)item.as_int());
+                        }
+                    }
+                }
+                else if ( value.is_uniform() )
+                {
+                    auto& item = value.as_uniform().value;
+                    simplify(item);
+                    if ( item.is_literal() && item.as_int() < 0 )
+                    {
+                        return Error(expr.position, "extent must be non-negative; found %d", (int)item.as_int());
+                    }
+                }
+                return value;
             }
         }
         
@@ -2853,13 +2977,30 @@ namespace sknd
                 {
                     auto& subscript = expr.as_subscript();
                     auto& pack = subscript.pack.is_reference() ? *subscript.pack.as_reference().target : subscript.pack;
-                    auto [idx_min, idx_max] = eval_shape_expr_bounds<int_t>(subscript.index, idx);
-                    auto [min, max] = eval_shape_expr_bounds<T>(pack.at(idx_min));
-                    for ( size_t i = idx_min + 1; i <= idx_max; ++i )
+                    if ( subscript.index.is_literal() )
                     {
-                        auto [item_min, item_max] = eval_shape_expr_bounds<T>(pack, i);
-                        max = std::max(max, item_max);
-                        min = std::min(min, item_min);
+                        return eval_shape_expr_bounds<T>(pack.at(subscript.index.as_int()));
+                    }
+                    else
+                    {
+                        return eval_shape_expr_bounds<T>(pack);
+                    }
+                }
+                case ValueExpr::Concat:
+                {
+                    auto& concat = expr.as_concat();
+                    auto [min, max] = eval_shape_expr_bounds<T>(concat.items.front());
+                    for ( size_t i = 1; i < concat.items.size(); ++i )
+                    {
+                        auto [item_min, item_max] = eval_shape_expr_bounds(concat.items[i]);
+                        if ( item_min < min )
+                        {
+                            min = item_min;
+                        }
+                        if ( item_max > max )
+                        {
+                            max = item_max;
+                        }
                     }
                     return std::make_pair(min, max);
                 }

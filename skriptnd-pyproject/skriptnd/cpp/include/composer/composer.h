@@ -3886,6 +3886,10 @@ namespace sknd
                 else if ( spread )
                 {
                     shape_value = shape[k];
+                    if ( !shape_value.packed() )
+                    {
+                        shape_value = ValueExpr::uniform(std::move(shape_value), size, count);
+                    }
                 }
                 else
                 {
@@ -4292,26 +4296,7 @@ namespace sknd
         Result<ValueExpr> eval_shape_expr( const Expr& expr, const Dict<Symbol>& symbols )
         {
             TRY_CALL(check_shape_expr(expr, symbols))
-            TRY_DECL(value, eval(expr, symbols))
-            simplify(value);
-            
-            if ( value.packed() )
-            {
-                for ( size_t i = 0; i < value.max_size(); ++i )
-                {
-                    auto val = value.at(i);
-                    if ( val.is_literal() && val.as_int() < 0 )
-                    {
-                        return Error(expr.position, "extent must be non-negative; found %d", (int)val.as_int());
-                    }
-                }
-            }
-            else if ( value.is_literal() && value.as_int() < 0 )
-            {
-                return Error(expr.position, "extent must be non-negative; found %d", (int)value.as_int());
-            }
-            
-            return value;
+            return Evaluation::eval_shape_expr(expr, symbols);
         }
         
         Result<void> check_shape_expr( const Expr& expr, const Dict<Symbol>& symbols )
@@ -4336,8 +4321,8 @@ namespace sknd
                         auto [min, max] = eval_shape_expr_bounds<real_t>(arg);
                         if ( min < 0 )
                         {
-                            report_warning(expr.position, "argument to function '%s' may become negative",
-                                           builtin.func.c_str());
+                            report_warning(expr.position, "argument to function '%s' may become negative (min = %d)",
+                                           builtin.func.c_str(), (int)min);
                         }
                     }
                 }
@@ -4409,11 +4394,11 @@ namespace sknd
             auto [min, max] = eval_shape_expr_bounds<int_t>(expr);
             if ( max < 0 )
             {
-                report_error(position, "shape expression is always negative");
+                report_error(position, "shape expression is always negative (max = %d)", (int)max);
             }
             if ( min < 0 )
             {
-                report_warning(position, "shape expression may become negative");
+                report_warning(position, "shape expression may become negative (min = %d)", (int)min);
             }
             return max;
         }
@@ -4455,11 +4440,11 @@ namespace sknd
                 
                 if ( max_extent < 0 )
                 {
-                    report_error(position, "shape expression at dimension %d is always negative", (int)i);
+                    report_error(position, "shape expression at dimension %d is always negative (max = %d)", (int)i, (int)max_extent);
                 }
                 if ( min_extent < 0 )
                 {
-                    report_warning(position, "shape expression at dimension %d may become negative", (int)i);
+                    report_warning(position, "shape expression at dimension %d may become negative (min = %d)", (int)i, (int)min_extent);
                 }
             }
             return max_shape;

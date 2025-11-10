@@ -1615,7 +1615,7 @@ namespace sknd
                         constant += 1;
                     }
                 }
-                return constant ? expr + constant : expr;
+                return expr == nullptr ? constant : expr + constant;
             }
             case Slice:
             {
@@ -1711,8 +1711,26 @@ namespace sknd
                 return ValueExpr(CastExpr{ cast.dtype, cast.arg.at(idx) }, dtype());
             }
             case Reference:
+            {
+                return ValueExpr(SubscriptExpr{ *this, ValueExpr((int_t)idx) }, dtype());
+            }
             case Concat:
             {
+                auto& concat = as_concat();
+                size_t offs = 0;
+                for ( auto& item : concat.items )
+                {
+                    if ( item.has_dynamic_size() )
+                    {
+                        break;
+                    }
+                    const size_t size = item.packed() ? item.max_size() : 1;
+                    if ( idx < offs + size )
+                    {
+                        return item.at(idx - offs);
+                    }
+                    offs += size;
+                }
                 return ValueExpr(SubscriptExpr{ *this, ValueExpr((int_t)idx) }, dtype());
             }
             case Slice:

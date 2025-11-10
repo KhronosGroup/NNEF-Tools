@@ -440,6 +440,61 @@ namespace sknd
                     }
                     break;
                 }
+                case ValueExpr::Fold:
+                {
+                    auto& fold = expr.as_fold();
+                    auto op = Lexer::operator_value(fold.op);
+                    if ( fold.pack.is_list() && fold.pack.as_list().size() <= 4 )
+                    {
+                        if constexpr( std::is_same_v<T,bool_t> )
+                        {
+                            if ( op == Lexer::Operator::And )
+                            {
+                                Poly<T> poly(true);
+                                for ( auto& term : fold.pack.as_list() )
+                                {
+                                    auto item = as_polynom<T>(term, ctx);
+                                    poly &= item;
+                                }
+                                return poly;
+                            }
+                            else if ( op == Lexer::Operator::Or )
+                            {
+                                Poly<T> poly(false);
+                                for ( auto& term : fold.pack.as_list() )
+                                {
+                                    auto item = as_polynom<T>(term, ctx);
+                                    poly |= item;
+                                }
+                                return poly;
+                            }
+                        }
+                        else
+                        {
+                            if ( op == Lexer::Operator::Plus )
+                            {
+                                Poly<T> poly(T(0));
+                                for ( auto& term : fold.pack.as_list() )
+                                {
+                                    auto item = as_polynom<T>(term, ctx);
+                                    poly += item;
+                                }
+                                return poly;
+                            }
+                            else if ( op == Lexer::Operator::Multiply )
+                            {
+                                Poly<T> poly(T(1));
+                                for ( auto& term : fold.pack.as_list() )
+                                {
+                                    auto item = as_polynom<T>(term, ctx);
+                                    poly *= item;
+                                }
+                                return poly;
+                            }
+                        }
+                    }
+                    break;
+                }
                 default:
                 {
                     break;
