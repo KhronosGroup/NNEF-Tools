@@ -1278,14 +1278,14 @@ namespace sknd
     template<>
     inline const ValueExpr& ValueExpr::positive_infinity<int_t>()
     {
-        static const ValueExpr inf(UnaryExpr{"int", positive_infinity()}, Typename::Int);
+        static const ValueExpr inf(CastExpr{Typename::Int, positive_infinity()}, Typename::Int);
         return inf;
     }
 
     template<>
     inline const ValueExpr& ValueExpr::negative_infinity<int_t>()
     {
-        static const ValueExpr inf(UnaryExpr{"int", negative_infinity()}, Typename::Int);
+        static const ValueExpr inf(CastExpr{Typename::Int, negative_infinity()}, Typename::Int);
         return inf;
     }
 

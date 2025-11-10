@@ -682,6 +682,10 @@ namespace sknd
                 case ValueExpr::Cast:
                 {
                     auto& cast = expr.as_cast();
+                    if ( cast.dtype == Typename::Int && cast.arg.is_infinity() )
+                    {
+                        break;
+                    }
                     auto& arg = cast.arg.is_uniform() ? cast.arg.as_uniform().value : cast.arg;
                     if ( arg.is_literal() )
                     {
