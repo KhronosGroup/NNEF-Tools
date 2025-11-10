@@ -573,6 +573,10 @@ namespace sknd
                         {
                             return Error(expr.position, "range begin and end must be explicitly supplied if stride depends on dynamic shapes");
                         }
+                        if ( stride == 0 )
+                        {
+                            return Error(expr.position, "zero stride in range");
+                        }
                         
                         ValueExpr first;
                         if ( range.first )

@@ -1314,49 +1314,6 @@ namespace sknd
         return is_fold() && as_fold().op == op;
     }
 
-
-    namespace detail
-    {
-    
-        template<typename T>
-        struct RangeCache
-        {
-            const ValueExpr& operator()( const T& value )
-            {
-                auto it = _cached.find(value);
-                if ( it == _cached.end() )
-                {
-                    it = _cached.emplace(value, ValueExpr(value)).first;
-                }
-                return it->second;
-            }
-            
-            std::unordered_map<T, ValueExpr> _cached;
-        };
-    
-        template<>
-        struct RangeCache<int_t>
-        {
-            const ValueExpr& operator()( const int_t& idx )
-            {
-                if ( _cached.size() <= idx )
-                {
-                    const size_t size = _cached.size();
-                    _cached.resize(idx + 1);
-                    for ( size_t i = size; i < _cached.size(); ++i )
-                    {
-                        _cached[i] = std::make_unique<ValueExpr>((int_t)i);
-                    }
-                }
-                return *_cached[idx];
-            }
-            
-            std::vector<std::unique_ptr<ValueExpr>> _cached;
-        };
-    
-    }   // namespace detail
-
-
     inline bool ValueExpr::is_dynamic() const
     {
         switch ( kind() )
@@ -1872,21 +1829,6 @@ namespace sknd
             {
                 auto& uniform = as_uniform();
                 return uniform.value;
-            }
-            case Range:
-            {
-                static detail::RangeCache<int_t> _int_cache;
-                static detail::RangeCache<int_t> _real_cache;
-                
-                auto& range = as_range();
-                if ( dtype() == Typename::Real )
-                {
-                    return _real_cache(range.first.as_real() + (real_t)i * range.stride.as_real());
-                }
-                else
-                {
-                    return _int_cache(range.first.as_int() + (int_t)i * range.stride.as_int());
-                }
             }
             default:
             {
