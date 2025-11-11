@@ -99,11 +99,11 @@ namespace sknd
                 auto it = dtypes.find(param.name);
                 if ( it != dtypes.end() )
                 {
-                    symbols.emplace(param.name, Symbol(ValueExpr(nullptr), it->second));
+                    symbols.emplace(param.name, Symbol(it->second, std::nullopt, Symbol::Dtype));
                 }
                 else if ( param.default_type )
                 {
-                    symbols.emplace(param.name, Symbol(ValueExpr(nullptr), *param.default_type));
+                    symbols.emplace(param.name, Symbol(*param.default_type, std::nullopt, Symbol::Dtype));
                 }
                 else
                 {
@@ -117,13 +117,13 @@ namespace sknd
                 if ( it != attribs.end() )
                 {
                     auto type = resolve_type(param, symbols);
-                    symbols.emplace(param.name, Symbol(it->second, type));
+                    symbols.emplace(param.name, Symbol(it->second, type, Symbol::Attrib));
                 }
                 else if ( param.default_value )
                 {
                     auto type = resolve_type(param, symbols);
                     TRY_DECL(value, eval(*param.default_value, {}))
-                    symbols.emplace(param.name, Symbol(value, type));
+                    symbols.emplace(param.name, Symbol(value, type, Symbol::Attrib));
                 }
                 else
                 {
@@ -142,7 +142,7 @@ namespace sknd
             {
                 auto type = resolve_type(param, symbols);
                 TRY_DECL(tensor, make_tensors_for_param(model.graphs.front(), param, symbols, type, scope, false))
-                symbols.emplace(param.name, Symbol(tensor, type));
+                symbols.emplace(param.name, Symbol(tensor, type, Symbol::Input));
                 add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), symbols);
             }
             
@@ -152,14 +152,14 @@ namespace sknd
             {
                 auto type = resolve_type(param, symbols);
                 TRY_DECL(tensor, make_tensors_for_param(model.graphs.front(), param, symbols, type, scope, false))
-                symbols.emplace(param.name, Symbol(tensor, type));
+                symbols.emplace(param.name, Symbol(tensor, type, Symbol::Constant));
                 add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), symbols);
             }
             for ( auto& param : main.variables )
             {
                 auto type = resolve_type(param, symbols);
                 TRY_DECL(tensor, make_tensors_for_param(model.graphs.front(), param, symbols, type, scope, true))
-                symbols.emplace(param.name, Symbol(tensor, type));
+                symbols.emplace(param.name, Symbol(tensor, type, Symbol::Variable));
                 add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), symbols);
             }
             
@@ -259,13 +259,13 @@ namespace sknd
                     {
                         items[i] = ValueExpr::placeholder(composed ? "" : next_placeholder_name(), items[i]);
                     }
-                    symbols.emplace(iden, Symbol(ValueExpr::list(std::move(items), Typename::Int), Typename::Int));
+                    symbols.emplace(iden, Symbol(ValueExpr::list(std::move(items), Typename::Int), Typename::Int, Symbol::Extent));
                 }
                 else
                 {
                     TRY_DECL(max_value, eval(bound, symbols))
                     auto value = ValueExpr::placeholder(composed ? "" : next_placeholder_name(), max_value);
-                    symbols.emplace(iden, Symbol(value, Typename::Int));
+                    symbols.emplace(iden, Symbol(value, Typename::Int, Symbol::Extent));
                 }
             }
             else
@@ -622,7 +622,7 @@ namespace sknd
                         var = make_tensor(*graph, tensor.dtype(), tensor.shape(), tensor.canonic_shape(), tensor.max_shape(), {}, {});
                     }
                     
-                    symbols.insert_or_assign(iden.name, Symbol(var, var.dtype()));
+                    symbols.insert_or_assign(iden.name, Symbol(var, var.dtype(), Symbol::Carried));
                     add_shape_symbols(iden.name, var.shape(), var.size_or_null(), symbols);
                     locals.push_back(var);
                 }
@@ -633,12 +633,12 @@ namespace sknd
                     if ( tensor != nullptr )
                     {
                         auto var = TensorRef(make_tensor(*graph, tensor.dtype(), tensor.shape(), tensor.canonic_shape(), tensor.max_shape(), {}, {}));
-                        symbols.insert_or_assign(iden, Symbol(var, tensor.dtype()));
+                        symbols.insert_or_assign(iden, Symbol(var, tensor.dtype(), Symbol::Scan));
                         locals.push_back(var);
                     }
                     else
                     {
-                        symbols.emplace(iden, Symbol(TensorRef(nullptr), Typename::Type));
+                        symbols.emplace(iden, Symbol(TensorRef(nullptr), Typename::Type, Symbol::Scan));
                         locals.push_back(nullptr);
                     }
                     add_shape_symbols(iden, tensor.shape(), tensor.size_or_null(), symbols);
@@ -654,7 +654,7 @@ namespace sknd
                 {
                     auto& iden = component.loop->index->name;
                     auto tensor = TensorRef(make_tensor(*graph, Typename::Int, {}, {}, {}, {}));
-                    symbols.insert_or_assign(iden, Symbol(tensor, Typename::Int));
+                    symbols.insert_or_assign(iden, Symbol(tensor, Typename::Int, Symbol::Index));
                     add_shape_symbols(iden, {}, symbols);
                     locals.push_back(tensor);
                     index = iden;
@@ -841,14 +841,14 @@ namespace sknd
                     if ( component.loop->index )
                     {
                         auto& iden = as_identifier(*component.loop->index).name;
-                        symbols.insert_or_assign(iden, Symbol(ValueExpr((int_t)i), Typename::Int));
+                        symbols.insert_or_assign(iden, Symbol(ValueExpr((int_t)i), Typename::Int, Symbol::Index));
                     }
                     
                     size_t j = 0;
                     for ( auto& [iden, expr] : component.loop->carries )
                     {
                         auto tensor = i == 0 ? inputs[j++] : outputs[j++];
-                        symbols.insert_or_assign(iden.name, Symbol(tensor, tensor.dtype()));
+                        symbols.insert_or_assign(iden.name, Symbol(tensor, tensor.dtype(), Symbol::Carried));
                         
                         if ( i == 0 )
                         {
@@ -858,7 +858,7 @@ namespace sknd
                     for ( auto& [iden, expr] : component.loop->scans )
                     {
                         TRY_DECL(tensor, eval(*expr, symbols, as_tensor(*graph), as_tensor_pack(*graph), i))
-                        symbols.insert_or_assign(iden, Symbol(tensor, tensor.dtype()));
+                        symbols.insert_or_assign(iden, Symbol(tensor, tensor.dtype(), Symbol::Scan));
                         
                         if ( i == 0 )
                         {
@@ -1310,7 +1310,7 @@ namespace sknd
             Dict<Symbol> locals;
             for ( auto& type : op.dtypes )
             {
-                locals.emplace(type.name, Symbol(ValueExpr(nullptr), types.at(type.name)));
+                locals.emplace(type.name, Symbol(types.at(type.name), std::nullopt, Symbol::Dtype));
             }
             
             TRY_DECL(inputs, eval_inputs(op.inputs, invocation.args, symbols, locals, context))
@@ -1323,7 +1323,7 @@ namespace sknd
                 {
                     auto& value = it->second;
                     auto type = resolve_type(param, locals);
-                    locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), value.size()));
+                    locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), value.size(), Symbol::Attrib));
                 }
             }
             
@@ -1332,7 +1332,7 @@ namespace sknd
                 const Param& param = op.inputs[i];
                 const TensorRef& input = inputs[i];
                 auto type = resolve_type(param, locals);
-                locals.emplace(param.name, Symbol(input, type));
+                locals.emplace(param.name, Symbol(input, type, Symbol::Input));
             }
             
             std::vector<Assertion> asserts;
@@ -1427,7 +1427,7 @@ namespace sknd
                 auto type = param.type_alias.empty() ? param.type.name : types.at(param.type_alias);
                 TRY_DECL(tensor, make_tensors_for_param(graph, param, locals, type, scope, false))
                 internals.push_back(tensor);
-                locals.emplace(param.name, Symbol(tensor, type));
+                locals.emplace(param.name, Symbol(tensor, type, Symbol::Constant));
                 add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), locals);
             }
             for ( auto& param : op.variables )
@@ -1435,7 +1435,7 @@ namespace sknd
                 auto type = param.type_alias.empty() ? param.type.name : types.at(param.type_alias);
                 TRY_DECL(tensor, make_tensors_for_param(graph, param, locals, type, scope, true))
                 internals.push_back(tensor);
-                locals.emplace(param.name, Symbol(tensor, type));
+                locals.emplace(param.name, Symbol(tensor, type, Symbol::Variable));
                 add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), locals);
             }
             
@@ -1495,7 +1495,7 @@ namespace sknd
                     auto& param = op.outputs[i];
                     auto& tensor = outputs[i];
                     auto type = param.type_alias.empty() ? param.type.name : types.at(param.type_alias);
-                    locals.emplace(param.name, Symbol(tensor, type));
+                    locals.emplace(param.name, Symbol(tensor, type, Symbol::Output));
                     add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), locals);
                 }
                 
@@ -1681,14 +1681,14 @@ namespace sknd
                                 
                                 if ( !item.name.empty() )
                                 {
-                                    symbols.insert_or_assign(item.name, Symbol(TensorRef(pack), result_type));
+                                    symbols.insert_or_assign(item.name, Symbol(TensorRef(pack), result_type, Symbol::Result));
                                 }
                             }
                             else
                             {
                                 if ( !item.name.empty() )
                                 {
-                                    symbols.insert_or_assign(item.name, Symbol(TensorRef((Tensor*)&output[k]), result_type));
+                                    symbols.insert_or_assign(item.name, Symbol(TensorRef((Tensor*)&output[k]), result_type, Symbol::Result));
                                 }
                             }
                             
@@ -1753,7 +1753,7 @@ namespace sknd
                     
                     if ( !item.name.empty() )
                     {
-                        symbols.insert_or_assign(item.name, Symbol(output, result_type));
+                        symbols.insert_or_assign(item.name, Symbol(output, result_type, Symbol::Result));
                     }
                     
                     if ( item.shape )
@@ -1787,21 +1787,21 @@ namespace sknd
         
         void add_shape_symbols( const std::string& name, const Shape& shape, const ValueExpr& size, Dict<Symbol>& symbols )
         {
-            symbols.insert_or_assign(name + ".shape", Symbol(ValueExpr(shape.data(), shape.size(), Typename::Int), Typename::Int));
-            symbols.insert_or_assign(name + ".rank", Symbol(ValueExpr((int_t)shape.size()), Typename::Int));
+            symbols.insert_or_assign(name + ".shape", Symbol(ValueExpr(shape.data(), shape.size(), Typename::Int), Typename::Int, Symbol::Extent));
+            symbols.insert_or_assign(name + ".rank", Symbol(ValueExpr((int_t)shape.size()), Typename::Int, Symbol::Extent));
             if ( size != nullptr )
             {
-                symbols.insert_or_assign(name + ".size", Symbol(size, Typename::Int));
+                symbols.insert_or_assign(name + ".size", Symbol(size, Typename::Int, Symbol::Extent));
             }
         }
         
         void add_shape_symbols( const std::string& name, bool packed, Dict<Symbol>& symbols )
         {
-            symbols.insert_or_assign(name + ".shape", Symbol(ValueExpr(nullptr), Typename::Type));
-            symbols.insert_or_assign(name + ".rank", Symbol(ValueExpr(nullptr), Typename::Type));
+            symbols.insert_or_assign(name + ".shape", Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Extent));
+            symbols.insert_or_assign(name + ".rank", Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Extent));
             if ( packed )
             {
-                symbols.insert_or_assign(name + ".size", Symbol(ValueExpr(nullptr), Typename::Type));
+                symbols.insert_or_assign(name + ".size", Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Extent));
             }
         }
         
@@ -2178,7 +2178,7 @@ namespace sknd
                     TRY_DECL(value, eval(*param.default_value, locals))
                     auto type = resolve_type(param, locals);
                     inputs[i] = make_constant(graph, value, type);
-                    locals.insert_or_assign(param.name, Symbol(inputs[i], type));
+                    locals.insert_or_assign(param.name, Symbol(inputs[i], type, Symbol::Input));
                 }
             }
             return {};
@@ -2468,7 +2468,7 @@ namespace sknd
                     }
                     
                     auto type = resolve_type(param, locals);
-                    locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), value.size()));
+                    locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), value.size(), Symbol::Attrib));
                     attribs.emplace(param.name, value);
                 }
                 if ( param.repeats )
@@ -2486,7 +2486,7 @@ namespace sknd
                         auto& iden = Typing::find_affine_id(*param.repeats);
                         if ( !iden.empty() && !locals.count(iden) )
                         {
-                            locals.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Int));
+                            locals.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Int, Symbol::Attrib));
                         }
                     }
                 }
@@ -2519,7 +2519,7 @@ namespace sknd
                     }
                     if ( it == locals.end() )
                     {
-                        locals.emplace(iden, Symbol(value, Typename::Int));
+                        locals.emplace(iden, Symbol(value, Typename::Int, Symbol::Extent));
                     }
                     else if ( symbol.packed() )
                     {
@@ -2629,7 +2629,7 @@ namespace sknd
         
         Result<void> eval_using( const Using& usage, Dict<Symbol>& symbols )
         {
-            static Symbol NullSymbol = Symbol(ValueExpr(nullptr), Typename::Type);
+            static Symbol NullSymbol = Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Using);
             
             std::optional<size_t> result_rank;
             TRY_DECL(value, eval_optional(*usage.expr, symbols))
@@ -2655,20 +2655,20 @@ namespace sknd
                             auto item_rank = (int_t)rank / item_count;
                             for ( size_t i = 0; i < item_count; ++i )
                             {
-                                auto symbol = value == nullptr ? NullSymbol : Symbol(ValueExpr(ptr + i, item_rank, item_count, type), type);
+                                auto symbol = value == nullptr ? NullSymbol : Symbol(ValueExpr(ptr + i, item_rank, item_count, type), type, Symbol::Using);
                                 symbols.emplace(as_identifier(*zip.items[i]).name, symbol);
                             }
                         }
                         else
                         {
-                            auto symbol = value == nullptr ? NullSymbol : Symbol(ValueExpr(ptr, rank.as_int(), type), type);
+                            auto symbol = value == nullptr ? NullSymbol : Symbol(ValueExpr(ptr, rank.as_int(), type), type, Symbol::Using);
                             symbols.emplace(as_identifier(*expand.item).name, symbol);
                         }
                         k += rank.as_int();
                     }
                     else
                     {
-                        auto symbol = value == nullptr ? NullSymbol : Symbol(value[k++], type);
+                        auto symbol = value == nullptr ? NullSymbol : Symbol(value[k++], type, Symbol::Using);
                         symbols.emplace(as_identifier(*item).name, symbol);
                     }
                 }
@@ -2691,7 +2691,7 @@ namespace sknd
                     TRY_MOVE(result_rank, eval_rank_max<true>(*usage.expr, symbols))
                 }
                 TRY_DECL(size, eval_rank<true>(*usage.expr, symbols))
-                auto symbol = value == nullptr ? NullSymbol : Symbol(value, type, result_rank, size);
+                auto symbol = value == nullptr ? NullSymbol : Symbol(value, type, result_rank, size, Symbol::Using);
                 symbols.emplace(iden.name, symbol);
             }
             if ( value.packed() && result_rank && *result_rank != value.max_size() )
@@ -2734,13 +2734,13 @@ namespace sknd
             for ( auto& [iden, expr] : lowering.bounds )
             {
                 TRY_DECL(rank, eval_rank_static(*expr, symbols))
-                _symbols.emplace(iden, Symbol(LoopIndex{}, rank));
+                _symbols.emplace(iden, Symbol(Typename::Int, rank, Symbol::Index));
             }
             for ( auto& [iden, expr] : lowering.locals )
             {
                 const Typename type = eval_type(*expr, symbols);
-                TRY_DECL(rank, eval_rank_max(*expr, symbols))
-                _symbols.emplace(iden, Symbol(LoopLocal(), type, rank));
+                TRY_DECL(rank, eval_rank_static(*expr, symbols))
+                _symbols.emplace(iden, Symbol(type, rank, Symbol::Local));
             }
             
             auto type = eval_type(*lowering.right, symbols);
@@ -2818,7 +2818,7 @@ namespace sknd
             
             for ( size_t i = 0; i < count.as_int(); ++i )
             {
-                _symbols.insert_or_assign(lowering.unroll_index, Symbol(ValueExpr((int_t)i), Typename::Int));
+                _symbols.insert_or_assign(lowering.unroll_index, Symbol(ValueExpr((int_t)i), Typename::Int, Symbol::Index));
                 
                 TRY_CALL(eval_lowering(lowering, symbols, graph, contractions))
             }
@@ -2851,14 +2851,14 @@ namespace sknd
                     bounds.push_back(std::make_pair(iden, simplified(std::move(value))));
                 }
                 
-                _symbols.emplace(iden, Symbol(LoopIndex{}, rank));
+                _symbols.emplace(iden, Symbol(Typename::Int, rank, Symbol::Index));
             }
             
             std::vector<std::pair<std::string,ValueExpr>> locals;
             for ( auto& [iden, expr] : lowering.locals )
             {
                 const Typename type = eval_type(*expr, symbols);
-                TRY_DECL(rank, eval_rank_max(*expr, symbols))
+                TRY_DECL(rank, eval_rank_static(*expr, symbols))
                 if ( rank )
                 {
                     TRY_DECL(value, eval_items(*expr, symbols, *rank))
@@ -2872,7 +2872,7 @@ namespace sknd
                     TRY_DECL(value, eval(*expr, symbols))
                     locals.emplace_back(iden, simplified(std::move(value)));
                 }
-                _symbols.emplace(iden, Symbol(LoopLocal(), type, rank));
+                _symbols.emplace(iden, Symbol(type, rank, Symbol::Local));
             }
             
             TRY_DECL(is_null, eval_null(*lowering.right, symbols))
@@ -3323,7 +3323,7 @@ namespace sknd
                     limits[k] = bound.as_int();
                 }
                 
-                Symbol symbol(bound.packed() ? ValueExpr::list((int_t)0, bound.max_size()) : ValueExpr((int_t)0), Typename::Int);
+                Symbol symbol(bound.packed() ? ValueExpr::list((int_t)0, bound.max_size()) : ValueExpr((int_t)0), Typename::Int, Symbol::Index);
                 auto [it,_] = const_cast<Dict<Symbol>&>(symbols).emplace(bounds[i].first, std::move(symbol));
                 
                 auto& value = it->second.as<ValueExpr>();
@@ -3595,7 +3595,7 @@ namespace sknd
                     auto& iden = Typing::find_affine_id(*param.repeats);
                     if ( !iden.empty() )
                     {
-                        symbols.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Type));
+                        symbols.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Extent));
                     }
                 }
                 else if ( tensor.packed() )
@@ -3606,11 +3606,11 @@ namespace sknd
                         auto pack = tensor.as<TensorPack*>();
                         if ( pack->size.is_literal() )
                         {
-                            symbols.emplace(iden, Symbol(ValueExpr(count), Typename::Int));
+                            symbols.emplace(iden, Symbol(ValueExpr(count), Typename::Int, Symbol::Extent));
                         }
                         else
                         {
-                            symbols.emplace(iden, Symbol(ValueExpr(SizeAccess{ pack }), Typename::Int));
+                            symbols.emplace(iden, Symbol(ValueExpr(SizeAccess{ pack }), Typename::Int, Symbol::Extent));
                         }
                     }
                 }
@@ -3626,7 +3626,7 @@ namespace sknd
                 if ( param.rank )
                 {
                     auto& iden = as_identifier(*param.rank).name;
-                    symbols.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Type));
+                    symbols.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Extent));
                 }
                 
                 deduce_null_ranks(param, symbols);
@@ -3642,7 +3642,7 @@ namespace sknd
                 if ( param.rank )
                 {
                     auto& iden = as_identifier(*param.rank).name;
-                    symbols.emplace(iden, Symbol(ValueExpr((int_t)tensor.rank()), Typename::Int));
+                    symbols.emplace(iden, Symbol(ValueExpr((int_t)tensor.rank()), Typename::Int, Symbol::Extent));
                 }
                 
                 TRY_CALL(deduce_ranks(param, tensor.rank(), position, symbols))
@@ -3674,12 +3674,12 @@ namespace sknd
                             auto it = symbols.find(iden);
                             if ( it == symbols.end() )
                             {
-                                symbols.emplace(iden, Symbol(ValueExpr(value), Typename::Int));
+                                symbols.emplace(iden, Symbol(ValueExpr(value), Typename::Int, Symbol::Extent));
                                 excess = 0;
                             }
                             else if ( it->second.as<ValueExpr>() == nullptr )
                             {
-                                it->second = Symbol(ValueExpr(value), Typename::Int);
+                                it->second = Symbol(ValueExpr(value), Typename::Int, Symbol::Extent);
                                 excess = 0;
                             }
                         }
@@ -3704,7 +3704,7 @@ namespace sknd
                             auto it = symbols.find(iden);
                             if ( it == symbols.end() )
                             {
-                                symbols.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Type));
+                                symbols.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Extent));
                             }
                         }
                     }
@@ -3727,7 +3727,7 @@ namespace sknd
                             auto it = symbols.find(iden);
                             if ( it == symbols.end() )
                             {
-                                symbols.emplace(iden, Symbol(ValueExpr((int_t)0), Typename::Int));
+                                symbols.emplace(iden, Symbol(ValueExpr((int_t)0), Typename::Int, Symbol::Extent));
                             }
                         }
                     }
@@ -3916,22 +3916,22 @@ namespace sknd
                         {
                             auto shape_expr = make_shape_access_exprs(value, tensor, k, true);
                             auto size_expr = make_size_access_expr(size, tensor);
-                            symbols.emplace(iden, Symbol(shape_expr, Typename::Int, count, size_expr));
+                            symbols.emplace(iden, Symbol(shape_expr, Typename::Int, count, size_expr, Symbol::Extent));
                         }
                         else if ( value == nullptr )
                         {
-                            symbols.emplace(iden, Symbol(value, Typename::Int));
+                            symbols.emplace(iden, Symbol(value, Typename::Int, Symbol::Extent));
                         }
                         else
                         {
                             auto shape_expr = make_shape_access_exprs(value, tensor, k);
-                            symbols.emplace(iden, Symbol(shape_expr, Typename::Int));
+                            symbols.emplace(iden, Symbol(shape_expr, Typename::Int, Symbol::Extent));
                         }
                     }
                     else if ( it->second.is<ValueExpr>() && it->second.as<ValueExpr>() == nullptr && value != nullptr )
                     {
                         auto shape_expr = make_shape_access_exprs(value, tensor, k);
-                        it->second = Symbol(shape_expr, Typename::Int);
+                        it->second = Symbol(shape_expr, Typename::Int, Symbol::Extent);
                     }
                     else if ( it->second.is<ValueExpr>() && is_literal(value) && it->second.as<ValueExpr>() != value )
                     {
@@ -4024,7 +4024,7 @@ namespace sknd
                     auto it = symbols.find(iden);
                     if ( it == symbols.end() )
                     {
-                        symbols.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Type));
+                        symbols.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Extent));
                     }
                 }
             }
@@ -4045,7 +4045,7 @@ namespace sknd
                     {
                         if ( expand )
                         {
-                            symbols.emplace(iden, Symbol(ValueExpr(nullptr, 0, Typename::Int), Typename::Int));
+                            symbols.emplace(iden, Symbol(ValueExpr(nullptr, 0, Typename::Int), Typename::Int, Symbol::Extent));
                         }
                         else
                         {

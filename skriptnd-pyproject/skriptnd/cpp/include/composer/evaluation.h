@@ -74,28 +74,31 @@ namespace sknd
         
     protected:
         
-        struct LoopIndex {};
-        struct LoopLocal {};
+        struct Valueless {};
         
-        struct Symbol : public std::variant<ValueExpr,TensorRef,LoopIndex,LoopLocal>
+        struct Symbol : public std::variant<ValueExpr,TensorRef,Valueless>
         {
-            typedef std::variant<ValueExpr,TensorRef,LoopIndex,LoopLocal> variant_type;
+            enum Kind
+            {
+                Dtype, Attrib, Input, Output, Variable, Constant, Using, Result, Extent, Index, Carried, Scan, Local,
+            };
+            
+            typedef std::variant<ValueExpr,TensorRef,Valueless> variant_type;
             
             Typename type;
             std::optional<size_t> rank;
             ValueExpr size;
+            Kind kind;
             
-            Symbol( const ValueExpr& value, const Typename type )
-                : variant_type(value), type(type), rank(value.max_size_or_null()), 
-                  size(value.packed() ? ValueExpr((int_t)value.max_size()) : ValueExpr(nullptr)) {}
-            Symbol( const ValueExpr& value, const Typename type, std::optional<size_t> rank, const ValueExpr& size )
-                : variant_type(value), type(type), rank(rank), size(size) {}
-            Symbol( const TensorRef& tensor, const Typename type )
-                : variant_type(tensor), type(type), rank(tensor.max_size_or_null()), size(tensor.size_or_null()) {}
-            Symbol( const LoopIndex& index, std::optional<size_t> rank )
-                : variant_type(index), type(Typename::Int), rank(rank), size(rank ? (int_t)*rank : ValueExpr(nullptr)) {}
-            Symbol( const LoopLocal& local, const Typename type, std::optional<size_t> rank = std::nullopt )
-                : variant_type(local), type(type), rank(rank), size(rank ? ValueExpr((int_t)*rank) : nullptr) {}
+            Symbol( const ValueExpr& value, const Typename type, const Kind kind )
+                : variant_type(value), type(type), rank(value.max_size_or_null()),
+                  size(value.packed() ? ValueExpr((int_t)value.max_size()) : ValueExpr(nullptr)), kind(kind) {}
+            Symbol( const ValueExpr& value, const Typename type, std::optional<size_t> rank, const ValueExpr& size, const Kind kind )
+                : variant_type(value), type(type), rank(rank), size(size), kind(kind) {}
+            Symbol( const TensorRef& tensor, const Typename type, const Kind kind )
+                : variant_type(tensor), type(type), rank(tensor.max_size_or_null()), size(tensor.size_or_null()), kind(kind) {}
+            Symbol( const Typename type, std::optional<size_t> rank, const Kind kind )
+                : variant_type(Valueless()), type(type), rank(rank), size(rank ? ValueExpr((int_t)*rank) : nullptr), kind(kind) {}
             
             template<typename T>
             bool is() const
@@ -123,6 +126,11 @@ namespace sknd
             bool is_null() const
             {
                 return is<ValueExpr>() ? as<ValueExpr>() == nullptr : is<TensorRef>() ? as<TensorRef>() == nullptr : false;
+            }
+            
+            bool is_runtime() const
+            {
+                return is<Valueless>() && (kind == Index || kind == Local);
             }
         };
         
@@ -528,13 +536,14 @@ namespace sknd
                         items[i] = std::move(item);
                     }
                     
-                    if ( std::all_of(items.begin(), items.end(), []( const ValueExpr& x ){ return is_literal(x); }) )
+                    auto can_unroll = []( const ValueExpr& x ){ return !x.packed() || x.is_list() || x.is_uniform(); };
+                    if ( std::all_of(items.begin(), items.end(), can_unroll) )
                     {
                         std::vector<ValueExpr> values(size);
                         size_t k = 0;
                         for ( auto& item : items )
                         {
-                            if ( item.is_literal() )
+                            if ( !item.packed() )
                             {
                                 values[k++] = std::move(item);
                             }
@@ -882,11 +891,10 @@ namespace sknd
         static Result<ValueExpr> eval_item( const IdentifierExpr& iden, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
             auto& symbol = symbols.at(iden.name);
-            if ( symbol.is<LoopIndex>() || symbol.is<LoopLocal>() )
+            if ( symbol.is_runtime() )
             {
-                return ValueExpr::identifier(symbol.packed() ? iden.name + "_" + std::to_string(*idx + 1) : iden.name, 
-                                             symbol.is<LoopIndex>() ? ValueExpr::IdentifierKind::LoopIndex : ValueExpr::IdentifierKind::LoopLocal,
-                                             symbol.type);
+                auto kind = symbol.kind == Symbol::Index ? ValueExpr::IdentifierKind::LoopIndex : ValueExpr::IdentifierKind::LoopLocal;
+                return ValueExpr::identifier(symbol.packed() ? iden.name + "_" + std::to_string(*idx + 1) : iden.name, kind, symbol.type);
             }
             auto& value = symbol.as<ValueExpr>();
             if ( value.packed() )
@@ -3066,7 +3074,7 @@ namespace sknd
                 case Expr::Identifier:
                 {
                     auto it = symbols.find(as_identifier(expr).name);
-                    return it != symbols.end() && (it->second.is<TensorRef>() || it->second.is<LoopLocal>());
+                    return it != symbols.end() && (it->second.is<TensorRef>() || it->second.is_runtime());
                 }
                 case Expr::Unary:
                 {
@@ -3096,6 +3104,11 @@ namespace sknd
             return std::all_of(exprs.begin(), exprs.end(), []( const ValueExpr& x ){ return x.is_literal(); });
         }
         
+        static bool is_shape_access( const std::vector<ValueExpr>& exprs )
+        {
+            return std::all_of(exprs.begin(), exprs.end(), []( const ValueExpr& x ){ return x.is_shape_access(); });
+        }
+        
         static bool is_literal( const ValueExpr& expr )
         {
             if ( expr.is_list() )
@@ -3109,6 +3122,21 @@ namespace sknd
                 return uniform.value.is_literal() && uniform.size.is_literal();
             }
             return expr.is_literal();
+        }
+        
+        static bool is_shape_access( const ValueExpr& expr )
+        {
+            if ( expr.is_list() )
+            {
+                auto& items = expr.as_list();
+                return is_shape_access(items);
+            }
+            else if ( expr.is_uniform() )
+            {
+                auto& uniform = expr.as_uniform();
+                return uniform.value.is_shape_access() && uniform.size.is_literal();
+            }
+            return expr.is_shape_access();
         }
         
         static bool is_implicit_constant( const TensorRef& tensor )
@@ -3372,14 +3400,6 @@ namespace sknd
             return any_of(expr, [&]( const Expr& e )
             {
                 return e.kind == Expr::Identifier && !symbols.count(as_identifier(e).name);
-            });
-        }
-        
-        static bool has_loop_index_symbols( const Expr& expr, const Dict<Symbol>& symbols )
-        {
-            return any_of(expr, [&]( const Expr& e )
-            {
-                return e.kind == Expr::Identifier && symbols.at(as_identifier(e).name).is<LoopIndex>();
             });
         }
         
