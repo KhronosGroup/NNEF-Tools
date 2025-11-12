@@ -420,17 +420,17 @@ namespace sknd
         
         os << indentation << '{' << std::endl;
         
+        for ( auto& [name, expr] : op.subexprs )
+        {
+            os << indentation << '\t' << name << " = " << expr << std::endl;
+        }
         for ( auto& assert : op.asserts )
         {
-            os << indentation << "assert " << assert << ";" << std::endl;
+            os << indentation << '\t' << "assert " << assert << ";" << std::endl;
         }
         
         if ( op.nodes == 1 )
         {
-            for ( auto& [name, expr] : op.subexprs )
-            {
-                os << indentation << '\t' << name << " = " << expr << std::endl;
-            }
             for ( auto& contraction : op.contractions )
             {
                 os << sknd::indent(indent + 1) << contraction << std::endl;
