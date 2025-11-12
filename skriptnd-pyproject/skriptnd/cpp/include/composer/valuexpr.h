@@ -1981,7 +1981,7 @@ namespace sknd
 
     inline std::ostream& operator<<( std::ostream& os, const ValueExpr::ReferenceExpr& ref )
     {
-        os << ref.name;
+        os << '*' << ref.name;
         return os;
     }
 
