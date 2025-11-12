@@ -3320,18 +3320,18 @@ namespace sknd
             return shape;
         }
         
-        static void resolve( Shape& shape )
+        static void resolve( Shape& shape, const unsigned flags = ResolveAll )
         {
             for ( auto& item : shape )
             {
-                resolve(item);
+                resolve(item, flags);
             }
         }
         
-        static Shape resolved( const Shape& shape )
+        static Shape resolved( const Shape& shape, const unsigned flags = ResolveAll )
         {
             Shape resolved = shape;
-            resolve(resolved);
+            resolve(resolved, flags);
             return resolved;
         }
         

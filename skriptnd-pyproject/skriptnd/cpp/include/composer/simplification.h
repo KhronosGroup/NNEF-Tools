@@ -42,6 +42,13 @@ namespace sknd
         
     public:
         
+        static const unsigned ResolveSizeAccess = 0x01;
+        static const unsigned ResolveShapeAccess = 0x02;
+        static const unsigned ResolveReference = 0x04;
+        static const unsigned ResolveAll = ResolveSizeAccess | ResolveShapeAccess | ResolveReference;
+        
+    public:
+        
         template<bool Recursive = true>
         static void simplify( ValueExpr& expr )
         {
@@ -86,55 +93,77 @@ namespace sknd
             return expr;
         }
         
-        static void resolve( ValueExpr& expr )
+        static void resolve( ValueExpr& expr, const unsigned flags = ResolveAll )
         {
-            preorder_traverse(expr, []( ValueExpr& x )
+            postorder_traverse(expr, [flags]( ValueExpr& x )
             {
-                if ( x.is_size_access() )
+                switch ( x.kind() )
                 {
-                    auto& access = x.as_size_access();
-                    x = access.pack.canonic_size();
-                }
-                else if ( x.is_shape_access() )
-                {
-                    auto& access = x.as_shape_access();
-                    if ( access.dim.is_literal() )
+                    case ValueExpr::SizeAccess:
                     {
-                        auto tensor = access.tensor;
-                        if ( access.item == nullptr )
+                        if ( flags & ResolveSizeAccess )
                         {
-                            bool packed = x.packed();
-                            x = tensor.canonic_shape()[access.dim.as_int()];
-                            if ( packed && !x.packed() )
+                            auto& access = x.as_size_access();
+                            x = access.pack.canonic_size();
+                            resolve(x, flags);
+                        }
+                        break;
+                    }
+                    case ValueExpr::ShapeAccess:
+                    {
+                        if ( flags & ResolveShapeAccess )
+                        {
+                            auto& access = x.as_shape_access();
+                            if ( access.dim.is_literal() )
                             {
-                                x = ValueExpr::uniform(x, tensor.size(), tensor.max_size());
+                                auto tensor = access.tensor;
+                                if ( access.item == nullptr )
+                                {
+                                    bool packed = x.packed();
+                                    x = tensor.canonic_shape()[access.dim.as_int()];
+                                    if ( packed && !x.packed() )
+                                    {
+                                        x = ValueExpr::uniform(x, tensor.size(), tensor.max_size());
+                                    }
+                                    resolve(x, flags);
+                                }
+                                else if ( access.item.is_literal() )
+                                {
+                                    x = tensor[access.item.as_int()].canonic_shape[access.dim.as_int()];
+                                    resolve(x, flags);
+                                }
                             }
                         }
-                        else if ( access.item.is_literal() )
-                        {
-                            x = tensor[access.item.as_int()].canonic_shape[access.dim.as_int()];
-                        }
+                        break;
                     }
-                }
-                else if ( x.is_reference() )
-                {
-                    auto& reference = x.as_reference();
-                    x = *reference.target;
-                    resolve(x);
+                    case ValueExpr::Reference:
+                    {
+                        if ( flags & ResolveReference )
+                        {
+                            auto& reference = x.as_reference();
+                            x = *reference.target;
+                            resolve(x, flags);
+                        }
+                        break;
+                    }
+                    default:
+                    {
+                        break;
+                    }
                 }
             });
         }
         
-        static ValueExpr resolved( const ValueExpr& expr )
+        static ValueExpr resolved( const ValueExpr& expr, const unsigned flags = ResolveAll )
         {
             auto resolved = expr;
-            resolve(resolved);
+            resolve(resolved, flags);
             return resolved;
         }
         
-        static ValueExpr resolved( ValueExpr&& expr )
+        static ValueExpr resolved( ValueExpr&& expr, const unsigned flags = ResolveAll )
         {
-            resolve(expr);
+            resolve(expr, flags);
             return expr;
         }
         
