@@ -1441,6 +1441,13 @@ namespace sknd
             
             TRY_CALL(add_placeholder_symbols(op.outputs, locals, !op.components.empty()))
             
+            std::vector<ValueExpr::ReferenceExpr*> references;
+            collect_references(attribs, locals, references);
+            collect_references(asserts, locals, references);
+            collect_references(internals, locals, references);
+            
+            bool extrinsic = op.components.empty() && op.lowerings.empty();
+            
             if ( !op.components.empty() )
             {
                 bool inlined = op.name.front() == '_';
@@ -1448,7 +1455,7 @@ namespace sknd
                 const size_t op_idx = graph.operations.size();
                 if ( !inlined )
                 {
-                    graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, {}, internals, {}, asserts, {}, 0, false });
+                    graph.operations.push_back(Operation{ invocation.target });
                 }
                 
                 const bool propagate_label = can_propagate_label(op, locals);
@@ -1459,13 +1466,16 @@ namespace sknd
                 
                 auto outputs = list_tensors(op.outputs, locals);
                 TRY_CALL(check_outputs(op.outputs, outputs, locals))
+                collect_references(outputs, locals, references);
                 
                 auto& graph = model.graphs[graph_idx];                      // get graph again based on index as it may be invalidated by compose()
                 
                 if ( !inlined )
                 {
-                    graph.operations[op_idx].outputs = outputs;
-                    graph.operations[op_idx].nodes = graph.operations.size() - op_idx;
+                    auto subexprs = make_subexprs(references);
+                    auto nodes = graph.operations.size() - op_idx;
+                    graph.operations[op_idx] = Operation{ invocation.target, std::move(types), attribs, inputs, outputs, std::move(internals),
+                                                          {}, std::move(asserts), std::move(subexprs), nodes, extrinsic };
                 }
                 
                 auto& parent = graph.operations[op_idx];
@@ -1481,7 +1491,7 @@ namespace sknd
                 
                 if ( op.graph )
                 {
-                    graph.asserts = std::move(asserts);
+                    graph.asserts = graph.operations[op_idx].asserts;
                 }
 
                 return std::make_tuple(std::move(attribs), std::move(inputs), std::move(outputs));
@@ -1489,6 +1499,7 @@ namespace sknd
             else
             {
                 TRY_DECL(outputs, eval_outputs(graph, op.outputs, locals, types, invocation.position, scope))
+                collect_references(outputs, locals, references);
                 
                 for ( size_t i = 0; i < outputs.size(); ++i )
                 {
@@ -1500,11 +1511,13 @@ namespace sknd
                 }
                 
                 TRY_DECL(contractions, eval_lowerings(op.lowerings, locals, graph))
-                auto subexprs = make_subexprs(collect_references(asserts, contractions, outputs, locals));
+                collect_references(contractions, locals, references);
+                
+                auto subexprs = make_subexprs(references);
                 bool extrinsic = op.lowerings.empty();
                 
-                graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, outputs, internals,
-                                                      contractions, asserts, std::move(subexprs), 1, extrinsic });
+                graph.operations.push_back(Operation{ invocation.target, std::move(types), attribs, inputs, outputs, std::move(internals),
+                                                      std::move(contractions), std::move(asserts), std::move(subexprs), 1, extrinsic });
                 
                 return std::make_tuple(std::move(attribs), std::move(inputs), std::move(outputs));
             }
@@ -1543,12 +1556,9 @@ namespace sknd
             });
         }
         
-        static std::vector<ValueExpr::ReferenceExpr*> collect_references( const std::vector<Assertion>& asserts,
-                                                                         const std::vector<Contraction>& contractions,
-                                                                         const std::vector<TensorRef>& outputs,
-                                                                         const Dict<Symbol>& symbols )
+        static void collect_references( const std::vector<Contraction>& contractions, const Dict<Symbol>& symbols,
+                                       std::vector<ValueExpr::ReferenceExpr*>& references )
         {
-            std::vector<ValueExpr::ReferenceExpr*> references;
             for ( auto& contraction : contractions )
             {
                 collect_references(contraction.left, symbols, references);
@@ -1562,26 +1572,53 @@ namespace sknd
                     collect_references(expr, symbols, references);
                 }
             }
-            for ( auto& output : outputs )
+        }
+        
+        static void collect_references( const std::vector<TensorRef>& tensors, const Dict<Symbol>& symbols,
+                                       std::vector<ValueExpr::ReferenceExpr*>& references )
+        {
+            for ( auto& tensor : tensors )
             {
-                for ( auto& expr : output.shape() )
+                for ( auto& expr : tensor.shape() )
                 {
                     collect_references(expr, symbols, references);
                 }
             }
+        }
+        
+        static void collect_references( const std::vector<Assertion>& asserts, const Dict<Symbol>& symbols,
+                                       std::vector<ValueExpr::ReferenceExpr*>& references )
+        {
             for ( auto& assert : asserts )
             {
                 collect_references(assert.condition, symbols, references);
+                for ( auto& expr : assert.args )
+                {
+                    collect_references(expr, symbols, references);
+                }
             }
-            return references;
         }
         
-        static void collect_references( const ValueExpr& expr, const Dict<Symbol>& symbols, std::vector<ValueExpr::ReferenceExpr*>& references )
+        static void collect_references( const Dict<ValueExpr>& values, const Dict<Symbol>& symbols,
+                                       std::vector<ValueExpr::ReferenceExpr*>& references )
+        {
+            for ( auto& [id, expr] : values )
+            {
+                collect_references(expr, symbols, references);
+            }
+        }
+        
+        static void collect_references( const ValueExpr& expr, const Dict<Symbol>& symbols, 
+                                       std::vector<ValueExpr::ReferenceExpr*>& references )
         {
             recurse(expr, [&]( const ValueExpr& x ){ collect_references(x, symbols, references); }, true);
             if ( expr.is_reference() )
             {
-                references.push_back(const_cast<ValueExpr::ReferenceExpr*>(&expr.as_reference()));
+                auto& reference = expr.as_reference();
+                if ( std::find(references.begin(), references.end(), &reference) == references.end() )
+                {
+                    references.push_back(const_cast<ValueExpr::ReferenceExpr*>(&reference));
+                }
             }
         }
         
