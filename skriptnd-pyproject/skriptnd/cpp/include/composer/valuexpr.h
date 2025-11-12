@@ -1669,7 +1669,7 @@ namespace sknd
             }
             case Reference:
             {
-                return ValueExpr(SubscriptExpr{ *this, ValueExpr((int_t)idx) }, dtype());
+                return packed() ? ValueExpr(SubscriptExpr{ *this, ValueExpr((int_t)idx) }, dtype()) : *this;
             }
             case Concat:
             {
