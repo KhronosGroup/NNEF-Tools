@@ -1353,7 +1353,7 @@ namespace sknd
                 TRY_DECL(left, eval_item(*expr.left, symbols, idx, cache))
                 TRY_DECL(right, eval_item(*expr.right, symbols, idx, cache))
                 
-                return ValueExpr(left == right);
+                return ValueExpr(canonical(left) == canonical(right));
             }
         }
         
