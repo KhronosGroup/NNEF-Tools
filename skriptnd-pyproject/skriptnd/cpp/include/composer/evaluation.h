@@ -504,9 +504,24 @@ namespace sknd
                 {
                     auto& select = as_select(expr);
                     TRY_DECL(cond, eval(*select.cond, symbols))
-                    if ( cond.is_literal() )
+                    if ( is_literal(cond) )
                     {
-                        return eval(cond.as_bool() ? *select.left : *select.right, symbols);
+                        if ( cond.packed() )
+                        {
+                            Cache cache;
+                            std::vector<ValueExpr> items(cond.max_size());
+                            for ( size_t i = 0; i < items.size(); ++i )
+                            {
+                                TRY_DECL(item, eval_item(cond[i].as_bool() ? *select.left : *select.right, symbols, i, &cache))
+                                items[i] = std::move(item);
+                            }
+                            auto type = eval_type(expr, symbols);
+                            return ValueExpr::list(std::move(items), type);
+                        }
+                        else
+                        {
+                            return eval(cond.as_bool() ? *select.left : *select.right, symbols);
+                        }
                     }
                     TRY_DECL(left, eval(*select.left, symbols))
                     TRY_DECL(right, eval(*select.right, symbols))
