@@ -61,7 +61,8 @@ namespace sknd
         
         OrderedDict& operator=( const OrderedDict& other )
         {
-            _items = other._items;
+            _items.~container_type();
+            new(&_items) container_type(other._items);
             return *this;
         }
         
