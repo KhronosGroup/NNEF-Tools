@@ -156,7 +156,7 @@ namespace sknd
                 auto type = eval_type(expr, symbols);
                 if ( !is_literal(value) )
                 {
-                    return Error(expr.position, "dynamic expression not allowed in this context");
+                    return Error(expr.position, "dynamic expression not allowed in this context; found '%s'", str(value).c_str());
                 }
                 return astensor(value, type);
             }

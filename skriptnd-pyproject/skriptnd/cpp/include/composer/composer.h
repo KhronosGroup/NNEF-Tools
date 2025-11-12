@@ -1737,7 +1737,7 @@ namespace sknd
                                 TRY_DECL(item_shape, eval_shape(*item.shape, symbols))
                                 output.shape() = item_shape;
                                 output.canonic_shape() = canonical(item_shape);
-                                output.max_shape() = eval_shape_max(item_shape);
+                                output.max_shape() = eval_shape_max(output.canonic_shape());
                                 if ( !item.name.empty() )
                                 {
                                     add_shape_symbols(item.name, item_shape, output_size, symbols);
@@ -1804,7 +1804,7 @@ namespace sknd
                         TRY_DECL(item_shape, eval_shape(*item.shape, symbols))
                         output.shape() = item_shape;
                         output.canonic_shape() = canonical(item_shape);
-                        output.max_shape() = eval_shape_max(item_shape);
+                        output.max_shape() = eval_shape_max(output.canonic_shape());
                         if ( !item.name.empty() )
                         {
                             add_shape_symbols(item.name, item_shape, output_size, symbols);
@@ -2081,6 +2081,10 @@ namespace sknd
                     {
                         replace_tensor(expr, oldRef, newRef);
                     }
+                }
+                for ( auto& [iden, expr] : op.subexprs )
+                {
+                    replace_tensor(expr, oldRef, newRef);
                 }
             }
             for ( auto& tensor : graph.tensors )
