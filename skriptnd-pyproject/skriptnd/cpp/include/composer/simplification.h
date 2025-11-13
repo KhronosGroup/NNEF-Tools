@@ -867,13 +867,17 @@ namespace sknd
                             return true;
                         }
                     }
-                    else if ( (left.is_shape_access() || right.is_shape_access()) && Lexer::is_comparison(op) )
+                    else if ( Lexer::is_comparison(op) )
                     {
-                        auto value = simplify_shape_comparison(op, binary.left, binary.right);
-                        if ( value != nullptr )
+                        if ( left.is_shape_access() || right.is_shape_access() || left.is_size_access() || right.is_size_access() ||
+                             left.is_placeholder() || right.is_placeholder() )
                         {
-                            expr = std::move(value);
-                            return true;
+                            auto value = simplify_shape_comparison(op, binary.left, binary.right);
+                            if ( value != nullptr )
+                            {
+                                expr = std::move(value);
+                                return true;
+                            }
                         }
                     }
                     else
@@ -1311,6 +1315,10 @@ namespace sknd
                     {
                         return left.detach();
                     }
+                    else if ( left == false )
+                    {
+                        return left.detach();
+                    }
                     else if ( right == false )
                     {
                         return right.detach();
@@ -1324,6 +1332,10 @@ namespace sknd
                         return right.detach();
                     }
                     else if ( right == false )
+                    {
+                        return left.detach();
+                    }
+                    else if ( left == true )
                     {
                         return left.detach();
                     }
@@ -1343,7 +1355,11 @@ namespace sknd
                 }
                 case Lexer::Operator::Imply:
                 {
-                    if ( left == true || right == true )
+                    if ( left == false || right == true )
+                    {
+                        return ValueExpr(true);
+                    }
+                    else if ( left == true )
                     {
                         return right.detach();
                     }
@@ -1601,7 +1617,7 @@ namespace sknd
                 }
                 case Lexer::Operator::Less:
                 {
-                    if ( left.is_literal() && left.as<T>() >= (T)0 )
+                    if ( left.is_literal() && left.as<T>() < (T)0 )
                     {
                         return true;
                     }
@@ -1613,7 +1629,7 @@ namespace sknd
                 }
                 case Lexer::Operator::LessEqual:
                 {
-                    if ( left.is_literal() && left.as<T>() > (T)0 )
+                    if ( left.is_literal() && left.as<T>() <= (T)0 )
                     {
                         return true;
                     }
@@ -1629,7 +1645,7 @@ namespace sknd
                     {
                         return false;
                     }
-                    if ( right.is_literal() && right.as<T>() >= (T)0 )
+                    if ( right.is_literal() && right.as<T>() < (T)0 )
                     {
                         return true;
                     }
@@ -1641,7 +1657,7 @@ namespace sknd
                     {
                         return false;
                     }
-                    if ( right.is_literal() && right.as<T>() > (T)0 )
+                    if ( right.is_literal() && right.as<T>() <= (T)0 )
                     {
                         return true;
                     }
