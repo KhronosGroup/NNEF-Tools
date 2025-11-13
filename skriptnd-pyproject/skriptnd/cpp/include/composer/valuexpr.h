@@ -2438,6 +2438,20 @@ namespace sknd
         callback(expr);
     }
 
+    inline bool any_of( const ValueExpr& expr, function_view<bool(const ValueExpr&)> callback, bool follow_references = false )
+    {
+        bool any = false;
+        preorder_traverse(expr, [&]( const ValueExpr& x ){ any |= callback(x); }, follow_references);
+        return any;
+    }
+
+    inline bool all_of( const ValueExpr& expr, function_view<bool(const ValueExpr&)> callback, bool follow_references = false )
+    {
+        bool all = true;
+        preorder_traverse(expr, [&]( const ValueExpr& x ){ all &= callback(x); }, follow_references);
+        return all;
+    }
+
     inline ValueExpr operator-( const ValueExpr& arg )
     {
         if ( arg.is_literal() )
