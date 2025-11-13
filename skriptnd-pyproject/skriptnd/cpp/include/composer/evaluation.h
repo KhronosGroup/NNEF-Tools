@@ -381,7 +381,16 @@ namespace sknd
                     auto& symbol = symbols.at(iden.name);
                     if ( symbol.is<ValueExpr>() )
                     {
-                        return symbol.as<ValueExpr>();
+                        auto& value = symbol.as<ValueExpr>();
+                        if ( is_literal(value) || is_shape_access(value) )
+                        {
+                            return value;
+                        }
+                        else if ( symbol.kind == Symbol::Using || symbol.kind == Symbol::Attrib )
+                        {
+                            return ValueExpr(ValueExpr::ReferenceExpr{ iden.name, &value }, value.dtype(), value.max_size_or_null());
+                        }
+                        return value;
                     }
                     break;
                 }
@@ -924,6 +933,14 @@ namespace sknd
             }
             else
             {
+                if ( value.is_literal() || value.is_shape_access() || value.is_size_access() )
+                {
+                    return value;
+                }
+                else if ( symbol.kind == Symbol::Using || symbol.kind == Symbol::Attrib )
+                {
+                    return ValueExpr(ValueExpr::ReferenceExpr{ iden.name, &value }, symbol.type);
+                }
                 return value;
             }
         }

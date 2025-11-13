@@ -1627,12 +1627,15 @@ namespace sknd
             Dict<std::string> remap;
             for ( auto& ref : references )
             {
-                auto it = remap.find(ref->name);
-                if ( it == remap.end() )
+                if ( !is_local_name(ref->name) )
                 {
-                    it = remap.emplace(ref->name, next_local_name()).first;
+                    auto it = remap.find(ref->name);
+                    if ( it == remap.end() )
+                    {
+                        it = remap.emplace(ref->name, next_local_name()).first;
+                    }
+                    ref->name = it->second;
                 }
-                ref->name = it->second;
             }
             
             OrderedDict<ValueExpr> subexprs;
@@ -2268,7 +2271,10 @@ namespace sknd
                         }
                         if ( can_replace_shape(canonic_repeats, output.canonic_size()) )
                         {
-                            output.size() = repeats;
+                            if ( !has_reference(repeats) )
+                            {
+                                output.size() = repeats;
+                            }
                             output.canonic_size() = canonic_repeats;
                         }
                     }
@@ -2347,13 +2353,21 @@ namespace sknd
             return true;
         }
         
+        bool has_reference( const ValueExpr& shape )
+        {
+            return any_of(shape, []( const ValueExpr& x ){ return x.is_reference(); });
+        }
+        
         void replace_shape( Tensor& tensor, const Shape& shape, const Shape& canonic_shape )
         {
             for ( size_t k = 0; k < canonic_shape.size(); ++k )
             {
                 if ( canonic_shape[k] != nullptr && can_replace_shape(canonic_shape[k], tensor.canonic_shape[k]) )
                 {
-                    tensor.shape[k] = shape[k];
+                    if ( !has_reference(shape[k]) )
+                    {
+                        tensor.shape[k] = shape[k];
+                    }
                     tensor.canonic_shape[k] = canonic_shape[k];
                 }
             }
@@ -2365,10 +2379,29 @@ namespace sknd
             {
                 if ( canonic_shape[k] != nullptr && can_replace_shape(canonic_shape[k], pack.canonic_shape[k]) )
                 {
-                    pack.shape[k] = shape[k];
+                    if ( !has_reference(shape[k]) )
+                    {
+                        pack.shape[k] = shape[k];
+                    }
                     pack.canonic_shape[k] = canonic_shape[k];
                 }
             }
+        }
+        
+        void replace_references( ValueExpr& expr, Dict<Symbol>& symbols )
+        {
+            postorder_traverse(expr, [&]( ValueExpr& x )
+            {
+                if ( x.is_reference() )
+                {
+                    auto& reference = x.as_reference();
+                    ValueExpr value = *reference.target;
+                    replace_references(value, symbols);
+                    auto& [name, symbol] = *symbols.emplace(next_local_name(), Symbol(value, value.dtype(), Symbol::Using)).first;
+                    reference.target = &symbol.as<ValueExpr>();
+                    reference.name = name;
+                }
+            });
         }
         
         Result<void> check_shape_repeats( const Shapedef& shape, const Dict<Symbol>& symbols, const size_t repeats )
@@ -2453,7 +2486,7 @@ namespace sknd
         }
         
         Result<Dict<ValueExpr>> eval_attribs( const std::vector<Param>& params, const Dict<Shared<Expr>>& args,
-                                             const Dict<Symbol>& symbols, const Dict<Symbol>& locals )
+                                             const Dict<Symbol>& symbols, Dict<Symbol>& locals )
         {
             Dict<ValueExpr> attribs;
             for ( const Param& param : params )
@@ -2464,6 +2497,7 @@ namespace sknd
                 if ( expr )
                 {
                     TRY_DECL(value, eval_optional(*expr, expr == param.default_value ? locals : symbols))
+                    replace_references(value, locals);
                     if ( !(param.repeats && !value.packed() && value != nullptr) )
                     {
                         attribs.emplace(param.name, value);
@@ -2507,6 +2541,8 @@ namespace sknd
                             return Error(position, "attribute '%s' must be supplied (as its default value evaluates to null)", param.name.c_str());
                         }
                     }
+                    
+                    replace_references(value, locals);
                     
                     auto type = resolve_type(param, locals);
                     locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), value.size(), Symbol::Attrib));
@@ -3603,6 +3639,11 @@ namespace sknd
         std::string next_placeholder_name()
         {
             return ".S" + std::to_string(_next_placeholder_idx++);
+        }
+        
+        bool is_local_name( const std::string& s ) const
+        {
+            return s.length() > 2 && s.substr(0,2) == ".L";
         }
         
         std::string scoped_name( const std::optional<std::string>& scope, const std::string& identifier, const size_t idx = 0 )
