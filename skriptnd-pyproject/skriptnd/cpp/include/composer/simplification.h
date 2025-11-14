@@ -169,8 +169,11 @@ namespace sknd
         
         static void canonify( ValueExpr& expr )
         {
-            resolve(expr);
-            simplify(expr);
+            if ( !is_simple(expr) )
+            {
+                resolve(expr);
+                simplify(expr);
+            }
         }
         
         static ValueExpr canonical( const ValueExpr& expr )
@@ -188,17 +191,35 @@ namespace sknd
         
     private:
         
+        static bool is_simple( const ValueExpr& expr )
+        {
+            switch ( expr.kind() )
+            {
+                case ValueExpr::Null:
+                case ValueExpr::Literal:
+                case ValueExpr::Identifier:
+                case ValueExpr::Placeholder:
+                {
+                    return true;
+                }
+                default:
+                {
+                    return false;
+                }
+            }
+        }
+        
         static bool simplify_polynomial( ValueExpr& expr )
         {
             PolynomContext ctx;
             ctx.exprs.push_back(ValueExpr(nullptr));
             
-            if ( expr.packed() )
+            if ( !expr.packed() )
             {
-                if ( !expr.is_list() )
-                {
-                    return false;
-                }
+                return simplify_polynomial(expr, ctx);
+            }
+            else if ( expr.is_list() )
+            {
                 bool simplified = false;
                 for ( auto& item : expr.as_list() )
                 {
@@ -206,10 +227,14 @@ namespace sknd
                 }
                 return simplified;
             }
-            else
+            else if ( expr.is_uniform() )
             {
-                return simplify_polynomial(expr, ctx);
+                auto& uniform = expr.as_uniform();
+                bool simplified = simplify_polynomial(uniform.value, ctx);
+                simplified |= simplify_polynomial(uniform.size, ctx);
+                return simplified;
             }
+            return false;
         }
         
         static bool simplify_polynomial( ValueExpr& expr, PolynomContext& ctx )
@@ -219,6 +244,7 @@ namespace sknd
                 case ValueExpr::Null:
                 case ValueExpr::Literal:
                 case ValueExpr::Identifier:
+                case ValueExpr::Placeholder:
                 case ValueExpr::SizeAccess:
                 case ValueExpr::ShapeAccess:
                 case ValueExpr::TensorAccess:
