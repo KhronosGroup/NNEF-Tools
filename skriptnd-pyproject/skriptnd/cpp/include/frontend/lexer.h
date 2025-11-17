@@ -216,10 +216,10 @@ namespace sknd
             "&=",
             "|=",
             ":=",
-            "<<",
-            ">>",
-            "<<!",
-            ">>!",
+            "<?",
+            ">?",
+            "<!",
+            ">!",
             "<>",
             "=",
             "?",
@@ -636,7 +636,7 @@ namespace sknd
                     _token += _input.get();
                 }
             }
-            else if ( _input.peek() == '!' )
+            else if ( _input.peek() == '?' || _input.peek() == '!' )
             {
                 if ( ch == '<' || ch == '>' )
                 {

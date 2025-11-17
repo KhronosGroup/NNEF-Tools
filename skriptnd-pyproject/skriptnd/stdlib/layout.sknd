@@ -536,7 +536,7 @@ operator slice {
     }
     @using {
         _begin = begin < 0 ? begin + s[axes] : begin;
-        _end = ((end < 0 ? end + s[axes] : end) >> -1) << s[axes];
+        _end = (end < 0 ? end + s[axes] : end) >? -1 <? s[axes];
         os = s[axes] <- (_end - _begin) \ stride;
     }
     @assert {

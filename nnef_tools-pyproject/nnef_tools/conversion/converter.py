@@ -1075,9 +1075,9 @@ class ShapeExpr:
         elif self.op == ShapeExpr.Op.CeilDiv:
             return f"({self.args[0]} \\ {self.args[1]})"
         elif self.op == ShapeExpr.Op.Min:
-            return f"({self.args[0]} << {self.args[1]})"
+            return f"({self.args[0]} <? {self.args[1]})"
         elif self.op == ShapeExpr.Op.Max:
-            return f"({self.args[0]} >> {self.args[1]})"
+            return f"({self.args[0]} >? {self.args[1]})"
         elif self.op == ShapeExpr.Op.Less:
             return f"({self.args[0]} < {self.args[1]})"
         elif self.op == ShapeExpr.Op.Greater:

@@ -193,12 +193,12 @@ operator nearest_resize {
     }
     @lower {
         with
-            r = real(i[axes]) * scale + offset:
-        output[i..] = input[i[axes] <- (int(rounding_method == 'FLOOR' ? floor(r) :
-                                            rounding_method == 'CEIL' ? ceil(r) :
-                                            rounding_method == 'ROUND_PREFER_FLOOR' ?
-                                               ceil(r - 0.5) : floor(r + 0.5))
-                                        << (s[axes] - 1))..],
+            x = real(i[axes]) * scale + offset,
+            r = rounding_method == 'FLOOR' ? floor(x) :
+                rounding_method == 'CEIL' ? ceil(x) :
+                rounding_method == 'ROUND_PREFER_FLOOR' ?
+                    ceil(x - 0.5) : floor(x + 0.5):
+        output[i..] = input[i[axes] <- (int(r) <? s[axes] - 1)..],
             i < os;
     }
 }

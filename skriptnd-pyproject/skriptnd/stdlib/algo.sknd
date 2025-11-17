@@ -30,8 +30,8 @@ operator top_k {
         input: real^(rank)[s..(axis < 0 ? axis + rank : axis),m,t..];
     }
     @output {
-        values: real[s..,k << m,t..];
-        indices: int[s..,k << m,t..];
+        values: real[s..,k <? m,t..];
+        indices: int[s..,k <? m,t..];
     }
     @assert {
         axis >= -rank && axis < rank:

@@ -70,7 +70,7 @@ operator matmul {
         Z: real[z..,mZ,nZ];
     }
     @using {
-        dz = da >> db;
+        dz = da >? db;
         ea = [1 ..(dz - da), a..];
         eb = [1 ..(dz - db), b..];
         ec = [1 ..(dz - dc), c..];

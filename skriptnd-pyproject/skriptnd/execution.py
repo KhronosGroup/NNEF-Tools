@@ -551,9 +551,9 @@ def _format_value_expr(expr, bracket=True, extent=None):
                 return f"std::pow({left}, {right})"
             elif expr.op == "%" and sknd.expr_dtype(expr) == sknd.Dtype.Real:
                 return f"std::fmod({left}, {right})"
-            elif expr.op == "<<":
+            elif expr.op == "<?":
                 return f"std::min({left}, {right})"
-            elif expr.op == ">>":
+            elif expr.op == ">?":
                 return f"std::max({left}, {right})"
             elif expr.op == "->":
                 return f"!{left} || {right}"
@@ -574,9 +574,9 @@ def _format_value_expr(expr, bracket=True, extent=None):
                 op = "sknd::rt::ceil_divides"
             elif expr.op == "%":
                 op = "std::modulus"
-            elif expr.op == "<<":
+            elif expr.op == "<?":
                 op = "sknd::rt::minimize"
-            elif expr.op == ">>":
+            elif expr.op == ">?":
                 op = "sknd::rt::maximize"
             elif expr.op == "&&":
                 op = "std::logical_and"
@@ -621,9 +621,9 @@ def _format_value_expr(expr, bracket=True, extent=None):
             op = "std::plus"
         elif expr.op == "*":
             op = "std::multiplies"
-        elif expr.op == "<<":
+        elif expr.op == "<?":
             op = "sknd::rt::minimize"
-        elif expr.op == ">>":
+        elif expr.op == ">?":
             op = "sknd::rt::maximize"
         elif expr.op == "||":
             op = "std::logical_or"

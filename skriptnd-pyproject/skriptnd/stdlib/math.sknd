@@ -463,7 +463,7 @@ operator add {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -501,7 +501,7 @@ operator sub {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -539,7 +539,7 @@ operator mul {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -577,7 +577,7 @@ operator div {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -615,7 +615,7 @@ operator mod {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -653,7 +653,7 @@ operator pow {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -691,7 +691,7 @@ operator min {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -704,7 +704,7 @@ operator min {
             'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
     }
     @lower {
-        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] << y[sy is 1 ? 0 : zi[py:py+ry]..],
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] <? y[sy is 1 ? 0 : zi[py:py+ry]..],
             zi < sz;
     }
 }
@@ -729,7 +729,7 @@ operator max {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -742,7 +742,7 @@ operator max {
             'lhs.shape': x.shape, 'rhs.shape': y.shape, lhs_align, rhs_align;
     }
     @lower {
-        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] >> y[sy is 1 ? 0 : zi[py:py+ry]..],
+        z[zi..] = x[sx is 1 ? 0 : zi[px:px+rx]..] >? y[sy is 1 ? 0 : zi[py:py+ry]..],
             zi < sz;
     }
 }
@@ -768,7 +768,7 @@ operator lt {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -807,7 +807,7 @@ operator gt {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -846,7 +846,7 @@ operator le {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -885,7 +885,7 @@ operator ge {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -924,7 +924,7 @@ operator eq {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -963,7 +963,7 @@ operator ne {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -998,7 +998,7 @@ operator and {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -1033,7 +1033,7 @@ operator or {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -1068,7 +1068,7 @@ operator xor {
     @using {
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy;
+        rz = qx >? qy;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
         ex = [1 ..(px), sx.., 1 ..(rz - rx - px)];
@@ -1113,7 +1113,7 @@ operator select {
         qc = rc + abs(cond_align ?? 0);
         qx = rx + abs(lhs_align ?? 0);
         qy = ry + abs(rhs_align ?? 0);
-        rz = qx >> qy >> qc;
+        rz = qx >? qy >? qc;
         pc = (cond_align < 0 ? rz - qc : cond_align) ?? rz - rc;
         px = (lhs_align < 0 ? rz - qx : lhs_align) ?? rz - rx;
         py = (rhs_align < 0 ? rz - qy : rhs_align) ?? rz - ry;
@@ -1315,7 +1315,7 @@ operator axpb {
         qx = rx + abs(x_align ?? 0);
         qa = ra + abs(a_align ?? 0);
         qb = rb + abs(b_align ?? 0);
-        ry = qx >> qa >> qb;
+        ry = qx >? qa >? qb;
         px = (x_align < 0 ? ry - qx : x_align) ?? ry - rx;
         pa = (a_align < 0 ? ry - qa : a_align) ?? ry - ra;
         pb = (b_align < 0 ? ry - qb : b_align) ?? ry - rb;
@@ -1368,7 +1368,7 @@ operator axpby {
         qy = ry + abs(y_align ?? 0);
         qa = ra + abs(a_align ?? 0);
         qb = rb + abs(b_align ?? 0);
-        rz = qx >> qy >> qa >> qb;
+        rz = qx >? qy >? qa >? qb;
         px = (x_align < 0 ? rz - qx : x_align) ?? rz - rx;
         py = (y_align < 0 ? rz - qy : y_align) ?? rz - ry;
         pa = (a_align < 0 ? rz - qa : a_align) ?? rz - ra;
@@ -1425,7 +1425,7 @@ operator clamp {
         qx = rx + abs(val_align ?? 0);
         qa = ra + abs(min_align ?? 0);
         qb = rb + abs(max_align ?? 0);
-        ry = qx >> qa >> qb;
+        ry = qx >? qa >? qb;
         px = (val_align < 0 ? ry - qx : val_align) ?? ry - rx;
         pa = (min_align < 0 ? ry - qa : min_align) ?? ry - ra;
         pb = (max_align < 0 ? ry - qb : max_align) ?? ry - rb;

@@ -681,10 +681,31 @@ namespace sknd
                     
                     if ( lexer.is_token(Operator::LeftParen) )
                     {
-                        TRY_CALL(lexer.accept(Operator::LeftParen))
-                        TRY_DECL(arg, parse_expr(lexer))
-                        TRY_CALL(lexer.accept(Operator::RightParen))
-                        return (Shared<Expr>)std::make_shared<BuiltinExpr>(position, name, arg);
+                        if ( name == "min" || name == "max" )
+                        {
+                            auto op = name == "min" ? Lexer::Operator::Min : Lexer::Operator::Max;
+                            TRY_CALL(lexer.accept(Operator::LeftParen))
+                            TRY_DECL(first, parse_expr(lexer))
+                            if ( lexer.is_token(Operator::RightParen) )
+                            {
+                                TRY_CALL(lexer.accept(Operator::RightParen))
+                                return (Shared<Expr>)std::make_shared<FoldExpr>(position, first, op);
+                            }
+                            else
+                            {
+                                TRY_CALL(lexer.accept(Operator::Comma))
+                                TRY_DECL(second, parse_expr(lexer))
+                                TRY_CALL(lexer.accept(Operator::RightParen))
+                                return (Shared<Expr>)std::make_shared<BinaryExpr>(position, first, second, op);
+                            }
+                        }
+                        else
+                        {
+                            TRY_CALL(lexer.accept(Operator::LeftParen))
+                            TRY_DECL(arg, parse_expr(lexer))
+                            TRY_CALL(lexer.accept(Operator::RightParen))
+                            return (Shared<Expr>)std::make_shared<BuiltinExpr>(position, name, arg);
+                        }
                     }
                     
                     Shared<Expr> expr;

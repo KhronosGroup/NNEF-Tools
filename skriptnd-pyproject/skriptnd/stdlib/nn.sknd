@@ -503,7 +503,7 @@ operator relu {
             "'max' must be positive", max;
     }
     @lower {
-        y[i..] = (x[i..] << max ?? x[i..]) >> (alpha * x[i..] ?? 0.0),
+        y[i..] = (x[i..] <? max ?? x[i..]) >? (alpha * x[i..] ?? 0.0),
             i < s;
     }
 }
