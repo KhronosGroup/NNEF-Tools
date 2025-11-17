@@ -1129,9 +1129,9 @@ class ShapeExpr:
         elif self.op == ShapeExpr.Op.Prod:
             return f"({self.args[0]} * ..)"
         elif self.op == ShapeExpr.Op.Minimize:
-            return f"({self.args[0]} << ..)"
+            return f"({self.args[0]} <? ..)"
         elif self.op == ShapeExpr.Op.Maximize:
-            return f"({self.args[0]} >> ..)"
+            return f"({self.args[0]} >? ..)"
         elif self.op == ShapeExpr.Op.Any:
             return f"({self.args[0]} || ..)"
         elif self.op == ShapeExpr.Op.All:
