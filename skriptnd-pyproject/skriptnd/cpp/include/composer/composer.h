@@ -3182,18 +3182,18 @@ namespace sknd
                     return dtype == Typename::Real ? (Shared<Expr>)std::make_shared<RealExpr>(position, 1) :
                                                      (Shared<Expr>)std::make_shared<IntExpr>(position, 1);
                 }
-                case Lexer::Operator::GreaterEqual:
+                case Lexer::Operator::MinEqual:
                 {
-                    auto expr = (Shared<Expr>)std::make_shared<RealExpr>(position, -std::numeric_limits<real_t>::infinity());
+                    auto expr = (Shared<Expr>)std::make_shared<RealExpr>(position, std::numeric_limits<real_t>::infinity());
                     if ( dtype != Typename::Real )
                     {
                         expr = (Shared<Expr>)std::make_shared<CastExpr>(position, dtype, expr);
                     }
                     return expr;
                 }
-                case Lexer::Operator::LessEqual:
+                case Lexer::Operator::MaxEqual:
                 {
-                    auto expr = (Shared<Expr>)std::make_shared<RealExpr>(position, std::numeric_limits<real_t>::infinity());
+                    auto expr = (Shared<Expr>)std::make_shared<RealExpr>(position, -std::numeric_limits<real_t>::infinity());
                     if ( dtype != Typename::Real )
                     {
                         expr = (Shared<Expr>)std::make_shared<CastExpr>(position, dtype, expr);

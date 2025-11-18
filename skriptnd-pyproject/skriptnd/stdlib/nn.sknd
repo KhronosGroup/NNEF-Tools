@@ -274,7 +274,7 @@ operator max_pool {
             "'padding_align' must be one of {padding_aligns}", padding_align;
     }
     @lower {
-        output[i..] >= input[i[axes] <- |stride * i[axes] + dilation * j - offset|..],
+        output[i..] >?= input[i[axes] <- |stride * i[axes] + dilation * j - offset|..],
             i < os, j < size;
     }
 }

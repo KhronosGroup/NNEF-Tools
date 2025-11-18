@@ -1293,8 +1293,8 @@ namespace sknd
                 Lexer::Operator::MultiplyEqual,
                 Lexer::Operator::AndEqual,
                 Lexer::Operator::OrEqual,
-                Lexer::Operator::LessEqual,
-                Lexer::Operator::GreaterEqual,
+                Lexer::Operator::MinEqual,
+                Lexer::Operator::MaxEqual,
                 Lexer::Operator::MakeEqual,
             };
             

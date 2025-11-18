@@ -1200,7 +1200,7 @@ operator min_n {
         y: T[s..];
     }
     @lower {
-        y[i..] <= xs[k][i..],
+        y[i..] <?= xs[k][i..],
             k < n, i < s;
     }
 }
@@ -1218,7 +1218,7 @@ operator max_n {
         y: T[s..];
     }
     @lower {
-        y[i..] >= xs[k][i..],
+        y[i..] >?= xs[k][i..],
             k < n, i < s;
     }
 }
@@ -1496,7 +1496,7 @@ operator min_reduce {
         kept_axes = dims[!axes_mask];
     }
     @lower {
-        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] <= input[i..],
+        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] <?= input[i..],
             i < s;
     }
 }
@@ -1530,7 +1530,7 @@ operator max_reduce {
         kept_axes = dims[!axes_mask];
     }
     @lower {
-        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] >= input[i..],
+        output[squeeze ? i[kept_axes] : (axes_mask ? 0 : i)..] >?= input[i..],
             i < s;
     }
 }

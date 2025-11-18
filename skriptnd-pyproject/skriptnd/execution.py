@@ -390,13 +390,14 @@ def _format_contraction_assignment(contraction, indent, idx=None):
     lhs = _format_tensor_access(contraction.left, idx)
     rhs = _format_value_expr(contraction.right[idx] if idx is not None else contraction.right, bracket=False)
 
-    if contraction.assignment == '>=':
-        return indent + f"{lhs} = std::max({lhs}, {rhs});\n"
-    elif contraction.assignment == '<=':
-        return indent + f"{lhs} = std::min({lhs}, {rhs});\n"
+    if contraction.assignment == '<?=':
+        return indent + f"if ( {rhs} < {lhs} ) {lhs} = {rhs};\n"
+    elif contraction.assignment == '>?=':
+        return indent + f"if ( {rhs} > {lhs} ) {lhs} = {rhs};\n"
+    elif contraction.assignment == ':=':
+        return indent + f"{lhs} = {rhs};\n"
     else:
-        op = '=' if contraction.assignment == ':=' else contraction.assignment
-        return indent + f"{lhs} {op} {rhs};\n"
+        return indent + f"{lhs} {contraction.assignment} {rhs};\n"
 
 
 def _format_guard(index, tensor, dim):

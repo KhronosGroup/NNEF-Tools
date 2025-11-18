@@ -160,13 +160,15 @@ namespace sknd
             GreaterEqual,
             Equal,
             NotEqual,
+            Min,
+            Max,
             PlusEqual,
             MultiplyEqual,
             AndEqual,
             OrEqual,
             MakeEqual,
-            Min,
-            Max,
+            MinEqual,
+            MaxEqual,
             Bounds,
             Assign,
             Question,
@@ -209,13 +211,15 @@ namespace sknd
             ">=",
             "==",
             "!=",
+            "<?",
+            ">?",
             "+=",
             "*=",
             "&=",
             "|=",
             ":=",
-            "<?",
-            ">?",
+            "<?=",
+            ">?=",
             "<>",
             "=",
             "?",
@@ -636,6 +640,10 @@ namespace sknd
                 if ( ch == '<' || ch == '>' )
                 {
                     _token += _input.get();
+                    if ( _input.peek() == '=' )
+                    {
+                        _token += _input.get();
+                    }
                 }
             }
             else if ( _input.peek() == '-' )

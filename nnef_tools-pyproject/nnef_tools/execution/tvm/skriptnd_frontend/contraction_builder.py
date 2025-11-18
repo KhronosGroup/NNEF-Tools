@@ -315,8 +315,8 @@ def _reduction_function(assignment):
             "*=": tir.multiply,
             "&=": tir.all,
             "|=": tir.any,
-            "<=": tir.min,
-            ">=": tir.max,
+            "<?=": tir.min,
+            ">?=": tir.max,
         }[assignment]
     except KeyError:  # KeyError means not supported operation, in case of expansion
         raise ValueError(f"Assignment {assignment} not supported")
