@@ -167,8 +167,6 @@ namespace sknd
             MakeEqual,
             Min,
             Max,
-            ArgMin,
-            ArgMax,
             Bounds,
             Assign,
             Question,
@@ -218,8 +216,6 @@ namespace sknd
             ":=",
             "<?",
             ">?",
-            "<!",
-            ">!",
             "<>",
             "=",
             "?",
@@ -266,7 +262,6 @@ namespace sknd
             {
                 return op == Operator::Plus || op == Operator::Multiply
                     || op == Operator::Min || op == Operator::Max
-                    || op == Operator::ArgMin || op == Operator::ArgMax
                     || op == Operator::And || op == Operator::Or
                     || op == Operator::MakeEqual || is_comparison(op);
             }
@@ -636,7 +631,7 @@ namespace sknd
                     _token += _input.get();
                 }
             }
-            else if ( _input.peek() == '?' || _input.peek() == '!' )
+            else if ( _input.peek() == '?' )
             {
                 if ( ch == '<' || ch == '>' )
                 {

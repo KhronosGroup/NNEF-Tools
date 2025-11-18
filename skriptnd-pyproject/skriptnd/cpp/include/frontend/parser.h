@@ -1752,8 +1752,6 @@ namespace sknd
                 { Operator::MakeEqual, 3 },
                 { Operator::Min, 4 },
                 { Operator::Max, 4 },
-                { Operator::ArgMin, 4 },
-                { Operator::ArgMax, 4 },
                 { Operator::Plus, 5 },
                 { Operator::Minus, 5 },
                 { Operator::Multiply, 6 },

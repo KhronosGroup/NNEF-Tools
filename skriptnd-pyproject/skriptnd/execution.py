@@ -394,11 +394,6 @@ def _format_contraction_assignment(contraction, indent, idx=None):
         return indent + f"{lhs} = std::max({lhs}, {rhs});\n"
     elif contraction.assignment == '<=':
         return indent + f"{lhs} = std::min({lhs}, {rhs});\n"
-    elif contraction.assignment == '>!' or contraction.assignment == '<!':
-        axis = contraction.axes[0]
-        idx = contraction.bounds[axis][0]
-        op = contraction.assignment[0]
-        return indent + f"if ( {rhs} {op} ${lhs} ) {{ {lhs} = {idx}; ${lhs} = {rhs}; }}\n"
     else:
         op = '=' if contraction.assignment == ':=' else contraction.assignment
         return indent + f"{lhs} {op} {rhs};\n"
@@ -1054,13 +1049,10 @@ def _format_nms(op, indent):
 
 
 def _format_tensor_declarations(model, indent, context):
-    auxiliaries = {contraction.left.tensor: _make_auxiliary_tensor(contraction.left.tensor, sknd.expr_dtype(contraction.right))
-                   for op in model.graphs[0].operations if op.contractions for contraction in op.contractions
-                   if contraction.assignment == '<!' or contraction.assignment == '>!'}
-
     subgraph_io = {tensor.name for graph in model.graphs[1:] if len(graph.operations)
                    for tensor in itertools.chain(graph.inputs, graph.outputs)}
 
+    auxiliaries = {}
     for block in model.graphs:
         for op in block.operations:
             if op.name == 'do':

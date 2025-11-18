@@ -1419,16 +1419,6 @@ namespace sknd
                     return type == Typename::Real ? eval_fold<maximize,real_t>(expr, symbols, idx, cache) :
                                                     eval_fold<maximize,int_t>(expr, symbols, idx, cache);
                 }
-                case Lexer::Operator::ArgMin:
-                {
-                    return type == Typename::Real ? eval_arg_fold<minimize,real_t>(expr, symbols) :
-                                                    eval_arg_fold<minimize,int_t>(expr, symbols);
-                }
-                case Lexer::Operator::ArgMax:
-                {
-                    return type == Typename::Real ? eval_arg_fold<maximize,real_t>(expr, symbols) :
-                                                    eval_arg_fold<maximize,int_t>(expr, symbols);
-                }
                 case Lexer::Operator::And:
                 {
                     return eval_fold<std::logical_and>(expr, symbols, idx, cache, (bool_t)true);
