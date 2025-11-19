@@ -1193,11 +1193,28 @@ namespace sknd
                 static bool_t value() { return true; }
             };
         
+        
+            template<template<typename> class Op, typename T> struct reduce_check
+            {
+                static void check( const size_t size ) {}
+            };
+        
+            template<> struct reduce_check<minimize, int_t>
+            {
+                static void check( const size_t size ) { if ( size == 0 ) throw std::invalid_argument("zero size in integer min reduction"); }
+            };
+        
+            template<> struct reduce_check<maximize, int_t>
+            {
+                static void check( const size_t size ) { if ( size == 0 ) throw std::invalid_argument("zero size in integer max reduction"); }
+            };
+        
         }   // namespace detail
     
         template<template<typename> class Op, typename Arg>
         inline typename Arg::value_type reduce( const Arg& arg )
         {
+            detail::reduce_check<Op, typename Arg::value_type>::check(arg.size());
             static Op<typename Arg::value_type> op;
             typename Arg::value_type res = detail::reduce_init<Op, typename Arg::value_type>::value();
             for ( size_t i = 0; i < arg.size(); ++i )

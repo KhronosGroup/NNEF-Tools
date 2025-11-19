@@ -1411,13 +1411,35 @@ namespace sknd
                 }
                 case Lexer::Operator::Min:
                 {
-                    return type == Typename::Real ? eval_fold<minimize,real_t>(expr, symbols, idx, cache) :
-                                                    eval_fold<minimize,int_t>(expr, symbols, idx, cache);
+                    if ( type == Typename::Real )
+                    {
+                        return eval_fold<minimize,real_t>(expr, symbols, idx, cache, inf());
+                    }
+                    else
+                    {
+                        TRY_DECL(value, (eval_fold<minimize,int_t>(expr, symbols, idx, cache)))
+                        if ( value == nullptr )
+                        {
+                            return Error(expr.position, "invalid min fold over empty pack");
+                        }
+                        return value;
+                    }
                 }
                 case Lexer::Operator::Max:
                 {
-                    return type == Typename::Real ? eval_fold<maximize,real_t>(expr, symbols, idx, cache) :
-                                                    eval_fold<maximize,int_t>(expr, symbols, idx, cache);
+                    if ( type == Typename::Real )
+                    {
+                        return eval_fold<maximize,real_t>(expr, symbols, idx, cache, -inf());
+                    }
+                    else
+                    {
+                        TRY_DECL(value, (eval_fold<maximize,int_t>(expr, symbols, idx, cache)))
+                        if ( value == nullptr )
+                        {
+                            return Error(expr.position, "invalid max fold over empty pack");
+                        }
+                        return value;
+                    }
                 }
                 case Lexer::Operator::And:
                 {

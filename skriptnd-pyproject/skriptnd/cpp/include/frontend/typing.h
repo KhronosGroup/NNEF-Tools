@@ -2895,8 +2895,7 @@ namespace sknd
                 return Error(fold.position, "operator '%s' is not allowed for tensors in this context", Lexer::str(fold.op));
             }
             
-            bool optional = (fold.op == Lexer::Operator::Min || fold.op == Lexer::Operator::Max || fold.op == Lexer::Operator::MakeEqual) &&
-                            !fold.cumulative;
+            bool optional = fold.op == Lexer::Operator::MakeEqual && !fold.cumulative;
             
             Typename name = Lexer::is_comparison(fold.op) ? Typename::Bool : pack_type.name;
             return make_type(name, optional || pack_type.optional, pack_type.tensor, fold.cumulative);
