@@ -1691,6 +1691,9 @@ class TestCases(TestEnv):
     def test_max_reduce_keepdims(self):
         self._test_reduce('ReduceMax', keepdims=True)
 
+    def test_min_reduce_keepdims(self):
+        self._test_reduce('ReduceMin', keepdims=True, dtype=TensorProto.INT64)
+
     def test_identity(self):
         self._test_unary('Identity')
 

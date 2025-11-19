@@ -909,12 +909,7 @@ namespace sknd
         
         bool is_infinite() const
         {
-            if ( !is_real() )
-            {
-                return false;
-            }
-            const real_t value = _data.as<real_t>();
-            return value == inf() || value == -inf();
+            return is_real() && std::isinf(_data.as<real_t>());
         }
         
         void resize( const size_t size )

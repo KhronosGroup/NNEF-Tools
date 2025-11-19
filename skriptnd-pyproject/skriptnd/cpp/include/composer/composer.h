@@ -3184,21 +3184,11 @@ namespace sknd
                 }
                 case Lexer::Operator::MinEqual:
                 {
-                    auto expr = (Shared<Expr>)std::make_shared<RealExpr>(position, inf());
-                    if ( dtype != Typename::Real )
-                    {
-                        expr = (Shared<Expr>)std::make_shared<CastExpr>(position, dtype, expr);
-                    }
-                    return expr;
+                    return (Shared<Expr>)std::make_shared<RealExpr>(position, inf());
                 }
                 case Lexer::Operator::MaxEqual:
                 {
-                    auto expr = (Shared<Expr>)std::make_shared<RealExpr>(position, -inf());
-                    if ( dtype != Typename::Real )
-                    {
-                        expr = (Shared<Expr>)std::make_shared<CastExpr>(position, dtype, expr);
-                    }
-                    return expr;
+                    return (Shared<Expr>)std::make_shared<RealExpr>(position, -inf());
                 }
                 case Lexer::Operator::AndEqual:
                 {

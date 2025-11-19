@@ -304,8 +304,15 @@ def _format_tensor_access(access, idx=None):
 
 
 def _format_nested_loops(contraction, indent):
-    if isinstance(contraction.right, (int, float, bool)) and len(contraction.locals) == 0:
+    if isinstance(contraction.right, (int, float, bool)) and contraction.assignment == "=" and \
+            len(contraction.locals) == 0:
         value = _format_value_expr(contraction.right)
+        if contraction.left.dtype == sknd.Dtype.Int:
+            if contraction.right == math.inf:
+                value = "std::numeric_limits<sknd::rt::int_t>::max()"
+            elif contraction.right == -math.inf:
+                value = "std::numeric_limits<sknd::rt::int_t>::min()"
+
         if contraction.left.packed and isinstance(contraction.left.tensor, sknd.TensorPack):
             return "\n".join(indent + f"{_valid_id(tensor.name)} = {value};"
                              for tensor in contraction.left.tensor.items)
@@ -509,11 +516,6 @@ def _format_value_expr(expr, bracket=True, extent=None):
         return _format_tensor_access(expr)
     elif isinstance(expr, sknd.CastExpr):
         if not expr.packed:
-            if expr.dtype == sknd.Dtype.Int:
-                if expr.arg == float('inf'):
-                    return "std::numeric_limits<sknd::rt::int_t>::max()"
-                elif expr.arg == float('-inf'):
-                    return "std::numeric_limits<sknd::rt::int_t>::min()"
             arg = _format_value_expr(expr.arg)
             dtype = _format_dtype(expr.dtype)
             return f"({dtype}){arg}"
