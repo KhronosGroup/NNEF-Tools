@@ -28,6 +28,9 @@ import six
 import re
 
 
+_INT_MAX = 2 ** 31 - 1
+
+
 class Transform:
 
     def __init__(self, type, name=None, inputs=None, outputs=None, dtypes=None, attribs=None,
@@ -811,10 +814,6 @@ class ConverterToSkriptND(Converter):
                                      for i, s in enumerate(tensor.shape))
 
     @staticmethod
-    def _convert_int_inf(x):
-        return _INT_POS_INF if x > _INT_MAX else _INT_NEG_INF if x < -_INT_MAX else x
-
-    @staticmethod
     def _non_singleton_rank(shape):
         return sum(s != 1 for s in shape)
 
@@ -839,14 +838,12 @@ class ConverterToSkriptND(Converter):
         check_shape_expr(symbolic)
         return symbolic
 
-    def arg_as_attrib(self, arg, as_scalar=False, convert_int_inf=False, none_on_failure=False, flat=True):
+    def arg_as_attrib(self, arg, as_scalar=False, none_on_failure=False, flat=True):
         if isinstance(arg, list):
-            return [self.arg_as_attrib(item, as_scalar=as_scalar, convert_int_inf=convert_int_inf) for item in arg]
+            return [self.arg_as_attrib(item, as_scalar=as_scalar) for item in arg]
 
         if self.is_const(arg):
             value = self.as_const(arg, flat=flat)
-            if convert_int_inf:
-                value = [self._convert_int_inf(x) for x in value] if isinstance(value, list) else self._convert_int_inf(value)
             return value[0] if as_scalar and isinstance(value, list) and len(value) == 1 else value
         else:
             try:
@@ -1281,13 +1278,6 @@ def optimize_shape_expr(expr):
             return ShapeExpr(ShapeExpr.Op.Const, args=[np.array(len(expr.arg.args))])
 
     return expr
-
-
-_INT_MAX = 2 ** 31 - 1
-_FLT_POS_INF = ShapeExpr(ShapeExpr.Op.Const, args=[float('inf')])
-_FLT_NEG_INF = ShapeExpr(ShapeExpr.Op.Const, args=[float('-inf')])
-_INT_POS_INF = ShapeExpr(ShapeExpr.Op.Cast, args=[_FLT_POS_INF, 'int'])
-_INT_NEG_INF = ShapeExpr(ShapeExpr.Op.Cast, args=[_FLT_NEG_INF, 'int'])
 
 
 def _optimize_reduce_shape_expr(expr, reduce_op, binary_op):

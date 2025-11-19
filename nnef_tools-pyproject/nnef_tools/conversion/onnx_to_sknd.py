@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from __future__ import division, print_function, absolute_import
-from .converter import ConverterToSkriptND as _Converter, Transform, ConversionError
+from .converter import ConverterToSkriptND as _Converter, Transform, ConversionError, _INT_MAX
 from ..model.utils import *
 from ..model import *
 from ..utils import types
@@ -330,6 +330,28 @@ class Converter(_Converter):
                             coordinate_transformation_mode == 'pytorch_half_pixel' else \
                'ASYMMETRIC' if coordinate_transformation_mode == 'asymmetric' else \
                'ALIGNED' if coordinate_transformation_mode == 'align_corners' else None
+
+    def handle_slice_bounds(self, value, tensor, axes):
+        if axes is None:
+            axes = list(range(len(value)))
+        if isinstance(value, list):
+            return [self._handle_slice_bound(item, tensor, axis) for axis, item in zip(axes, value)]
+        else:
+            return value
+
+    def _handle_slice_bound(self, value, tensor, axis):
+        return self._make_shape_access(tensor, axis) if value >= _INT_MAX else -1 if value <= -_INT_MAX else \
+               self._shift_negative_by_shape(tensor, axis, value) if value < 0 else value
+
+    def _make_shape_access(self, tensor, axis):
+        shape = ShapeExpr(ShapeExpr.Op.Shape, args=[tensor])
+        axis = ShapeExpr(ShapeExpr.Op.Const, args=[axis])
+        return ShapeExpr(ShapeExpr.Op.Subscript, args=[shape, axis])
+
+    def _shift_negative_by_shape(self, tensor, axis, value):
+        shape = self._make_shape_access(tensor, axis)
+        value = ShapeExpr(ShapeExpr.Op.Const, args=[-value])
+        return ShapeExpr(ShapeExpr.Op.Sub, args=[shape, value])
 
     def _eval_symbolic_shape(self, tensor):
         op = tensor.producer
@@ -905,17 +927,17 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='layout.slice',
             defaults={
-                'starts': '!arg_as_attrib(I[1], convert_int_inf=True) if len(I) > 1 else None',
-                'ends': '!arg_as_attrib(I[2], convert_int_inf=True) if len(I) > 2 else None',
                 'axes': '!arg_as_attrib(I[3]) if len(I) > 3 else None',
+                'starts': '!arg_as_attrib(I[1]) if len(I) > 1 else None',
+                'ends': '!arg_as_attrib(I[2]) if len(I) > 2 else None',
                 'steps': '!arg_as_attrib(I[4]) if len(I) > 4 else None',
             },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
                 'axes': '!axes',
-                'begin': '!starts',
-                'end': '!ends',
+                'begin': '!handle_slice_bounds(starts, I[0], axes)',
+                'end': '!handle_slice_bounds(ends, I[0], axes)',
                 'stride': '!steps',
             }
         ),

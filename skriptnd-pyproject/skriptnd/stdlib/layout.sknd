@@ -535,9 +535,8 @@ operator slice {
         output: T[os..];
     }
     @using {
-        _begin = begin < 0 ? begin + s[axes] : begin;
-        _end = (end < 0 ? end + s[axes] : end) >? -1 <? s[axes];
-        os = s[axes] <- (_end - _begin) \ stride;
+        _end = end >? -1 <? s[axes];
+        os = s[axes] <- (_end - begin) \ stride;
     }
     @assert {
         axes >= -d && axes < d:
@@ -547,17 +546,17 @@ operator slice {
             "'axes' must be distinct", axes;
         stride != 0:
             "'stride' must be non-zero", stride;
-        _begin >= 0:
-            "'begin' must be non-negative";
-        _begin < s[axes]:
-            "'begin' must be less than input.shape at 'axes'";
-        stride > 0 => _end >= _begin:
-            "'end' must be greater than or equal to begin if stride is positive";
-        stride < 0 => _end <= _begin:
-            "'end' must be less than or equal to begin if stride is negative";
+        begin >= 0:
+            "'begin' must be non-negative", begin;
+        begin < s[axes]:
+            "'begin' must be less than input.shape at 'axes'", begin;
+        stride > 0 => end >= begin:
+            "'end' must be greater than or equal to 'begin' if stride is positive", begin, end;
+        stride < 0 => end <= begin:
+            "'end' must be less than or equal to 'begin' if stride is negative", begin, end;
     }
     @lower {
-        output[si..] = input[si[axes] <- _begin + stride * si[axes]..],
+        output[si..] = input[si[axes] <- begin + stride * si[axes]..],
             si < os;
     }
 }

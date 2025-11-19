@@ -1258,7 +1258,7 @@ graph slice {
         output: real[4,16,8,8];
     }
     @compose {
-        output = layout.slice{axes=[2,3], begin=[1,1], end=[-1,-1]}(input);
+        output = layout.slice{axes=[2,3], begin=[1,1], end=[input.shape[2] - 1, input.shape[3] - 1]}(input);
     }
 }
 
