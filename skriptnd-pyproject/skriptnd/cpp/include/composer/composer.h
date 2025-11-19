@@ -252,7 +252,7 @@ namespace sknd
             {
                 if ( count )
                 {
-                    TRY_DECL(size, eval(*count, symbols))
+                    TRY_DECL(size, eval_shape_expr(*count, symbols))
                     TRY_DECL(items, eval_items(bound, symbols, size.as_int()))
                     
                     for ( size_t i = 0; i < items.size(); ++i )

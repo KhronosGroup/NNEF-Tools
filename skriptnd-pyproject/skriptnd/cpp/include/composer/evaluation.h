@@ -2694,11 +2694,7 @@ namespace sknd
             {
                 TRY_DECL(value, eval_item(expr, symbols))
                 simplify(value);
-                
-                if ( value.is_literal() && value.as_int() < 0 )
-                {
-                    return Error(expr.position, "extent must be non-negative; found %d", (int)value.as_int());
-                }
+                TRY_CALL(check_shape_expr(value, expr.position))
                 return value;
             }
             else if ( rank.is_literal() )
@@ -2707,10 +2703,7 @@ namespace sknd
                 for ( auto& item : items )
                 {
                     simplify(item);
-                    if ( item.is_literal() && item.as_int() < 0 )
-                    {
-                        return Error(expr.position, "extent must be non-negative; found %d", (int)item.as_int());
-                    }
+                    TRY_CALL(check_shape_expr(item, expr.position))
                 }
                 auto type = eval_type(expr, symbols);
                 auto value = ValueExpr::list(std::move(items), type);
@@ -2724,23 +2717,26 @@ namespace sknd
                     for ( auto& item : value.as_list() )
                     {
                         simplify(item);
-                        if ( item.is_literal() && item.as_int() < 0 )
-                        {
-                            return Error(expr.position, "extent must be non-negative; found %d", (int)item.as_int());
-                        }
+                        TRY_CALL(check_shape_expr(item, expr.position))
                     }
                 }
                 else if ( value.is_uniform() )
                 {
                     auto& item = value.as_uniform().value;
                     simplify(item);
-                    if ( item.is_literal() && item.as_int() < 0 )
-                    {
-                        return Error(expr.position, "extent must be non-negative; found %d", (int)item.as_int());
-                    }
+                    TRY_CALL(check_shape_expr(item, expr.position))
                 }
                 return value;
             }
+        }
+        
+        Result<void> check_shape_expr( const ValueExpr& value, const Position& position )
+        {
+            if ( value.is_literal() && value.as_int() < 0 )
+            {
+                return Error(position, "extent must be non-negative; found %d", (int)value.as_int());
+            }
+            return {};
         }
         
         template<typename T>
