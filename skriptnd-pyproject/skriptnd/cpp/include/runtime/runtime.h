@@ -1199,14 +1199,14 @@ namespace sknd
                 static void check( const size_t size ) {}
             };
         
-            template<> struct reduce_check<minimize, int_t>
+            template<typename T> struct reduce_check<minimize, T>
             {
-                static void check( const size_t size ) { if ( size == 0 ) throw std::invalid_argument("zero size in integer min reduction"); }
+                static void check( const size_t size ) { if ( size == 0 ) throw std::invalid_argument("zero size in min reduction"); }
             };
         
-            template<> struct reduce_check<maximize, int_t>
+            template<typename T> struct reduce_check<maximize, T>
             {
-                static void check( const size_t size ) { if ( size == 0 ) throw std::invalid_argument("zero size in integer max reduction"); }
+                static void check( const size_t size ) { if ( size == 0 ) throw std::invalid_argument("zero size in max reduction"); }
             };
         
         }   // namespace detail

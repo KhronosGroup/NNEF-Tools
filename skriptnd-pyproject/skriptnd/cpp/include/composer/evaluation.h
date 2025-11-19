@@ -1396,58 +1396,57 @@ namespace sknd
         
         static Result<ValueExpr> eval_item( const FoldExpr& expr, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache )
         {
+            TRY_DECL(rank, eval_rank(*expr.pack, symbols))
+            if ( !rank.is_literal() && allows_dynamic_fold(expr.op) )
+            {
+                TRY_DECL(pack, eval(*expr.pack, symbols))
+                return ValueExpr::fold(Lexer::str(expr.op), std::move(pack));
+            }
+            
             const Typename type = eval_type(expr, symbols);
             switch ( expr.op )
             {
                 case Lexer::Operator::Plus:
                 {
-                    return type == Typename::Real ? eval_fold<std::plus>(expr, symbols, idx, cache, (real_t)0) :
-                                                    eval_fold<std::plus>(expr, symbols, idx, cache, (int_t)0);
+                    auto count = expr.cumulative ? *idx + 1 : rank.as_int();
+                    return type == Typename::Real ? eval_fold<std::plus>(expr, symbols, count, cache, (real_t)0) :
+                                                    eval_fold<std::plus>(expr, symbols, count, cache, (int_t)0);
                 }
                 case Lexer::Operator::Multiply:
                 {
-                    return type == Typename::Real ? eval_fold<std::multiplies>(expr, symbols, idx, cache, (real_t)1) :
-                                                    eval_fold<std::multiplies>(expr, symbols, idx, cache, (int_t)1);
+                    auto count = expr.cumulative ? *idx + 1 : rank.as_int();
+                    return type == Typename::Real ? eval_fold<std::multiplies>(expr, symbols, count, cache, (real_t)1) :
+                                                    eval_fold<std::multiplies>(expr, symbols, count, cache, (int_t)1);
                 }
                 case Lexer::Operator::Min:
                 {
-                    if ( type == Typename::Real )
+                    auto count = expr.cumulative ? *idx + 1 : rank.as_int();
+                    if ( count == 0 )
                     {
-                        return eval_fold<minimize,real_t>(expr, symbols, idx, cache, inf());
+                        return Error(expr.position, "invalid min fold over empty pack");
                     }
-                    else
-                    {
-                        TRY_DECL(value, (eval_fold<minimize,int_t>(expr, symbols, idx, cache)))
-                        if ( value == nullptr )
-                        {
-                            return Error(expr.position, "invalid min fold over empty pack");
-                        }
-                        return value;
-                    }
+                    return type == Typename::Real ? eval_fold<minimize,real_t>(expr, symbols, count, cache) :
+                                                    eval_fold<minimize,int_t>(expr, symbols, count, cache);
                 }
                 case Lexer::Operator::Max:
                 {
-                    if ( type == Typename::Real )
+                    auto count = expr.cumulative ? *idx + 1 : rank.as_int();
+                    if ( count == 0 )
                     {
-                        return eval_fold<maximize,real_t>(expr, symbols, idx, cache, -inf());
+                        return Error(expr.position, "invalid max fold over empty pack");
                     }
-                    else
-                    {
-                        TRY_DECL(value, (eval_fold<maximize,int_t>(expr, symbols, idx, cache)))
-                        if ( value == nullptr )
-                        {
-                            return Error(expr.position, "invalid max fold over empty pack");
-                        }
-                        return value;
-                    }
+                    return type == Typename::Real ? eval_fold<maximize,real_t>(expr, symbols, count, cache) :
+                                                    eval_fold<maximize,int_t>(expr, symbols, count, cache);
                 }
                 case Lexer::Operator::And:
                 {
-                    return eval_fold<std::logical_and>(expr, symbols, idx, cache, (bool_t)true);
+                    auto count = expr.cumulative ? *idx + 1 : rank.as_int();
+                    return eval_fold<std::logical_and>(expr, symbols, count, cache, (bool_t)true);
                 }
                 case Lexer::Operator::Or:
                 {
-                    return eval_fold<std::logical_or>(expr, symbols, idx, cache, (bool_t)false);
+                    auto count = expr.cumulative ? *idx + 1 : rank.as_int();
+                    return eval_fold<std::logical_or>(expr, symbols, count, cache, (bool_t)false);
                 }
                 case Lexer::Operator::Less:
                 {
@@ -1660,21 +1659,12 @@ namespace sknd
     private:
         
         template<template<typename> class F, typename T>
-        static Result<ValueExpr> eval_fold( const FoldExpr& fold, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache,
+        static Result<ValueExpr> eval_fold( const FoldExpr& fold, const Dict<Symbol>& symbols, const size_t count, Cache* cache,
                                            const std::optional<T> init = std::nullopt )
         {
-            TRY_DECL(rank, eval_rank(*fold.pack, symbols))
-            assert(rank != nullptr);
-            if ( !rank.is_literal() )
-            {
-                TRY_DECL(pack, eval(*fold.pack, symbols))
-                return ValueExpr::fold(Lexer::str(fold.op), std::move(pack));
-            }
-            
             const F<T> func;
             auto literal_value = init;
             ValueExpr expr_value;
-            auto count = fold.cumulative ? *idx + 1 : rank.as_int();
             TRY_DECL(items, eval_items(*fold.pack, symbols, count))
             
             size_t terms = 0;
@@ -1715,10 +1705,9 @@ namespace sknd
         }
         
         template<template<typename> class F, typename T>
-        static Result<ValueExpr> eval_fold( const FoldExpr& fold, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache,
-                                           const T init )
+        static Result<ValueExpr> eval_fold( const FoldExpr& fold, const Dict<Symbol>& symbols, const size_t count, Cache* cache, const T init )
         {
-            return eval_fold<F>(fold, symbols, idx, cache, std::optional<T>(init));
+            return eval_fold<F>(fold, symbols, count, cache, std::optional<T>(init));
         }
         
         template<template<typename> class F, typename T>
@@ -2639,6 +2628,10 @@ namespace sknd
                 }
                 else
                 {
+                    if ( !select.right )
+                    {
+                        return Error(expr.position, "select condition must be compile-time expression when right hand side is omitted");
+                    }
                     TRY_DECL(left_null, eval_null(*select.left, symbols))
                     TRY_DECL(right_null, eval_null(*select.right, symbols))
                     return left_null || right_null;
