@@ -792,7 +792,7 @@ namespace sknd
                 case ValueExpr::Cast:
                 {
                     auto& cast = expr.as_cast();
-                    if ( cast.dtype == Typename::Int && cast.arg.is_infinity() )
+                    if ( cast.dtype == Typename::Int && cast.arg.is_infinite() )
                     {
                         break;
                     }
@@ -1068,14 +1068,6 @@ namespace sknd
                 }
                 case Lexer::Operator::Minus:
                 {
-                    if ( arg == ValueExpr::positive_infinity<int_t>() )
-                    {
-                        return ValueExpr::negative_infinity<int_t>();
-                    }
-                    if ( arg == ValueExpr::negative_infinity<int_t>() )
-                    {
-                        return ValueExpr::positive_infinity<int_t>();
-                    }
                     return arg.dtype() == Typename::Real ? ValueExpr(-(real_t)arg) : ValueExpr(-(int_t)arg);
                 }
                 case Lexer::Operator::Not:
@@ -1236,11 +1228,11 @@ namespace sknd
                     {
                         return left.detach();
                     }
-                    if ( left.is_positive_infinity() || left.is_negative_infinity() )
+                    if ( left.is_infinite() )
                     {
                         return left.detach();
                     }
-                    if ( right.is_positive_infinity() || right.is_negative_infinity() )
+                    if ( right.is_infinite() )
                     {
                         return right.detach();
                     }
@@ -1256,11 +1248,11 @@ namespace sknd
                     {
                         return left.detach();
                     }
-                    if ( left.is_positive_infinity() || left.is_negative_infinity() )
+                    if ( left.is_infinite() )
                     {
                         return left.detach();
                     }
-                    if ( right.is_positive_infinity() || right.is_negative_infinity() )
+                    if ( right.is_infinite() )
                     {
                         return -right.detach();
                     }
@@ -1284,14 +1276,6 @@ namespace sknd
                     {
                         return -left.detach();
                     }
-                    if ( left.is_infinity<int_t>() && right.is_literal() )
-                    {
-                        return right.as_int() > 0 ? left.detach() : -left.detach();
-                    }
-                    if ( right.is_infinity<int_t>() && left.is_literal() )
-                    {
-                        return left.as_int() > 0 ? right.detach() : -right.detach();
-                    }
                     break;
                 }
                 case Lexer::Operator::Divide:
@@ -1308,14 +1292,6 @@ namespace sknd
                     if ( left == right )
                     {
                         return left.dtype() == Typename::Real ? ValueExpr((real_t)1) : ValueExpr((int_t)1);
-                    }
-                    if ( left.is_infinity<int_t>() && right.is_literal() )
-                    {
-                        return right.as_int() > 0 ? left.detach() : -left.detach();
-                    }
-                    if ( right.is_infinity<int_t>() )
-                    {
-                        return ValueExpr((int_t)0);
                     }
                     break;
                 }
@@ -1417,19 +1393,19 @@ namespace sknd
                     {
                         return ValueExpr(true);
                     }
-                    if ( left.is_positive_infinity() )
+                    if ( left == inf() )
                     {
                         return ValueExpr(true);
                     }
-                    if ( right.is_positive_infinity() )
+                    if ( right == inf() )
                     {
                         return ValueExpr(false);
                     }
-                    if ( left.is_negative_infinity() )
+                    if ( left == -inf() )
                     {
                         return ValueExpr(false);
                     }
-                    if ( right.is_negative_infinity() )
+                    if ( right == -inf() )
                     {
                         return ValueExpr(true);
                     }
@@ -1445,19 +1421,19 @@ namespace sknd
                     {
                         return ValueExpr(true);
                     }
-                    if ( left.is_positive_infinity() )
+                    if ( left == inf() )
                     {
                         return ValueExpr(false);
                     }
-                    if ( right.is_positive_infinity() )
+                    if ( right == inf() )
                     {
                         return ValueExpr(true);
                     }
-                    if ( left.is_negative_infinity() )
+                    if ( left == -inf() )
                     {
                         return ValueExpr(true);
                     }
-                    if ( right.is_negative_infinity() )
+                    if ( right == -inf() )
                     {
                         return ValueExpr(false);
                     }
@@ -1473,19 +1449,19 @@ namespace sknd
                     {
                         return ValueExpr(false);
                     }
-                    if ( left.is_positive_infinity() )
+                    if ( left == inf() )
                     {
                         return ValueExpr(true);
                     }
-                    if ( right.is_positive_infinity() )
+                    if ( right == inf() )
                     {
                         return ValueExpr(false);
                     }
-                    if ( left.is_negative_infinity() )
+                    if ( left == -inf() )
                     {
                         return ValueExpr(false);
                     }
-                    if ( right.is_negative_infinity() )
+                    if ( right == -inf() )
                     {
                         return ValueExpr(true);
                     }
@@ -1501,19 +1477,19 @@ namespace sknd
                     {
                         return ValueExpr(false);
                     }
-                    if ( left.is_positive_infinity() )
+                    if ( left == inf() )
                     {
                         return ValueExpr(false);
                     }
-                    if ( right.is_positive_infinity() )
+                    if ( right == inf() )
                     {
                         return ValueExpr(true);
                     }
-                    if ( left.is_negative_infinity() )
+                    if ( left == -inf() )
                     {
                         return ValueExpr(true);
                     }
-                    if ( right.is_negative_infinity() )
+                    if ( right == -inf() )
                     {
                         return ValueExpr(false);
                     }
@@ -1529,19 +1505,19 @@ namespace sknd
                     {
                         return left.detach();
                     }
-                    if ( left.is_positive_infinity() )
+                    if ( left == inf() )
                     {
                         return right.detach();
                     }
-                    if ( right.is_positive_infinity() )
+                    if ( right == inf() )
                     {
                         return left.detach();
                     }
-                    if ( left.is_negative_infinity() )
+                    if ( left == -inf() )
                     {
                         return left.detach();
                     }
-                    if ( right.is_negative_infinity() )
+                    if ( right == -inf() )
                     {
                         return right.detach();
                     }
@@ -1575,19 +1551,19 @@ namespace sknd
                     {
                         return left.detach();
                     }
-                    if ( left.is_positive_infinity() )
+                    if ( left == inf() )
                     {
                         return left.detach();
                     }
-                    if ( right.is_positive_infinity() )
+                    if ( right == inf() )
                     {
                         return right.detach();
                     }
-                    if ( left.is_negative_infinity() )
+                    if ( left == -inf() )
                     {
                         return right.detach();
                     }
-                    if ( right.is_negative_infinity() )
+                    if ( right == -inf() )
                     {
                         return left.detach();
                     }

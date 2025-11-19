@@ -1502,14 +1502,12 @@ namespace sknd
                 return arg;
             }
             
-            auto inf = std::numeric_limits<real_t>::infinity();
-            if ( arg == inf && type == Typename::Int )
+            if ( type == Typename::Int )
             {
-                return ValueExpr::positive_infinity<int_t>();
-            }
-            else if ( arg == -inf && type == Typename::Int )
-            {
-                return ValueExpr::negative_infinity<int_t>();
+                if ( arg == inf() || arg == -inf() )
+                {
+                    return Error(cast.position, "invalid casting of infinity to int");
+                }
             }
             
             if ( !arg.is_literal() )
@@ -2817,11 +2815,11 @@ namespace sknd
                         auto [min, max] = eval_shape_expr_bounds<T>(cast.arg, idx);
                         return duplicate(min != (T)0 || max != (T)0);
                     }
-                    if ( cast.arg == std::numeric_limits<real_t>::infinity() )
+                    if ( cast.arg == inf() )
                     {
                         return duplicate(std::numeric_limits<T>::max());
                     }
-                    if ( cast.arg == -std::numeric_limits<real_t>::infinity() )
+                    if ( cast.arg == -inf() )
                     {
                         return duplicate(std::numeric_limits<T>::min());
                     }

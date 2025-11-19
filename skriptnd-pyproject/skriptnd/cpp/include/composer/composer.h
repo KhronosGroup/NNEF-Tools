@@ -3184,7 +3184,7 @@ namespace sknd
                 }
                 case Lexer::Operator::MinEqual:
                 {
-                    auto expr = (Shared<Expr>)std::make_shared<RealExpr>(position, std::numeric_limits<real_t>::infinity());
+                    auto expr = (Shared<Expr>)std::make_shared<RealExpr>(position, inf());
                     if ( dtype != Typename::Real )
                     {
                         expr = (Shared<Expr>)std::make_shared<CastExpr>(position, dtype, expr);
@@ -3193,7 +3193,7 @@ namespace sknd
                 }
                 case Lexer::Operator::MaxEqual:
                 {
-                    auto expr = (Shared<Expr>)std::make_shared<RealExpr>(position, -std::numeric_limits<real_t>::infinity());
+                    auto expr = (Shared<Expr>)std::make_shared<RealExpr>(position, -inf());
                     if ( dtype != Typename::Real )
                     {
                         expr = (Shared<Expr>)std::make_shared<CastExpr>(position, dtype, expr);

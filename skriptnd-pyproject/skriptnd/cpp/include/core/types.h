@@ -211,6 +211,11 @@ namespace sknd
             return std::max(a, b);
         }
     };
+
+    inline real_t inf()
+    {
+        return std::numeric_limits<real_t>::infinity();
+    }
     
 }   // namespace sknd
 

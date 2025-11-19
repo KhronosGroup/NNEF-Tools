@@ -105,20 +105,6 @@ namespace sknd
             return empty;
         }
         
-        template<typename T = real_t, typename = std::enable_if_t<std::is_same_v<T,real_t> || std::is_same_v<T,int_t>>>
-        static const ValueExpr& positive_infinity()
-        {
-            static const ValueExpr inf = std::numeric_limits<real_t>::infinity();
-            return inf;
-        }
-        
-        template<typename T = real_t, typename = std::enable_if_t<std::is_same_v<T,real_t> || std::is_same_v<T,int_t>>>
-        static const ValueExpr& negative_infinity()
-        {
-            static const ValueExpr inf = -std::numeric_limits<real_t>::infinity();
-            return inf;
-        }
-        
         template<typename T>
         static Kind kind_of()
         {
@@ -913,15 +899,6 @@ namespace sknd
         
         ValueExpr slice( const size_t first, const size_t last, const size_t stride = 1 ) const;
         
-        template<typename T = real_t, typename = std::enable_if_t<std::is_same_v<T,real_t> || std::is_same_v<T,int_t>>>
-        bool is_infinity() const
-        {
-            return *this == positive_infinity<T>() || *this == negative_infinity<T>();
-        }
-        
-        bool is_positive_infinity() const;
-        bool is_negative_infinity() const;
-        
         bool is_dynamic() const;
         bool has_dynamic_size() const;
         ValueExpr size() const;
@@ -929,6 +906,16 @@ namespace sknd
         bool is_unary( const std::string& op ) const;
         bool is_binary( const std::string& op ) const;
         bool is_fold( const std::string& op ) const;
+        
+        bool is_infinite() const
+        {
+            if ( !is_real() )
+            {
+                return false;
+            }
+            const real_t value = _data.as<real_t>();
+            return value == inf() || value == -inf();
+        }
         
         void resize( const size_t size )
         {
@@ -1273,30 +1260,6 @@ namespace sknd
     {
         auto type = value.dtype();
         return ValueExpr(UniformExpr{ std::forward<ValueExpr>(value), std::forward<ValueExpr>(size) }, type, max_size);
-    }
-
-    template<>
-    inline const ValueExpr& ValueExpr::positive_infinity<int_t>()
-    {
-        static const ValueExpr inf(CastExpr{Typename::Int, positive_infinity()}, Typename::Int);
-        return inf;
-    }
-
-    template<>
-    inline const ValueExpr& ValueExpr::negative_infinity<int_t>()
-    {
-        static const ValueExpr inf(CastExpr{Typename::Int, negative_infinity()}, Typename::Int);
-        return inf;
-    }
-
-    inline bool ValueExpr::is_positive_infinity() const
-    {
-        return *this == positive_infinity<real_t>() || *this == positive_infinity<int_t>();
-    }
-
-    inline bool ValueExpr::is_negative_infinity() const
-    {
-        return *this == negative_infinity<real_t>() || *this == negative_infinity<int_t>();
     }
 
     inline bool ValueExpr::is_unary( const std::string& op ) const

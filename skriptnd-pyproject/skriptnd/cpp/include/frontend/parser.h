@@ -717,7 +717,7 @@ namespace sknd
                     if ( lexer.is_token(Keyword::Inf) )
                     {
                         TRY_CALL(lexer.accept());
-                        return (Shared<Expr>)std::make_shared<RealExpr>(position, std::numeric_limits<real_t>::infinity());
+                        return (Shared<Expr>)std::make_shared<RealExpr>(position, inf());
                     }
                     else if ( lexer.is_token(Keyword::Pi) )
                     {
