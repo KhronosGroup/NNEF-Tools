@@ -382,7 +382,7 @@ namespace sknd
                     if ( symbol.is<ValueExpr>() )
                     {
                         auto& value = symbol.as<ValueExpr>();
-                        if ( is_literal(value) || is_shape_access(value) )
+                        if ( is_literal(value) || is_shape_access(value) || value.is_reference() )
                         {
                             return value;
                         }
@@ -933,7 +933,7 @@ namespace sknd
             }
             else
             {
-                if ( value.is_literal() || value.is_shape_access() || value.is_size_access() )
+                if ( value.is_literal() || value.is_shape_access() || value.is_size_access() || value.is_reference() )
                 {
                     return value;
                 }
