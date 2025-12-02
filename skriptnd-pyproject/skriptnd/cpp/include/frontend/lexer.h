@@ -94,6 +94,8 @@ namespace sknd
             With,
             Yield,
             Unroll,
+            Static,
+            Dynamic,
         };
         
         static constexpr const char* const KeywordStrings[] =
@@ -127,6 +129,8 @@ namespace sknd
             "with",
             "yield",
             "unroll",
+            "static",
+            "dynamic",
         };
         
         static constexpr const size_t KeywordCount = sizeof(KeywordStrings) / sizeof(const char*);

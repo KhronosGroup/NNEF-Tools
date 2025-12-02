@@ -158,7 +158,7 @@ operator linear_upsample {
 operator nearest_resize {
     @attrib {
         axes: int..(k) = [0:d];
-        size: int..(k);
+        size: dynamic int..(k);
         coordinate_transform: str = 'SYMMETRIC';
         rounding_method: str = 'ROUND_PREFER_FLOOR';
     }
@@ -206,7 +206,7 @@ operator nearest_resize {
 operator linear_resize {
     @attrib {
         axes: int..(k) = [0:d];
-        size: int..(k);
+        size: dynamic int..(k);
         antialias: bool = true;
         coordinate_transform: str = 'SYMMETRIC';
     }
@@ -248,7 +248,7 @@ operator linear_resize {
 operator cubic_resize {
     @attrib {
         axes: int..(k) = [0:d];
-        size: int..(k);
+        size: dynamic int..(k);
         antialias: bool = true;
         coeff_a: real = -0.75;
         coordinate_transform: str = 'SYMMETRIC';
@@ -279,7 +279,7 @@ operator cubic_resize {
 operator resize {
     @attrib {
         axes: int..(k) = [0:d];
-        size: int..(k);
+        size: dynamic int..(k);
         mode: str = 'NEAREST';
         coordinate_transform: str = 'SYMMETRIC';
         rounding_method: str = 'ROUND_PREFER_FLOOR';

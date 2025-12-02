@@ -15,7 +15,7 @@
 
 operator mesh_grid {
     @input {
-        inputs: real[..shape]..(n);
+        inputs: real[..shape]..(static n);
     }
     @output {
         outputs: real[shape..]..(n);

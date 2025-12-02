@@ -21,7 +21,7 @@ operator linear {
         use_bias: bool = true;
     }
     @input {
-        input: real[b,c];
+        input: real[b,static c];
     }
     @output {
         output: real[b,channels];
@@ -47,7 +47,7 @@ operator conv {
         groups: int = 1;
     }
     @input {
-        input: real[b,c,s..(d)];
+        input: real[b,static c,s..(d)];
     }
     @using {
         fd = (size - 1) * dilation + 1;
@@ -88,7 +88,7 @@ operator deconv {
         groups: int = 1;
     }
     @input {
-        input: real[b,n,s..(d)];
+        input: real[b,static n,s..(d)];
     }
     @using {
         fd = (size - 1) * dilation + 1;
@@ -125,7 +125,7 @@ operator batch_norm {
         momentum: real = 0.0;
     }
     @input {
-        input: real[b,c,s..(d)];
+        input: real[b,static c,s..(d)];
     }
     @output {
         output: real[b,c,s..];

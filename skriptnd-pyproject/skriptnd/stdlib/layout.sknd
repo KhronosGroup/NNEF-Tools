@@ -24,8 +24,8 @@ operator tensor {
         T: type;
     }
     @attrib {
-        shape: int..(d) = [];
-        value: T..(shape * ..);
+        shape: dynamic int..(static d) = [];
+        value: dynamic T..(shape * ..);
     }
     @output {
         output: T[shape..];
@@ -48,7 +48,7 @@ operator uniform {
         T: type;
     }
     @attrib {
-        shape: int..(d);
+        shape: dynamic int..(static d);
     }
     @input {
         value: T[];
@@ -69,8 +69,8 @@ operator range {
         T: num;
     }
     @attrib {
-        first: T;
-        last: T;
+        first: dynamic T;
+        last: dynamic T;
         stride: T = T(1);
     }
     @output {
@@ -138,9 +138,9 @@ operator reshape {
         T: type;
     }
     @attrib {
-        axis: int = 0;      # dimension where reshaping starts
-        rank: int = d;      # number of reshaped dimensions
-        shape: int..(r);    # new shape for marked dimensions
+        axis: int = 0;                      # dimension where reshaping starts
+        rank: int = d;                      # number of reshaped dimensions
+        shape: dynamic int..(static r);     # new shape for marked dimensions
     }
     @input {
         input: T^(input_rank)[s..(axis < 0 ? axis + input_rank : axis),t..(d)];
@@ -221,8 +221,8 @@ operator unflatten {
         T: type;
     }
     @attrib {
-        axis: int;          # unflattened dimension
-        shape: int..(d);    # new shape
+        axis: int;                          # unflattened dimension
+        shape: dynamic int..(static d);     # new shape
     }
     @input {
         input: T^(input_rank)[s..(axis < 0 ? axis + input_rank : axis),z,t..];
@@ -360,8 +360,8 @@ operator split {
     }
     @attrib {
         axis: int;
-        count: optional int;
-        sizes: int..(n) = [(z / count)..(count)];
+        count: dynamic optional int;
+        sizes: dynamic int..(n) = [(z / count)..(count)];
     }
     @input {
         input: T^(rank)[s..(axis < 0 ? axis + rank : axis),z,t..];
@@ -487,7 +487,7 @@ operator broadcast {
     }
     @attrib {
         axes: int..(k) = [0:d];     # effected axes
-        shape: int..(k);            # new dimensions for effected axes
+        shape: dynamic int..(k);    # new dimensions for effected axes
     }
     @input {
         input: T[s..(d)];
@@ -524,8 +524,8 @@ operator slice {
     }
     @attrib {
         axes: int..(k) = [0:d];     # effected dimensions
-        begin: int..(k);            # beginning positions for effected dimensions
-        end: int..(k);              # ending positions for effected dimensions
+        begin: dynamic int..(k);    # beginning positions for effected dimensions
+        end: dynamic int..(k);      # ending positions for effected dimensions
         stride: int..(k) = 1;       # strides for effected dimensions
     }
     @input {
@@ -569,7 +569,7 @@ operator pad {
     }
     @attrib {
         axes: int..(k) = [0:d];
-        padding: int..(2 * k);
+        padding: dynamic int..(2 * k);
         method: str = 'CONSTANT';
     }
     @input {

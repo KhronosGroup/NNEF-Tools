@@ -367,15 +367,15 @@ operator avg_pool {
         padding_align in padding_aligns:
             "'padding_align' must be one of {padding_aligns}", padding_align;
     }
-    @constant {
-        ones: real[[1 ..(d)][axes] <- sa..] = 1.0;
-    }
     @compose {
         sum = sum_pool{size=size, stride=stride, dilation=dilation, padding=padding,
                         padding_align=padding_align, axes=axes, ceil_mode=ceil_mode}(input);
-        cnt = if ignore_border then
-                  sum_pool{size=size, stride=stride, dilation=dilation, padding=padding,
-                           padding_align=padding_align, axes=axes, ceil_mode=ceil_mode}(ones)
+        cnt = if ignore_border then {
+                  ones = layout.tensor{shape=[[1 ..(d)][axes] <- sa..], value=1.0}();
+                  cnt = sum_pool{size=size, stride=stride, dilation=dilation, padding=padding,
+                        padding_align=padding_align, axes=axes, ceil_mode=ceil_mode}(ones);
+                  yield cnt;
+              }
               else real(size * ..);
         output = math.div(sum, cnt);
     }

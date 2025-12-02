@@ -101,7 +101,7 @@ namespace sknd
             {
                 if ( !is_deferred_attrib(param) )
                 {
-                    declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Attrib);
+                    declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats.value, Declaration::Attrib);
                 }
             }
             
@@ -122,8 +122,8 @@ namespace sknd
             {
                 if ( is_deferred_attrib(param) )
                 {
-                    declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Attrib);
-                    if ( param.repeats )
+                    declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats.value, Declaration::Attrib);
+                    if ( param.repeats.value )
                     {
                         declare_repeats(decls, param);
                     }
@@ -140,12 +140,12 @@ namespace sknd
             for ( size_t i = 0; i < op.inputs.size(); ++i )
             {
                 auto& param = op.inputs[(*order)[i]];
-                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Input);
-                if ( param.repeats && (!op.graph || param.repeats_bound) )
+                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats.value, Declaration::Input);
+                if ( param.repeats.value && (!op.graph || param.repeats.bound) )
                 {
                     if ( main )
                     {
-                        check_repeat_bound(decls, param.repeats, param.repeats_bound);
+                        check_repeat_bound(decls, param.repeats.value, param.repeats.bound);
                     }
                     declare_repeats(decls, param);
                 }
@@ -157,7 +157,7 @@ namespace sknd
                     {
                         check_shape_component_bounds(decls, shape);
                     }
-                    declare_shape_components(decls, shape, param.repeats, param.type.optional);
+                    declare_shape_components(decls, shape, param.repeats.value, param.type.optional);
                     if ( uses_shape_symbols(shape) )
                     {
                         report_error(param.position, "implicitly defined shape/rank symbols are not allowed in input shape declaration");
@@ -191,11 +191,11 @@ namespace sknd
                 check_param(param, decls, Lexer::Block::Input);
                 if ( param.shape )
                 {
-                    check_shape_components(decls, *param.shape, param.repeats, false);
+                    check_shape_components(decls, *param.shape, param.repeats.value, false, false);
                 }
                 if ( main )
                 {
-                    if ( param.type.packed && !param.repeats )
+                    if ( param.type.packed && !param.repeats.value )
                     {
                         report_error(param.position, "packed inputs of main graph must have their pack sizes defined");
                     }
@@ -206,7 +206,7 @@ namespace sknd
                     else
                     {
                         auto& shape = *param.shape;
-                        if ( std::any_of(shape.extents.begin(), shape.extents.end(), []( const Shared<Expr>& item ){ return !item; }) )
+                        if ( std::any_of(shape.extents.begin(), shape.extents.end(), []( const Extent& extent ){ return !extent.value; }) )
                         {
                             report_error(shape.position, "inputs of main graph must have their shape components specified");
                         }
@@ -228,35 +228,35 @@ namespace sknd
                 check_param(param, decls, Lexer::Block::Constant);
                 if ( param.shape )
                 {
-                    check_shape_components(decls, *param.shape, param.repeats);
+                    check_shape_components(decls, *param.shape, param.repeats.value, true, true);
                 }
                 else
                 {
                     report_error(param.position, "constants must have their shape specified");
                 }
-                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Constant);
+                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats.value, Declaration::Constant);
             }
             for ( auto& param : op.variables )
             {
                 check_param(param, decls, Lexer::Block::Variable);
                 if ( param.shape )
                 {
-                    check_shape_components(decls, *param.shape, param.repeats);
+                    check_shape_components(decls, *param.shape, param.repeats.value, true, true);
                 }
                 else
                 {
                     report_error(param.position, "variables must have their shape specified");
                 }
-                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Variable);
+                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats.value, Declaration::Variable);
             }
             for ( auto& param : op.outputs )
             {
                 check_param(param, decls, Lexer::Block::Output);
-                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats, Declaration::Output);
+                declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats.value, Declaration::Output);
                 if ( param.shape )
                 {
                     declare_dynamic_shape_components(decls, *param.shape);
-                    check_shape_components(decls, *param.shape, param.repeats, true, !op.graph);
+                    check_shape_components(decls, *param.shape, param.repeats.value, true, false, !op.graph);
                 }
                 else if ( !op.graph )
                 {
@@ -373,6 +373,10 @@ namespace sknd
                                 }
                             }
                         }
+                        if ( decl.type.dynamic && !type.dynamic )
+                        {
+                            decl.type.dynamic = false;
+                        }
                         if ( as_non_optional(decl.type) != as_non_optional(type) && type.name != Typename::Type )
                         {
                             report_error(position, "identifer '%s' was previously declared as '%s' at [%d,%d]; would be redeclared as '%s'",
@@ -398,15 +402,15 @@ namespace sknd
                 {
                     if ( type.packed )
                     {
-                        declare_symbol(decls, position, name + ".size", make_type(Typename::Int, type.optional, false, false), nullptr, nullptr,
+                        declare_symbol(decls, position, name + ".size", make_type(Typename::Int, type.optional, false, false, true), nullptr, nullptr,
                                        Declaration::Shape | Declaration::Implicit);
                     }
                     else
                     {
                         auto shape_rank = std::make_shared<IdentifierExpr>(position, name + ".rank");
-                        declare_symbol(decls, position, name + ".shape", make_type(Typename::Int, type.optional, false, true), nullptr, shape_rank,
+                        declare_symbol(decls, position, name + ".shape", make_type(Typename::Int, type.optional, false, true, true), nullptr, shape_rank,
                                        Declaration::Shape | Declaration::Implicit);
-                        declare_symbol(decls, position, name + ".rank", make_type(Typename::Int, type.optional, false, false), nullptr, nullptr,
+                        declare_symbol(decls, position, name + ".rank", make_type(Typename::Int, type.optional, false, false, false), nullptr, nullptr,
                                        Declaration::Shape | Declaration::Implicit);
                     }
                 }
@@ -415,17 +419,15 @@ namespace sknd
         
         void declare_shape_components( Dict<Declaration>& decls, const Shapedef& shape, const Shared<Expr>& repeats, bool optional ) const
         {
-            size_t idx = 0;
-            for ( auto item : shape.extents )
+            for ( auto& extent : shape.extents )
             {
+                auto item = extent.value;
                 bool packed = false;
                 bool optnal = optional;
-                bool dynamic = shape.bounds[idx] != nullptr;
-                bool spread = shape.spreads & (1 << idx++);
                 
                 Shared<Expr> count, cond;
                 
-                if ( spread )
+                if ( extent.spread )
                 {
                     count = repeats;
                     packed = true;
@@ -451,7 +453,7 @@ namespace sknd
                             auto& iden = find_affine_id(*count);
                             if ( !iden.empty() )
                             {
-                                auto type = make_type(Typename::Int, optional, false, false);
+                                auto type = make_type(Typename::Int, optional, false, false, false);
                                 declare_symbol(decls, count->position, iden, type, nullptr, nullptr, Declaration::Shape);
                             }
                         }
@@ -461,7 +463,7 @@ namespace sknd
                 auto& iden = find_affine_id(*item);
                 if ( !iden.empty() )
                 {
-                    if ( dynamic )
+                    if ( extent.bound )
                     {
                         auto it = decls.find(iden);
                         if ( it != decls.end() && (it->second.flags & Declaration::Attrib) )
@@ -472,7 +474,7 @@ namespace sknd
                                          iden.c_str(), (int)pos.line, (int)pos.column);
                         }
                     }
-                    auto type = make_type(Typename::Int, optnal, false, packed);
+                    auto type = make_type(Typename::Int, optnal, false, packed, extent.dynamic);
                     declare_symbol(decls, item->position, iden, type, nullptr, count, Declaration::Shape, cond);
                 }
             }
@@ -480,21 +482,20 @@ namespace sknd
         
         void declare_dynamic_shape_components( Dict<Declaration>& decls, const Shapedef& shape ) const
         {
-            for ( size_t i = 0; i < shape.extents.size(); ++i )
+            for ( auto& extent : shape.extents )
             {
-                auto& extent = shape.extents[i];
-                auto& bound = shape.bounds[i];
-                if ( bound )
+                auto& item = extent.value;
+                if ( extent.bound )
                 {
-                    if ( extent->kind == Expr::Identifier )
+                    if ( item->kind == Expr::Identifier )
                     {
-                        auto& iden = as_identifier(*extent).name;
-                        declare_symbol(decls, extent->position, iden, make_type(Typename::Int), nullptr, nullptr,
+                        auto& iden = as_identifier(*item).name;
+                        declare_symbol(decls, item->position, iden, make_type(Typename::Int), nullptr, nullptr,
                                        Declaration::Shape | Declaration::Implicit);
                     }
                     else
                     {
-                        report_error(extent->position, "expected identifier when upper bound is specified");
+                        report_error(item->position, "expected identifier when upper bound is specified");
                     }
                 }
             }
@@ -510,19 +511,19 @@ namespace sknd
         }
         
         void check_shape_components( const Dict<Declaration>& decls, const Shapedef& shape, const Shared<Expr>& repeats,
-                                    bool enforce_check = true, bool enforce_bound = false ) const
+                                    bool enforce_check = true, bool enforce_static = false, bool enforce_bound = false ) const
         {
-            for ( size_t i = 0; i < shape.extents.size(); ++i )
+            for ( auto& extent : shape.extents )
             {
-                auto extent = shape.extents[i];
-                auto bound = shape.bounds[i];
-                bool spread = shape.spreads & (1 << i);
+                auto item = extent.value;
+                auto bound = extent.bound;
+                bool spread = extent.spread;
                 
-                if ( extent )
+                if ( item )
                 {
-                    if ( extent->kind == Expr::Expand )
+                    if ( item->kind == Expr::Expand )
                     {
-                        auto& expand = as_expand(*extent);
+                        auto& expand = as_expand(*item);
                         if ( expand.count )
                         {
                             if ( !is_affine_expr(*expand.count) || enforce_check )
@@ -530,16 +531,31 @@ namespace sknd
                                 check_repeat(*expand.count, decls, true);
                             }
                         }
-                        extent = expand.item;
+                        item = expand.item;
                         
-                        if ( extent )
+                        if ( item )
                         {
-                            if ( !is_affine_expr(*extent) || enforce_check )
+                            if ( enforce_check || !is_affine_expr(*item) )
                             {
-                                auto [type, rank] = check_extent(*extent, decls);
-                                if ( type && !type->packed && !expand.count )
+                                auto [type, rank] = check_extent(*item, decls);
+                                if ( type )
                                 {
-                                    report_error(extent->position, "repeat count must be supplied if item is not a pack");
+                                    if ( !type->packed && !expand.count )
+                                    {
+                                        report_error(item->position, "repeat count must be supplied if item is not a pack");
+                                    }
+                                    if ( enforce_static && type->dynamic )
+                                    {
+                                        report_error(item->position, "extent must be static expression in this context");
+                                    }
+                                }
+                                if ( rank && *rank )
+                                {
+                                    auto rank_type = eval_type(**rank, decls);
+                                    if ( rank_type && rank_type->dynamic )
+                                    {
+                                        report_error(item->position, "packed extent must have static rank in this context");
+                                    }
                                 }
                             }
                         }
@@ -548,21 +564,28 @@ namespace sknd
                     {
                         if ( spread && !repeats )
                         {
-                            report_error(extent->position, "packed item can only be spread across a packed parameter");
+                            report_error(item->position, "packed item can only be spread across a packed parameter");
                         }
-                        if ( !is_affine_expr(*extent) || enforce_check )
+                        if ( enforce_check || !is_affine_expr(*item) )
                         {
-                            auto [type, rank] = check_extent(*extent, decls, repeats);
-                            if ( type && type->packed && !spread )
+                            auto [type, rank] = check_extent(*item, decls, repeats);
+                            if ( type )
                             {
-                                report_error(extent->position, "packed item must be expanded or spread in shape definitions");
+                                if ( type->packed && !spread )
+                                {
+                                    report_error(item->position, "packed item must be expanded or spread in shape definitions");
+                                }
+                                if ( enforce_static && type->dynamic )
+                                {
+                                    report_error(item->position, "extent must be static expression in this context");
+                                }
                             }
                         }
                     }
                 }
                 else if ( !bound && enforce_bound )
                 {
-                    report_error(shape.position, "upper bound must be specified for dynamic shape components");
+                    report_error(item->position, "upper bound must be specified for dynamic shape components");
                 }
                 
                 if ( bound )
@@ -574,19 +597,17 @@ namespace sknd
         
         void check_shape_component_bounds( const Dict<Declaration>& decls, const Shapedef& shape ) const
         {
-            for ( size_t i = 0; i < shape.extents.size(); ++i )
+            for ( auto& extent : shape.extents )
             {
-                auto& extent = shape.extents[i];
-                auto& bound = shape.bounds[i];
-                
-                auto& iden = find_affine_id(expanded(*extent));
-                if ( !iden.empty() && !decls.count(iden) && !bound )
+                auto& item = extent.value;
+                auto& iden = find_affine_id(expanded(*item));
+                if ( !iden.empty() && !decls.count(iden) && !extent.bound )
                 {
-                    report_error(extent->position, "upper bound must be specified in main graph for dynamic shape");
+                    report_error(item->position, "upper bound must be specified in main graph for dynamic shape");
                 }
-                if ( extent->kind == Expr::Expand )
+                if ( item->kind == Expr::Expand )
                 {
-                    auto count = as_expand(*extent).count;
+                    auto count = as_expand(*item).count;
                     if ( has_unknown_symbols(*count, decls) )
                     {
                         report_error(count->position, "shape components of main graph inputs must have fixed length");
@@ -614,9 +635,9 @@ namespace sknd
         
         bool uses_shape_symbols( const Shapedef& shape ) const
         {
-            for ( auto& item : shape.extents )
+            for ( auto& extent : shape.extents )
             {
-                if ( item && uses_shape_symbols(*item) )
+                if ( extent.value && uses_shape_symbols(*extent.value) )
                 {
                     return true;
                 }
@@ -639,19 +660,19 @@ namespace sknd
         
         void declare_repeats( Dict<Declaration>& decls, const Typed& param ) const
         {
-            auto& iden = find_affine_id(*param.repeats);
+            auto& iden = find_affine_id(*param.repeats.value);
             if ( !iden.empty() )
             {
-                auto type = make_type(Typename::Int, param.type.optional, false, false);
-                declare_symbol(decls, param.repeats->position, iden, type, nullptr, nullptr, Declaration::Shape);
+                auto type = make_type(Typename::Int, param.type.optional, false, false, param.repeats.dynamic);
+                declare_symbol(decls, param.repeats.value->position, iden, type, nullptr, nullptr, Declaration::Shape);
                 
-                if ( param.repeats_bound )
+                if ( param.repeats.bound )
                 {
                     auto it = decls.find(iden);
                     if ( it != decls.end() && (it->second.flags & Declaration::Attrib) )
                     {
                         auto& pos = it->second.position;
-                        report_error(param.repeats->position, "identifier '%s' is already declared as an attribute at [%d,%d]; "
+                        report_error(param.repeats.value->position, "identifier '%s' is already declared as an attribute at [%d,%d]; "
                                                               "cannot be used as a dynamic pack size",
                                      iden.c_str(), (int)pos.line, (int)pos.column);
                     }
@@ -698,7 +719,7 @@ namespace sknd
                                     pack_size = std::make_shared<BinaryExpr>(item.position, repeats, diff, Lexer::Operator::Minus);
                                 }
                                 
-                                auto count = item.repeats;
+                                auto count = item.repeats.value;
                                 if ( count )
                                 {
                                     if ( !check_repeat(*count, decls) )
@@ -735,7 +756,7 @@ namespace sknd
                             if ( item.shape )
                             {
                                 declare_shape_rank(decls, item.rank);
-                                declare_shape_components(decls, *item.shape, item.repeats, item.type.optional);
+                                declare_shape_components(decls, *item.shape, item.repeats.value, item.type.optional);
                             }
                             
                             has_pack |= pack;
@@ -746,7 +767,7 @@ namespace sknd
                 {
                     auto& item = *result;
                     
-                    Shared<Expr> count = item.repeats;
+                    Shared<Expr> count = item.repeats.value;
                     if ( count )
                     {
                         if ( !type.packed )
@@ -785,7 +806,7 @@ namespace sknd
                     if ( item.shape )
                     {
                         declare_shape_rank(decls, item.rank);
-                        declare_shape_components(decls, *item.shape, item.repeats, item.type.optional);
+                        declare_shape_components(decls, *item.shape, item.repeats.value, item.type.optional);
                     }
                     
                     if ( !item.name.empty() )
@@ -919,13 +940,13 @@ namespace sknd
         void check_param( const Param& param, const Dict<Declaration>& decls, const Lexer::Block block ) const
         {
             bool declares_repeats = block == Lexer::Block::Attrib || block == Lexer::Block::Input;
-            if ( !declares_repeats && param.type.packed && !param.repeats && !param.repeats_bound )
+            if ( !declares_repeats && param.type.packed && !param.repeats.value && !param.repeats.bound )
             {
                 report_error(param.position, "repeat count must be defined");
             }
-            if ( param.repeats && (!declares_repeats || !is_affine_expr(*param.repeats)) )
+            if ( param.repeats.value && (!declares_repeats || !is_affine_expr(*param.repeats.value)) )
             {
-                check_repeat(*param.repeats, decls);
+                check_repeat(*param.repeats.value, decls);
             }
             if ( !param.type_alias.empty() )
             {
@@ -953,7 +974,7 @@ namespace sknd
             }
             if ( param.default_value )
             {
-                check_default_value(param, decls, param.repeats, block == Lexer::Block::Constant);
+                check_default_value(param, decls, block == Lexer::Block::Constant);
             }
         }
         
@@ -1018,7 +1039,7 @@ namespace sknd
                 }
                 if ( component.loop->index )
                 {
-                    auto type = make_type(Typename::Int, false, !component.loop->unroll, false);
+                    auto type = make_type(Typename::Int, false, !component.loop->unroll, false, false);
                     declare_symbol(decls, component.loop->index->position, component.loop->index->name, type, nullptr, nullptr, Declaration::LoopLocal | Declaration::AllowShadowing);
                 }
                 if ( component.loop->condition )
@@ -1160,7 +1181,7 @@ namespace sknd
             }
         }
         
-        void check_default_value( const Param& param, const Dict<Declaration>& decls, const Shared<Expr> repeats, bool check_rank ) const
+        void check_default_value( const Param& param, const Dict<Declaration>& decls, bool check_rank ) const
         {
             auto& locals = const_cast<Dict<Declaration>&>(decls);
             
@@ -1189,9 +1210,19 @@ namespace sknd
                 {
                     report_error(param.default_value->position, "default value expression cannot be of optional type if it is defined by bounds");
                 }
+                if ( type->tensor && !param.type.tensor)
+                {
+                    report_error(param.default_value->position, "tensor expression is not allowed for attributes");
+                }
+                if ( type->dynamic && !param.type.dynamic )
+                {
+                    report_error(param.default_value->position, "default value of attribute '%s' must be static expression",
+                                 param.name.c_str());
+                }
             }
-            if ( rank && *rank && repeats )
+            if ( rank && *rank && param.repeats.value )
             {
+                auto repeats = param.repeats.value;
                 if ( is_const_expr(*repeats) )
                 {
                     if ( !is_const_expr(**rank) )
@@ -1213,6 +1244,15 @@ namespace sknd
                 {
                     report_error(param.default_value->position, "default value length (%s) does not match parameter pack length (%s)",
                                  str(**rank).c_str(), str(*repeats).c_str());
+                }
+                if ( !param.repeats.dynamic )
+                {
+                    auto rank_type = eval_type(**rank, locals);
+                    if ( rank_type && rank_type->dynamic )
+                    {
+                        report_error(param.default_value->position, "default value of attribute '%s' must be of static length",
+                                     param.name.c_str());
+                    }
                 }
             }
             
@@ -1326,7 +1366,6 @@ namespace sknd
                         report_error(expr->position, "expected non-optional expression for index bounds");
                     }
                     declare_symbol(decls, expr->position, iden, *type, nullptr, *rank, Declaration::TensorIndex);
-                    check_extent(*expr, decls);
                 }
             }
             
@@ -1488,7 +1527,7 @@ namespace sknd
                                 if ( same_layout )
                                 {
                                     auto one = std::make_shared<IntExpr>(range.position, 1);
-                                    const_cast<Shared<Expr>&>(range.first) = std::make_shared<BinaryExpr>(range.position, shape->extents[i], one, Lexer::Operator::Minus);
+                                    const_cast<Shared<Expr>&>(range.first) = std::make_shared<BinaryExpr>(range.position, shape->extents[i].value, one, Lexer::Operator::Minus);
                                 }
                                 else
                                 {
@@ -1510,7 +1549,7 @@ namespace sknd
                             {
                                 if ( same_layout )
                                 {
-                                    const_cast<Shared<Expr>&>(range.last) = shape->extents[i];
+                                    const_cast<Shared<Expr>&>(range.last) = shape->extents[i].value;
                                 }
                                 else
                                 {
@@ -1526,7 +1565,7 @@ namespace sknd
                     for ( size_t i = 0; i < access.indices.size(); ++i )
                     {
                         auto& index = access.indices[i];
-                        auto& extent = shape->extents[i];
+                        auto& extent = shape->extents[i].value;
                         if ( index->kind != Expr::Expand && extent->kind == Expr::Expand )
                         {
                             report_error(index->position, "index is not packed but corresponding shape item is packed");
@@ -1737,10 +1776,13 @@ namespace sknd
             
             check_has_no_tensor_access(expr);
             
-            if ( repeats && *rank && !ranks_equal(**rank, *repeats, decls) )
+            if ( rank && *rank )
             {
-                report_error(expr.position, "extent pack size (%s) does not match parameter count (%s)",
-                             str(**rank).c_str(), str(*repeats).c_str());
+                if ( repeats && !ranks_equal(**rank, *repeats, decls) )
+                {
+                    report_error(expr.position, "extent pack size (%s) does not match parameter count (%s)",
+                                 str(**rank).c_str(), str(*repeats).c_str());
+                }
             }
             
             return std::make_pair(type, rank);
@@ -1894,6 +1936,10 @@ namespace sknd
                                                  "non-packed expression type '%s' incompatible with packed parameter type '%s' for argument %d",
                                                  str(*type).c_str(), str(param.type).c_str(), (int)(i+1));
                                 }
+                                if ( type->dynamic )
+                                {
+                                    report_error(arg->position, "dynamic expression not allowed for tensor argument %d", (int)(i+1));
+                                }
                                 if ( !param.type_alias.empty() )
                                 {
                                     check_base_type(op, param.type_alias, type->name, arg->position);
@@ -1980,12 +2026,17 @@ namespace sknd
                 }
                 if ( type->packed && repeated )
                 {
-                    report_error(region.position, "repeated block can only yield results of non-packed type (found '%s' for result %d)", str(*type).c_str(), (int)types.size() + 1);
+                    report_error(yield->position, "repeated block can only yield results of non-packed type (found '%s')", str(*type).c_str());
                     return {};
                 }
                 if ( type->optional )
                 {
-                    report_error(region.position, "yielded result must not be of optional type (found '%s' for result %d)", str(*type).c_str(), (int)types.size() + 1);
+                    report_error(yield->position, "result of block must not be of optional type (found '%s')", str(*type).c_str());
+                    return {};
+                }
+                if ( type->dynamic )
+                {
+                    report_error(yield->position, "result of block must not be dynamic expression");
                     return {};
                 }
                 type->packed |= repeated && types.size() >= nvars;
@@ -2024,15 +2075,16 @@ namespace sknd
         {
             for ( auto& [key, value] : attribs )
             {
+                auto attrib = find_param(op.attribs, key);
+                if ( !attrib )
+                {
+                    report_error(value->position, "operator '%s' has no attribute '%s'", qname(op).c_str(), key.c_str());
+                    continue;
+                }
                 auto [type, rank] = check_expr(*value, decls);
                 if ( type )
                 {
-                    auto attrib = find_param(op.attribs, key);
-                    if ( !attrib )
-                    {
-                        report_error(value->position, "operator '%s' has no attribute '%s'", qname(op).c_str(), key.c_str());
-                    }
-                    else if ( !attrib->type_alias.empty() )
+                    if ( !attrib->type_alias.empty() )
                     {
                         check_base_type(op, attrib->type_alias, type->name, value->position);
                         update_generic_type(generic_types, attrib->type_alias, type->name, value->position);
@@ -2046,7 +2098,21 @@ namespace sknd
                     }
                     if ( type->tensor )
                     {
-                        report_error(value->position, "tensor identifier is not allowed for attributes");
+                        report_error(value->position, "tensor expression is not allowed for attributes");
+                    }
+                    if ( type->dynamic && !attrib->type.dynamic )
+                    {
+                        report_error(value->position, "attribute '%s' of operator '%s' must be static expression",
+                                     key.c_str(), op.name.c_str());
+                    }
+                }
+                if ( rank && *rank && !attrib->repeats.dynamic )
+                {
+                    auto rank_type = eval_type(**rank, decls);
+                    if ( rank_type && rank_type->dynamic )
+                    {
+                        report_error(value->position, "attribute '%s' of operator '%s' must be of static length",
+                                     key.c_str(), op.name.c_str());
                     }
                 }
             }
@@ -2453,7 +2519,7 @@ namespace sknd
             auto& items = list.items;
             if ( items.empty() )
             {
-                return make_type(Typename::Type, false, false, true);
+                return make_type(Typename::Type, false, false, true, false);
             }
             
             Type type;
@@ -2477,6 +2543,7 @@ namespace sknd
                                  str(type).c_str(), str(item_type).c_str());
                 }
                 type.optional |= item_type.optional;
+                type.dynamic |= item_type.dynamic;
             }
             type.packed = true;
             return type;
@@ -2540,7 +2607,8 @@ namespace sknd
             auto type = make_type(Lexer::is_comparison(binary.op) ? Typename::Bool : name,
                                   lhs_type.optional || rhs_type.optional,
                                   lhs_type.tensor || rhs_type.tensor,
-                                  lhs_type.packed || rhs_type.packed);
+                                  lhs_type.packed || rhs_type.packed,
+                                  lhs_type.dynamic || rhs_type.dynamic);
             
             if ( type.tensor && !(flags & Flags::AllowTensorOperators) )
             {
@@ -2644,7 +2712,11 @@ namespace sknd
                 {
                     return Error(select.position, "condition in operator '?:' must not be of packed type when the right hand side is absent");
                 }
-                return Type{ lhs_type.name, true, lhs_type.tensor, lhs_type.packed };
+                if ( cond_type.dynamic )
+                {
+                    return Error(select.position, "condition in operator '?:' must be static when the right hand side is absent");
+                }
+                return make_type(lhs_type.name, true, lhs_type.tensor, lhs_type.packed, lhs_type.dynamic);
             }
             
             TRY_DECL(rhs_type, eval_type(*select.right, decls, flags))
@@ -2661,7 +2733,8 @@ namespace sknd
             return make_type(!is_empty_pack(lhs_type) ? lhs_type.name : rhs_type.name,
                              cond_type.optional || lhs_type.optional || rhs_type.optional,
                              cond_type.tensor || lhs_type.tensor || rhs_type.tensor,
-                             cond_type.packed || lhs_type.packed || rhs_type.packed);
+                             cond_type.packed || lhs_type.packed || rhs_type.packed,
+                             cond_type.dynamic || lhs_type.dynamic || rhs_type.dynamic);
         }
         
         static Result<Type> eval_type( const ExpandExpr& expand, const Dict<Declaration>& decls, unsigned flags )
@@ -2711,12 +2784,11 @@ namespace sknd
                              str(array_type).c_str());
             }
             
-            return Type{
-                array_type.name,
-                array_type.optional || index_type.optional,
-                array_type.tensor,
-                index_type.packed && array_type.name != Typename::Str,
-            };
+            return make_type(array_type.name,
+                             array_type.optional || index_type.optional,
+                             array_type.tensor,
+                             index_type.packed && array_type.name != Typename::Str,
+                             array_type.dynamic || index_type.dynamic);
         }
         
         static Result<Type> eval_type( const AccessExpr& access, const Dict<Declaration>& decls, unsigned flags )
@@ -2757,12 +2829,13 @@ namespace sknd
                 optional |= index_type.optional;
             }
             
-            return Type{ tensor_type.name, optional, false, packed };
+            return make_type(tensor_type.name, optional, false, packed, false);
         }
         
         static Result<Type> eval_type( const RangeExpr& range, const Dict<Declaration>& decls )
         {
             bool optional = false;
+            bool dynamic = false;
             if ( range.first )
             {
                 TRY_DECL(type, eval_type(*range.first, decls))
@@ -2771,6 +2844,7 @@ namespace sknd
                     return Error(range.position, "range begin must be of type 'int'; found '%s'", str(type).c_str());
                 }
                 optional |= type.optional;
+                dynamic |= type.dynamic;
             }
             if ( range.last )
             {
@@ -2780,6 +2854,7 @@ namespace sknd
                     return Error(range.position, "range end must be of type 'int'; found '%s'", str(type).c_str());
                 }
                 optional |= type.optional;
+                dynamic |= type.dynamic;
             }
             if ( range.stride )
             {
@@ -2789,18 +2864,19 @@ namespace sknd
                     return Error(range.position, "range stride must be of type 'int'; found '%s'", str(type).c_str());
                 }
                 optional |= type.optional;
+                dynamic |= type.dynamic;
             }
             
-            return Type{ Typename::Int, optional, false, true };
+            return make_type(Typename::Int, optional, false, true, dynamic);
         }
         
         static Result<Type> eval_type( const ZipExpr& zip, const Dict<Declaration>& decls, unsigned flags )
         {
-            TRY_DECL(first_type, eval_type(*zip.items[0], decls, flags))
-            if ( !first_type.packed )
+            TRY_DECL(type, eval_type(*zip.items[0], decls, flags))
+            if ( !type.packed )
             {
                 return Error(zip.items[0]->position, "items in zip expression must be of packed type; found '%s'",
-                             str(first_type).c_str());
+                             str(type).c_str());
             }
             for ( size_t i = 1; i < zip.items.size(); ++i )
             {
@@ -2810,13 +2886,15 @@ namespace sknd
                     return Error(zip.items[i]->position, "items in zip expression must be of packed type; found '%s'",
                                  str(item_type).c_str());
                 }
-                else if ( item_type.name != first_type.name || item_type.tensor != first_type.tensor )
+                else if ( item_type.name != type.name || item_type.tensor != type.tensor )
                 {
                     return Error(zip.position, "item type mismatch in zip expression ('%s' vs '%s')",
-                                 str(first_type.name).c_str(), str(item_type.name).c_str());
+                                 str(type.name).c_str(), str(item_type.name).c_str());
                 }
+                type.optional |= item_type.optional;
+                type.dynamic |= item_type.dynamic;
             }
-            return first_type;
+            return type;
         }
         
         static Result<Type> eval_type( const CoalesceExpr& coalesce, const Dict<Declaration>& decls, unsigned flags )
@@ -2841,7 +2919,11 @@ namespace sknd
                              str(as_non_optional(condition_type)).c_str(), str(as_non_optional(alternate_type)).c_str());
             }
             
-            return Type{ alternate_type.name, false, condition_type.tensor || alternate_type.tensor, alternate_type.packed };
+            return make_type(alternate_type.name,
+                             false,
+                             condition_type.tensor || alternate_type.tensor,
+                             condition_type.packed || alternate_type.packed,
+                             condition_type.dynamic || alternate_type.dynamic);
         }
         
         static Result<Type> eval_type( const IdentityExpr& iden, const Dict<Declaration>& decls, unsigned flags )
@@ -2855,7 +2937,8 @@ namespace sknd
                              str(left_type).c_str(), str(right_type).c_str());
             }
             
-            return make_type(Typename::Bool, left_type.optional || left_type.optional, false, left_type.packed || right_type.packed);
+            return make_type(Typename::Bool, left_type.optional || left_type.optional, false,
+                             left_type.packed || right_type.packed, false);
         }
         
         static Result<Type> eval_type( const ContainExpr& contain, const Dict<Declaration>& decls, unsigned flags )
@@ -2874,7 +2957,7 @@ namespace sknd
                              str(pack_type).c_str());
             }
             
-            return make_type(Typename::Bool, item_type.optional || pack_type.optional, false, item_type.packed);
+            return make_type(Typename::Bool, item_type.optional || pack_type.optional, false, item_type.packed, false);
         }
         
         static Result<Type> eval_type( const FoldExpr& fold, const Dict<Declaration>& decls, unsigned flags )
@@ -2898,14 +2981,14 @@ namespace sknd
             bool optional = fold.op == Lexer::Operator::MakeEqual && !fold.cumulative;
             
             Typename name = Lexer::is_comparison(fold.op) ? Typename::Bool : pack_type.name;
-            return make_type(name, optional || pack_type.optional, pack_type.tensor, fold.cumulative);
+            return make_type(name, optional || pack_type.optional, pack_type.tensor, fold.cumulative, pack_type.dynamic);
         }
         
         static Result<Type> eval_type( const CastExpr& cast, const Dict<Declaration>& decls, unsigned flags )
         {
             if ( !cast.arg )
             {
-                return Type{ cast.base, false, false, false };
+                return make_type(cast.base);
             }
             
             TRY_DECL(arg_type, eval_type(*cast.arg, decls, flags))
@@ -2920,7 +3003,7 @@ namespace sknd
                 return Error(cast.position, "cast operator is not allowed for tensors in this context");
             }
             
-            return Type{ cast.base, arg_type.optional, arg_type.tensor, arg_type.packed };
+            return make_type(cast.base, arg_type.optional, arg_type.tensor, arg_type.packed, arg_type.dynamic);
         }
         
         static Result<Type> eval_type( const BuiltinExpr& builtin, const Dict<Declaration>& decls, unsigned flags )
@@ -2970,12 +3053,14 @@ namespace sknd
                              builtin.func.c_str());
             }
             
-            return Type{ types.second == types.first ? arg_type.name : types.second, arg_type.optional, arg_type.tensor, arg_type.packed };
+            return make_type(types.second == types.first ? arg_type.name : types.second,
+                             arg_type.optional, arg_type.tensor, arg_type.packed, arg_type.dynamic);
         }
         
         static Result<Type> eval_type( const FormatExpr& format, const Dict<Declaration>& decls )
         {
             bool optional = false;
+            bool dynamic = false;
             for ( auto& sub : format.subs )
             {
                 TRY_DECL(type, eval_type(*sub.second, decls))
@@ -2984,8 +3069,9 @@ namespace sknd
                     return Error(format.position, "arguments to string formatting must not be tensors");
                 }
                 optional |= type.optional;
+                dynamic |= type.dynamic;
             }
-            return make_type(Typename::Str, optional, false, false);
+            return make_type(Typename::Str, optional, false, false, dynamic);
         }
         
         static Result<Type> eval_type( const BoundedExpr& bounded, const Dict<Declaration>& decls, unsigned flags )
@@ -3057,6 +3143,7 @@ namespace sknd
             }
             
             pack_type.optional |= index_type.optional || value_type.optional;
+            pack_type.dynamic |= index_type.dynamic || value_type.dynamic;
             return pack_type;
         }
         
@@ -3509,7 +3596,7 @@ namespace sknd
         
         static bool is_deferred_attrib( const Param& param )
         {
-            return param.repeats || param.type.optional || (param.default_value && !is_const_expr(*param.default_value));
+            return param.repeats.value || param.type.optional || (param.default_value && !is_const_expr(*param.default_value));
         }
         
         static Result<std::vector<size_t>> deduction_order( const std::vector<Param>& attribs, const std::vector<Param>& inputs,
@@ -3580,9 +3667,9 @@ namespace sknd
             
             for ( auto& attrib : attribs )
             {
-                if ( !attrib.type.optional && attrib.repeats )
+                if ( !attrib.type.optional && attrib.repeats.value )
                 {
-                    auto& iden = find_affine_id(*attrib.repeats);
+                    auto& iden = find_affine_id(*attrib.repeats.value);
                     if ( !iden.empty() )
                     {
                         symbols.insert(iden);
@@ -3702,8 +3789,9 @@ namespace sknd
         static size_t flexible_items( const Shapedef& shape, const std::set<std::string>& symbols )
         {
             size_t flexibles = 0;
-            for ( auto& item : shape.extents )
+            for ( auto& extent : shape.extents )
             {
+                auto& item = extent.value;
                 if ( item && item->kind == Expr::Expand )
                 {
                     auto id = rank_id(as_expand(*item), symbols);
@@ -3724,8 +3812,9 @@ namespace sknd
             }
             
             auto local_symbols = symbols;
-            for ( auto item : shape.extents )
+            for ( auto extent : shape.extents )
             {
+                auto item = extent.value;
                 if ( item )
                 {
                     item = unwrapped(item);
@@ -3737,8 +3826,9 @@ namespace sknd
                 }
             }
             
-            for ( auto item : shape.extents )
+            for ( auto extent : shape.extents )
             {
+                auto item = extent.value;
                 if ( item )
                 {
                     item = unwrapped(item);
@@ -3762,23 +3852,24 @@ namespace sknd
         
         static void add_symbols( const Shapedef& shape, std::set<std::string>& symbols )
         {
-            for ( auto extent : shape.extents )
+            for ( auto& extent : shape.extents )
             {
-                if ( extent )
+                auto item = extent.value;
+                if ( item )
                 {
-                    if ( extent->kind == Expr::Expand )
+                    if ( item->kind == Expr::Expand )
                     {
-                        auto& expand = as_expand(*extent);
+                        auto& expand = as_expand(*item);
                         auto id = rank_id(expand, symbols);
                         if ( !id.empty() )
                         {
                             symbols.insert(id);
                         }
-                        extent = expand.item;
+                        item = expand.item;
                     }
-                    if ( extent->kind == Expr::Identifier )
+                    if ( item->kind == Expr::Identifier )
                     {
-                        symbols.insert(as_identifier(*extent).name);
+                        symbols.insert(as_identifier(*item).name);
                     }
                 }
             }

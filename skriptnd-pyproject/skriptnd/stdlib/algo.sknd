@@ -21,7 +21,7 @@
 
 operator top_k {
     @attrib {
-        k: int;
+        k: dynamic int;
         axis: int = 0;
         largest: bool = true;
         sorted: bool = true;
@@ -48,7 +48,7 @@ operator top_k {
 operator nonmax_suppress {
     @attrib {
         box_format: str = "CORNERS";
-        max_outputs_per_class: int = n;
+        max_outputs_per_class: dynamic int = n;
         iou_threshold: real = 0.0;
         score_threshold: optional real;
     }

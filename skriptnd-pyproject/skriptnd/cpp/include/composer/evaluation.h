@@ -2665,11 +2665,11 @@ namespace sknd
         static Result<size_t> shape_rank( const Shapedef& shape, const Dict<Symbol>& symbols )
         {
             size_t sum = 0;
-            for ( auto& item : shape.extents )
+            for ( auto& extent : shape.extents )
             {
-                if ( item )
+                if ( extent.value )
                 {
-                    TRY_DECL(rank, shape_item_rank(*item, symbols))
+                    TRY_DECL(rank, shape_item_rank(*extent.value, symbols))
                     sum += rank;
                 }
                 else
@@ -3416,9 +3416,9 @@ namespace sknd
         
         static bool has_undefined_symbols( const Shapedef& shape, const Dict<Symbol>& symbols )
         {
-            for ( auto& item : shape.extents )
+            for ( auto& extent : shape.extents )
             {
-                if ( item && has_undefined_symbols(*item, symbols) )
+                if ( extent.value && has_undefined_symbols(*extent.value, symbols) )
                 {
                     return true;
                 }

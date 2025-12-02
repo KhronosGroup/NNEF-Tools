@@ -1630,7 +1630,8 @@ operator mean_reduce {
     }
     @compose {
         sum = sum_reduce{axes=axes, squeeze=squeeze}(input);
-        output = div(sum, real(s[axes] * ..));
+        cnt = layout.tensor{value=real(s[axes] * ..)}();
+        output = div(sum, cnt);
     }
 }
 

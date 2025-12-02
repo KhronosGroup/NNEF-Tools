@@ -57,6 +57,7 @@ namespace sknd
         bool optional = false;
         bool tensor = false;
         bool packed = false;
+        bool dynamic = false;
     };
     
     
@@ -72,42 +73,52 @@ namespace sknd
     
     inline Type make_type( const Typename& name )
     {
-        return Type{ name, false, false, false };
+        return Type{ name, false, false, false, false };
     }
     
-    inline Type make_type( const Typename& name, const bool optional, const bool tensor, const bool packed )
+    inline Type make_type( const Typename& name, const bool optional, const bool tensor, const bool packed, const bool dynamic )
     {
-        return Type{ name, optional, tensor, packed };
+        return Type{ name, optional, tensor, packed, dynamic };
     }
     
     inline Type as_optional( const Type& type )
     {
-        return Type{ type.name, true, type.tensor, type.packed };
+        return Type{ type.name, true, type.tensor, type.packed, type.dynamic };
     }
     
     inline Type as_tensor( const Type& type )
     {
-        return Type{ type.name, type.optional, true, type.packed };
+        return Type{ type.name, type.optional, true, type.packed, type.dynamic };
     }
     
     inline Type as_packed( const Type& type )
     {
-        return Type{ type.name, type.optional, type.tensor, true };
+        return Type{ type.name, type.optional, type.tensor, true, type.dynamic };
+    }
+
+    inline Type as_dynamic( const Type& type )
+    {
+        return Type{ type.name, type.optional, type.tensor, type.packed, true };
     }
     
     inline Type as_non_optional( const Type& type )
     {
-        return Type{ type.name, false, type.tensor, type.packed };
+        return Type{ type.name, false, type.tensor, type.packed, type.dynamic };
     }
     
     inline Type as_non_tensor( const Type& type )
     {
-        return Type{ type.name, type.optional, false, type.packed };
+        return Type{ type.name, type.optional, false, type.packed, type.dynamic };
     }
     
     inline Type as_non_packed( const Type& type )
     {
-        return Type{ type.name, type.optional, type.tensor, false };
+        return Type{ type.name, type.optional, type.tensor, false, type.dynamic };
+    }
+
+    inline Type as_static( const Type& type )
+    {
+        return Type{ type.name, type.optional, type.tensor, type.packed, false };
     }
     
     inline bool is_abstract( const Typename& type )

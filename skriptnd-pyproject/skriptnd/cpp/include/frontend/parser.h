@@ -442,6 +442,7 @@ namespace sknd
             TRY_DECL(name, parse_identifier(lexer))
             TRY_CALL(lexer.accept(Operator::Colon))
             
+            TRY_DECL(dynamic, block == Lexer::Block::Attrib ? lexer.accept_if(Keyword::Dynamic) : false)
             TRY_DECL(optional, lexer.accept_if(Keyword::Optional))
             
             bool aliased = lexer.is_token(Category::Identifier);
@@ -469,18 +470,33 @@ namespace sknd
             
             TRY_DECL(packed, lexer.accept_if(Operator::Dots))
             
-            Shared<Expr> repeats;
+            Position repeats_position;
+            Shared<Expr> repeats_value;
             Shared<Expr> repeats_bound;
+            bool dynamic_repeats = block == Lexer::Block::Input || dynamic;
             if ( packed )
             {
                 if ( lexer.is_token(Operator::LeftParen) )
                 {
                     TRY_CALL(lexer.accept(Operator::LeftParen))
                     
+                    repeats_position = lexer.position();
+                    
+                    if ( lexer.is_token(Keyword::Static) )
+                    {
+                        TRY_CALL(lexer.accept())
+                        dynamic_repeats = false;
+                    }
+                    else if ( lexer.is_token(Keyword::Dynamic) )
+                    {
+                        TRY_CALL(lexer.accept())
+                        dynamic_repeats = true;
+                    }
+                    
                     TRY_DECL(tilde, (flags & Flags::AllowTilde) ? lexer.accept_if(Lexer::Operator::Tilde) : false);
                     if ( !tilde )
                     {
-                        TRY_MOVE(repeats, parse_expr(lexer))
+                        TRY_MOVE(repeats_value, parse_expr(lexer))
                     }
                     
                     TRY_DECL(bar, lexer.accept_if(Lexer::Operator::Bar))
@@ -489,16 +505,16 @@ namespace sknd
                         TRY_MOVE(repeats_bound, parse_expr(lexer))
                     }
                     
-                    if ( !repeats && block != Lexer::Block::Output )
+                    if ( !repeats_value && block != Lexer::Block::Output )
                     {
-                        repeats = std::make_shared<IdentifierExpr>(position, "|" + name + "|");
+                        repeats_value = std::make_shared<IdentifierExpr>(position, "|" + name + "|");
                     }
                     
                     TRY_CALL(lexer.accept(Operator::RightParen))
                 }
                 else if ( block != Lexer::Block::Output )
                 {
-                    repeats = std::make_shared<IdentifierExpr>(position, "|" + name + "|");
+                    repeats_value = std::make_shared<IdentifierExpr>(position, "|" + name + "|");
                 }
             }
             
@@ -524,8 +540,9 @@ namespace sknd
             }
             
             bool tensor = block != Lexer::Block::Attrib;
-            const Type type = make_type(type_id.second, optional, tensor, packed);
-            return Param{ position, name, type, type_alias, rank, shape, repeats, repeats_bound, default_value, default_bounds };
+            const Type type = make_type(type_id.second, optional, tensor, packed, dynamic);
+            auto repeats = Extent{ repeats_position, repeats_value, repeats_bound, false, dynamic_repeats };
+            return Param{ position, name, type, type_alias, rank, shape, repeats, default_value, default_bounds };
         }
         
         static Result<Shared<Shapedef>> parse_shape( Lexer& lexer, const std::string& name = {}, unsigned flags = 0 )
@@ -534,28 +551,23 @@ namespace sknd
             
             TRY_CALL(lexer.accept(Operator::LeftBracket))
             
-            std::vector<Shared<Expr>> extents;
-            std::vector<Shared<Expr>> bounds;
-            size_t spreads = 0;
+            std::vector<Extent> extents;
             
             if ( !lexer.is_token(Operator::RightBracket) )
             {
                 bool more;
                 do
                 {
-                    TRY_DECL(spread, lexer.accept_if(Operator::Dots))
-                    if ( spread )
-                    {
-                        spreads |= 1 << extents.size();
-                    }
-                    
                     auto pos = lexer.position();
                     
-                    Shared<Expr> extent;
+                    TRY_DECL(is_static, lexer.accept_if(Keyword::Static))
+                    TRY_DECL(is_spread, lexer.accept_if(Operator::Dots))
+                    
+                    Shared<Expr> item;
                     TRY_DECL(tilde, (flags & Flags::AllowTilde) ? lexer.accept_if(Operator::Tilde) : false)
                     if ( !tilde )
                     {
-                        TRY_MOVE(extent, parse_expr(lexer))
+                        TRY_MOVE(item, parse_expr(lexer))
                     }
                     
                     Shared<Expr> bound;
@@ -565,24 +577,23 @@ namespace sknd
                         TRY_MOVE(bound, parse_expr(lexer))
                     }
                     
-                    if ( !extent && (bound || (flags & Flags::IsDecl)) )
+                    if ( !item && (bound || (flags & Flags::IsDecl)) )
                     {
-                        extent = (Shared<Expr>)std::make_shared<IdentifierExpr>(pos, name + ".shape:" + std::to_string(extents.size()));
+                        item = (Shared<Expr>)std::make_shared<IdentifierExpr>(pos, name + ".shape:" + std::to_string(extents.size()));
                     }
                     
                     TRY_DECL(expand, lexer.accept_if(Operator::Dots))
                     if ( expand )
                     {
-                        TRY_DECL(count, lexer.is_token(Operator::LeftParen) || !extent ? parse_paren(lexer, parse_expr) : Shared<Expr>())
-                        if ( !count && extent->kind == Expr::Identifier && (flags & Flags::IsDecl) )
+                        TRY_DECL(count, lexer.is_token(Operator::LeftParen) || !item ? parse_paren(lexer, parse_expr) : Shared<Expr>())
+                        if ( !count && item->kind == Expr::Identifier && (flags & Flags::IsDecl) )
                         {
-                            count = std::make_shared<IdentifierExpr>(pos, "|" + as_identifier(*extent).name + "|");
+                            count = std::make_shared<IdentifierExpr>(pos, "|" + as_identifier(*item).name + "|");
                         }
-                        extent = (Shared<Expr>)std::make_shared<ExpandExpr>(pos, extent, count);
+                        item = (Shared<Expr>)std::make_shared<ExpandExpr>(pos, item, count);
                     }
                     
-                    extents.emplace_back(extent);
-                    bounds.emplace_back(bound);
+                    extents.emplace_back(Extent{ pos, item, bound, is_spread, !is_static });
                     
                     TRY_DECL(is_comma, lexer.accept_if(Operator::Comma))
                     more = is_comma;
@@ -592,7 +603,7 @@ namespace sknd
             
             TRY_CALL(lexer.accept(Operator::RightBracket))
             
-            return (Shared<Shapedef>)std::make_shared<Shapedef>(Shapedef{ position, std::move(extents), std::move(bounds), spreads });
+            return (Shared<Shapedef>)std::make_shared<Shapedef>(Shapedef{ position, std::move(extents) });
         }
         
         static Result<Shared<Expr>> parse_expr( Lexer& lexer )
@@ -1367,14 +1378,14 @@ namespace sknd
                         bool aliased = lexer.is_token(Category::Identifier);
                         TRY_DECL(type_id, parse_type_identifier(lexer))
                         type_alias = aliased ? type_id.first : std::string();
-                        type = make_type(type_id.second, false, true, false);
+                        type = make_type(type_id.second, false, true, false, false);
                         TRY_MOVE(shape, parse_shape(lexer))
                     }
                     TRY_CALL(lexer.accept(separator))
                     TRY_DECL(expr, parse_expr(lexer))
                     TRY_MOVE(more, lexer.accept_if(Operator::Comma))
                     
-                    const Typed typed = { position, iden, type, type_alias, nullptr, shape, nullptr, nullptr };
+                    const Typed typed = { position, iden, type, type_alias, nullptr, shape };
                     decls.emplace_back(typed, expr);
                 }
                 while ( more );
@@ -1535,17 +1546,23 @@ namespace sknd
             
             TRY_DECL(packed, lexer.accept_if(Operator::Dots))
             
+            Position pos;
             Shared<Expr> count;
+            bool is_static = true;
             if ( packed )
             {
                 if ( lexer.is_token(Operator::LeftParen) || force_count )
                 {
                     TRY_CALL(lexer.accept(Operator::LeftParen))
+                    TRY_MOVE(is_static, lexer.accept_if(Keyword::Static))
+                    pos = lexer.position();
                     TRY_MOVE(count, parse_expr(lexer))
                     TRY_CALL(lexer.accept(Operator::RightParen))
                 }
             }
-            return Typed{ position, iden, make_type(type_name, false, true, packed), type_alias, nullptr, shape, count, nullptr };
+            auto type = make_type(type_name, false, true, packed, false);
+            auto repeats = Extent{ pos, count, nullptr, false, !is_static };
+            return Typed{ position, iden, type, type_alias, nullptr, shape, repeats };
         }
         
         static Result<std::map<std::string,Shared<Expr>>> parse_attribs( Lexer& lexer )

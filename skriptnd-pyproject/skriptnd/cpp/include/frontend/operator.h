@@ -40,12 +40,19 @@ namespace sknd
         const std::optional<Typename> default_type;
     };
 
+    struct Extent
+    {
+        const Position position;
+        const Shared<Expr> value;
+        const Shared<Expr> bound;
+        const bool spread = false;
+        const bool dynamic = false;
+    };
+
     struct Shapedef
     {
         const Position position;
-        const std::vector<Shared<Expr>> extents;
-        const std::vector<Shared<Expr>> bounds;
-        const size_t spreads;
+        const std::vector<Extent> extents;
     };
 
     struct Typed
@@ -56,8 +63,7 @@ namespace sknd
         const std::string type_alias;
         const Shared<Expr> rank;
         const Shared<Shapedef> shape;
-        const Shared<Expr> repeats;
-        const Shared<Expr> repeats_bound;
+        const Extent repeats;
     };
     
     struct Param : public Typed
@@ -187,7 +193,7 @@ namespace sknd
             {
                 os << ',';
             }
-            os << *shape.extents[i];
+            os << *shape.extents[i].value;
         }
         os << ']';
         return os;
@@ -219,9 +225,9 @@ namespace sknd
         {
             os << "..";
         }
-        if ( typed.repeats )
+        if ( typed.repeats.value )
         {
-            os << '(' << *typed.repeats << ')';
+            os << '(' << *typed.repeats.value << ')';
         }
         return os;
     }

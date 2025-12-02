@@ -223,20 +223,18 @@ namespace sknd
             {
                 if ( param.shape )
                 {
-                    for ( size_t i = 0; i < param.shape->extents.size(); ++i )
+                    for ( auto& extent : param.shape->extents )
                     {
-                        bool spread = param.shape->spreads & (1 << i);
-                        auto& extent = param.shape->extents[i];
-                        auto& bound = param.shape->bounds[i];
-                        if ( bound )
+                        if ( extent.bound )
                         {
-                            TRY_CALL(add_placeholder_symbol(*extent, *bound, symbols, composed, spread ? param.repeats : nullptr))
+                            TRY_CALL(add_placeholder_symbol(*extent.value, *extent.bound, symbols, composed,
+                                                            extent.spread ? param.repeats.value : nullptr))
                         }
                     }
                 }
-                if ( param.repeats && param.repeats_bound )
+                if ( param.repeats.value && param.repeats.bound )
                 {
-                    TRY_CALL(add_placeholder_symbol(*param.repeats, *param.repeats_bound, symbols, composed))
+                    TRY_CALL(add_placeholder_symbol(*param.repeats.value, *param.repeats.bound, symbols, composed))
                 }
             }
             return {};
@@ -340,18 +338,16 @@ namespace sknd
                 auto& tensor = symbols.at(param.name).as<TensorRef>();
                 
                 size_t dim = 0;
-                for ( size_t i = 0; i < param.shape->extents.size(); ++i )
+                for ( auto& extent : param.shape->extents )
                 {
-                    bool spread = param.shape->spreads & (1 << i);
-                    auto& extent = param.shape->extents[i];
-                    auto& bound = param.shape->bounds[i];
-                    if ( bound )
+                    auto& item = extent.value;
+                    if ( extent.bound )
                     {
-                        replace_placeholder_symbol(*extent, tensor, dim, symbols, spread);
+                        replace_placeholder_symbol(*item, tensor, dim, symbols, extent.spread);
                     }
-                    if ( extent->kind == Expr::Expand )
+                    if ( item->kind == Expr::Expand )
                     {
-                        auto count = as_expand(*extent).count;
+                        auto count = as_expand(*item).count;
                         TRY_DECL(size, eval(*count, symbols))
                         dim += size.as_int();
                     }
@@ -360,9 +356,9 @@ namespace sknd
                         dim += 1;
                     }
                 }
-                if ( param.repeats && param.repeats_bound )
+                if ( param.repeats.value && param.repeats.bound )
                 {
-                    replace_placeholder_symbol(*param.repeats, tensor, std::nullopt, symbols);
+                    replace_placeholder_symbol(*param.repeats.value, tensor, std::nullopt, symbols);
                 }
             }
             return {};
@@ -1394,7 +1390,7 @@ namespace sknd
                 else if ( param.shape )
                 {
                     TRY_DECL(shape, eval_shape(*param.shape, locals))
-                    TRY_DECL(size, param.repeats ? eval_shape_expr(*param.repeats, locals) : ValueExpr(nullptr))
+                    TRY_DECL(size, param.repeats.value ? eval_shape_expr(*param.repeats.value, locals) : ValueExpr(nullptr))
                     add_shape_symbols(param.name, shape, size, locals);
                 }
                 else
@@ -1700,9 +1696,9 @@ namespace sknd
                         {
                             if ( item.type.packed )
                             {
-                                if ( item.repeats )
+                                if ( item.repeats.value )
                                 {
-                                    TRY_DECL(length, eval(*item.repeats, symbols))
+                                    TRY_DECL(length, eval(*item.repeats.value, symbols))
                                     if ( (int_t)length != (int_t)n )
                                     {
                                         return Error(item.position, "mismatch between declared and computed pack length (%d vs %d)",
@@ -1775,9 +1771,9 @@ namespace sknd
                     }
                     auto& result_type = output_type != Typename::Type ? output_type : decl_type;
                     
-                    if ( item.type.packed && item.repeats )
+                    if ( item.type.packed && item.repeats.value )
                     {
-                        TRY_DECL(length, eval(*item.repeats, symbols))
+                        TRY_DECL(length, eval(*item.repeats.value, symbols))
                         if ( !equivalent(length, output.size()) )
                         {
                             return Error(item.position, "mismatch between declared and computed pack length (%s vs %s)",
@@ -2257,16 +2253,16 @@ namespace sknd
                 
                 if ( param.type.packed )
                 {
-                    if ( param.repeats )
+                    if ( param.repeats.value )
                     {
-                        TRY_DECL(repeats, eval(*param.repeats, symbols))
+                        TRY_DECL(repeats, eval(*param.repeats.value, symbols))
                         auto canonic_repeats = canonical(repeats);
                         const size_t count = eval_shape_expr_max(canonic_repeats);
                         TRY_CALL(check_shape_repeats(*param.shape, symbols, count))
                         
                         if ( !compare_shapes(canonic_repeats, output.canonic_size(), output.max_size()) )
                         {
-                            return Error(param.repeats->position, "output pack length (%s) does not match declared output count (%s)",
+                            return Error(param.repeats.value->position, "output pack length (%s) does not match declared output count (%s)",
                                          str(output.size()).c_str(), str(repeats).c_str());
                         }
                         if ( can_replace_shape(canonic_repeats, output.canonic_size()) )
@@ -2406,8 +2402,9 @@ namespace sknd
         
         Result<void> check_shape_repeats( const Shapedef& shape, const Dict<Symbol>& symbols, const size_t repeats )
         {
-            for ( auto item : shape.extents )
+            for ( auto& extent : shape.extents )
             {
+                auto& item = extent.value;
                 if ( item != nullptr && item->kind != Expr::Expand )
                 {
                     TRY_DECL(rank, eval_rank_max<true>(*item, symbols))
@@ -2497,8 +2494,16 @@ namespace sknd
                 if ( expr )
                 {
                     TRY_DECL(value, eval_optional(*expr, expr == param.default_value ? locals : symbols))
+                    if ( !param.type.dynamic && value != nullptr && !is_literal(value) )
+                    {
+                        return Error(param.position, "attribute value must not be dynamic expression");
+                    }
+                    if ( !param.repeats.dynamic && value.packed() && value.has_dynamic_size() )
+                    {
+                        return Error(param.repeats.position, "packed attribute value must not be of dynamic length");
+                    }
                     replace_references(value, locals);
-                    if ( !(param.repeats && !value.packed() && value != nullptr) )
+                    if ( !(param.repeats.value && !value.packed() && value != nullptr) )
                     {
                         attribs.emplace(param.name, value);
                     }
@@ -2522,14 +2527,14 @@ namespace sknd
                     auto expr = it != args.end() ? it->second : param.default_value;
                     
                     TRY_DECL(value, eval_optional(*expr, expr == param.default_value ? locals : symbols))
-                    if ( param.repeats && !value.packed() && value != nullptr )
+                    if ( param.repeats.value && !value.packed() && value != nullptr )
                     {
-                        if ( has_undefined_symbols(*param.repeats, locals) )
+                        if ( has_undefined_symbols(*param.repeats.value, locals) )
                         {
                             return Error(position, "could not deduce rank of attribute '%s'", param.name.c_str());
                         }
                         
-                        TRY_DECL(count, eval(*param.repeats, locals))
+                        TRY_DECL(count, eval(*param.repeats.value, locals))
                         auto max_count = eval_shape_expr_max(canonical(count));
                         
                         value = ValueExpr::uniform(value, count, max_count);
@@ -2542,25 +2547,34 @@ namespace sknd
                         }
                     }
                     
+                    if ( !param.type.dynamic && value != nullptr && !is_literal(value) )
+                    {
+                        return Error(param.position, "attribute value must not be dynamic expression");
+                    }
+                    if ( !param.repeats.dynamic && value.packed() && value.has_dynamic_size() )
+                    {
+                        return Error(param.repeats.position, "packed attribute value must not be of dynamic length");
+                    }
+                    
                     replace_references(value, locals);
                     
                     auto type = resolve_type(param, locals);
                     locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), value.size(), Symbol::Attrib));
                     attribs.emplace(param.name, value);
                 }
-                if ( param.repeats )
+                if ( param.repeats.value )
                 {
                     TRY_CALL(deduce_attrib_rank(param, position, locals))
                 }
             }
             for ( const Param& param : params )
             {
-                if ( param.repeats )
+                if ( param.repeats.value )
                 {
                     const Symbol& symbol = locals.at(param.name);
                     if ( symbol.is_null() )
                     {
-                        auto& iden = Typing::find_affine_id(*param.repeats);
+                        auto& iden = Typing::find_affine_id(*param.repeats.value);
                         if ( !iden.empty() && !locals.count(iden) )
                         {
                             locals.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Int, Symbol::Attrib));
@@ -2576,9 +2590,9 @@ namespace sknd
             const Symbol& symbol = locals.at(param.name);
             if ( !symbol.is_null() && symbol.packed() )
             {
-                if ( !has_undefined_symbols(*param.repeats, locals) )
+                if ( !has_undefined_symbols(*param.repeats.value, locals) )
                 {
-                    TRY_DECL(count, eval(*param.repeats, locals))
+                    TRY_DECL(count, eval(*param.repeats.value, locals))
                     if ( symbol.packed() && !equivalent(count, symbol.size) )
                     {
                         return Error(position, "argument length %s does not match expected rank %s of attribute '%s'",
@@ -2587,7 +2601,7 @@ namespace sknd
                 }
                 else
                 {
-                    TRY_DECL(iden, value, eval_affine_id(*param.repeats, symbol.size))
+                    TRY_DECL(iden, value, eval_affine_id(*param.repeats.value, symbol.size))
                     assert(!iden.empty());
                     auto it = locals.find(iden);
                     if ( value.is_literal() && value.as_int() < 0 && (it == locals.end() || symbol.packed()) )
@@ -3457,9 +3471,9 @@ namespace sknd
         {
             if ( param.type.packed )
             {
-                TRY_DECL(size, eval_shape_expr(*param.repeats, symbols))
+                TRY_DECL(size, eval_shape_expr(*param.repeats.value, symbols))
                 auto canonic_size = canonical(size);
-                const size_t max_size = eval_shape_expr_max_checked(canonic_size, param.repeats->position);
+                const size_t max_size = eval_shape_expr_max_checked(canonic_size, param.repeats.value->position);
                 TRY_CALL(check_shape_repeats(*param.shape, symbols, max_size))
                 
                 TRY_DECL(value, param.default_value ? eval(*param.default_value, symbols) : ValueExpr(nullptr))
@@ -3660,11 +3674,11 @@ namespace sknd
         
         Result<void> deduce_repeats( const Typed& param, const TensorRef& tensor, Dict<Symbol>& symbols )
         {
-            if ( param.repeats )
+            if ( param.repeats.value )
             {
                 if ( tensor == nullptr )
                 {
-                    auto& iden = Typing::find_affine_id(*param.repeats);
+                    auto& iden = Typing::find_affine_id(*param.repeats.value);
                     if ( !iden.empty() )
                     {
                         symbols.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Extent));
@@ -3672,7 +3686,11 @@ namespace sknd
                 }
                 else if ( tensor.packed() )
                 {
-                    TRY_DECL(iden, count, eval_affine_id(*param.repeats, (int_t)tensor.max_size()))
+                    if ( !param.repeats.dynamic && !tensor.size().is_literal() )
+                    {
+                        return Error(param.repeats.position, "pack length must be static");
+                    }
+                    TRY_DECL(iden, count, eval_affine_id(*param.repeats.value, (int_t)tensor.max_size()))
                     if ( !iden.empty() )
                     {
                         auto pack = tensor.as<TensorPack*>();
@@ -3733,8 +3751,9 @@ namespace sknd
             }
             auto excess = (int_t)(rank - min_rank);
             
-            for ( auto item : param.shape->extents )
+            for ( auto& extent : param.shape->extents )
             {
+                auto& item = extent.value;
                 if ( item && item->kind == Expr::Expand )
                 {
                     auto count = as_expand(*item).count;
@@ -3763,8 +3782,9 @@ namespace sknd
         
         void deduce_null_ranks( const Typed& param, Dict<Symbol>& symbols )
         {
-            for ( auto item : param.shape->extents )
+            for ( auto& extent : param.shape->extents )
             {
+                auto& item = extent.value;
                 if ( item->kind == Expr::Expand )
                 {
                     auto count = as_expand(*item).count;
@@ -3786,8 +3806,9 @@ namespace sknd
         
         Result<void> deduce_zero_ranks( const Typed& param, Dict<Symbol>& symbols )
         {
-            for ( auto item : param.shape->extents )
+            for ( auto& extent : param.shape->extents )
             {
+                auto& item = extent.value;
                 if ( item->kind == Expr::Expand )
                 {
                     auto count = as_expand(*item).count;
@@ -3811,11 +3832,11 @@ namespace sknd
         Result<size_t> deduced_shape_rank( const Shapedef& shape, const Dict<Symbol>& symbols )
         {
             size_t sum = 0;
-            for ( auto& item : shape.extents )
+            for ( auto& extent : shape.extents )
             {
-                if ( item )
+                if ( extent.value )
                 {
-                    TRY_DECL(rank, deduced_shape_item_rank(*item, symbols))
+                    TRY_DECL(rank, deduced_shape_item_rank(*extent.value, symbols))
                     sum += rank;
                 }
                 else
@@ -3904,10 +3925,10 @@ namespace sknd
             auto& shape = tensor.shape();
             auto& canonic_shape = tensor.canonic_shape();
             
-            size_t k = 0, idx = 0;
-            for ( auto item : param.shape->extents )
+            size_t k = 0;
+            for ( auto& extent : param.shape->extents )
             {
-                bool spread = param.shape->spreads & (1 << idx++);
+                auto item = extent.value;
                 if ( !item )
                 {
                     k += 1;
@@ -3955,7 +3976,7 @@ namespace sknd
                         }
                     }
                 }
-                else if ( spread )
+                else if ( extent.spread )
                 {
                     shape_value = shape[k];
                     if ( !shape_value.packed() )
@@ -3977,6 +3998,11 @@ namespace sknd
                     }
                 }
                 
+                if ( !extent.dynamic && !is_literal(shape_value) )
+                {
+                    return Error(extent.position, "shape component must be static");
+                }
+                
                 TRY_DECL(iden, value, eval_affine_id(*item, shape_value))
                 
                 if ( !iden.empty() )
@@ -3984,7 +4010,7 @@ namespace sknd
                     auto it = symbols.find(iden);
                     if ( it == symbols.end() )
                     {
-                        if ( spread )
+                        if ( extent.spread )
                         {
                             auto shape_expr = make_shape_access_exprs(value, tensor, k, true);
                             auto size_expr = make_size_access_expr(size, tensor);
@@ -4017,8 +4043,9 @@ namespace sknd
             }
             
             k = 0;
-            for ( auto item : param.shape->extents )
+            for ( auto& extent : param.shape->extents )
             {
+                auto item = extent.value;
                 if ( !item )
                 {
                     k += 1;
@@ -4086,10 +4113,9 @@ namespace sknd
         
         void deduce_null_extents( const Typed& param, Dict<Symbol>& symbols )
         {
-            for ( auto item : param.shape->extents )
+            for ( auto& extent : param.shape->extents )
             {
-                item = unwrapped(item);
-                
+                auto item = unwrapped(extent.value);
                 auto& iden = Typing::find_affine_id(*item);
                 if ( !iden.empty() )
                 {
@@ -4104,8 +4130,9 @@ namespace sknd
         
         Result<void> deduce_zero_extents( const Typed& param, Dict<Symbol>& symbols )
         {
-            for ( auto item : param.shape->extents )
+            for ( auto& extent : param.shape->extents )
             {
+                auto item = extent.value;
                 const bool expand = item->kind == Expr::Expand;
                 item = unwrapped(item);
                 
@@ -4329,8 +4356,9 @@ namespace sknd
             Shape shape(rank);
             
             size_t k = 0;
-            for ( auto item : shapedef.extents )
+            for ( auto& extent : shapedef.extents )
             {
+                auto item = extent.value;
                 if ( !item )    // output shape of graph that will be derived by composition
                 {
                     shape[k++] = nullptr;
