@@ -442,8 +442,18 @@ namespace sknd
             TRY_DECL(name, parse_identifier(lexer))
             TRY_CALL(lexer.accept(Operator::Colon))
             
-            TRY_DECL(dynamic, block == Lexer::Block::Attrib ? lexer.accept_if(Keyword::Dynamic) : false)
+            bool dynamic = false;
+            if ( block == Lexer::Block::Attrib && lexer.is_token(Keyword::Dynamic) )
+            {
+                TRY_CALL(lexer.accept())
+                dynamic = true;
+            }
             TRY_DECL(optional, lexer.accept_if(Keyword::Optional))
+            if ( block == Lexer::Block::Attrib && !dynamic && lexer.is_token(Keyword::Dynamic) )
+            {
+                TRY_CALL(lexer.accept())
+                dynamic = true;
+            }
             
             bool aliased = lexer.is_token(Category::Identifier);
             TRY_DECL(type_id, parse_type_identifier(lexer))
@@ -473,7 +483,7 @@ namespace sknd
             Position repeats_position;
             Shared<Expr> repeats_value;
             Shared<Expr> repeats_bound;
-            bool dynamic_repeats = block == Lexer::Block::Input || dynamic;
+            bool dynamic_repeats = block == Lexer::Block::Input;
             if ( packed )
             {
                 if ( lexer.is_token(Operator::LeftParen) )
@@ -482,15 +492,17 @@ namespace sknd
                     
                     repeats_position = lexer.position();
                     
-                    if ( lexer.is_token(Keyword::Static) )
+                    if ( block == Lexer::Block::Input && lexer.is_token(Keyword::Static) )
                     {
                         TRY_CALL(lexer.accept())
                         dynamic_repeats = false;
+                        flags |= Flags::AllowTilde;
                     }
-                    else if ( lexer.is_token(Keyword::Dynamic) )
+                    else if ( block == Lexer::Block::Attrib && lexer.is_token(Keyword::Dynamic) )
                     {
                         TRY_CALL(lexer.accept())
                         dynamic_repeats = true;
+                        flags |= Flags::AllowTilde;
                     }
                     
                     TRY_DECL(tilde, (flags & Flags::AllowTilde) ? lexer.accept_if(Lexer::Operator::Tilde) : false);

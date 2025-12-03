@@ -24,7 +24,7 @@ operator tensor {
         T: type;
     }
     @attrib {
-        shape: dynamic int..(static d) = [];
+        shape: dynamic int..(d) = [];
         value: dynamic T..(shape * ..);
     }
     @output {
@@ -48,7 +48,7 @@ operator uniform {
         T: type;
     }
     @attrib {
-        shape: dynamic int..(static d);
+        shape: dynamic int..(d);
     }
     @input {
         value: T[];
@@ -140,7 +140,7 @@ operator reshape {
     @attrib {
         axis: int = 0;                      # dimension where reshaping starts
         rank: int = d;                      # number of reshaped dimensions
-        shape: dynamic int..(static r);     # new shape for marked dimensions
+        shape: dynamic int..(r);            # new shape for marked dimensions
     }
     @input {
         input: T^(input_rank)[s..(axis < 0 ? axis + input_rank : axis),t..(d)];
@@ -222,7 +222,7 @@ operator unflatten {
     }
     @attrib {
         axis: int;                          # unflattened dimension
-        shape: dynamic int..(static d);     # new shape
+        shape: dynamic int..(d);            # new shape
     }
     @input {
         input: T^(input_rank)[s..(axis < 0 ? axis + input_rank : axis),z,t..];
@@ -361,7 +361,7 @@ operator split {
     @attrib {
         axis: int;
         count: dynamic optional int;
-        sizes: dynamic int..(n) = [(z / count)..(count)];
+        sizes: dynamic int..(dynamic n) = [(z / count)..(count)];
     }
     @input {
         input: T^(rank)[s..(axis < 0 ? axis + rank : axis),z,t..];

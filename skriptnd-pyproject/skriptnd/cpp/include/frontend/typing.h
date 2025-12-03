@@ -184,6 +184,10 @@ namespace sknd
             for ( auto& param : op.attribs )
             {
                 check_param(param, decls, Lexer::Block::Attrib);
+                if ( op.graph && param.type.dynamic )
+                {
+                    report_error(param.position, "graph attributes must not be dynamic");
+                }
             }
             for ( size_t i = 0; i < op.inputs.size(); ++i )
             {
@@ -676,6 +680,14 @@ namespace sknd
                                                               "cannot be used as a dynamic pack size",
                                      iden.c_str(), (int)pos.line, (int)pos.column);
                     }
+                }
+            }
+            else
+            {
+                auto rank_type = eval_type(*param.repeats.value, decls);
+                if ( rank_type && rank_type->dynamic )
+                {
+                    const_cast<bool&>(param.repeats.dynamic) = true;
                 }
             }
         }
