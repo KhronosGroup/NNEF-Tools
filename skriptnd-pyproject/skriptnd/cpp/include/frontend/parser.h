@@ -1079,7 +1079,7 @@ namespace sknd
             TRY_DECL(last, (indexing && lexer.is_oneof(Operator::RightBracket, Operator::Comma)) || lexer.is_token(Operator::Colon) ? 
                      Shared<Expr>() : parse_expr(lexer))
             TRY_DECL(strided, lexer.accept_if(Operator::Colon))
-            TRY_DECL(stride, strided ? parse_expr(lexer) : Shared<Expr>())
+            TRY_DECL(stride, strided ? parse_expr(lexer) : (Shared<Expr>)std::make_shared<IntExpr>(lexer.position(), 1))
             return (Shared<Expr>)std::make_shared<RangeExpr>(position, first, last, stride);
         }
         

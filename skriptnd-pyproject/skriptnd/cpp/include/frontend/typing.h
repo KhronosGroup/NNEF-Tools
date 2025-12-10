@@ -1519,55 +1519,20 @@ namespace sknd
             if ( it != decls.end() )
             {
                 auto& shape = it->second.shape;
-                bool same_layout = access.indices.size() == shape->extents.size();
+                const bool same_layout = access.indices.size() == shape->extents.size();
                 
                 for ( size_t i = 0; i < access.indices.size(); ++i )
                 {
                     auto& index = access.indices[i];
+                    auto extent = same_layout ? shape->extents[i].value : nullptr;
+                    
                     if ( index->kind == Expr::Range )
                     {
                         auto& range = as_range(*index);
-                        if ( (!range.first || !range.last) && range.stride && range.stride->kind != Expr::Literal )
+                        auto result = augment_range(range, decls, extent);
+                        if ( !result )
                         {
-                            report_error(index->position, "stride must be integer literal if any range limits are implicit");
-                        }
-                        bool reversed = range.stride && range.stride->kind == Expr::Literal && as_int(*range.stride).value < 0;
-                        if ( reversed )
-                        {
-                            if ( !range.first )
-                            {
-                                if ( same_layout )
-                                {
-                                    auto one = std::make_shared<IntExpr>(range.position, 1);
-                                    const_cast<Shared<Expr>&>(range.first) = std::make_shared<BinaryExpr>(range.position, shape->extents[i].value, one, Lexer::Operator::Minus);
-                                }
-                                else
-                                {
-                                    report_error(index->position, "rank of range index could not be derived");
-                                }
-                            }
-                            if ( !range.last )
-                            {
-                                const_cast<Shared<Expr>&>(range.last) = std::make_shared<IntExpr>(range.position, -1);
-                            }
-                        }
-                        else
-                        {
-                            if ( !range.first )
-                            {
-                                const_cast<Shared<Expr>&>(range.first) = std::make_shared<IntExpr>(range.position, 0);
-                            }
-                            if ( !range.last )
-                            {
-                                if ( same_layout )
-                                {
-                                    const_cast<Shared<Expr>&>(range.last) = shape->extents[i].value;
-                                }
-                                else
-                                {
-                                    report_error(index->position, "rank of range index could not be derived");
-                                }
-                            }
+                            report_error(result.error());
                         }
                     }
                 }
@@ -3274,68 +3239,7 @@ namespace sknd
                     else if ( index.index->kind == Expr::Range )
                     {
                         auto& range = as_range(*index.index);
-                        
-                        const int_t stride_value = !range.stride ? 1 : range.stride->kind == Expr::Literal && as_literal(*range.stride).type.name == Typename::Int ? as_int(*range.stride).value : 0;
-                        
-                        if ( stride_value < 0 )
-                        {
-                            if ( !range.first && !range.last )
-                            {
-                                return array_rank;
-                            }
-                            auto minus_one = std::make_shared<IntExpr>(range.position, -1);
-                            auto first = range.first ? range.first :
-                                std::make_shared<BinaryExpr>(range.position, array_rank, minus_one, Lexer::Operator::Plus);
-                            if ( range.first && is_const_expr(*first) )
-                            {
-                                TRY_DECL(value, Evaluation::eval(*first, {}))
-                                if ( value.as_int() < 0 )
-                                {
-                                    first = std::make_shared<BinaryExpr>(range.position, array_rank, first, Lexer::Operator::Plus);
-                                }
-                            }
-                            auto last = range.last ? range.last : minus_one;
-                            if ( range.last && is_const_expr(*last) )
-                            {
-                                TRY_DECL(value, Evaluation::eval(*last, {}))
-                                if ( value.as_int() < 0 )
-                                {
-                                    last = std::make_shared<BinaryExpr>(range.position, array_rank, last, Lexer::Operator::Plus);
-                                }
-                            }
-                            auto expr = (Shared<Expr>)std::make_shared<BinaryExpr>(range.position, first, last, Lexer::Operator::Minus);
-                            if ( stride_value == -1 )
-                            {
-                                return expr;
-                            }
-                            auto stride = (Shared<Expr>)std::make_shared<IntExpr>(range.position, -stride_value);
-                            return (Shared<Expr>)std::make_shared<BinaryExpr>(range.position, expr, stride, Lexer::Operator::Divide);
-                        }
-                        else
-                        {
-                            auto first = range.first;
-                            if ( range.first && is_const_expr(*first) )
-                            {
-                                TRY_DECL(value, Evaluation::eval(*first, {}))
-                                if ( value.as_int() < 0 )
-                                {
-                                    first = std::make_shared<BinaryExpr>(range.position, first, array_rank, Lexer::Operator::Plus);
-                                }
-                            }
-                            auto last = range.last ? range.last : array_rank;
-                            if ( range.last && is_const_expr(*last) )
-                            {
-                                TRY_DECL(value, Evaluation::eval(*last, {}))
-                                if ( value.as_int() < 0 )
-                                {
-                                    last = std::make_shared<BinaryExpr>(range.position, last, array_rank, Lexer::Operator::Plus);
-                                }
-                            }
-                            auto expr = !first ? last :
-                                std::make_shared<BinaryExpr>(range.position, last, first, Lexer::Operator::Minus);
-                            return stride_value == 1 ? expr :
-                                std::make_shared<BinaryExpr>(range.position, expr, range.stride, Lexer::Operator::Divide);
-                        }
+                        TRY_CALL(augment_range(range, decls, array_rank))
                     }
                     return eval_rank(*index.index, decls);
                 }
@@ -3376,8 +3280,23 @@ namespace sknd
                     {
                         TRY_CALL(eval_rank(*range.stride, decls))
                     }
-                    const Shared<Expr> expr = range.first && range.last ? std::make_shared<BinaryExpr>(range.position, range.last, range.first, Lexer::Operator::Minus) : range.last;
-                    return range.stride && expr ? std::make_shared<BinaryExpr>(range.position, expr, range.stride, Lexer::Operator::Divide) : expr;
+                    
+                    Shared<Expr> expr;
+                    if ( !range.first || is_literal(*range.first, (int_t)0) )
+                    {
+                        expr = range.last;
+                    }
+                    else if ( !range.last )
+                    {
+                        auto last = std::make_shared<IntExpr>(range.position, -1);
+                        expr = std::make_shared<BinaryExpr>(range.position, last, range.first, Lexer::Operator::Minus);
+                    }
+                    else
+                    {
+                        expr = std::make_shared<BinaryExpr>(range.position, range.last, range.first, Lexer::Operator::Minus);
+                    }
+                    
+                    return is_literal(*range.stride, (int_t)1) ? expr : std::make_shared<BinaryExpr>(range.position, expr, range.stride, Lexer::Operator::Divide);
                 }
                 case Expr::Zip:
                 {
@@ -3505,6 +3424,63 @@ namespace sknd
             }
 
             return Error(expr.position, "unknown expression type");
+        }
+        
+        static Result<void> augment_range( const RangeExpr& range, const Dict<Declaration>& decls, const Shared<Expr>& length )
+        {
+            if ( (!range.first || !range.last) && range.stride->kind != Expr::Literal )
+            {
+                return Error(range.position, "range stride must be a literal when begin or end is omitted");
+            }
+            
+            if ( !range.first )
+            {
+                auto stride = as_int(*range.stride).value;
+                if ( stride < 0 )
+                {
+                    if ( !length )
+                    {
+                        return Error(range.position, "range begin could not be derived");
+                    }
+                    auto one = std::make_shared<IntExpr>(range.position, 1);
+                    const_cast<Shared<Expr>&>(range.first) = std::make_shared<BinaryExpr>(range.position, length, one, Lexer::Operator::Minus);
+                }
+            }
+            else
+            {
+                TRY_CALL(augment_negative_index(const_cast<Shared<Expr>&>(range.first), length))
+            }
+            
+            if ( !range.last )
+            {
+                auto stride = as_int(*range.stride).value;
+                if ( stride >= 0 )
+                {
+                    if ( !length )
+                    {
+                        return Error(range.position, "range end could not be derived");
+                    }
+                    const_cast<Shared<Expr>&>(range.last) = length;
+                }
+            }
+            else
+            {
+                TRY_CALL(augment_negative_index(const_cast<Shared<Expr>&>(range.last), length))
+            }
+            return {};
+        }
+        
+        static Result<void> augment_negative_index( Shared<Expr>& index, const Shared<Expr>& length )
+        {
+            if ( is_const_expr(*index) )
+            {
+                TRY_DECL(value, Evaluation::eval(*index, {}))
+                if ( value.as_int() < 0 )
+                {
+                    index = std::make_shared<BinaryExpr>(index->position, length, index, Lexer::Operator::Plus);
+                }
+            }
+            return {};
         }
         
         static Result<Shared<Expr>> eval_items_rank( const std::vector<Shared<Expr>>& items, const Dict<Declaration>& decls,

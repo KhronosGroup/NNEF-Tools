@@ -2242,10 +2242,6 @@ namespace sknd
                         TRY_DECL(length, eval_rank(*index.array, symbols))
                         
                         TRY_DECL(stride, range.stride ? eval_item(*range.stride, symbols) : ValueExpr(1))
-                        if ( !stride.is_literal() && (!range.first || !range.last) )
-                        {
-                            return Error(expr.position, "range begin and end must be explicitly supplied if stride depends on dynamic shapes");
-                        }
                         
                         TRY_DECL(first, range.first ? eval_item(*range.first, symbols) :
                                         ValueExpr(stride.as_int() < 0 ? length - 1 : 0))
@@ -2260,7 +2256,7 @@ namespace sknd
                             last = last + length;
                         }
                         
-                        return stride.is_literal() && stride.as_int() < 0 ? ceil_div(first - last, -stride) : ceil_div(last - first, stride);
+                        return ceil_div(last - first, stride);
                     }
                     else
                     {

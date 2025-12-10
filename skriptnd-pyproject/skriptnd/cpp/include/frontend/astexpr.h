@@ -364,8 +364,7 @@ namespace sknd
 
         void print( std::ostream& os ) const
         {
-            const bool paren_left = (left->kind == Binary && static_cast<const BinaryExpr&>(*left).op != op) ||
-                                     left->kind == Fold || left->kind == Select;
+            const bool paren_left = left->kind == Binary || left->kind == Fold || left->kind == Select;
             if ( paren_left )
             {
                 os << '(';
@@ -378,8 +377,7 @@ namespace sknd
             
             os << ' ' << Lexer::str(op) << ' ';
             
-            const bool paren_right = (right->kind == Binary && static_cast<const BinaryExpr&>(*right).op != op) ||
-                                      right->kind == Fold || right->kind == Select;
+            const bool paren_right = right->kind == Binary || right->kind == Fold || right->kind == Select;
             if ( paren_right )
             {
                 os << '(';
@@ -992,6 +990,26 @@ namespace sknd
     inline bool is_identifier( const Expr& expr, const std::string& iden )
     {
         return expr.kind == Expr::Identifier && as_identifier(expr).name == iden;
+    }
+
+    inline bool is_literal( const Expr& expr, const int_t& value )
+    {
+        return expr.kind == Expr::Literal && as_int(expr).value == value;
+    }
+
+    inline bool is_literal( const Expr& expr, const real_t& value )
+    {
+        return expr.kind == Expr::Literal && as_real(expr).value == value;
+    }
+
+    inline bool is_literal( const Expr& expr, const bool_t& value )
+    {
+        return expr.kind == Expr::Literal && as_bool(expr).value == value;
+    }
+
+    inline bool is_literal( const Expr& expr, const str_t& value )
+    {
+        return expr.kind == Expr::Literal && as_str(expr).value == value;
     }
 
     inline bool is_unary( const Expr& expr, const Lexer::Operator op )
