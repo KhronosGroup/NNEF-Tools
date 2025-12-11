@@ -91,8 +91,7 @@ namespace sknd
             Kind kind;
             
             Symbol( const ValueExpr& value, const Typename type, const Kind kind )
-                : variant_type(value), type(type), rank(value.max_size_or_null()),
-                  size(value.packed() ? ValueExpr((int_t)value.max_size()) : ValueExpr(nullptr)), kind(kind) {}
+                : variant_type(value), type(type), rank(value.max_size_or_null()), size(value.size()), kind(kind) {}
             Symbol( const ValueExpr& value, const Typename type, std::optional<size_t> rank, const ValueExpr& size, const Kind kind )
                 : variant_type(value), type(type), rank(rank), size(size), kind(kind) {}
             Symbol( const TensorRef& tensor, const Typename type, const Kind kind )

@@ -1319,7 +1319,7 @@ namespace sknd
                 {
                     auto& value = it->second;
                     auto type = resolve_type(param, locals);
-                    locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), value.size(), Symbol::Attrib));
+                    locals.emplace(param.name, Symbol(value, type, Symbol::Attrib));
                 }
             }
             
@@ -2570,7 +2570,7 @@ namespace sknd
                     replace_references(value, locals);
                     
                     auto type = resolve_type(param, locals);
-                    locals.emplace(param.name, Symbol(value, type, value.max_size_or_null(), value.size(), Symbol::Attrib));
+                    locals.emplace(param.name, Symbol(value, type, Symbol::Attrib));
                     attribs.emplace(param.name, value);
                 }
                 if ( param.repeats.value )
@@ -2733,7 +2733,7 @@ namespace sknd
         {
             static Symbol NullSymbol = Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Using);
             
-            std::optional<size_t> result_rank;
+            ValueExpr declared_rank;
             TRY_DECL(value, eval_optional(*usage.expr, symbols))
             auto type = eval_type(*usage.expr, symbols);
             if ( usage.identifier->kind == Expr::List )
@@ -2776,7 +2776,7 @@ namespace sknd
                 }
                 if ( !has_flexible_item )
                 {
-                    TRY_MOVE(result_rank, eval_rank_max(list, symbols))
+                    TRY_MOVE(declared_rank, eval_rank(list, symbols))
                 }
             }
             else
@@ -2785,21 +2785,15 @@ namespace sknd
                 
                 if ( value.packed() && usage.rank )
                 {
-                    TRY_DECL(declared_rank, eval(*usage.rank, symbols))
-                    result_rank = declared_rank.as_int();
+                    TRY_MOVE(declared_rank, eval(*usage.rank, symbols))
                 }
-                else
-                {
-                    TRY_MOVE(result_rank, eval_rank_max<true>(*usage.expr, symbols))
-                }
-                TRY_DECL(size, eval_rank<true>(*usage.expr, symbols))
-                auto symbol = value == nullptr ? NullSymbol : Symbol(value, type, result_rank, size, Symbol::Using);
+                auto symbol = value == nullptr ? NullSymbol : Symbol(value, type, Symbol::Using);
                 symbols.emplace(iden.name, symbol);
             }
-            if ( value.packed() && result_rank && *result_rank != value.max_size() )
+            if ( declared_rank != nullptr && canonical(declared_rank) != canonical(value.size()) )
             {
-                return Error(usage.position, "expression rank (%d) does not match declared rank (%d)",
-                             (int)value.max_size(), (int)*result_rank);
+                return Error(usage.position, "expression rank (%s) does not match declared rank (%s)",
+                             str(value.size()).c_str(), str(declared_rank).c_str());
             }
             return Result<void>();
         }
