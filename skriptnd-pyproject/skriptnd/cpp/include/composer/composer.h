@@ -651,7 +651,7 @@ namespace sknd
                     auto& iden = component.loop->index->name;
                     auto tensor = TensorRef(make_tensor(*graph, Typename::Int, {}, {}, {}, {}));
                     symbols.insert_or_assign(iden, Symbol(tensor, Typename::Int, Symbol::Index));
-                    add_shape_symbols(iden, {}, symbols);
+                    add_shape_symbols(iden, {}, nullptr, symbols);
                     locals.push_back(tensor);
                     index = iden;
                 }
@@ -1385,7 +1385,7 @@ namespace sknd
                 const Param& param = op.inputs[i];
                 if ( inputs[i] == nullptr )
                 {
-                    add_shape_symbols(param.name, param.type.packed, locals);
+                    add_null_shape_symbols(param.name, param.type.packed, locals);
                 }
                 else if ( param.shape )
                 {
@@ -1823,15 +1823,26 @@ namespace sknd
         
         void add_shape_symbols( const std::string& name, const Shape& shape, const ValueExpr& size, Dict<Symbol>& symbols )
         {
-            symbols.insert_or_assign(name + ".shape", Symbol(ValueExpr(shape.data(), shape.size(), Typename::Int), Typename::Int, Symbol::Extent));
-            symbols.insert_or_assign(name + ".rank", Symbol(ValueExpr((int_t)shape.size()), Typename::Int, Symbol::Extent));
+            auto tensor = symbols.at(name).as<TensorRef>();
+            auto shape_value = is_literal(shape) ? ValueExpr(shape.data(), shape.size(), Typename::Int) :
+                                                   ValueExpr(ShapeAccess{ tensor }, Typename::Int, shape.size());
+            auto rank_value = ValueExpr((int_t)shape.size());
+            
+            assert(shape_value.packed());
+            assert(shape_value.max_size() == shape.size());
+            assert(shape_value.size() == (int_t)shape.size());
+            
+            symbols.insert_or_assign(name + ".shape", Symbol(shape_value, Typename::Int, Symbol::Extent));
+            symbols.insert_or_assign(name + ".rank", Symbol(rank_value, Typename::Int, Symbol::Extent));
             if ( size != nullptr )
             {
-                symbols.insert_or_assign(name + ".size", Symbol(size, Typename::Int, Symbol::Extent));
+                auto size_value = size.is_literal() ? size : SizeAccess{ tensor };
+                symbols.insert_or_assign(name + ".size", Symbol(size_value, Typename::Int, Symbol::Extent));
             }
+            assert(symbols.at(name + ".shape").size == (int_t)shape.size());
         }
         
-        void add_shape_symbols( const std::string& name, bool packed, Dict<Symbol>& symbols )
+        void add_null_shape_symbols( const std::string& name, bool packed, Dict<Symbol>& symbols )
         {
             symbols.insert_or_assign(name + ".shape", Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Extent));
             symbols.insert_or_assign(name + ".rank", Symbol(ValueExpr(nullptr), Typename::Type, Symbol::Extent));

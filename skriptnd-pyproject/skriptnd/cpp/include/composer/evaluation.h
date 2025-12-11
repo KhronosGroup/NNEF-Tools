@@ -709,7 +709,12 @@ namespace sknd
                 {
                     auto& iden = as_identifier(expr);
                     auto& symbol = symbols.at(iden.name);
-                    return !symbol.is<ValueExpr>() || symbol.as<ValueExpr>().is_list();
+                    if ( symbol.is<ValueExpr>() )
+                    {
+                        auto& value = symbol.as<ValueExpr>();
+                        return value.is_list() || value.is_shape_access();
+                    }
+                    return true;
                 }
                 case Expr::Fold:
                 {
@@ -924,11 +929,6 @@ namespace sknd
             if ( value.packed() )
             {
                 assert(idx);
-                if ( endswith(iden.name, ".shape") && !value[*idx].is_literal() )
-                {
-                    auto& tensor = symbols.at(iden.name.substr(0, iden.name.length() - 6)).as<TensorRef>();
-                    return ValueExpr(ShapeAccess{ tensor, (int_t)*idx });
-                }
                 return value.at(*idx);
             }
             else
@@ -1141,15 +1141,6 @@ namespace sknd
                 {
                     if constexpr( std::is_same_v<T,ValueExpr> )
                     {
-                        if ( expr.array->kind == Expr::Identifier )
-                        {
-                            auto& iden = as_identifier(*expr.array);
-                            if ( endswith(iden.name, ".shape") )
-                            {
-                                auto& tensor = symbols.at(iden.name.substr(0, iden.name.length() - 6)).as<TensorRef>();
-                                return ValueExpr(ShapeAccess{ tensor, index_value });
-                            }
-                        }
                         TRY_DECL(value, eval(*expr.array, symbols))
                         return value.at(index_value);
                     }
@@ -3271,9 +3262,8 @@ namespace sknd
                 case Expr::Identifier:
                 {
                     auto& iden = as_identifier(expr);
-                    auto& symbol = symbols.at(iden.name + ".shape");
-                    auto& items = symbol.as<ValueExpr>().as_list();
-                    return Shape(items.begin(), items.end());
+                    auto& symbol = symbols.at(iden.name);
+                    return symbol.is<TensorRef>() ? symbol.as<TensorRef>().shape() : Shape();
                 }
                 case Expr::List:
                 {
