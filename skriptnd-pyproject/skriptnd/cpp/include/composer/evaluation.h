@@ -3306,12 +3306,14 @@ namespace sknd
         static Result<Shape> eval_shape_from_items( const std::vector<Shared<Expr>>& items, const Dict<Symbol>& symbols, const Position& position )
         {
             Shape shape;
+            Shape canonic_shape;
             for ( size_t i = 0; i < items.size(); ++i )
             {
                 TRY_DECL(item_shape, eval_shape_from_expr(*items[i], symbols))
                 if ( i == 0 )
                 {
                     shape = item_shape;
+                    canonic_shape = canonical(item_shape);
                 }
                 else
                 {
@@ -3325,7 +3327,7 @@ namespace sknd
                         {
                             shape[k].as_list()[i] = item_shape[k];
                         }
-                        else if ( shape[k] != item_shape[k] )
+                        else if ( canonic_shape[k] != canonical(item_shape[k]) )
                         {
                             shape[k] = ValueExpr::list(shape[k], items.size());
                             shape[k].as_list()[i] = item_shape[k];

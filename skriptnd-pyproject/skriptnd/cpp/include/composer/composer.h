@@ -768,7 +768,7 @@ namespace sknd
                     auto& condition = *component.loop->condition;
                     TRY_DECL(cond_graph_idx, cond_inputs, compose_subgraph(condition, operators, symbols, model, graph_idx, scope, label))
                     
-                    graph = &model.graphs[graph_idx];   // rest as it may have become invalid
+                    graph = &model.graphs[graph_idx];   // reset as it may have become invalid
                     
                     add_all(locals, cond_inputs);
                     
@@ -2250,7 +2250,7 @@ namespace sknd
             return outputs;
         }
         
-        Result<void> check_outputs( const std::vector<Param>& params, std::vector<TensorRef> outputs,
+        Result<void> check_outputs( const std::vector<Param>& params, std::vector<TensorRef>& outputs,
                                    const Dict<Symbol>& symbols )
         {
             for ( size_t i = 0; i < params.size(); ++i )
@@ -3994,7 +3994,7 @@ namespace sknd
                     shape_value = shape[k];
                     if ( shape_value.is_list() )
                     {
-                        if ( !all_equal(shape_value.as_list()) )
+                        if ( !all_equal(canonic_shape[k].as_list()) )
                         {
                             return Error(position, "ambiguous deduction of shape component %d due to non-uniform pack item shape: %s",
                                          (int)k, std::to_string(shape_value).c_str());
@@ -4031,16 +4031,27 @@ namespace sknd
                             symbols.emplace(iden, Symbol(shape_expr, Typename::Int, Symbol::Extent));
                         }
                     }
-                    else if ( it->second.is<ValueExpr>() && it->second.as<ValueExpr>() == nullptr && value != nullptr )
+                    else if ( it->second.is<ValueExpr>() )
                     {
-                        auto shape_expr = make_shape_access_exprs(value, tensor, k);
-                        it->second = Symbol(shape_expr, Typename::Int, Symbol::Extent);
-                    }
-                    else if ( it->second.is<ValueExpr>() && is_literal(value) && it->second.as<ValueExpr>() != value )
-                    {
-                        return Error(position, "ambiguous deduction of shape component '%s' (%s vs %s)",
-                                     iden.c_str(), std::to_string(it->second.as<ValueExpr>()).c_str(),
-                                     std::to_string(value).c_str());
+                        auto& symbol_value = it->second.as<ValueExpr>();
+                        if ( symbol_value == nullptr && value != nullptr )
+                        {
+                            auto shape_expr = make_shape_access_exprs(value, tensor, k);
+                            it->second = Symbol(shape_expr, Typename::Int, Symbol::Extent);
+                        }
+                        else if ( is_literal(value) && symbol_value != value )
+                        {
+                            if ( canonical(symbol_value) != value )
+                            {
+                                return Error(position, "ambiguous deduction of shape component '%s' (%s vs %s)",
+                                             iden.c_str(), std::to_string(symbol_value).c_str(), std::to_string(value).c_str());
+                            }
+                            else
+                            {
+                                symbol_value = value;
+                            }
+                        }
+                        
                     }
                 }
                 
