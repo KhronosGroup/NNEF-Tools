@@ -996,11 +996,27 @@ namespace sknd
                     if ( subscript.index.is_literal() )
                     {
                         auto index = (size_t)subscript.index.as_int();
-                        auto sub = subscript.pack.at(index);
-                        if ( sub != expr )
+                        if ( subscript.pack.is_reference() )
                         {
-                            expr = sub;
-                            return true;
+                            auto& pack = *subscript.pack.as_reference().target;
+                            if ( pack.is_list() )
+                            {
+                                auto& item = pack.as_list()[index];
+                                if ( item.is_literal() || item.is_shape_access() || item.is_size_access() )
+                                {
+                                    expr = item;
+                                    return true;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            auto item = subscript.pack.at(index);
+                            if ( item != expr )
+                            {
+                                expr = item;
+                                return true;
+                            }
                         }
                     }
                     else if ( subscript.index.is_uniform() && subscript.index.as_uniform().value.is_literal() )
