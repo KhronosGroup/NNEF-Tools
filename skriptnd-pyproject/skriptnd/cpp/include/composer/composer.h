@@ -2250,7 +2250,7 @@ namespace sknd
             return outputs;
         }
         
-        Result<void> check_outputs( const std::vector<Param>& params, std::vector<TensorRef>& outputs,
+        Result<void> check_outputs( const std::vector<Param>& params, const std::vector<TensorRef>& outputs,
                                    const Dict<Symbol>& symbols )
         {
             for ( size_t i = 0; i < params.size(); ++i )
@@ -2276,8 +2276,6 @@ namespace sknd
                             return Error(param.repeats.value->position, "output pack length (%s) does not match declared output count (%s)",
                                          str(output.size()).c_str(), str(repeats).c_str());
                         }
-                        
-                        replace_size(*output.as<TensorPack*>(), repeats, canonic_repeats);
                     }
                     
                     TRY_DECL(declared_shape, eval_shape(*param.shape, symbols))
@@ -2292,10 +2290,7 @@ namespace sknd
                             return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of item %d of output '%s'",
                                          str(output[j].shape).c_str(), str(declared_shape_j).c_str(), (int)j, param.name.c_str());
                         }
-                        replace_shape(output[j], declared_shape_j, canonic_shape_j);
                     }
-                    
-                    replace_shape(*output.as<TensorPack*>(), declared_shape, canonic_shape);
                 }
                 else
                 {
@@ -2306,7 +2301,6 @@ namespace sknd
                         return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of output '%s'",
                                      str(output->shape).c_str(), str(declared_shape).c_str(), param.name.c_str());
                     }
-                    replace_shape(*output, declared_shape, canonic_shape);
                 }
             }
             return Result<void>();
