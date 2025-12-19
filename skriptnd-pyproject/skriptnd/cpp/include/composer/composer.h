@@ -2276,14 +2276,8 @@ namespace sknd
                             return Error(param.repeats.value->position, "output pack length (%s) does not match declared output count (%s)",
                                          str(output.size()).c_str(), str(repeats).c_str());
                         }
-                        if ( can_replace_shape(canonic_repeats, output.canonic_size()) )
-                        {
-                            if ( !has_reference(repeats) )
-                            {
-                                output.size() = repeats;
-                            }
-                            output.canonic_size() = canonic_repeats;
-                        }
+                        
+                        replace_size(*output.as<TensorPack*>(), repeats, canonic_repeats);
                     }
                     
                     TRY_DECL(declared_shape, eval_shape(*param.shape, symbols))
@@ -2392,6 +2386,18 @@ namespace sknd
                     }
                     pack.canonic_shape[k] = canonic_shape[k];
                 }
+            }
+        }
+        
+        void replace_size( TensorPack& pack, const ValueExpr& size, const ValueExpr& canonic_size )
+        {
+            if ( can_replace_shape(canonic_size, pack.canonic_size) )
+            {
+                if ( !has_reference(size) )
+                {
+                    pack.size = size;
+                }
+                pack.canonic_size = canonic_size;
             }
         }
         
