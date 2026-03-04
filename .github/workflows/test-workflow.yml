@@ -3,7 +3,7 @@ name: workflow-testing
 on:
   push:
     tags:
-      - 'nnef-*'
+      - '*'
 
 jobs:
   my-job:
