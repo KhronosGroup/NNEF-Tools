@@ -1,0 +1,13 @@
+name: workflow-testing
+
+on:
+  push:
+    tags:
+      - 'nnef-*'
+
+jobs:
+  my-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: test-step
+        run: echo "Test workflow triggered!"
