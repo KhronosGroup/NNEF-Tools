@@ -3,7 +3,7 @@ name: Build, test and publish nnef_tools
 on:
   push:
     tags:
-      - 'nnef-v[0-9][0-9]*.[0-9][0-9]*.[0-9][0-9]*'
+      - 'nnef_tools-v[0-9]+.[0-9]+.[0-9]+'
 
 
 jobs:
