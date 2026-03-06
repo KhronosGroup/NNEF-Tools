@@ -4378,21 +4378,30 @@ namespace sknd
                 if ( !item )    // output shape of graph that will be derived by composition
                 {
                     shape[k++] = nullptr;
-                    continue;
                 }
-                
-                TRY_DECL(value, eval_shape_expr(*item, symbols))
-                
-                if ( item->kind == Expr::Expand )
+                else if ( item->kind == Expr::Expand && !as_expand(*item).item )
                 {
-                    for ( size_t i = 0; i < value.max_size(); ++i )
+                    TRY_DECL(rank, shape_item_rank(*item, symbols))
+                    for ( size_t i = 0; i < rank; ++i )
                     {
-                        shape[k++] = value.at(i);
+                        shape[k++] = nullptr;
                     }
                 }
                 else
                 {
-                    shape[k++] = value;
+                    TRY_DECL(value, eval_shape_expr(*item, symbols))
+                    
+                    if ( item->kind == Expr::Expand )
+                    {
+                        for ( size_t i = 0; i < value.max_size(); ++i )
+                        {
+                            shape[k++] = value.at(i);
+                        }
+                    }
+                    else
+                    {
+                        shape[k++] = value;
+                    }
                 }
             }
             

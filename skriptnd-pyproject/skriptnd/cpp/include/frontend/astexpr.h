@@ -771,7 +771,10 @@ namespace sknd
             case Expr::Expand:
             {
                 auto& expand = as_expand(expr);
-                update(value, callback(*expand.item));
+                if ( expand.item )
+                {
+                    update(value, callback(*expand.item));
+                }
                 if ( expand.count )
                 {
                     update(value, callback(*expand.count));
