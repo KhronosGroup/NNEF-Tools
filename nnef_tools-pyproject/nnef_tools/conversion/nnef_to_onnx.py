@@ -208,7 +208,7 @@ _Transforms = Converter.unpack_transforms({
             outputs='!O[0]',
             attribs={
                 'axis': '!axes[0]',
-                'keepdims': True,
+                'keepdims': 1,
             }
         ),
     'batch_normalization':
