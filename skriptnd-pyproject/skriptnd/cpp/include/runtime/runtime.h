@@ -391,7 +391,7 @@ namespace sknd
             {
                 for ( size_t i = 0; i < _shape.size(); ++i )
                 {
-                    bool dynamic = _dynamic_mask & (1 << i);
+                    bool dynamic = _dynamic_mask & ((size_t)1 << i);
                     if ( _shape[i] < 0 || _shape[i] > _max_shape[i] || (!dynamic && _shape[i] != _max_shape[i]) )
                     {
                         return false;
@@ -731,7 +731,7 @@ namespace sknd
             {
                 for ( size_t i = 0; i < _shape.size(); ++i )
                 {
-                    bool dynamic = _dynamic_mask & (1 << i);
+                    bool dynamic = _dynamic_mask & ((size_t)1 << i);
                     if ( _shape[i] < -1 || _shape[i] > _max_shape[i] || (!dynamic && _shape[i] != _max_shape[i]) )
                     {
                         return false;

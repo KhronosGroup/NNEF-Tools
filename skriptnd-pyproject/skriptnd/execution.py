@@ -18,10 +18,13 @@ import skriptnd as sknd
 import numpy as np
 import itertools
 import importlib
+import importlib.util
 import shutil
 import math
 import os
 import re
+import tempfile
+import uuid
 
 
 ModelTemplate = \
@@ -31,11 +34,11 @@ ModelTemplate = \
 #include <stdexcept>
 #include "intrinsics.h"
 
-struct {name}_model
+struct {name}
 {{
 {tensors}
 
-    {name}_model() {init}
+    {name}() {init}
 
     std::vector<sknd::rt::TensorRef> inputs()
     {{
@@ -86,9 +89,6 @@ py::object make_namedtuple( const std::string& name, std::initializer_list<std::
     return namedtuple(py::str(name), items);
 }
 
-py::object TensorInfo = make_namedtuple("TensorInfo", { "shape", "dtype" });
-
-
 py::dtype py_dtype( sknd::rt::Dtype dtype )
 {
     static const py::dtype py_dtypes[] =
@@ -113,7 +113,13 @@ void fill_tensor( sknd::rt::TensorView& tensor, const py::array& array )
         throw std::invalid_argument("unexpected dtype '" + str(array.dtype()) + "'; expected dtype '" + str(dtype) + "'");
     }
     
-    tensor.reshape(array.ndim(), array.shape());
+    std::vector<long> shape(array.ndim());
+    for ( py::ssize_t i = 0; i < array.ndim(); ++i )
+    {
+        shape[i] = (long)array.shape()[i];
+    }
+    
+    tensor.reshape(array.ndim(), shape.data());
     
     std::copy_n((char*)array.data(), array.nbytes(), tensor.bytes());
 }
@@ -173,7 +179,7 @@ py::tuple execute( MODEL_TYPE& model, py::args args )
             auto& items = *input.as<sknd::rt::TensorPackView*>();
             auto& arg = (const py::list&)args[i];
             
-            items.resize(arg.size());
+            items.resize((int)arg.size());
             for ( int k = 0; k < items.size(); ++k )
             {
                 fill_tensor(items[k], (const py::array&)arg[k]);
@@ -228,6 +234,8 @@ py::tuple make_shape( const size_t rank, const int* extents )
 
 py::tuple tensor_info( const std::vector<sknd::rt::TensorRef>& views )
 {
+    static py::object TensorInfo = make_namedtuple("TensorInfo", { "shape", "dtype" });
+
     py::tuple infos(views.size());
     for ( size_t i = 0; i < views.size(); ++i )
     {
@@ -1112,11 +1120,11 @@ def _make_auxiliary_tensor(tensor, dtype=None):
                        shape=tensor.shape, canonic_shape=tensor.canonic_shape, max_shape=tensor.max_shape)
 
 
-def _generate_model_source(model):
+def _generate_model_source(model, name):
     context = {}
     inputs = model.graphs[0].inputs
     outputs = model.graphs[0].outputs
-    return ModelTemplate.format(name=_valid_id(model.name),
+    return ModelTemplate.format(name=name,
                                 tensors=_format_tensor_declarations(model, indent='\t', context=context),
                                 init=_wrap_brackets(_format_tensor_initializers(model, indent='\t\t', context=context)),
                                 checks=_format_checks_code(model.graphs, indent='\t\t', context=context),
@@ -1140,68 +1148,115 @@ def _normalize_dtype(array):
     return array
 
 
-def compile_model(model, keep_generated_code=False):
-    model_name = _valid_id(model.name)
-    model_fn = model_name.replace('$', '_')
+def compile_model(model, keep_generated_code=False, tmp_dir_path="."):
+    u_id = uuid.uuid4().hex[:6]
+    model_fn = _valid_id(model.name).replace('$', '_')
     hdr_name = model_fn + "_model.h"
     cpp_name = model_fn + "_pybind.cpp"
-    module_name = model_fn + "_module"
+    model_type = model_fn + u_id + "_model"
+    module_name = model_fn + u_id + "_module"
 
-    _save_to_file(_generate_model_source(model), hdr_name)
-    _save_to_file(WrapperSource, cpp_name)
+    base = os.path.normpath(os.path.join(os.path.dirname(__file__), "cpp", "include"))
 
-    base = os.path.normpath(os.path.join(__file__, '../cpp/include'))
-
+    # generate the Extension object
     ext_modules = [
         Pybind11Extension(module_name,
                           [cpp_name],
                           include_dirs=[base, os.path.join(base, 'core'), os.path.join(base, 'runtime')],
                           define_macros=[
-                              ('MODEL_TYPE', model_name + '_model'),
+                              ('MODEL_TYPE', model_type),
                               ('MODULE_NAME', module_name),
                               ('HEADER_NAME', '"' + hdr_name + '"'),
                           ],
                           ),
     ]
 
-    import distutils.command.build
+    with tempfile.TemporaryDirectory(dir=tmp_dir_path) as build_dir:
+        global windows_pyd_dir
+        # change wd to the temporary dir
+        cwd = os.getcwd()
+        os.chdir(build_dir)
+        try:
+            _save_to_file(_generate_model_source(model, model_type), hdr_name)
+            _save_to_file(WrapperSource, cpp_name)
+        except ValueError as e:
+            os.chdir(cwd)
+            raise e
 
-    parent_dir = os.path.normpath(os.path.join(__file__, '../'))
-    build_dir = os.path.join(parent_dir, 'build_' + model_fn)
+        setup(
+            name=module_name,
+            version="1.0",
+            ext_modules=ext_modules,
+            packages=[],
+            cmdclass={"build_ext": build_ext},
+            zip_safe=False,
+            python_requires=">=3.6",
+            script_name='setup.py',
+            script_args=['--quiet', 'build_ext', '--inplace', '--build-lib', './lib'],
+            include_dirs=["skriptnd/cpp/include", "skriptnd/cpp/include/core",
+                          "skriptnd/cpp/include/frontend", "skriptnd/cpp/include/composer", "skriptnd/cpp/include/runtime"],
+        )
 
-    # Override build command
-    class BuildCommand(distutils.command.build.build):
-        def initialize_options(self):
-            distutils.command.build.build.initialize_options(self)
-            self.build_base = build_dir
+        # get the generated .so file
+        for r, ds, fs in os.walk("./lib"):
+            so_path = os.path.join(r, fs[0])
 
-    setup(
-        name=module_name,
-        version="1.0",
-        ext_modules=ext_modules,
-        packages=[],
-        cmdclass={"build_ext": build_ext, "build": BuildCommand},
-        zip_safe=False,
-        python_requires=">=3.6",
-        script_name='setup.py',
-        script_args=['--quiet', 'develop'],
-        include_dirs=["skriptnd/cpp/include", "skriptnd/cpp/include/core",
-                      "skriptnd/cpp/include/frontend", "skriptnd/cpp/include/composer", "skriptnd/cpp/include/runtime"],
-    )
 
-    os.remove(cpp_name)
-    if not keep_generated_code:
-        os.remove(hdr_name)
+        # on windows dlls can't be deleted, move to cwd/.skndworkdir/ for deletion
+        if os.name == "nt":
+            target_path = os.path.join(cwd, ".skndworkdir", os.path.basename(so_path))
+            if windows_pyd_dir == "":
+                windows_pyd_dir = os.path.dirname(target_path)
+            os.makedirs(windows_pyd_dir, exist_ok=True)
+            shutil.move(so_path, target_path)
+            so_path = target_path
 
-    shutil.rmtree(build_dir)
-    if os.path.exists(module_name + '.egg-info'):
-        shutil.rmtree(module_name + '.egg-info')
+        # use specification to collect the module and load it
+        #   caching problems arose with the other modul loading method
+        spec = importlib.util.spec_from_file_location(module_name, so_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
 
-    import site
-    importlib.reload(site)
-    module = importlib.import_module(module_name, package=".")
-    os.remove(module.__file__)
+        if keep_generated_code:
+            shutil.copyfile(hdr_name, os.path.join(cwd, hdr_name))
+
+        os.chdir(cwd)
 
     compiled_model = module.Model()
     compiled_model.load({tensor.name: _normalize_dtype(tensor.value) for tensor in model.variables})
     return compiled_model
+
+import sys
+import subprocess
+import atexit
+
+windows_pyd_dir = ""
+
+def cleanup_pyd():
+    # Windows can't remove pyd files, we remove them from a subprocess after execution
+    if os.name != "nt" or windows_pyd_dir == "":
+        return
+
+    pid = os.getpid()
+
+    cleaner_script = "\n".join([
+        "import os, time, shutil",
+        "while True:",
+        "    try:",
+        f"        os.kill({pid}, 0)",
+        "        time.sleep(1)",
+        "    except OSError:",
+        "        break",
+        f"shutil.rmtree({repr(windows_pyd_dir)}, ignore_errors=True)",
+    ])
+
+    # Spawn it detached so it survives the main process exit
+    subprocess.Popen(
+        [sys.executable, "-c", cleaner_script],
+        creationflags=subprocess.CREATE_NO_WINDOW,  # ← only this, drop DETACHED_PROCESS
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+atexit.register(cleanup_pyd)
