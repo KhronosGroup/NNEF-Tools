@@ -398,15 +398,22 @@ class NNEFExecutor(Executor):
 
 class SkriptNDExecutor(Executor):
 
-    def __init__(self, model_path, target=None, device=None, atomic=None):
+    def __init__(self, model_path, target=None, device=None, atomic=None, require_intermediates=False):
         import skriptnd as sknd
         self.model = sknd.read_model(model_path)
         if not self.model:
             raise IOError('Failed to read model')
         if atomic is not None:
             sknd.flatten_model(self.model, is_atomic=lambda op: op.name in atomic)
+
+        self.original_outputs = self.model.graphs[0].outputs
+
         if target is None or target == 'cpp':
-            self.runner = sknd.compile_model(self.model)
+            if require_intermediates:
+                fetch_tensors = (tensor for tensor in self.model.tensors if not tensor.name.startswith('.'))
+                self.model.graphs[0].outputs = tuple(fetch_tensors)
+
+            self.runner = sknd.compile_model(self.model, True)
         else:
             from .execution.tvm import VirtualMachine, is_atomic
             if atomic is None:
@@ -417,9 +424,10 @@ class SkriptNDExecutor(Executor):
         return [TensorInfo(tensor.name, tensor.shape, _sknd_dtype_to_numpy[tensor.dtype])
                 for tensor in self.model.graphs[0].inputs]
 
-    def output_info(self):
+    def output_info(self, original=False):
+        collection = self.original_outputs if original else self.model.graphs[0].outputs
         return [TensorInfo(tensor.name, tensor.shape, _sknd_dtype_to_numpy[tensor.dtype])
-                for tensor in self.model.graphs[0].outputs]
+                for tensor in collection]
 
     def tensor_info(self):
         return [TensorInfo(tensor.name, tensor.shape, _sknd_dtype_to_numpy[tensor.dtype])
@@ -428,7 +436,15 @@ class SkriptNDExecutor(Executor):
     def __call__(self, inputs, output_names=None, collect_statistics=False):
         inputs = [inputs[tensor.name] for tensor in self.input_info()]
         outputs = self.runner(*inputs)
-        return {tensor.name: output for tensor, output in zip(self.output_info(), outputs)}, None
+
+        from .execution.tvm import VirtualMachine
+        stats = None
+        if collect_statistics and not isinstance(self.runner, VirtualMachine):
+            stats = {}
+            for tensor, output in zip(self.output_info(), outputs):
+                stats[tensor.name] = compute_statistics(output)
+
+        return {tensor.name: output for tensor, output in zip(self.output_info(True), outputs)}, stats
 
 
 def get_executor(format, model_path, require_intermediates, custom_operators, decomposed, atomic, target, device):
@@ -441,7 +457,7 @@ def get_executor(format, model_path, require_intermediates, custom_operators, de
     elif format == 'nnef':
         return NNEFExecutor(model_path, custom_operators, decomposed)
     elif format == 'sknd':
-        return SkriptNDExecutor(model_path, target=target, device=device, atomic=atomic)
+        return SkriptNDExecutor(model_path, target=target, device=device, atomic=atomic, require_intermediates=require_intermediates)
     else:
         return None
 
