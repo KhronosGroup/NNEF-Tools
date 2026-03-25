@@ -85,8 +85,6 @@ static PyObject* SubscriptExpr;
 static PyObject* UniformExpr;
 static PyObject* RangeExpr;
 
-
-static PyObject* EmptyTupleDefault = PyTuple_New(0);
 static PyObject* EmptyListDefault = (PyObject*)&PyList_Type;
 static PyObject* EmptyDictDefault = (PyObject*)&PyDict_Type;
 
@@ -1054,6 +1052,7 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
 #else
     PyObject* module = Py_InitModule("_skriptnd", skriptnd_methods);
 #endif
+	static PyObject* EmptyTupleDefault = PyTuple_New(0);	
 	if ( module == NULL )
 	{
 		RETURN_ERROR;
