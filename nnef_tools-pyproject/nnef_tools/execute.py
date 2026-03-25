@@ -406,12 +406,14 @@ class SkriptNDExecutor(Executor):
         if atomic is not None:
             sknd.flatten_model(self.model, is_atomic=lambda op: op.name in atomic)
 
-        self.original_outputs = self.model.graphs[0].outputs
+        self.inputs = self.model.graphs[0].inputs
+        self.outputs = self.model.graphs[0].outputs
 
         if target is None or target == 'cpp':
             if require_intermediates:
-                fetch_tensors = (tensor for tensor in self.model.tensors if not tensor.name.startswith('.'))
-                self.model.graphs[0].outputs = tuple(fetch_tensors)
+                fetch_tensors = (tensor for tensor in self.model.tensors
+                                 if not tensor.name.startswith('.') and tensor not in self.outputs)
+                self.model.graphs[0].outputs = self.outputs + tuple(fetch_tensors)
 
             self.runner = sknd.compile_model(self.model, True)
         else:
@@ -422,29 +424,28 @@ class SkriptNDExecutor(Executor):
 
     def input_info(self):
         return [TensorInfo(tensor.name, tensor.shape, _sknd_dtype_to_numpy[tensor.dtype])
-                for tensor in self.model.graphs[0].inputs]
+                for tensor in self.inputs]
 
-    def output_info(self, original=False):
-        collection = self.original_outputs if original else self.model.graphs[0].outputs
+    def output_info(self):
         return [TensorInfo(tensor.name, tensor.shape, _sknd_dtype_to_numpy[tensor.dtype])
-                for tensor in collection]
+                for tensor in self.outputs]
 
     def tensor_info(self):
         return [TensorInfo(tensor.name, tensor.shape, _sknd_dtype_to_numpy[tensor.dtype])
                 for graph in self.model.graphs for tensor in graph.tensors]
 
     def __call__(self, inputs, output_names=None, collect_statistics=False):
-        inputs = [inputs[tensor.name] for tensor in self.input_info()]
+        inputs = [inputs[tensor.name] for tensor in self.inputs]
         outputs = self.runner(*inputs)
 
         from .execution.tvm import VirtualMachine
         stats = None
         if collect_statistics and not isinstance(self.runner, VirtualMachine):
             stats = {}
-            for tensor, output in zip(self.output_info(), outputs):
+            for tensor, output in zip(self.model.graphs[0].outputs, outputs):
                 stats[tensor.name] = compute_statistics(output)
 
-        return {tensor.name: output for tensor, output in zip(self.output_info(True), outputs)}, stats
+        return {tensor.name: output for tensor, output in zip(self.outputs, outputs)}, stats
 
 
 def get_executor(format, model_path, require_intermediates, custom_operators, decomposed, atomic, target, device):
