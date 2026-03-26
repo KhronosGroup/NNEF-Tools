@@ -25,6 +25,12 @@ import os
 import re
 import tempfile
 import uuid
+import platform
+import sys
+import subprocess
+import atexit
+
+WindowsPydDir = None
 
 
 ModelTemplate = \
@@ -1150,11 +1156,11 @@ def _normalize_dtype(array):
 
 def compile_model(model, keep_generated_code=False, tmp_dir_path="."):
     u_id = uuid.uuid4().hex[:6]
-    model_fn = _valid_id(model.name).replace('$', '_')
-    hdr_name = model_fn + "_model.h"
-    cpp_name = model_fn + "_pybind.cpp"
-    model_type = model_fn + u_id + "_model"
-    module_name = model_fn + u_id + "_module"
+    model_name = _valid_id(model.name).replace('$', '_')
+    hdr_name = model_name + "_model.h"
+    cpp_name = model_name + "_pybind.cpp"
+    model_type = model_name + "_model_" + u_id
+    module_name = model_name + "_module_" + u_id
 
     base = os.path.normpath(os.path.join(os.path.dirname(__file__), "cpp", "include"))
 
@@ -1172,7 +1178,7 @@ def compile_model(model, keep_generated_code=False, tmp_dir_path="."):
     ]
 
     with tempfile.TemporaryDirectory(dir=tmp_dir_path) as build_dir:
-        global windows_pyd_dir
+        global WindowsPydDir
         # change wd to the temporary dir
         cwd = os.getcwd()
         os.chdir(build_dir)
@@ -1183,6 +1189,8 @@ def compile_model(model, keep_generated_code=False, tmp_dir_path="."):
             os.chdir(cwd)
             raise e
 
+        lib_root = "./lib"
+
         setup(
             name=module_name,
             version="1.0",
@@ -1192,27 +1200,25 @@ def compile_model(model, keep_generated_code=False, tmp_dir_path="."):
             zip_safe=False,
             python_requires=">=3.6",
             script_name='setup.py',
-            script_args=['--quiet', 'build_ext', '--inplace', '--build-lib', './lib'],
+            script_args=['--quiet', 'build_ext', '--inplace', '--build-lib', lib_root],
             include_dirs=["skriptnd/cpp/include", "skriptnd/cpp/include/core",
-                          "skriptnd/cpp/include/frontend", "skriptnd/cpp/include/composer", "skriptnd/cpp/include/runtime"],
+                          "skriptnd/cpp/include/frontend", "skriptnd/cpp/include/composer",
+                          "skriptnd/cpp/include/runtime"],
         )
 
         # get the generated .so file
-        for r, ds, fs in os.walk("./lib"):
-            so_path = os.path.join(r, fs[0])
+        so_path = os.path.join(lib_root, os.listdir(lib_root)[0])
 
-
-        # on windows dlls can't be deleted, move to cwd/.skndworkdir/ for deletion
-        if os.name == "nt":
+        # on windows dlls can't be deleted, move to cwd/.skndworkdir/ for delayed deletion
+        if platform.system() == "Windows":
             target_path = os.path.join(cwd, ".skndworkdir", os.path.basename(so_path))
-            if windows_pyd_dir == "":
-                windows_pyd_dir = os.path.dirname(target_path)
-            os.makedirs(windows_pyd_dir, exist_ok=True)
+            if WindowsPydDir is None:
+                WindowsPydDir = os.path.dirname(target_path)
+            os.makedirs(WindowsPydDir, exist_ok=True)
             shutil.move(so_path, target_path)
             so_path = target_path
 
         # use specification to collect the module and load it
-        #   caching problems arose with the other modul loading method
         spec = importlib.util.spec_from_file_location(module_name, so_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -1226,37 +1232,27 @@ def compile_model(model, keep_generated_code=False, tmp_dir_path="."):
     compiled_model.load({tensor.name: _normalize_dtype(tensor.value) for tensor in model.variables})
     return compiled_model
 
-import sys
-import subprocess
-import atexit
-
-windows_pyd_dir = ""
 
 def cleanup_pyd():
     # Windows can't remove pyd files, we remove them from a subprocess after execution
-    if os.name != "nt" or windows_pyd_dir == "":
+    if platform.system() != "Windows" or WindowsPydDir is None:
         return
 
-    pid = os.getpid()
-
-    cleaner_script = "\n".join([
-        "import os, time, shutil",
-        "while True:",
-        "    try:",
-        f"        os.kill({pid}, 0)",
-        "        time.sleep(1)",
-        "    except OSError:",
-        "        break",
-        f"shutil.rmtree({repr(windows_pyd_dir)}, ignore_errors=True)",
+    cleanup_script = "\n".join([
+        f"import psutil, shutil",
+        f"proc = psutil.Process({os.getpid()})",
+        f"proc.wait()",     # Blocks until the process dies
+        f"shutil.rmtree({WindowsPydDir}, ignore_errors=True)",
     ])
 
     # Spawn it detached so it survives the main process exit
     subprocess.Popen(
-        [sys.executable, "-c", cleaner_script],
-        creationflags=subprocess.CREATE_NO_WINDOW,  # ← only this, drop DETACHED_PROCESS
+        [sys.executable, "-c", cleanup_script],
+        creationflags=subprocess.CREATE_NO_WINDOW,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
 
 atexit.register(cleanup_pyd)
