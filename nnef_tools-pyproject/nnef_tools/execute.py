@@ -409,6 +409,7 @@ class SkriptNDExecutor(Executor):
         self.inputs = self.model.graphs[0].inputs
         self.outputs = self.model.graphs[0].outputs
 
+        self.target = target
         if target is None or target == 'cpp':
             if require_intermediates:
                 fetch_tensors = (tensor for tensor in self.model.tensors
@@ -438,9 +439,8 @@ class SkriptNDExecutor(Executor):
         inputs = [inputs[tensor.name] for tensor in self.inputs]
         outputs = self.runner(*inputs)
 
-        from .execution.tvm import VirtualMachine
         stats = None
-        if collect_statistics and not isinstance(self.runner, VirtualMachine):
+        if collect_statistics and self.target == 'cpp':
             stats = {}
             for tensor, output in zip(self.model.graphs[0].outputs, outputs):
                 stats[tensor.name] = compute_statistics(output)
