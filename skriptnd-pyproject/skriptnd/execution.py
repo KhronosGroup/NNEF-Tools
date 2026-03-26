@@ -26,9 +26,6 @@ import re
 import tempfile
 import uuid
 import platform
-import sys
-import subprocess
-import atexit
 
 WindowsPydDir = None
 
@@ -1235,27 +1232,28 @@ def compile_model(model, keep_generated_code=False, tmp_dir_path="."):
 
 def cleanup_pyd():
     # Windows can't remove pyd files, we remove them from a subprocess after execution
-    if platform.system() != "Windows" or WindowsPydDir is None:
-        return
+    if WindowsPydDir is not None:
+        cleanup_script = "\n".join([
+            f"import psutil, shutil",
+            f"try:",
+            f"    proc = psutil.Process({os.getpid()})",
+            f"    proc.wait()",     # Blocks until the process dies
+            f"except psutil.NoSuchProcess:",
+            f"    pass",
+            f"shutil.rmtree({repr(WindowsPydDir)}, ignore_errors=True)",
+        ])
 
-    cleanup_script = "\n".join([
-        f"import psutil, shutil",
-        f"try:",
-        f"    proc = psutil.Process({os.getpid()})",
-        f"    proc.wait()",     # Blocks until the process dies
-        f"except psutil.NoSuchProcess:",
-        f"    pass",
-        f"shutil.rmtree({repr(WindowsPydDir)}, ignore_errors=True)",
-    ])
-
-    # Spawn it detached so it survives the main process exit
-    subprocess.Popen(
-        [sys.executable, "-c", cleanup_script],
-        creationflags=subprocess.CREATE_NO_WINDOW,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+        # Spawn it detached so it survives the main process exit
+        import subprocess, sys
+        subprocess.Popen(
+            [sys.executable, "-c", cleanup_script],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
-atexit.register(cleanup_pyd)
+if platform.system() == "Windows":
+    import atexit
+    atexit.register(cleanup_pyd)
