@@ -1240,9 +1240,12 @@ def cleanup_pyd():
 
     cleanup_script = "\n".join([
         f"import psutil, shutil",
-        f"proc = psutil.Process({os.getpid()})",
-        f"proc.wait()",     # Blocks until the process dies
-        f"shutil.rmtree({WindowsPydDir}, ignore_errors=True)",
+        f"try:",
+        f"    proc = psutil.Process({os.getpid()})",
+        f"    proc.wait()",     # Blocks until the process dies
+        f"except psutil.NoSuchProcess:",
+        f"    pass",
+        f"shutil.rmtree({repr(WindowsPydDir)}, ignore_errors=True)",
     ])
 
     # Spawn it detached so it survives the main process exit
