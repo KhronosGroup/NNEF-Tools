@@ -409,8 +409,8 @@ class SkriptNDExecutor(Executor):
         self.inputs = self.model.graphs[0].inputs
         self.outputs = self.model.graphs[0].outputs
 
-        self.target = target
-        if target is None or target == 'cpp':
+        self.target = 'cpp' if target is None else target
+        if self.target == 'cpp':
             if require_intermediates:
                 fetch_tensors = (tensor for tensor in self.model.tensors
                                  if not tensor.name.startswith('.') and tensor not in self.outputs)
