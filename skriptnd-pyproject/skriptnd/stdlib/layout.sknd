@@ -25,7 +25,7 @@ operator tensor {
     }
     @attrib {
         shape: dynamic int..(d) = [];
-        value: dynamic T..(shape * ..);
+        value: dynamic T..(dynamic shape * ..);
     }
     @output {
         output: T[shape..];

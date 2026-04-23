@@ -676,8 +676,9 @@ namespace sknd
                     if ( it != decls.end() && (it->second.flags & Declaration::Attrib) )
                     {
                         auto& pos = it->second.position;
-                        report_error(param.repeats.value->position, "identifier '%s' is already declared as an attribute at [%d,%d]; "
-                                                              "cannot be used as a dynamic pack size",
+                        report_error(param.repeats.value->position,
+                                     "identifier '%s' is already declared as an attribute at [%d,%d]; "
+                                     "cannot be used as a dynamic pack size",
                                      iden.c_str(), (int)pos.line, (int)pos.column);
                     }
                 }
@@ -685,9 +686,9 @@ namespace sknd
             else
             {
                 auto rank_type = eval_type(*param.repeats.value, decls);
-                if ( rank_type && rank_type->dynamic )
+                if ( rank_type && rank_type->dynamic && !param.repeats.dynamic )
                 {
-                    const_cast<bool&>(param.repeats.dynamic) = true;
+                    report_error(param.repeats.value->position, "length must be explicitly marked as 'dynamic' if the expression is dynamic");
                 }
             }
         }
