@@ -118,13 +118,15 @@ int main( int argc, const char * argv[] )
         return -2;
     }
     
+    auto importer = []( const std::string& module_name ){ return sknd::try_import_from_paths(module_name, {"skriptnd/stdlib/"}); };
+    
     size_t failed = 0;
     for ( auto& graph_name : graph_names )
     {
         is.close();
         is.open(fn);
         
-        auto model = sknd::read_model(is, module.c_str(), graph_name, "skriptnd/stdlib/", "", error_handler);
+        auto model = sknd::read_model(is, module.c_str(), importer, error_handler, graph_name);
         if ( model )
         {
             if ( atomic )

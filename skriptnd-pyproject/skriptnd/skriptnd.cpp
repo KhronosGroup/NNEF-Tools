@@ -974,13 +974,20 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
 
     std::optional<sknd::Model> model;
 
+    std::vector<std::string> import_paths = { stdlib };
+    auto importer = [&]( const std::string& module_name ){ return sknd::try_import_from_paths(module_name, import_paths); };
+
     if ( isFile )
     {
         const std::string& path = input;
         bool isFolder = path.back() == '\\' || path.back() == '/';
-        const std::string import_path = isFolder ? path : "";
         const std::string filename = isFolder ? path + "main.sknd" : path;
         const std::string module = isFolder ? "main" : module_from_path(path);
+
+        if ( isFolder )
+        {
+            import_paths.push_back(path);
+        }
 
         std::ifstream fs(filename);
         if ( !fs )
@@ -989,7 +996,7 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
             PyErr_SetString(PyExc_FileNotFoundError, message.c_str());
             return NULL;
         }
-        model = sknd::read_model(fs, module, "", stdlib, import_path, error_callback, attributes, flags);
+        model = sknd::read_model(fs, module, importer, error_callback, {}, attributes, flags);
         if ( model )
         {
             model->name = sknd::model_name_from_path(path);
@@ -998,7 +1005,7 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
     else
     {
         std::stringstream ss(input);
-        model = sknd::read_model(ss, "main", "", stdlib, "", error_callback, attributes);
+        model = sknd::read_model(ss, "main", importer, error_callback, {}, attributes, flags);
     }
 
     return model ? buildPyModel(*model) : buildPyNone();

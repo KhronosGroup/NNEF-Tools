@@ -27,6 +27,8 @@
 namespace sknd
 {
     
+    typedef std::function<std::unique_ptr<std::istream>( const std::string& )> ImportCallback;
+
     typedef std::function<bool( const Operation& )> OperationFilter;
 
     inline bool TrueOperationFilter( const Operation& ) { return true; }
@@ -34,13 +36,21 @@ namespace sknd
     
 
     std::string model_name_from_path( const std::string& path );
+
+    std::unique_ptr<std::istream> try_import_from_paths( const std::string& module_name, 
+                                                        const std::vector<std::string>& import_paths );
     
-    std::optional<Model> read_model( const std::string& path, const std::string& graph_name, const std::string& stdlib_path,
-                                    const ErrorCallback error, const std::map<std::string, sknd::ValueExpr>& attribs = {},
+    std::optional<Model> read_model( const std::string& path,
+                                    const ImportCallback importer,
+                                    const ErrorCallback error,
+                                    const std::string& entry_point = {},
+                                    const std::map<std::string, sknd::ValueExpr>& attribs = {},
                                     const unsigned flags = DefaultCompilerFlags ) noexcept;
-    std::optional<Model> read_model( std::istream& is, const std::string& module, const std::string& graph_name,
-                                    const std::string& stdlib_path, const std::string& import_path,
-                                    const ErrorCallback error, const std::map<std::string, sknd::ValueExpr>& attribs = {},
+    std::optional<Model> read_model( std::istream& is, const std::string& module_name,
+                                    const ImportCallback importer,
+                                    const ErrorCallback error,
+                                    const std::string& entry_point = {},
+                                    const std::map<std::string, sknd::ValueExpr>& attribs = {},
                                     const unsigned flags = DefaultCompilerFlags ) noexcept;
 
     void flatten_model( Model& model, const OperationFilter is_atomic = FalseOperationFilter ) noexcept;

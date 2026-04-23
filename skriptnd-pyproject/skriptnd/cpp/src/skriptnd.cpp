@@ -32,8 +32,30 @@ namespace sknd
         return path.substr(beg, end - beg);
     }
 
-    std::optional<Model> read_model( const std::string& path, const std::string& entry_point, const std::string& stdlib_path,
-                                    const ErrorCallback error, const std::map<std::string, ValueExpr>& attribs,
+    std::unique_ptr<std::istream> try_import_from_paths( const std::string& module_name, 
+                                                        const std::vector<std::string>& import_paths )
+    {
+        std::string module_path = module_name;
+        std::replace(module_path.begin(), module_path.end(), '.', '/');
+        module_path += ".sknd";
+        
+        std::ifstream is;
+        for ( auto& path : import_paths )
+        {
+            is.open(path + module_path);
+            if ( is.is_open() )
+            {
+                return std::make_unique<std::ifstream>(std::move(is));
+            }
+        }
+        return nullptr;
+    }
+
+    std::optional<Model> read_model( const std::string& path,
+                                    const ImportCallback importer,
+                                    const ErrorCallback error,
+                                    const std::string& entry_point,
+                                    const std::map<std::string, sknd::ValueExpr>& attribs,
                                     const unsigned flags ) noexcept
     {
         const std::string folder = path.back() != '\\' && path.back() != '/' ? path + "/" : path;
@@ -45,7 +67,7 @@ namespace sknd
             return std::nullopt;
         }
         
-        auto model = read_model(is, "main", entry_point, stdlib_path, folder, error, attribs, flags);
+        auto model = read_model(is, "main", importer, error, entry_point, attribs, flags);
         if ( model )
         {
             model->name = model_name_from_path(path);
@@ -54,9 +76,11 @@ namespace sknd
         return model;
     }
     
-    std::optional<Model> read_model( std::istream& is, const std::string& module, const std::string& entry_point,
-                                    const std::string& stdlib_path, const std::string& import_path,
-                                    const ErrorCallback error, const std::map<std::string, ValueExpr>& attribs,
+    std::optional<Model> read_model( std::istream& is, const std::string& module_name,
+                                    const ImportCallback importer,
+                                    const ErrorCallback error,
+                                    const std::string& entry_point,
+                                    const std::map<std::string, sknd::ValueExpr>& attribs,
                                     const unsigned flags ) noexcept
     {
         size_t warning_count = 0;
@@ -74,8 +98,33 @@ namespace sknd
             }
         };
         
-        Parser parser(stdlib_path, import_path, counted_error);
-        auto modules = parser(is);
+        Parser parser(counted_error);
+        
+        std::vector<Module> modules;
+        std::set<std::string> imported;
+        
+        modules.push_back(parser.parse_module(is, module_name, true));
+        
+        for ( size_t i = 0; i < modules.size(); ++i )
+        {
+            for ( size_t j = 0; j < modules[i].imports.size(); ++j )
+            {
+                auto import = modules[i].imports[j];
+                if ( !imported.count(import.name) )
+                {
+                    auto is = importer(import.name);
+                    if ( !is )
+                    {
+                        error(import.position, Error::format_string("could not import module '%s'", import.name.c_str()), {}, false);
+                        continue;
+                    }
+                    
+                    modules.push_back(parser.parse_module(*is, import.name));
+                    imported.insert(import.name);
+                }
+            }
+        }
+        
         if ( error_count )
         {
             return std::nullopt;
@@ -104,7 +153,7 @@ namespace sknd
                 message += entry_point;
                 message += "'";
             }
-            error(Position{ module }, message, {}, false);
+            error(Position{ module_name }, message, {}, false);
             return std::nullopt;
         }
         

@@ -50,83 +50,20 @@ namespace sknd
             IsIndex = 0x04,
             AllowTilde = 0x10,
         };
-
-        static constexpr const char* FileExtension = ".sknd";
         
         template<typename T>
         using Dict = std::map<std::string,T>;
         
     public:
         
-        Parser( const std::string& stdlib_path, const std::string& import_path, const ErrorCallback error )
-        : _stdlib_path(stdlib_path), _import_path(import_path), _error(error)
+        Parser( const ErrorCallback error )
+        : _error(error)
         {
         }
         
-        std::vector<Module> operator()( std::istream& is, const Dict<std::string>& preloaded = {} )
-        {
-            std::vector<Module> modules;
-            std::set<std::string> imported;
-            
-            Module main = parse_module(is, "main", true);
-            modules.push_back(std::move(main));
-            
-            for ( size_t i = 0; i < modules.size(); ++i )
-            {
-                for ( size_t j = 0; j < modules[i].imports.size(); ++j )
-                {
-                    auto import = modules[i].imports[j];
-                    if ( !imported.count(import.name) )
-                    {
-                        auto module = import_module(import.name, preloaded);
-                        if ( module )
-                        {
-                            modules.push_back(std::move(*module));
-                            imported.insert(import.name);
-                        }
-                        else
-                        {
-                            report_error(import.position, "could not import module '%s'", import.name.c_str());
-                        }
-                    }
-                }
-            }
-            
-            return modules;
-        }
+    public:
         
-    private:
-        
-        std::optional<Module> import_module( const std::string& module_name, const Dict<std::string>& preloaded )
-        {
-            auto it = preloaded.find(module_name);
-            if ( it != preloaded.end() )
-            {
-                std::stringstream ss(it->second);
-                return parse_module(ss, module_name, false);
-            }
-            
-            std::string module_path = module_name;
-            std::replace(module_path.begin(), module_path.end(), '.', '/');
-            module_path += FileExtension;
-            
-            std::ifstream is;
-            if ( !_stdlib_path.empty() )
-            {
-                is.open(_stdlib_path + module_path);
-            }
-            if ( !is.is_open() && !_import_path.empty() )
-            {
-                is.open(_import_path + module_path);
-            }
-            if ( !is.is_open() )
-            {
-                return std::nullopt;
-            }
-            return parse_module(is, module_name, false);
-        }
-        
-        Module parse_module( std::istream& is, const std::string& name, bool main )
+        Module parse_module( std::istream& is, const std::string& name, bool main = false )
         {
             Lexer lexer(is, name);
             
@@ -158,6 +95,8 @@ namespace sknd
             
             return (Module){ name, std::move(imports), std::move(operators) };
         }
+        
+    private:
         
         Result<void> parse_import( Lexer& lexer, std::vector<Import>& imports )
         {
@@ -1823,8 +1762,6 @@ namespace sknd
         
     private:
         
-        const std::string _stdlib_path;
-        const std::string _import_path;
         const ErrorCallback _error;
     };
 

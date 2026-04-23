@@ -61,6 +61,8 @@ int main( int argc, const char * argv[] )
         }
     }
     
+    auto importer = []( const std::string& module_name ){ return sknd::try_import_from_paths(module_name, {"skriptnd/stdlib/"}); };
+    
     size_t passed = 0;
     size_t failed = 0;
     for ( auto& entry : std::filesystem::recursive_directory_iterator(folder) )
@@ -75,7 +77,7 @@ int main( int argc, const char * argv[] )
                 return -1;
             }
             
-            auto model = sknd::read_model(is, "main", "", "skriptnd/stdlib/", "", error_handler);
+            auto model = sknd::read_model(is, "main", importer, error_handler);
             if ( model )
             {
                 if ( atomic )
