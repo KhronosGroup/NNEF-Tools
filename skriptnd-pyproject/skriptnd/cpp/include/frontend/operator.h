@@ -173,6 +173,20 @@ namespace sknd
         const std::vector<Component> updates;
         const std::vector<Quantization> quantizations;
     };
+
+    struct Import
+    {
+        const Position position;
+        const std::string name;
+    };
+
+    struct Module
+    {
+        const std::string name;
+        const std::vector<Import> imports;
+        const std::vector<Operator> operators;
+    };
+
     
     inline std::ostream& operator<<( std::ostream& os, const TypeParam& type )
     {

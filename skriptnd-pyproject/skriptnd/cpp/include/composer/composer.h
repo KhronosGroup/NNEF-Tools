@@ -85,12 +85,12 @@ namespace sknd
         Composer( const ErrorCallback error, const unsigned flags )
         : _error(error), _flags(flags) {}
         
-        Result<Model> operator()( const Dict<Operator>& operators, const std::string& graph_name,
+        Result<Model> operator()( const Dict<const Operator*>& operators, const std::string& graph_name,
                                  const Dict<ValueExpr>& attribs = {}, const Dict<Typename>& dtypes = {} )
         {
             reset();
             
-            const Operator& main = operators.at(graph_name);
+            const Operator& main = *operators.at(graph_name);
             
             Dict<Symbol> symbols;
             
@@ -448,7 +448,7 @@ namespace sknd
         }
         
         Result<std::tuple<std::vector<TensorRef>,std::vector<TensorRef>>>
-        compose( const Component& component, const Dict<Operator>& operators, Dict<Symbol>& symbols, Model& model,
+        compose( const Component& component, const Dict<const Operator*>& operators, Dict<Symbol>& symbols, Model& model,
                 const size_t graph_idx, const std::optional<std::string>& scope, const bool propagate_label )
         {
             auto label = propagate_label ? "~" : auto_label(component, symbols);
@@ -909,12 +909,12 @@ namespace sknd
             }
         }
         
-        size_t output_count( const Callable& callable, const Dict<Operator>& operators )
+        size_t output_count( const Callable& callable, const Dict<const Operator*>& operators )
         {
             if ( callable.is<Invocation>() )
             {
                 auto& invocation = callable.as<Invocation>();
-                auto& op = operators.at(invocation.target);
+                auto& op = *operators.at(invocation.target);
                 return op.outputs.size();
             }
             else
@@ -1092,14 +1092,14 @@ namespace sknd
         }
         
         Result<std::tuple<Dict<ValueExpr>,std::vector<TensorRef>,std::vector<TensorRef>>>
-        compose_callable( const Callable& callable, const Dict<Operator>& operators, const Dict<Symbol>& symbols,
+        compose_callable( const Callable& callable, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
                          Model& model, const size_t ctx_graph_idx, const size_t sub_graph_idx,
                          const std::optional<std::string>& scope, const std::string& auto_label )
         {
             if ( callable.is<Invocation>() )
             {
                 auto& invocation = callable.as<Invocation>();
-                auto& op = operators.at(invocation.target);
+                auto& op = *operators.at(invocation.target);
                 auto new_scope = op.publish ? nested_scope(invocation.label, scope, auto_label) : std::nullopt;
                 if ( op.graph && invocation.label.empty() )
                 {
@@ -1124,7 +1124,7 @@ namespace sknd
         }
         
         Result<std::tuple<size_t,std::vector<TensorRef>>>
-        compose_subgraph( const Callable& callable, const Dict<Operator>& operators, const Dict<Symbol>& symbols,
+        compose_subgraph( const Callable& callable, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
                          Model& model, const size_t parent_idx, const std::optional<std::string>& scope, const std::string& auto_label )
         {
             const size_t graph_idx = model.graphs.size();
@@ -1135,7 +1135,7 @@ namespace sknd
             if ( callable.is<Invocation>() )
             {
                 const Invocation& invocation = callable.as<Invocation>();
-                const Operator& op = operators.at(invocation.target);
+                const Operator& op = *operators.at(invocation.target);
                 
                 if ( op.graph )
                 {
@@ -1193,7 +1193,7 @@ namespace sknd
             if ( callable.is<Invocation>() && scope && !label.empty() )
             {
                 const Invocation& invocation = callable.as<Invocation>();
-                const Operator& op = operators.at(invocation.target);
+                const Operator& op = *operators.at(invocation.target);
                 
                 rename_inputs(op.inputs, inputs, graph_name + ".");
             }
@@ -1212,7 +1212,7 @@ namespace sknd
             if ( callable.is<Invocation>() )
             {
                 const Invocation& invocation = callable.as<Invocation>();
-                const Operator& op = operators.at(invocation.target);
+                const Operator& op = *operators.at(invocation.target);
                 
                 if ( op.graph )
                 {
@@ -1224,7 +1224,7 @@ namespace sknd
         }
         
         Result<std::tuple<std::vector<TensorRef>,std::vector<TensorRef>>>
-        compose_region( const Region& region, const Dict<Operator>& operators, const Dict<Symbol>& symbols,
+        compose_region( const Region& region, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
                        Model& model, const size_t ctx_graph_idx, const size_t sub_graph_idx, const std::optional<std::string>& scope )
         {
             Dict<Symbol> locals = symbols;
@@ -1293,11 +1293,11 @@ namespace sknd
         }
         
         Result<std::tuple<Dict<ValueExpr>,std::vector<TensorRef>,std::vector<TensorRef>>>
-        invoke( const Invocation& invocation, const Dict<Operator>& operators, const Dict<Symbol>& symbols,
+        invoke( const Invocation& invocation, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
                Model& model, const size_t context_idx, const size_t graph_idx, const std::optional<std::string>& scope,
                const bool signature_only = false )
         {
-            const Operator& op = operators.at(invocation.target);
+            const Operator& op = *operators.at(invocation.target);
             auto& context = model.graphs[context_idx];
             auto& graph = model.graphs[graph_idx];
             
@@ -4312,7 +4312,7 @@ namespace sknd
         }
         
         Result<void> eval_quantization( Graph& graph, const std::vector<Quantization>& quantization, const Dict<Symbol>& symbols,
-                                       const Dict<Operator>& operators )
+                                       const Dict<const Operator*>& operators )
         {
             Dict<Tensor*> tensors;
             for ( auto& tensor : graph.tensors )
@@ -4330,7 +4330,7 @@ namespace sknd
                 }
                 auto& tensor = *it->second;
                 
-                auto& op = operators.at(quant.invocation.target);
+                auto& op = *operators.at(quant.invocation.target);
                 auto dtypes = eval_dtypes(op, quant.invocation);
                 
                 auto& param = op.inputs.front();

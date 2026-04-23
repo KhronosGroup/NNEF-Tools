@@ -84,8 +84,39 @@ namespace sknd
         {
         }
         
-        void check_operator( const Operator& op, const Dict<Operator>& operators, const Dict<std::set<std::string>>& imports,
-                            const bool main ) const
+        const Operator* find_main_op( const Module& module, const std::string& hint = {} )
+        {
+            if ( !hint.empty() )
+            {
+                auto it = std::find_if(module.operators.begin(), module.operators.end(), [&]( const Operator& op ){ return op.name == hint; });
+                return it != module.operators.end() ? &*it : nullptr;
+            }
+            else
+            {
+                auto it = std::find_if(module.operators.begin(), module.operators.end(), []( const Operator& op ){ return op.graph; });
+                return it != module.operators.end() ? &*it : nullptr;
+            }
+        }
+        
+        void check_module( const Module& module, const Dict<const Operator*>& operators, const Operator* main ) const
+        {
+            for ( auto& op : module.operators )
+            {
+                auto key = module.name + "." + op.name;
+                auto& defined = operators.at(key);
+                if ( defined != &op )
+                {
+                    report_error(op.position, "%s '%s' is already defined at [%d:%d]",
+                                 defined->graph ? "graph" : "operator", key.c_str(),
+                                 (int)defined->position.line, (int)defined->position.column);
+                }
+                check_operator(module, op, operators, &op == main);
+            }
+        }
+        
+    private:
+        
+        void check_operator( const Module& module, const Operator& op, const Dict<const Operator*>& operators, const bool main ) const
         {
             Dict<Declaration> decls;
             std::vector<bool> checked(op.asserts.size(), false);
@@ -287,13 +318,13 @@ namespace sknd
             for ( auto& component : op.components )
             {
                 check_component(component, operators, decls, defs, false);
-                check_invocation_access(op.position.module, component, operators, imports, decls, !is_private && !op.graph && op.components.size() == 1);
+                check_invocation_access(module, component, operators, decls, !is_private && !op.graph && op.components.size() == 1);
             }
             
             for ( auto& component : op.updates )
             {
                 check_component(component, operators, decls, defs, true);
-                check_invocation_access(op.position.module, component, operators, imports, decls, !is_private && !op.graph && op.updates.size() == 1);
+                check_invocation_access(module, component, operators, decls, !is_private && !op.graph && op.updates.size() == 1);
             }
             
             for ( auto& quantization : op.quantizations )
@@ -326,8 +357,6 @@ namespace sknd
             
             check_labels(op, operators, decls);
         }
-        
-    private:
         
         void declare_symbol( Dict<Declaration>& decls, const Position& position, const std::string& name, const Type& type,
                             const Shared<Shapedef> shape, const Shared<Expr>& repeats, const unsigned flags, const Shared<Expr>& cond = nullptr ) const
@@ -1005,7 +1034,7 @@ namespace sknd
             }
         }
         
-        void check_component( const Component& component, const Dict<Operator>& operators, Dict<Declaration>& decls, Dict<Definition>& defs,
+        void check_component( const Component& component, const Dict<const Operator*>& operators, Dict<Declaration>& decls, Dict<Definition>& defs,
                              const bool updates ) const
         {
             Dict<Declaration> saved_decls;
@@ -1172,7 +1201,7 @@ namespace sknd
             check_updates(decls, component.results, updates);
         }
         
-        void check_condition( const Callable& condition, const Dict<Operator>& operators, const Dict<Declaration>& decls ) const
+        void check_condition( const Callable& condition, const Dict<const Operator*>& operators, const Dict<Declaration>& decls ) const
         {
             auto cond_type = result_type(condition, decls, operators, true);
             if ( !cond_type.empty() )
@@ -1275,12 +1304,12 @@ namespace sknd
             }
         }
         
-        void check_quantization( const Quantization& quantization, const Dict<Operator>& operators, const Dict<Declaration>& decls ) const
+        void check_quantization( const Quantization& quantization, const Dict<const Operator*>& operators, const Dict<Declaration>& decls ) const
         {
             auto types = check_invocation(quantization.invocation, decls, operators, true);
             if ( !types.empty() )
             {
-                auto& op = operators.at(quantization.invocation.target);
+                auto& op = *operators.at(quantization.invocation.target);
                 if ( op.inputs.size() != 1 || op.inputs.front().type.packed )
                 {
                     report_error(quantization.invocation.position, "quantization operator must have exactly 1 non-packed input; found %d%s",
@@ -1643,7 +1672,7 @@ namespace sknd
             }
         }
         
-        void check_labels( const Operator& op, const Dict<Operator>& operators, const Dict<Declaration>& decls ) const
+        void check_labels( const Operator& op, const Dict<const Operator*>& operators, const Dict<Declaration>& decls ) const
         {
             Dict<Position> labels;
             for ( auto& component : op.components )
@@ -1663,7 +1692,7 @@ namespace sknd
             }
         }
         
-        void check_label( const Callable& callable, const Dict<Operator>& operators, const std::string& auto_label,
+        void check_label( const Callable& callable, const Dict<const Operator*>& operators, const std::string& auto_label,
                          Dict<Position>& labels, const size_t repetition ) const
         {
             if ( callable.is<Invocation>() )
@@ -1673,7 +1702,7 @@ namespace sknd
                 if ( label.empty() )
                 {
                     auto it = operators.find(invocation.target);
-                    if ( it != operators.end() && !it->second.graph && has_variables(invocation, operators) )
+                    if ( it != operators.end() && !it->second->graph && has_variables(invocation, operators) )
                     {
                         report_error(invocation.position, "invoked operator '%s' must be labelled because it defines internal variables",
                                      invocation.target.c_str());
@@ -1691,7 +1720,7 @@ namespace sknd
             }
         }
         
-        bool has_variables( const Invocation& invocation, const Dict<Operator>& operators ) const
+        bool has_variables( const Invocation& invocation, const Dict<const Operator*>& operators ) const
         {
             if ( invocation.target.empty() )
             {
@@ -1702,7 +1731,7 @@ namespace sknd
             {
                 return false;
             }
-            auto& op = it->second;
+            auto& op = *it->second;
             if ( !op.variables.empty() )
             {
                 return true;
@@ -1848,7 +1877,7 @@ namespace sknd
             return std::make_pair(type, rank);
         }
         
-        std::vector<Type> check_invocation( const Invocation& invocation, const Dict<Declaration>& decls, const Dict<Operator>& operators,
+        std::vector<Type> check_invocation( const Invocation& invocation, const Dict<Declaration>& decls, const Dict<const Operator*>& operators,
                                            const bool quantization, const bool subgraph = false, const bool repeated = false, const size_t nvars = 0 ) const
         {
             auto it = operators.find(invocation.target);
@@ -1870,7 +1899,7 @@ namespace sknd
                 return {};
             }
             
-            auto& op = it->second;
+            auto& op = *it->second;
             if ( op.graph && !subgraph )
             {
                 report_error(invocation.position, "'%s' is defined as graph, which is not allowed to be invoked in this context", op.name.c_str());
@@ -1979,7 +2008,7 @@ namespace sknd
             return types;
         }
         
-        std::vector<Type> check_region( const Region& region, const Dict<Declaration>& decls, const Dict<Operator>& operators,
+        std::vector<Type> check_region( const Region& region, const Dict<Declaration>& decls, const Dict<const Operator*>& operators,
                                        const bool repeated = false, const size_t nvars = 0 ) const
         {
             Dict<Declaration> _decls = decls;
@@ -2120,8 +2149,8 @@ namespace sknd
             }
         }
         
-        void check_invocation_access( const std::string& module, const Component& component, const Dict<Operator>& operators,
-                                     const Dict<std::set<std::string>>& imports, const Dict<Declaration>& decls, bool allow_private_primitives ) const
+        void check_invocation_access( const Module& module, const Component& component, const Dict<const Operator*>& operators,
+                                     const Dict<Declaration>& decls, bool allow_private_primitives ) const
         {
             if ( component.branches.size() )
             {
@@ -2132,22 +2161,22 @@ namespace sknd
                 
                 for ( auto& item : component.branches )
                 {
-                    check_invocation_access(module, item.condition, operators, imports, decls, false);
-                    check_invocation_access(module, item.consequent, operators, imports, decls, allow_private_primitives);
+                    check_invocation_access(module, item.condition, operators, decls, false);
+                    check_invocation_access(module, item.consequent, operators, decls, allow_private_primitives);
                 }
             }
             else if ( component.loop )
             {
                 if ( component.loop->condition )
                 {
-                    check_invocation_access(module, *component.loop->condition, operators, imports, decls, false);
+                    check_invocation_access(module, *component.loop->condition, operators, decls, false);
                 }
             }
-            check_invocation_access(module, component.operation, operators, imports, decls, allow_private_primitives);
+            check_invocation_access(module, component.operation, operators, decls, allow_private_primitives);
         }
         
-        void check_invocation_access( const std::string& module, const Callable& callable, const Dict<Operator>& operators,
-                                     const Dict<std::set<std::string>>& imports, const Dict<Declaration>& decls, bool allow_private_primitives ) const
+        void check_invocation_access( const Module& module, const Callable& callable, const Dict<const Operator*>& operators,
+                                     const Dict<Declaration>& decls, bool allow_private_primitives ) const
         {
             if ( callable.is<Invocation>() )
             {
@@ -2156,23 +2185,30 @@ namespace sknd
                 auto target_module = invocation.target.substr(0, pos);
                 auto target_name = invocation.target.substr(pos + 1);
                 
-                if ( target_module != module && !imports.at(module).count(target_module) )
+                if ( target_module != module.name )
                 {
-                    report_error(invocation.position, "module '%s' is not imported in module '%s'",
-                                 target_module.c_str(), module.c_str());
+                    auto it = std::find_if(module.imports.begin(), module.imports.end(), [&]( const Import& import )
+                    {
+                        return import.name == target_module;
+                    });
+                    if ( it == module.imports.end() )
+                    {
+                        report_error(invocation.position, "module '%s' is not imported in module '%s'",
+                                     target_module.c_str(), module.name.c_str());
+                    }
                 }
                 
                 if ( target_name.front() == '_' )
                 {
-                    if ( target_module != module )
+                    if ( target_module != module.name )
                     {
                         report_error(invocation.position, "cannot invoke operator '%s' from module '%s' because it is private in module '%s'",
-                                     invocation.target.c_str(), module.c_str(), target_module.c_str());
+                                     invocation.target.c_str(), module.name.c_str(), target_module.c_str());
                     }
                     auto it = operators.find(invocation.target);
                     if ( it != operators.end() )
                     {
-                        auto& op = it->second;
+                        auto& op = *it->second;
                         if ( op.components.empty() && !allow_private_primitives )
                         {
                             report_error(invocation.position, "private primitive operator '%s' cannot be invoked in "
@@ -2188,7 +2224,7 @@ namespace sknd
                 auto& region = callable.as<Region>();
                 for ( auto& component : region.components )
                 {
-                    check_invocation_access(module, component, operators, imports, decls, false);
+                    check_invocation_access(module, component, operators, decls, false);
                 }
             }
         }
@@ -2265,7 +2301,7 @@ namespace sknd
             }
         }
         
-        std::vector<Type> result_type( const Callable& callable, const Dict<Declaration>& decls, const Dict<Operator>& operators,
+        std::vector<Type> result_type( const Callable& callable, const Dict<Declaration>& decls, const Dict<const Operator*>& operators,
                                       const bool subgraph = false, const bool repeated = false, const size_t nvars = 0 ) const
         {
             if ( callable.is<Invocation>() )
@@ -2278,7 +2314,7 @@ namespace sknd
             }
         }
         
-        std::vector<Type> result_type( const Component& component, const Dict<Declaration>& decls, const Dict<Operator>& operators ) const
+        std::vector<Type> result_type( const Component& component, const Dict<Declaration>& decls, const Dict<const Operator*>& operators ) const
         {
             if ( component.branches.size() )
             {

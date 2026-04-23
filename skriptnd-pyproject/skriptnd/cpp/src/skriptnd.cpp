@@ -32,7 +32,7 @@ namespace sknd
         return path.substr(beg, end - beg);
     }
 
-    std::optional<Model> read_model( const std::string& path, const std::string& graph_name, const std::string& stdlib_path,
+    std::optional<Model> read_model( const std::string& path, const std::string& entry_point, const std::string& stdlib_path,
                                     const ErrorCallback error, const std::map<std::string, ValueExpr>& attribs,
                                     const unsigned flags ) noexcept
     {
@@ -45,7 +45,7 @@ namespace sknd
             return std::nullopt;
         }
         
-        auto model = read_model(is, "main", graph_name, stdlib_path, folder, error, attribs, flags);
+        auto model = read_model(is, "main", entry_point, stdlib_path, folder, error, attribs, flags);
         if ( model )
         {
             model->name = model_name_from_path(path);
@@ -54,7 +54,7 @@ namespace sknd
         return model;
     }
     
-    std::optional<Model> read_model( std::istream& is, const std::string& module, const std::string& main_graph,
+    std::optional<Model> read_model( std::istream& is, const std::string& module, const std::string& entry_point,
                                     const std::string& stdlib_path, const std::string& import_path,
                                     const ErrorCallback error, const std::map<std::string, ValueExpr>& attribs,
                                     const unsigned flags ) noexcept
@@ -75,40 +75,52 @@ namespace sknd
         };
         
         Parser parser(stdlib_path, import_path, counted_error);
-        auto [operators, imports, graph_names] = parser(is, module);
+        auto modules = parser(is);
         if ( error_count )
         {
             return std::nullopt;
         }
         
-        auto graph_name = !main_graph.empty() ? main_graph : !graph_names.empty() ? graph_names.front() : "";
-        auto scoped_graph_name = module + "." + graph_name;
+        std::map<std::string,const Operator*> operators;
+        for ( auto& mod : modules )
+        {
+            for ( auto& op : mod.operators )
+            {
+                auto key = mod.name + "." + op.name;
+                operators.emplace(key, &op);
+            }
+        }
         
         Typing typing(counted_error);
-        for ( auto& [key, op] : operators )
+        
+        auto& main_module = modules.front();
+        auto main_op = typing.find_main_op(main_module, entry_point);
+        if ( !main_op )
         {
-            typing.check_operator(op, operators, imports, key == scoped_graph_name);
+            std::string message = "could not find graph definition";
+            if ( !entry_point.empty() )
+            {
+                message += " '";
+                message += entry_point;
+                message += "'";
+            }
+            error(Position{ module }, message, {}, false);
+            return std::nullopt;
+        }
+        
+        auto main_name = main_module.name + "." + main_op->name;
+        
+        for ( auto& mod : modules )
+        {
+            typing.check_module(mod, operators, main_op);
         }
         if ( error_count )
         {
-            return std::nullopt;
-        }
-        
-        if ( graph_names.empty() )
-        {
-            error(Position{ module }, "could not find graph definition", {}, false);
-            return std::nullopt;
-        }
-        
-        auto it = operators.find(scoped_graph_name);
-        if ( it == operators.end() )
-        {
-            error(Position{ module }, "could not find definition of graph '" + graph_name + "'", {}, false);
             return std::nullopt;
         }
         
         Composer composer(counted_error, flags);
-        auto model = composer(operators, scoped_graph_name, attribs);
+        auto model = composer(operators, main_name, attribs);
         if ( !model )
         {
             error(model.error().position, model.error().message, model.error().trace, false);
