@@ -93,7 +93,7 @@ namespace sknd
                 }
             }
             
-            return (Module){ name, std::move(imports), std::move(operators) };
+            return Module{ name, std::move(imports), std::move(operators) };
         }
         
     private:
@@ -110,7 +110,7 @@ namespace sknd
                 TRY_DECL(is_comma, lexer.accept_if(Operator::Comma))
                 more = is_comma;
                 
-                imports.push_back((Import){ position, name });
+                imports.push_back(Import{ position, name });
             }
             while ( more );
             
