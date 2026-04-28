@@ -32,17 +32,36 @@ namespace sknd
         return path.substr(beg, end - beg);
     }
 
-    std::unique_ptr<std::istream> try_import_from_paths( const std::string& module_name, 
-                                                        const std::vector<std::string>& import_paths )
+    std::string module_path_from_name( const std::string& module_name )
     {
         std::string module_path = module_name;
         std::replace(module_path.begin(), module_path.end(), '.', '/');
         module_path += ".sknd";
+        return module_path;
+    }
+
+    std::unique_ptr<std::istream> try_import_from_path( const std::string& module_name,
+                                                        const std::string& import_path )
+    {
+        const std::string module_path = module_path_from_name(module_name);
+        
+        std::ifstream is(import_path + module_path);
+        if ( is.is_open() )
+        {
+            return std::make_unique<std::ifstream>(std::move(is));
+        }
+        return nullptr;
+    }
+
+    std::unique_ptr<std::istream> try_import_from_paths( const std::string& module_name,
+                                                        const std::vector<std::string>& import_paths )
+    {
+        const std::string module_path = module_path_from_name(module_name);
         
         std::ifstream is;
-        for ( auto& path : import_paths )
+        for ( auto& import_path : import_paths )
         {
-            is.open(path + module_path);
+            is.open(import_path + module_path);
             if ( is.is_open() )
             {
                 return std::make_unique<std::ifstream>(std::move(is));
@@ -67,7 +86,13 @@ namespace sknd
             return std::nullopt;
         }
         
-        auto model = read_model(is, "main", importer, error, entry_point, attribs, flags);
+        auto folder_importer = [&]( const std::string& module_name )
+        {
+            auto is = try_import_from_path(module_name, folder);
+            return is ? std::move(is) : importer(module_name);
+        };
+        
+        auto model = read_model(is, "main", folder_importer, error, entry_point, attribs, flags);
         if ( model )
         {
             model->name = model_name_from_path(path);

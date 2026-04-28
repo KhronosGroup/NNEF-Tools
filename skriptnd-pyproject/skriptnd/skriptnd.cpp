@@ -983,10 +983,9 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
         bool isFolder = path.back() == '\\' || path.back() == '/';
         const std::string filename = isFolder ? path + "main.sknd" : path;
         const std::string module = isFolder ? "main" : module_from_path(path);
-
         if ( isFolder )
         {
-            import_paths.push_back(path);
+            import_paths = { path, stdlib };
         }
 
         std::ifstream fs(filename);

@@ -36,8 +36,11 @@ namespace sknd
     
 
     std::string model_name_from_path( const std::string& path );
+    std::string module_path_from_name( const std::string& module_name );
 
-    std::unique_ptr<std::istream> try_import_from_paths( const std::string& module_name, 
+    std::unique_ptr<std::istream> try_import_from_path( const std::string& module_name,
+                                                        const std::string& import_path );
+    std::unique_ptr<std::istream> try_import_from_paths( const std::string& module_name,
                                                         const std::vector<std::string>& import_paths );
     
     std::optional<Model> read_model( const std::string& path,
