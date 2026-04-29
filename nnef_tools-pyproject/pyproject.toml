@@ -19,7 +19,7 @@ authors = [
 ]
 maintainers = [{ name = "Viktor Gyenes", email = "viktor.gyenes@aimotive.com" }]
 
-dependencies = ["future", "numpy", "six", "typing", "nnef"]
+dependencies = ["future", "numpy", "six", "nnef"]
 
 [build-system]
 requires = ["setuptools"]
