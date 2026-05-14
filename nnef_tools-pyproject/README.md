@@ -15,9 +15,9 @@ The python package supports extras for different functionalities:
 | Visualization of NNEF models   | visualization       | graphviz                                     |
 | Full install                   | full                | _all packages listed above_                  |
 
-Installing ONNX and Caffe dependencies (for reference):
+Installing with ONNX dependencies (for reference):
 ```
-pip install nnet_tools[onnx, caffe] 
+pip install nnef_tools[onnx] 
 ```
 
 ## Usage
