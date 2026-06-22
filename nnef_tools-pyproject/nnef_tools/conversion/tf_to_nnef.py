@@ -137,7 +137,12 @@ class Converter(_Converter):
         else:
             assert False
 
-        return self._pre_transpose(tensor, perm)
+        original = self._tensor_map[tensor]
+        if self._is_constant(original) and len(original.consumers) == 1:
+            self._transform_constant(tensor, lambda data: np.transpose(data, axes=perm))
+            return tensor
+        else:
+            return self._pre_transpose(tensor, perm)
 
     def transpose_depthwise_filter(self, tensor, format='XCN'):
         if self.is_xcn(format):
@@ -150,7 +155,13 @@ class Converter(_Converter):
             assert False
 
         shape = tensor.shape[:-2] + (1, -1)
-        return self._pre_transpose(self._reshape(tensor, shape), perm)
+
+        original = self._tensor_map[tensor]
+        if self._is_constant(original) and len(original.consumers) == 1:
+            self._transform_constant(tensor, lambda data: np.transpose(np.reshape(data, shape=shape), axes=perm))
+            return tensor
+        else:
+            return self._pre_transpose(self._reshape(tensor, shape), perm)
 
     def transpose_like(self, tensor, ref):
         if ref is not None and self.transposing(ref):
