@@ -19,6 +19,7 @@
 #include "composer.h"
 #include "binary.h"
 #include <functional>
+#include <unordered_set>
 
 
 namespace sknd
@@ -68,6 +69,33 @@ namespace sknd
             }
         }
         return nullptr;
+    }
+
+    Shape item_shape( const Shape& pack_shape, const size_t idx )
+    {
+        Shape shape(pack_shape.size());
+        for ( size_t i = 0; i < shape.size(); ++i )
+        {
+            shape[i] = pack_shape[i].packed() ? pack_shape[i].at(idx) : pack_shape[i];
+        }
+        return shape;
+    }
+
+    void set_output_shapes( Operation& op )
+    {
+        for ( size_t i = 0; i < op.outputs.size(); ++i )
+        {
+            auto& output = op.outputs[i];
+            output.shape() = op.output_shapes[i];
+            if ( output.packed() )
+            {
+                for ( size_t j = 0; j < output.max_size(); ++j )
+                {
+                    output[j].shape = item_shape(op.output_shapes[i], j);
+                }
+                output.size()= op.output_sizes[i];
+            }
+        }
     }
 
     std::optional<Model> read_model( const std::string& path,
@@ -201,13 +229,25 @@ namespace sknd
             return std::nullopt;
         }
         
+        for ( auto& graph : model->graphs )
+        {
+            for ( auto& op : graph.operations )
+            {
+                if ( op.nodes == 1 )
+                {
+                    set_output_shapes(op);
+                }
+            }
+        }
+        
         return error_count ? std::optional<Model>() : std::move(*model);
     }
 
-    void flatten_model( Model& model, const OperationFilter is_atomic ) noexcept
+    void flatten_model( Model& model, const OperationFilter is_atomic, bool keep_internals ) noexcept
     {
         for ( auto& graph : model.graphs )
         {
+            std::unordered_set<TensorRef> internals;
             for ( auto it = graph.operations.begin(); it != graph.operations.end(); ++it )
             {
                 if ( it->nodes > 1 )
@@ -218,17 +258,53 @@ namespace sknd
                         {
                             if ( itt->nodes == 1 )
                             {
-                                std::move(itt->contractions.begin(), itt->contractions.end(), std::back_inserter(it->contractions));
+                                if ( keep_internals )
+                                {
+                                    std::move(itt->contractions.begin(), itt->contractions.end(), std::back_inserter(it->contractions));
+                                }
+                                for ( auto& output : itt->outputs )
+                                {
+                                    if ( std::find(it->outputs.begin(), it->outputs.end(), output) == it->outputs.end() )
+                                    {
+                                        if ( keep_internals )
+                                        {
+                                            it->internals.push_back(output);
+                                        }
+                                        else
+                                        {
+                                            if ( output.packed() )
+                                            {
+                                                for ( size_t i = 0; i < output.max_size(); ++i )
+                                                {
+                                                    internals.insert(&output[i]);
+                                                }
+                                            }
+                                            internals.insert(output);
+                                        }
+                                    }
+                                }
                             }
                         }
+                        
                         graph.operations.erase(it + 1, it + it->nodes);
                         it->nodes = 1;
+                        
+                        set_output_shapes(*it);
                     }
                     else
                     {
                         graph.operations.erase(it--);
                     }
                 }
+            }
+            if ( !internals.empty() )
+            {
+                graph.tensors.erase(std::remove_if(graph.tensors.begin(), graph.tensors.end(), [&]( auto& item ) {
+                    return internals.count(&*item);
+                }), graph.tensors.end());
+                graph.packs.erase(std::remove_if(graph.packs.begin(), graph.packs.end(), [&]( auto& item ) {
+                    return internals.count(&*item);
+                }), graph.packs.end());
             }
         }
     }
@@ -262,11 +338,10 @@ namespace sknd
             validate_tensor_header(header);
             
             tensor.shape.resize(header.rank);
-            tensor.canonic_shape.resize(header.rank);
             tensor.max_shape.resize(header.rank);
             for ( size_t i = 0; i < header.rank; ++i )
             {
-                tensor.shape[i] = tensor.canonic_shape[i] = tensor.max_shape[i] = (int_t)header.extents[i];
+                tensor.shape[i] = tensor.max_shape[i] = (int_t)header.extents[i];
             }
         }
         catch ( const Error& e )

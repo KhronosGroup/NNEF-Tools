@@ -59,6 +59,8 @@ namespace sknd
         using Simplification::resolved;
         using Simplification::canonify;
         using Simplification::canonical;
+        using Simplification::simplify;
+        using Simplification::simplified;
         
     private:
         
@@ -80,7 +82,7 @@ namespace sknd
         {
             enum Kind
             {
-                Dtype, Attrib, Input, Output, Variable, Constant, Using, Result, Extent, Index, Carried, Scan, Local,
+                Gtype, Attrib, Input, Output, Variable, Constant, Using, Result, Extent, Index, Carried, Scan, Local,
             };
             
             typedef std::variant<ValueExpr,TensorRef,Valueless> variant_type;
@@ -3351,6 +3353,21 @@ namespace sknd
             Shape resolved = shape;
             resolve(resolved, flags);
             return resolved;
+        }
+        
+        static void simplify( Shape& shape )
+        {
+            for ( auto& item : shape )
+            {
+                simplify(item);
+            }
+        }
+        
+        static Shape simplified( const Shape& shape )
+        {
+            Shape simple = shape;
+            simplify(simple);
+            return simple;
         }
         
         static void canonify( Shape& shape )

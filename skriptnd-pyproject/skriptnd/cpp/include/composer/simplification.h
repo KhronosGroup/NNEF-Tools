@@ -104,7 +104,7 @@ namespace sknd
                         if ( flags & ResolveSizeAccess )
                         {
                             auto& access = x.as_size_access();
-                            x = access.pack.canonic_size();
+                            x = access.pack.size();
                             resolve(x, flags);
                         }
                         break;
@@ -120,7 +120,7 @@ namespace sknd
                                 if ( access.item == nullptr )
                                 {
                                     bool packed = x.packed();
-                                    x = tensor.canonic_shape()[access.dim.as_int()];
+                                    x = tensor.shape()[access.dim.as_int()];
                                     if ( packed && !x.packed() )
                                     {
                                         x = ValueExpr::uniform(x, tensor.size(), tensor.max_size());
@@ -129,7 +129,7 @@ namespace sknd
                                 }
                                 else if ( access.item.is_literal() )
                                 {
-                                    x = tensor[access.item.as_int()].canonic_shape[access.dim.as_int()];
+                                    x = tensor[access.item.as_int()].shape[access.dim.as_int()];
                                     resolve(x, flags);
                                 }
                             }

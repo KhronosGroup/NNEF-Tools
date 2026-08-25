@@ -694,29 +694,35 @@ def _format_value_exprs(expr, bracket=True):
         return _format_value_expr(expr, bracket=bracket)
 
 
-def _format_shape_propagation(output, indent):
+def _format_shape_propagation(output, output_shape, output_size, indent):
     text = ""
-    if isinstance(output, sknd.TensorPack) and _is_dynamic_size(output.size) and not _is_placeholder(output.size):
-        length = _format_value_expr(output.size, bracket=False)
+    if isinstance(output, sknd.TensorPack) and _is_dynamic_size(output_size) and not _is_placeholder(output_size):
+        length = _format_value_expr(output_size, bracket=False)
         text += indent + f"{_valid_id(output.name)}.resize({length});\n"
-    if _is_dynamic_shape(output.shape) and all(not _is_placeholder(item) for item in output.shape):
+    if _is_dynamic_shape(output_shape) and all(not _is_placeholder(item) for item in output_shape):
         shape = ", ".join(_format_value_expr(expr, bracket=False) if not sknd.expr_is_packed(expr) else "-1"
-                          for expr in output.shape)
+                          for expr in output_shape)
         text += indent + f"{_valid_id(output.name)}.reshape({shape});\n"
     if isinstance(output, sknd.TensorPack):
-        text += "".join(_format_shape_propagation(item, indent) for item in output)
+        text += "".join(_format_shape_propagation(item, _item_shape(output_shape, idx), None, indent)
+                        for idx, item in enumerate(output))
     return text
 
 
-def _format_shape_definition(output, indent):
+def _format_shape_definition(output, output_shape, output_size, indent):
     text = ""
-    if any(_is_placeholder(item) for item in output.shape):
+    if any(_is_placeholder(item) for item in output_shape):
         shape = ", ".join(_format_value_expr(expr, bracket=False) if not sknd.expr_is_packed(expr) else "-1"
-                          for expr in output.shape)
+                          for expr in output_shape)
         text += indent + f"{_valid_id(output.name)}.reshape({shape});\n"
     if isinstance(output, sknd.TensorPack):
-        text += "".join(_format_shape_definition(item, indent) for item in output)
+        text += "".join(_format_shape_definition(item, _item_shape(output_shape, idx), None, indent)
+                        for idx, item in enumerate(output))
     return text
+
+
+def _item_shape(shape, idx):
+    return tuple(x[idx] if sknd.expr_is_packed(x) else x for x in shape)
 
 
 def _is_dynamic_size(expr):
@@ -797,10 +803,12 @@ def _format_operation(op, indent, context):
 
     text += "".join(_format_pack_population(output, indent) for output in op.outputs
                     if output.name in deferred_packs)
-    text += "".join(_format_shape_propagation(output, indent) for output in op.outputs)
+    text += "".join(_format_shape_propagation(output, shape, size, indent)
+                    for output, shape, size in zip(op.outputs, op.output_shapes, op.output_sizes))
     text += _format_intrinsic(op, indent, context) if op.is_extrinsic else _format_contractions(op, indent)
     if op.is_primitive and not op.is_extrinsic:
-        text += "".join(_format_shape_definition(output, indent) for output in op.outputs)
+        text += "".join(_format_shape_definition(output, shape, size, indent)
+                        for output, shape, size in zip(op.outputs, op.output_shapes, op.output_sizes))
 
     return text
 
@@ -987,7 +995,7 @@ def _format_do(op, indent, context):
     dynamic_iters = op.inputs[nvars+nscans]
 
     auxiliaries = context['auxiliaries']
-    index = sknd.Tensor(name='$', dtype=sknd.Dtype.Int, shape=(), canonic_shape=(), max_shape=())
+    index = sknd.Tensor(name='$', dtype=sknd.Dtype.Int, shape=(), max_shape=())
     vars = tuple(auxiliaries[output] for output in op.outputs[:nvars])
     subgraph_inputs = vars + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
     body_inputs = tuple(subgraph_inputs[idx] for idx in op.attribs['body_inputs'])
@@ -1120,7 +1128,7 @@ def _valid_id(name):
 
 def _make_auxiliary_tensor(tensor, dtype=None):
     return sknd.Tensor(name='$'+tensor.name, dtype=dtype or tensor.dtype,
-                       shape=tensor.shape, canonic_shape=tensor.canonic_shape, max_shape=tensor.max_shape)
+                       shape=tensor.shape, max_shape=tensor.max_shape)
 
 
 def _generate_model_source(model, name):

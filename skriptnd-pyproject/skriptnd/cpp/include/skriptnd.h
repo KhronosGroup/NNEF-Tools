@@ -56,7 +56,7 @@ namespace sknd
                                     const std::map<std::string, sknd::ValueExpr>& attribs = {},
                                     const unsigned flags = DefaultCompilerFlags ) noexcept;
 
-    void flatten_model( Model& model, const OperationFilter is_atomic = FalseOperationFilter ) noexcept;
+    void flatten_model( Model& model, const OperationFilter is_atomic = FalseOperationFilter, bool keep_internals = false ) noexcept;
 
     bool read_tensor( std::istream& is, Tensor& tensor, std::string& error ) noexcept;
     bool write_tensor( std::ostream& os, const Tensor& tensor, std::string& error ) noexcept;

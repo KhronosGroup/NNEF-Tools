@@ -681,13 +681,12 @@ static PyObject* buildPyTensor( const sknd::Tensor& tensor, const BuildContext& 
     PyObject* name = buildPyStr(tensor.name);
     PyObject* dtype = buildPyDtype(tensor.dtype);
     PyObject* shape = Py_None; // deferred due to references to other tensors
-    PyObject* canonic_shape = buildPyShape(tensor.canonic_shape, context);
     PyObject* max_shape = buildPyShape(tensor.max_shape);
     PyObject* quant = buildPyAttribs(tensor.quant, context);
     PyObject* value = buildPyValueExpr(tensor.value, context);
     PyObject* variable = buildPyBoolean(tensor.variable);
 
-    return makePyObject(Tensor, name, dtype, shape, canonic_shape, max_shape, quant, value, variable);
+    return makePyObject(Tensor, name, dtype, shape, max_shape, quant, value, variable);
 }
 
 static PyObject* buildPyTensorPack( const sknd::TensorPack& pack, const BuildContext& context )
@@ -695,10 +694,8 @@ static PyObject* buildPyTensorPack( const sknd::TensorPack& pack, const BuildCon
     PyObject* name = buildPyStr(pack.name);
     PyObject* dtype = buildPyDtype(pack.dtype);
     PyObject* shape = Py_None;  // deferred due to references to other tensors
-    PyObject* canonic_shape = buildPyShape(pack.canonic_shape, context);
     PyObject* max_shape = buildPyShape(pack.max_shape);
     PyObject* size = Py_None;   // deferred due to references to other tensors
-    PyObject* canonic_size = buildPyValueExpr(pack.canonic_size, context);
 
     PyObject* items = PyList_New(pack.items.size());
     for ( size_t i = 0; i < pack.items.size(); ++i )
@@ -708,7 +705,7 @@ static PyObject* buildPyTensorPack( const sknd::TensorPack& pack, const BuildCon
         PyList_SetItem(items, i, item);
     }
 
-    return makePyObject(TensorPack, name, dtype, shape, canonic_shape, max_shape, size, canonic_size, items);
+    return makePyObject(TensorPack, name, dtype, shape, max_shape, size, items);
 }
 
 static PyObject* buildPyContraction( const sknd::Contraction& contraction, const BuildContext& context )
@@ -785,9 +782,22 @@ static PyObject* buildPyOperation( const sknd::Operation& op, BuildContext& cont
         PyList_SetItem(asserts, i, buildPyAssertion(op.asserts[i], context));
     }
 
+    PyObject* output_shapes = PyList_New(op.output_shapes.size());
+    for ( size_t i = 0; i < op.output_shapes.size(); ++i )
+    {
+        PyList_SetItem(output_shapes, i, buildPyShape(op.output_shapes[i], context));
+    }
+
+    PyObject* output_sizes = PyList_New(op.output_sizes.size());
+    for ( size_t i = 0; i < op.output_sizes.size(); ++i )
+    {
+        PyList_SetItem(output_sizes, i, buildPyValueExpr(op.output_sizes[i], context));
+    }
+
     PyObject* components = Py_None;     // deferred
 
-    return makePyObject(Operation, name, dtypes, attribs, inputs, outputs, internals, contractions, asserts, subexprs, components);
+    return makePyObject(Operation, name, dtypes, attribs, inputs, outputs, internals, contractions, asserts, subexprs,
+                        components, output_shapes, output_sizes);
 }
 
 static PyObject* buildPyGraph( const sknd::Graph& graph )
@@ -1119,13 +1129,13 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
 
     Contraction = makeDataClass(module, "Contraction", { "left", "right", "condition", "assignment", "locals", "bounds", "subscripts", "axes" });
 
-    Tensor = makeDataClass(module, "Tensor", { "name", "dtype", "shape", "canonic_shape", "max_shape", "quant", "value", "variable" },
+    Tensor = makeDataClass(module, "Tensor", { "name", "dtype", "shape", "max_shape", "quant", "value", "variable" },
                            { buildPyNone(), buildPyNone(), buildPyBoolean(false) });
-    TensorPack = makeDataClass(module, "TensorPack", { "name", "dtype", "shape", "canonic_shape", "max_shape", "size", "canonic_size", "items" },
+    TensorPack = makeDataClass(module, "TensorPack", { "name", "dtype", "shape", "max_shape", "size", "items" },
                                { buildPyInt(0), EmptyListDefault });
     Assertion = makeDataClass(module, "Assertion", { "condition", "message", "args" });
-    Operation = makeDataClass(module, "Operation", { "name", "dtypes", "attribs", "inputs", "outputs", "internals", "contractions", "asserts", "subexprs", "components" },
-                              { EmptyDictDefault, EmptyDictDefault, EmptyTupleDefault, EmptyTupleDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault });
+    Operation = makeDataClass(module, "Operation", { "name", "dtypes", "attribs", "inputs", "outputs", "internals", "contractions", "asserts", "subexprs", "components", "output_shapes", "output_sizes" },
+                              { EmptyDictDefault, EmptyDictDefault, EmptyTupleDefault, EmptyTupleDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault });
     Graph = makeDataClass(module, "Graph", { "name", "operations", "inputs", "outputs", "tensors", "packs", "asserts" },
                           { EmptyListDefault, EmptyTupleDefault, EmptyTupleDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault });
     Model = makeDataClass(module, "Model", { "name", "graphs" }, { EmptyListDefault });

@@ -34,6 +34,9 @@
 namespace sknd
 {
 
+    typedef std::vector<ValueExpr> Shape;
+
+
     /*
      * Data structure to desribe a tensor assignment via unary/binary/ternary operations over multi-dimensional tensor accesses
      * A contraction may result in reduction or broadcasting accross any combination of dimensions depending on the index variables
@@ -59,8 +62,7 @@ namespace sknd
     {
         std::string name;                                               // name of the tensor in the graph
         Typename dtype;                                                 // data-type of the tensor
-        std::vector<ValueExpr> shape;                                   // shape of the tensor, possibly dynamic expressions
-        std::vector<ValueExpr> canonic_shape;                           // canonical shape the tensor (resolved shape references)
+        std::vector<ValueExpr> shape;                                   // shape the tensor (expressed in terms of shape symbols)
         std::vector<int_t> max_shape;                                   // upper bound of tensor shape
         std::map<std::string,ValueExpr> quant;                          // quantization info for the tensor
         std::vector<char> data;                                         // data of variable tensor
@@ -77,11 +79,9 @@ namespace sknd
         std::vector<Tensor*> items;                                     // items in the pack
         std::string name;                                               // name of the pack
         Typename dtype;                                                 // dtype of the tensors in the pack
-        std::vector<ValueExpr> shape;                                   // (partial) shape of tensors in the pack
-        std::vector<ValueExpr> canonic_shape;                           // canonical shape of tensors in the pack (resolved shape references)
+        std::vector<ValueExpr> shape;                                   // shape of tensors in the pack (expressed in terms of shape symbols)
         std::vector<int_t> max_shape;                                   // upper bound of tensor shape
-        ValueExpr size;                                                 // dynamic size of the pack
-        ValueExpr canonic_size;                                         // canonical dynamic size of the pack
+        ValueExpr size;                                                 // canonical dynamic size of the pack
     };
 
 
@@ -111,6 +111,8 @@ namespace sknd
         std::vector<Contraction> contractions;                          // list of contractions that define the lowering of the operation
         std::vector<Assertion> asserts;                                 // list of dynamic asserts that need to be checked in run-time
         OrderedDict<ValueExpr> subexprs;                                // dictionary shared sub-expressions
+        std::vector<Shape> output_shapes;                               // dynamic output shapes
+        std::vector<ValueExpr> output_sizes;                            // dynamic sizes of output packs
         size_t nodes = 1;                                               // size of the subtree that this operation represents
         bool extrinsic = true;                                          // whether the operation is externally defined
     };

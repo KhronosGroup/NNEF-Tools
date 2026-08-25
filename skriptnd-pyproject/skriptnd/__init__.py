@@ -655,14 +655,42 @@ def atomics(obj: typing.Union[sknd.Graph, sknd.Operation], is_atomic):
     return _enum_atomics(obj.components, is_atomic)
 
 
-def flatten_model(model: sknd.Model, is_atomic=None):
+def _item_shape(shape, idx):
+    return tuple(x[idx] if sknd.expr_is_packed(x) else x for x in shape)
+
+
+def _set_output_shapes(op):
+    for output, shape, size in zip(op.outputs, op.output_shapes, op.output_sizes):
+        output.shape = shape
+        if isinstance(output, TensorPack):
+            for idx, item in enumerate(output.items):
+                item.shape = _item_shape(shape, idx)
+            output.size = size
+
+
+def flatten_model(model: sknd.Model, is_atomic=None, keep_internals=False):
     for graph in model.graphs:
         if is_atomic is None:
             graph.operations = list(graph.primitives)
         else:
             graph.operations = list(atomics(graph, is_atomic))
+            internals = set()
             for op in graph.operations:
                 if not op.is_primitive:
                     for prim in op.primitives:
-                        op.contractions.extend(prim.contractions)
+                        if keep_internals:
+                            op.contractions.extend(prim.contractions)
+                        for output in prim.outputs:
+                            if output not in op.outputs:
+                                if keep_internals:
+                                    op.internals.append(output)
+                                else:
+                                    if isinstance(output, TensorPack):
+                                        for item in output.items:
+                                            internals.add(item)
+                                    internals.add(output)
                     op.components = []
+                    _set_output_shapes(op)
+            if not keep_internals:
+                graph.tensors = [tensor for tensor in graph.tensor if tensor not in internals]
+                graph.packs = [pack for pack in graph.packs if pack not in internals]

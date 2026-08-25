@@ -58,8 +58,6 @@ namespace sknd
             Typename& dtype() { return packed() ? as<P*>()->dtype : as<T*>()->dtype; }
             const std::vector<ValueExpr>& shape() const { return packed() ? as<P*>()->shape : as<T*>()->shape; }
             std::vector<ValueExpr>& shape() { return packed() ? as<P*>()->shape : as<T*>()->shape; }
-            const std::vector<ValueExpr>& canonic_shape() const { return packed() ? as<P*>()->canonic_shape : as<T*>()->canonic_shape; }
-            std::vector<ValueExpr>& canonic_shape() { return packed() ? as<P*>()->canonic_shape : as<T*>()->canonic_shape; }
             const std::vector<int_t>& max_shape() const { return packed() ? as<P*>()->max_shape : as<T*>()->max_shape; }
             std::vector<int_t>& max_shape() { return packed() ? as<P*>()->max_shape : as<T*>()->max_shape; }
             size_t rank() const { return packed() ? as<P*>()->shape.size() : as<T*>()->shape.size(); }
@@ -68,10 +66,7 @@ namespace sknd
             std::optional<size_t> max_size_or_null() const { return packed() ? max_size() : (std::optional<size_t>)std::nullopt; }
             ValueExpr& size() { return as<P*>()->size; }
             const ValueExpr& size() const { return as<P*>()->size; }
-            ValueExpr& canonic_size() { return as<P*>()->canonic_size; }
-            const ValueExpr& canonic_size() const { return as<P*>()->canonic_size; }
             const ValueExpr& size_or_null() const { return packed() ? size() : V::null(); }
-            const ValueExpr& canonic_size_or_null() const { return packed() ? canonic_size() : V::null(); }
             bool is_constant() const { return !packed() ? as<T*>()->value != nullptr :
                 std::all_of(as<P*>()->items.begin(), as<P*>()->items.end(), []( const T* item ){ return item->value != nullptr; }); }
             TensorRef at( const size_t i ) { return TensorRef(as<P*>()->items[i]); }

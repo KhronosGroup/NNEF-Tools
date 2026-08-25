@@ -215,9 +215,16 @@ namespace sknd
             for ( auto& param : op.attribs )
             {
                 check_param(param, decls, Lexer::Block::Attrib);
-                if ( op.graph && param.type.dynamic )
+                if ( op.graph )
                 {
-                    report_error(param.position, "graph attributes must not be dynamic");
+                    if ( param.type.dynamic )
+                    {
+                        report_error(param.position, "graph attribute must not be dynamic");
+                    }
+                    if ( param.repeats.value && param.repeats.dynamic )
+                    {
+                        report_error(param.position, "graph attribute must not be of dynamic size");
+                    }
                 }
             }
             for ( size_t i = 0; i < op.inputs.size(); ++i )
@@ -636,14 +643,14 @@ namespace sknd
                 auto& iden = find_affine_id(expanded(*item));
                 if ( !iden.empty() && !decls.count(iden) && !extent.bound )
                 {
-                    report_error(item->position, "upper bound must be specified in main graph for dynamic shape");
+                    report_error(item->position, "upper bound must be specified in graph for dynamic shape");
                 }
                 if ( item->kind == Expr::Expand )
                 {
                     auto count = as_expand(*item).count;
                     if ( has_unknown_symbols(*count, decls) )
                     {
-                        report_error(count->position, "shape components of main graph inputs must have fixed length");
+                        report_error(count->position, "shape components of graph inputs must have fixed length");
                     }
                 }
             }
