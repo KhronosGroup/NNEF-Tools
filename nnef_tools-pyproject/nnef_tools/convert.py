@@ -373,7 +373,7 @@ def main(args):
                                         decomposed=[], custom_shapes={}, fold_constants=False)
                     model = reader(output_model)
 
-                tensor_lookup = {tensor.name: tensor for tensor in model.tensors if tensor.name is not None} \
+                tensor_lookup = {tensor.name: tensor for graph in model.graphs for tensor in graph.tensors if tensor.name is not None} \
                     if args.tensor_mapping is not None else None
 
                 optimizer(model)
