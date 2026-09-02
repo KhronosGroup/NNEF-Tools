@@ -383,11 +383,12 @@ def main(args):
 
                 if args.tensor_mapping is not None:
                     if converter:
-                        tensor_mapping = {src: tensor_lookup[dst].name for src, dst in six.iteritems(tensor_mapping)
-                                          if tensor_lookup[dst].graph is model}
+                        tensor_mapping = {name: tensor.name for name, tensor in
+                                          ((src, tensor_lookup[dst]) for src, dst in six.iteritems(tensor_mapping))
+                                          if tensor.graph and tensor.graph.model is model}
                     else:
                         tensor_mapping = {name: tensor.name for name, tensor in six.iteritems(tensor_lookup)
-                                          if tensor.graph is model}
+                                          if tensor.graph and tensor.graph.model is model}
             else:
                 print(f"No optimizer found for output format {args.output_format}")
 
