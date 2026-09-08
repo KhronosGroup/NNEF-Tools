@@ -371,6 +371,8 @@ class Converter(_Converter):
                 return ShapeExpr(ShapeExpr.Op.UpRank, args=[expr, rank - effective_rank])
             else:
                 return ShapeExpr(ShapeExpr.Op.Const, args=[value])
+        elif op.type == 'Identity':
+            return self._eval_symbolic_shape(op.inputs[0])
         elif op.type == 'Shape':
             if op.input.has_producer and op.input.producer in self._shape_ops:
                 length = ShapeExpr(ShapeExpr.Op.Length, args=[self._eval_symbolic_shape(op.input)])
