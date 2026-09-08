@@ -902,8 +902,9 @@ class ConverterToNNEF(Converter):
                     Operation(graph, type='external', inputs=(), outputs=tensor,
                               attribs={'shape': list(tensor.shape), 'dtype': tensor.dtype})
                 else:
+                    value = mapped.data if isinstance(mapped.data, (np.ndarray, list)) else [mapped.data]
                     Operation(graph, type='constant', inputs=(), outputs=tensor,
-                              attribs={'shape': list(tensor.shape), 'dtype': tensor.dtype, 'value': mapped.data})
+                              attribs={'shape': list(tensor.shape), 'dtype': tensor.dtype, 'value': value})
 
     def _make_constant(self, graph, dtype, value, inline):
         if isinstance(value, tuple):
@@ -920,7 +921,8 @@ class ConverterToNNEF(Converter):
 
     def _const_operation(self, output, value):
         Operation(output.graph, type='constant', inputs=(), outputs=output,
-                  attribs={'value': value, 'dtype': output.dtype, 'shape': list(output.shape)})
+                  attribs={'value': value if isinstance(value, (np.ndarray, list)) else [value],
+                           'dtype': output.dtype, 'shape': list(output.shape)})
 
     def _transpose_operation(self, input, output, perm):
         Operation(input.graph, type='transpose', inputs=input, outputs=output, attribs={'axes': perm})
