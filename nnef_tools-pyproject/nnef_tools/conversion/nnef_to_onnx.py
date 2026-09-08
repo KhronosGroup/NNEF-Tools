@@ -32,6 +32,7 @@ class Converter(_Converter):
             'lstm_loop': lambda X, W, R, B, h, c, **kwargs: (h, c),
             'erf': lambda x: x,
             'mish': lambda x: x,
+            'hard_sigmoid': lambda x, alpha, beta: x,
             'depth_to_space': lambda x, block_size, **kwargs: [x[0], x[1] // block_size ** 2, x[2] * block_size, x[3] * block_size],
             'space_to_depth': lambda x, block_size, **kwargs: [x[0], x[1] * block_size ** 2, x[2] // block_size, x[3] // block_size],
         }
@@ -552,6 +553,16 @@ _Transforms = Converter.unpack_transforms({
             outputs='!O[0]',
             attribs={
                 'blocksize': '!block_size',
+            },
+        ),
+    'hard_sigmoid':
+        Transform(
+            type='HardSigmoid',
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'alpha': '!alpha',
+                'beta': '!beta',
             },
         ),
 })

@@ -367,7 +367,7 @@ class Reader(object):
 
         if self._simplify:
             from onnxsim import simplify
-            model_proto, _ = simplify(model_proto, input_shapes=input_shapes, perform_optimization=False)
+            model_proto, _ = simplify(model_proto, overwrite_input_shapes=input_shapes, perform_optimization=False)
         if input_shapes:
             _set_tensor_shapes_from_dict(model_proto.graph.input, input_shapes)
 

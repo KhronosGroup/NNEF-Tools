@@ -684,6 +684,18 @@ class TestCases(TestEnv):
 
         self._test_conversion('prelu', [node], [input, alpha], [output])
 
+    def test_hard_sigmoid(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 32, 32])
+        node = helper.make_node(
+            op_type='HardSigmoid',
+            inputs=['input'],
+            outputs=['output'],
+        )
+
+        self._test_conversion('hard_sigmoid', [node], [input], [output],
+                              opset_version=22)
+
     def test_where(self):
         cond = helper.make_tensor_value_info('cond', TensorProto.BOOL, [1, 1, 32, 32])
         input1 = helper.make_tensor_value_info('input1', TensorProto.FLOAT, [1, 3, 32, 32])
