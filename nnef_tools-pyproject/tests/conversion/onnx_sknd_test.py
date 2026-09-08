@@ -2141,6 +2141,9 @@ class NetworkTestCases(TestEnv):
         self._test_conversion_from_file(self._network_folder + 'yolo_v3.onnx',
                                         input_shape=[(1, 3, 224, 224), (1, 2)])
 
+    def test_yolo_v4(self):
+        self._test_conversion_from_file(self._network_folder + 'yolo_v4.onnx')
+
     def test_gpt_encoder(self):
         self._test_conversion_from_file(self._network_folder + 'gpt-encoder.onnx',
                                         input_shape=(1, 3, 128, 256))
