@@ -370,7 +370,7 @@ def main(args):
                 if args.output_format != args.input_format:
                     writer(model, output_model)
                     reader = get_reader(args.output_format, atomic=lambda name: not name.startswith('main.'),
-                                        decomposed=[], custom_shapes={}, fold_constants=False)
+                                        decomposed=decomposed, custom_shapes={}, fold_constants=False)
                     model = reader(output_model)
 
                 tensor_lookup = {tensor.name: tensor for graph in model.graphs for tensor in graph.tensors if tensor.name is not None} \
