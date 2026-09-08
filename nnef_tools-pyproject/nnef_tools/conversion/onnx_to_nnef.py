@@ -121,6 +121,13 @@ fragment mish( x: tensor<scalar> ) -> ( y: tensor<scalar> )
 }
 """
 
+_HARD_SIGMOID_FRAGMENT = """
+fragment hard_sigmoid( x: tensor<scalar>, alpha: scalar = 0.2, beta: scalar = 0.5 ) -> ( y: tensor<scalar> )
+{
+    y = clamp(alpha * x + beta, 0.0, 1.0);
+}
+"""
+
 _DEPTH_TO_SPACE_FRAGMENT = """
 fragment depth_to_space( x: tensor<scalar>, block_size: integer, blocks_first: logical ) -> ( y: tensor<scalar> )
 {
@@ -157,6 +164,7 @@ class Converter(_Converter):
             'lstm_loop': _LSTM_LOOP_FRAGMENT,
             'erf': _ERF_FRAGMENT,
             'mish': _MISH_FRAGMENT,
+            'hard_sigmoid': _HARD_SIGMOID_FRAGMENT,
             'depth_to_space': _DEPTH_TO_SPACE_FRAGMENT,
             'space_to_depth': _SPACE_TO_DEPTH_FRAGMENT,
         }
@@ -177,6 +185,7 @@ class Converter(_Converter):
             'lstm_loop': lambda X, W, R, B, h, c, **kwargs: (h, c),
             'erf': lambda x: x,
             'mish': lambda x: x,
+            'hard_sigmoid': lambda x: x,
             'depth_to_space': lambda x, block_size, **kwargs: [x[0], x[1] // block_size ** 2, x[2] * block_size, x[3] * block_size],
             'space_to_depth': lambda x, block_size, **kwargs: [x[0], x[1] * block_size ** 2, x[2] // block_size, x[3] // block_size],
         }
@@ -522,6 +531,20 @@ _Transforms = Converter.unpack_transforms({
                 '!broadcast(I[1], I[0].rank)',
             ),
             outputs='!O[0]',
+        ),
+    'HardSigmoid':
+        Transform(
+            type='hard_sigmoid',
+            defaults={
+                'alpha': 0.2,
+                'beta': 0.5,
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'alpha': '!alpha',
+                'beta': '!beta',
+            },
         ),
     'Transpose':
         Transform(
