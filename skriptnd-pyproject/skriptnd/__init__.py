@@ -36,6 +36,7 @@ Model = _sknd.Model             # dataclass('Model', {
                                 #   'graphs': List[Graph],
                                 # }),
 Graph = _sknd.Graph             # dataclass('Graph', {
+                                #   'parent': Graph,
                                 #   'name': str,
                                 #   'operations': List[Operation],
                                 #   'inputs': Tuple[Tensor],
@@ -198,37 +199,6 @@ def _enum_referenced(op):
                     yield x.pack
 
 
-def _node_count(op):
-    nodes = 1
-    for comp in op.components:
-        nodes += _node_count(comp)
-    return nodes
-
-
-def _enum_components(graph):
-    i = 0
-    while i < len(graph.operations):
-        op = graph.operations[i]
-        i += _node_count(op)
-        yield op
-
-
-def _enum_primitives(op):
-    if op.is_primitive:
-        yield op
-    else:
-        for comp in op.components:
-            yield from _enum_primitives(comp)
-
-
-def _enum_atomics(operations, is_atomic):
-    for op in operations:
-        if op.is_primitive or is_atomic(op):
-            yield op
-        else:
-            yield from _enum_atomics(op.components, is_atomic)
-
-
 PlaceholderExpr.__str__ = lambda x: (x.id if x.id and not x.id.startswith('.') else '~') + '|' + str(x.max_value)
 IdentifierExpr.__str__ = lambda x: _local_name(x.name)
 ReferenceExpr.__str__ = lambda x: _local_name(x.name)
@@ -253,6 +223,7 @@ Tensor.is_activation = property(lambda tensor: tensor.value is None and not tens
 Tensor.is_variable = property(lambda tensor: tensor.variable)
 Tensor.is_constant = property(lambda tensor: tensor.value is not None and not tensor.variable)
 
+TensorPack.__hash__ = lambda pack: hash(pack.name)
 TensorPack.__len__ = lambda pack: len(pack.items)
 TensorPack.__getitem__ = lambda pack, i: pack.items[i]
 TensorPack.__iter__ = lambda pack: iter(pack.items)
@@ -262,25 +233,22 @@ TensorPack.packed = property(lambda expr: True)
 Operation.constants = property(lambda op: (tensor for tensor in op.internals if tensor.is_constant))
 Operation.variables = property(lambda op: (tensor for tensor in op.internals if tensor.is_variable))
 Operation.referenced = property(_enum_referenced)
-Operation.is_primitive = property(lambda op: len(op.components) == 0)
-Operation.is_compound = property(lambda op: len(op.components) != 0)
-Operation.is_extrinsic = property(lambda op: op.contractions is None)
-Operation.primitives = property(_enum_primitives)
+Operation.is_primitive = property(lambda op: op.contractions is not None)
+Operation.is_compound = property(lambda op: op.subgraphs is not None)
+Operation.is_extrinsic = property(lambda op: op.contractions is None and op.subgraphs is None)
 
+Graph.__hash__ = lambda graph: hash(graph.name)
+Graph.dependent = property(lambda graph: graph.parent is not None)
 Graph.variables = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_variable))
 Graph.constants = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_constant))
 Graph.activations = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_activation))
 Graph.intermediates = property(lambda graph: (tensor for op in graph.operations for tensor in _itemize(op.outputs)))
-Graph.components = property(_enum_components)
-Graph.primitives = property(lambda graph: (op for op in graph.operations if op.is_primitive))
-Graph.is_flat = property(lambda graph: all(op.is_primitive for op in graph.operations))
 
 Model.tensors = property(lambda model: (tensor for graph in model.graphs for tensor in graph.tensors))
 Model.packs = property(lambda model: (pack for graphs in model.graphs for pack in graphs.packs))
 Model.variables = property(lambda model: (tensor for tensor in model.tensors if tensor.is_variable))
 Model.constants = property(lambda model: (tensor for tensor in model.tensors if tensor.is_constant))
 Model.activations = property(lambda model: (tensor for tensor in model.tensors if tensor.is_activation))
-Model.is_flat = property(lambda model: all(graph.is_flat for graph in model.graphs))
 
 
 ListExpr.__len__ = lambda expr: len(expr.items)
@@ -651,46 +619,57 @@ def has_index_guards(expr, locals):
     return False
 
 
-def atomics(obj: typing.Union[sknd.Graph, sknd.Operation], is_atomic):
-    return _enum_atomics(obj.components, is_atomic)
+def _replace_tensor_accesses(value, tensor_remap):
+    if isinstance(value, Expr):
+        for expr in recursive_enumerate_expr(value):
+            if isinstance(expr, ShapeAccess):
+                remapped = tensor_remap.get(expr.tensor)
+                if remapped:
+                    expr.tensor = remapped
+            if isinstance(expr, SizeAccess):
+                remapped = tensor_remap.get(expr.pack)
+                if remapped:
+                    expr.pack = remapped
 
 
-def _item_shape(shape, idx):
-    return tuple(x[idx] if sknd.expr_is_packed(x) else x for x in shape)
+def _replace_tensor_usage(graph, tensor_remap):
+    graph.inputs = tuple(tensor_remap.get(tensor) or tensor for tensor in graph.inputs)
+    for op in graph.operations:
+        op.inputs = tuple(tensor_remap.get(tensor) or tensor for tensor in op.inputs)
+        if op.subgraphs:
+            for subgraph in op.subgraphs:
+                _replace_tensor_usage(subgraph, tensor_remap)
+        for key, value in op.attribs.items():
+            _replace_tensor_accesses(value, tensor_remap)
+        for key, value in op.subexprs.items():
+            _replace_tensor_accesses(value, tensor_remap)
+    for tensor in graph.tensors:
+        for expr in tensor.shape:
+            _replace_tensor_accesses(expr, tensor_remap)
 
 
-def _set_output_shapes(op):
-    for output, shape, size in zip(op.outputs, op.output_shapes, op.output_sizes):
-        output.shape = shape
-        if isinstance(output, TensorPack):
-            for idx, item in enumerate(output.items):
-                item.shape = _item_shape(shape, idx)
-            output.size = size
-
-
-def flatten_model(model: sknd.Model, is_atomic=None, keep_internals=False):
+def inline_compounds(model, filter):
+    removed_subgraphs = set()
     for graph in model.graphs:
-        if is_atomic is None:
-            graph.operations = list(graph.primitives)
-        else:
-            graph.operations = list(atomics(graph, is_atomic))
-            internals = set()
-            for op in graph.operations:
-                if not op.is_primitive:
-                    for prim in op.primitives:
-                        if keep_internals:
-                            op.contractions.extend(prim.contractions)
-                        for output in prim.outputs:
-                            if output not in op.outputs:
-                                if keep_internals:
-                                    op.internals.append(output)
-                                else:
-                                    if isinstance(output, TensorPack):
-                                        for item in output.items:
-                                            internals.add(item)
-                                    internals.add(output)
-                    op.components = []
-                    _set_output_shapes(op)
-            if not keep_internals:
-                graph.tensors = [tensor for tensor in graph.tensor if tensor not in internals]
-                graph.packs = [pack for pack in graph.packs if pack not in internals]
+        tensor_remap = {}
+        ops = []
+        for op in graph.operations:
+            if op.is_compound and filter(op):
+                body = op.subgraphs[0]
+                ops.extend(body.operations)
+                for op_output, body_output in zip(op.outputs, body.outputs):
+                    tensor_remap[op_output] = body_output
+                removed_subgraphs.add(body)
+            else:
+                ops.append(op)
+
+        graph.operations = ops
+        graph.tensors = [tensor_remap.get(tensor) or tensor for tensor in graph.tensors]
+
+        _replace_tensor_usage(graph, tensor_remap)
+
+    for graph in model.graphs:
+        if graph.parent and graph.parent in removed_subgraphs:
+            graph.parent = graph.parent.parent
+
+    model.graphs = [graph for graph in model.graphs if graph not in removed_subgraphs]

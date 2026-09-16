@@ -233,80 +233,11 @@ namespace sknd
         {
             for ( auto& op : graph.operations )
             {
-                if ( op.nodes == 1 )
-                {
-                    set_output_shapes(op);
-                }
+                set_output_shapes(op);
             }
         }
         
         return error_count ? std::optional<Model>() : std::move(*model);
-    }
-
-    void flatten_model( Model& model, const OperationFilter is_atomic, bool keep_internals ) noexcept
-    {
-        for ( auto& graph : model.graphs )
-        {
-            std::unordered_set<TensorRef> internals;
-            for ( auto it = graph.operations.begin(); it != graph.operations.end(); ++it )
-            {
-                if ( it->nodes > 1 )
-                {
-                    if ( is_atomic(*it) )
-                    {
-                        for ( auto itt = it + 1; itt < it + it->nodes; ++itt )
-                        {
-                            if ( itt->nodes == 1 )
-                            {
-                                if ( keep_internals )
-                                {
-                                    std::move(itt->contractions.begin(), itt->contractions.end(), std::back_inserter(it->contractions));
-                                }
-                                for ( auto& output : itt->outputs )
-                                {
-                                    if ( std::find(it->outputs.begin(), it->outputs.end(), output) == it->outputs.end() )
-                                    {
-                                        if ( keep_internals )
-                                        {
-                                            it->internals.push_back(output);
-                                        }
-                                        else
-                                        {
-                                            if ( output.packed() )
-                                            {
-                                                for ( size_t i = 0; i < output.max_size(); ++i )
-                                                {
-                                                    internals.insert(&output[i]);
-                                                }
-                                            }
-                                            internals.insert(output);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        graph.operations.erase(it + 1, it + it->nodes);
-                        it->nodes = 1;
-                        
-                        set_output_shapes(*it);
-                    }
-                    else
-                    {
-                        graph.operations.erase(it--);
-                    }
-                }
-            }
-            if ( !internals.empty() )
-            {
-                graph.tensors.erase(std::remove_if(graph.tensors.begin(), graph.tensors.end(), [&]( auto& item ) {
-                    return internals.count(&*item);
-                }), graph.tensors.end());
-                graph.packs.erase(std::remove_if(graph.packs.begin(), graph.packs.end(), [&]( auto& item ) {
-                    return internals.count(&*item);
-                }), graph.packs.end());
-            }
-        }
     }
 
     inline size_t item_bytes( const Typename dtype )

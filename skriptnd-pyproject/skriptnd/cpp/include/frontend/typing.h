@@ -524,9 +524,9 @@ namespace sknd
         {
             for ( auto& extent : shape.extents )
             {
-                auto& item = extent.value;
                 if ( extent.bound )
                 {
+                    const auto& item = expanded(extent.value);
                     if ( item->kind == Expr::Identifier )
                     {
                         auto& iden = as_identifier(*item).name;

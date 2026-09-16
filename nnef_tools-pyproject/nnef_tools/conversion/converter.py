@@ -146,7 +146,8 @@ class Converter:
         self._graph_map = {}
 
         for graph in model.graphs:
-            self._graph_map[graph] = self._graph = Graph(self._model, graph.name)
+            parent = self._graph_map[graph.parent] if graph.parent else None
+            self._graph_map[graph] = self._graph = Graph(self._model, parent=parent, name=graph.name)
 
             for tensor in graph.tensors:
                 self._tensor_map[tensor] = Tensor(self._graph, name=tensor.name, dtype=tensor.dtype, shape=tensor.shape,

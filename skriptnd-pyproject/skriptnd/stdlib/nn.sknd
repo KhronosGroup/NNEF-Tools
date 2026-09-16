@@ -887,7 +887,7 @@ operator lstm_step {
 
 # @text This is a helper operator to describe an LSTM iteration where each batch item has the same number of steps (which may be a static or dynamic count).
 
-operator lstm_loop {
+operator _lstm_loop {
     @input {
         X: real[s,b,c];
         W: real[4*n,c];
@@ -898,7 +898,7 @@ operator lstm_loop {
         steps: optional int[];
     }
     @output {
-        Y: real[~|s,b,n];
+        Y: real[~|s..(?steps),s..(!?steps),b,n];
         hN: real[b,n];
         cN: real[b,n];
     }
@@ -935,7 +935,7 @@ operator _jagged_lstm_loops {
         h0s: real[1,n]..(b) = layout.unstack{axis=0, squeeze=false}(h0);
         c0s: real[1,n]..(b) = layout.unstack{axis=0, squeeze=false}(c0);
         Ys..(b), hNs..(b), cNs..(b) = for Xi : Xs, h0i : h0s, c0i : c0s, cnt : counts do..(b)
-                                      item: lstm_loop(Xi, W, R, B, h0i, c0i, cnt);
+                                      item: _lstm_loop(Xi, W, R, B, h0i, c0i, cnt);
         Y = layout.stack{axis=1, squeeze=true}(Ys);
         hN = layout.stack{axis=0, squeeze=true}(hNs);
         cN = layout.stack{axis=0, squeeze=true}(cNs);
@@ -955,7 +955,7 @@ operator lstm {
         steps: optional int[b];
     }
     @output {
-        Y: real[~|s,b,n];
+        Y: real[~|s..(?steps),s..(!?steps),b,n];
         hN: real[b,n];
         cN: real[b,n];
     }
@@ -963,6 +963,6 @@ operator lstm {
         Y, hN, cN = if ?steps then
                         _jagged_lstm_loops(X, W, R, B, h0, c0, steps)
                     else
-                        lstm_loop(X, W, R, B, h0, c0);
+                        _lstm_loop(X, W, R, B, h0, c0);
     }
 }

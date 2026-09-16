@@ -46,7 +46,7 @@ class Printer:
         referenced = {model.graphs[0].name}
         for graph in model.graphs:
             if graph.name in referenced:
-                for op in graph.components:
+                for op in graph.operations:
                     for value in op.attribs.values():
                         if isinstance(value, _sknd.Graph):
                             referenced.add(value.name)
@@ -165,7 +165,7 @@ class Printer:
             else:
                 label = self._make_id(target.name)
                 text = label + ': {\n'
-                for op in target.components:
+                for op in target.operations:
                     text += "\t\t\t"
                     text += self._format_operation(op.outputs, op.name, op.dtypes.values(),
                                                    op.attribs, op.inputs) + ";\n"
@@ -348,7 +348,7 @@ class Printer:
             print("\t}", file=file)
 
         print("\t@compose {", file=file)
-        for op in graph.components:
+        for op in graph.operations:
             print("\t\t" + self._format_operation(op.outputs, op.name, op.dtypes.values(), op.attribs, op.inputs)
                   + ";", file=file)
         print("\t}", file=file)

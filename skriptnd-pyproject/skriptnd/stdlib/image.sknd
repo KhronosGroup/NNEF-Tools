@@ -155,7 +155,7 @@ operator linear_upsample {
 
 # @section resize-ops Image Resize/Rescale Operators
 
-operator nearest_resize {
+operator _nearest_resize {
     @attrib {
         axes: int..(k) = [0:d];
         size: dynamic int..(k);
@@ -203,7 +203,7 @@ operator nearest_resize {
     }
 }
 
-operator linear_resize {
+operator _linear_resize {
     @attrib {
         axes: int..(k) = [0:d];
         size: dynamic int..(k);
@@ -245,7 +245,7 @@ operator linear_resize {
     }
 }
 
-operator cubic_resize {
+operator _cubic_resize {
     @attrib {
         axes: int..(k) = [0:d];
         size: dynamic int..(k);
@@ -316,16 +316,16 @@ operator resize {
     }
     @compose {
         output = if mode == 'NEAREST' then
-                     nearest_resize{axes=axes, size=size,
-                                    coordinate_transform=coordinate_transform,
-                                    rounding_method=rounding_method}(input)
+                     _nearest_resize{axes=axes, size=size,
+                                     coordinate_transform=coordinate_transform,
+                                     rounding_method=rounding_method}(input)
                  elif mode == 'LINEAR' then
-                     linear_resize{axes=axes, size=size, antialias=antialias,
-                                   coordinate_transform=coordinate_transform}(input)
+                     _linear_resize{axes=axes, size=size, antialias=antialias,
+                                    coordinate_transform=coordinate_transform}(input)
                  else
-                     cubic_resize{axes=axes, size=size, antialias=antialias,
-                                  coordinate_transform=coordinate_transform,
-                                  coeff_a=cubic_coeff_a}(input);
+                     _cubic_resize{axes=axes, size=size, antialias=antialias,
+                                   coordinate_transform=coordinate_transform,
+                                   coeff_a=cubic_coeff_a}(input);
     }
 }
 

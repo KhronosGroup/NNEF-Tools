@@ -95,6 +95,18 @@ namespace sknd
             
             TRY_CALL(make_graph(model, op, graph_name, operators, dtypes, attribs))
             
+            for ( auto& graph : model.graphs )
+            {
+                graph.parent = remap_graph(model, graph.parent);
+                for ( auto& op : graph.operations )
+                {
+                    for ( auto& subgraph : op.subgraphs )
+                    {
+                        subgraph = remap_graph(model, subgraph);
+                    }
+                }
+            }
+            
             return model;
         }
         
@@ -160,7 +172,7 @@ namespace sknd
             const std::string scope = graph_name + ".";
             
             const size_t graph_idx = model.graphs.size();
-            new_graph(model, graph_name);
+            new_graph(model, -1, graph_name);
             
             size_t i = 0;
             for ( auto& param : op.inputs )
@@ -170,14 +182,24 @@ namespace sknd
                 if ( !reference_inputs.empty() )
                 {
                     tensor = make_tensor_like(model.graphs[graph_idx], reference_inputs[i++]);
-                    replace_dynamic_shapes_with_placeholders(tensor);
+                    if ( tensor != nullptr )
+                    {
+                        replace_dynamic_shapes_with_placeholders(tensor);
+                    }
                 }
                 else
                 {
                     TRY_MOVE(tensor, make_tensors_for_param(model.graphs[graph_idx], param, symbols, type, scope, false))
                 }
                 symbols.emplace(param.name, Symbol(tensor, type, Symbol::Input));
-                add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), symbols);
+                if ( tensor != nullptr )
+                {
+                    add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), symbols);
+                }
+                else
+                {
+                    add_null_shape_symbols(param.name, tensor.packed(), symbols);
+                }
             }
             
             TRY_CALL(replace_placeholder_symbols(op.inputs, symbols))
@@ -229,11 +251,60 @@ namespace sknd
             return {};
         }
         
-        Graph& new_graph( Model& model, const std::string& name )
+        Result<void> make_graph( Model& model, const size_t parent_idx, const Operator& op, const Dict<const Operator*>& operators,
+                                Dict<Symbol>& symbols )
+        {
+            const std::string graph_name = op.position.module + "." + op.name + next_graph_name();
+            const std::string scope = graph_name + ".";
+            
+            const size_t graph_idx = model.graphs.size();
+            Graph& graph = new_graph(model, parent_idx, graph_name);
+            
+            for ( auto& param : op.constants )
+            {
+                auto type = resolve_type(param, symbols);
+                TRY_DECL(tensor, make_tensors_for_param(graph, param, symbols, type, scope, false))
+                symbols.emplace(param.name, Symbol(tensor, type, Symbol::Constant));
+                add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), symbols);
+            }
+            for ( auto& param : op.variables )
+            {
+                auto type = resolve_type(param, symbols);
+                TRY_DECL(tensor, make_tensors_for_param(graph, param, symbols, type, scope, true))
+                symbols.emplace(param.name, Symbol(tensor, type, Symbol::Variable));
+                add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), symbols);
+            }
+            
+            const bool propagate_label = can_propagate_label(op, symbols);
+            for ( auto& component : op.components )
+            {
+                TRY_CALL(compose(component, operators, symbols, model, graph_idx, scope, propagate_label))
+            }
+            
+            model.graphs[graph_idx].inputs = list_tensors(op.inputs, symbols);
+            model.graphs[graph_idx].outputs = list_tensors(op.outputs, symbols);
+            
+            //TRY_CALL(check_outputs(op.outputs, model.graphs[graph_idx].outputs, symbols))
+            
+            return {};
+        }
+        
+        Graph& new_graph( Model& model, const size_t parent_idx, const std::string& name )
         {
             _contexts[name] = SubgraphContext();
-            model.graphs.push_back(Graph{ name });
+            model.graphs.push_back(Graph{ map_graph(parent_idx), name });
             return model.graphs.back();
+        }
+        
+        Graph* map_graph( const size_t graph_idx )
+        {
+            return reinterpret_cast<Graph*>(graph_idx + 1);
+        }
+        
+        Graph* remap_graph( Model& model, Graph* ptr )
+        {
+            auto idx = reinterpret_cast<size_t>(ptr);
+            return idx ? &model.graphs[idx - 1] : nullptr;
         }
         
         Result<void> add_placeholder_symbols( const std::vector<Param>& params, Dict<Symbol>& symbols, bool composed )
@@ -269,8 +340,8 @@ namespace sknd
             {
                 if ( count )
                 {
-                    TRY_DECL(size, eval_shape_expr(*count, symbols))
-                    TRY_DECL(items, eval_items(bound, symbols, size.as_int()))
+                    TRY_DECL(size, eval(*count, symbols))
+                    TRY_DECL(items, eval_items(bound, symbols, size.is_bool() ? size.as_bool() ? 1 : 0 : size.as_int()))
                     
                     for ( size_t i = 0; i < items.size(); ++i )
                     {
@@ -508,7 +579,7 @@ namespace sknd
                             
                             if ( condition_graphs.empty() )     // branching is completely eliminated
                             {
-                                TRY_DECL(attribs, inputs, outputs, compose_callable(consequent, operators, symbols, model, graph_idx, graph_idx, scope, label))
+                                TRY_DECL(attribs, inputs, outputs, compose_callable(consequent, operators, symbols, model, graph_idx, scope, label))
                                 rename_results(component.results, outputs, scope);
                                 TRY_CALL(add_results_to_symbols(component.results, outputs, model.graphs[graph_idx], symbols, scope, component.position))
                                 return std::make_tuple(inputs, outputs);
@@ -555,7 +626,7 @@ namespace sknd
                 {
                     if ( condition_graphs.empty() )     // only else branch was not eliminated
                     {
-                        TRY_DECL(attribs, inputs, outputs, compose_callable(component.operation, operators, symbols, model, graph_idx, graph_idx, scope, label))
+                        TRY_DECL(attribs, inputs, outputs, compose_callable(component.operation, operators, symbols, model, graph_idx, scope, label))
                         rename_results(component.results, outputs, scope);
                         TRY_CALL(add_results_to_symbols(component.results, outputs, model.graphs[graph_idx], symbols, scope, component.position))
                         
@@ -621,8 +692,8 @@ namespace sknd
                     { "branch_inputs", subgraph_input_mapping(inputs, branch_inputs) },
                 };
                 
-                model.graphs[graph_idx].operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, {}, {},
-                                                                        std::move(output_shapes), std::move(output_sizes) });
+                model.graphs[graph_idx].operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, {}, {}, {},
+                                                                        std::move(output_shapes), std::move(output_sizes), true });
                 return std::make_tuple(inputs, outputs);
             }
             else if ( component.loop && !component.loop->unroll )
@@ -644,8 +715,6 @@ namespace sknd
                     TRY_DECL(tensor, eval(*expr, symbols, as_tensor(*graph), as_tensor_pack(*graph)))
                     inputs.push_back(tensor);
                 }
-                
-                auto first_local = graph->tensors.size();
                 
                 std::vector<TensorRef> locals;
                 for ( auto& [iden, expr] : component.loop->carries )
@@ -692,6 +761,8 @@ namespace sknd
                 filter_null(inputs);
                 filter_null(locals);
                 
+                std::vector<TensorRef> internals = locals;
+                
                 const size_t nscans = locals.size() - nvars;
                 
                 std::string index;
@@ -702,14 +773,13 @@ namespace sknd
                     symbols.insert_or_assign(iden, Symbol(tensor, Typename::Int, Symbol::Index));
                     add_shape_symbols(iden, {}, nullptr, symbols);
                     locals.push_back(tensor);
+                    internals.push_back(tensor);
                     index = iden;
                 }
                 else
                 {
                     locals.push_back(TensorRef(nullptr));
                 }
-                
-                auto last_local = graph->tensors.size();
                 
                 TRY_DECL(repeats, loop_repeats(component, symbols, *graph, component.loop->count))
                 
@@ -850,11 +920,8 @@ namespace sknd
                 rename_results(component.results, outputs, scope);
                 TRY_CALL(add_results_to_symbols(component.results, outputs, *graph, symbols, scope, component.position))
                 
-                graph->operations.push_back(Operation{ "do", {}, attribs, inputs, outputs, {}, {}, {}, {},
-                                                       std::move(output_shapes), std::move(output_sizes) });
-                
-                // remove local placeholder tensors
-                graph->tensors.erase(graph->tensors.begin() + first_local, graph->tensors.begin() + last_local);
+                graph->operations.push_back(Operation{ "do", {}, attribs, inputs, outputs, internals, {}, {}, {}, {},
+                                                       std::move(output_shapes), std::move(output_sizes), true });
                 
                 return std::make_tuple(inputs, outputs);
             }
@@ -920,7 +987,7 @@ namespace sknd
                         }
                     }
                     
-                    TRY_DECL(item_attribs, item_inputs, item_outputs, compose_callable(component.operation, operators, symbols, model, graph_idx, graph_idx, scope, label))
+                    TRY_DECL(item_attribs, item_inputs, item_outputs, compose_callable(component.operation, operators, symbols, model, graph_idx, scope, label))
                     
                     graph = &model.graphs[graph_idx];
                     
@@ -960,7 +1027,7 @@ namespace sknd
             }
             else
             {
-                TRY_DECL(attribs, inputs, outputs, compose_callable(component.operation, operators, symbols, model, graph_idx, graph_idx, scope, label))
+                TRY_DECL(attribs, inputs, outputs, compose_callable(component.operation, operators, symbols, model, graph_idx, scope, label))
                 rename_results(component.results, outputs, scope);
                 TRY_CALL(add_results_to_symbols(component.results, outputs, model.graphs[graph_idx], symbols, scope, component.position))
                 return std::make_tuple(inputs, outputs);
@@ -1233,7 +1300,7 @@ namespace sknd
         
         Result<std::tuple<Dict<ValueExpr>,std::vector<TensorRef>,std::vector<TensorRef>>>
         compose_callable( const Callable& callable, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
-                         Model& model, const size_t ctx_graph_idx, const size_t sub_graph_idx,
+                         Model& model, const size_t graph_idx,
                          const std::optional<std::string>& scope, const std::string& auto_label )
         {
             if ( callable.is<Invocation>() )
@@ -1246,11 +1313,12 @@ namespace sknd
                     new_scope = invocation.target + ".";
                 }
                 _trace.emplace_back(invocation.target, invocation.position);
-                auto result = invoke(invocation, operators, symbols, model, ctx_graph_idx, sub_graph_idx, new_scope);
+                auto result = invoke(invocation, operators, symbols, model, graph_idx, new_scope);
                 _trace.pop_back();
                 if ( !result )
                 {
                     result.error().trace.emplace_front(invocation.target, invocation.position);
+                    return result.error();
                 }
                 auto& [dtypes, attribs, inputs, outputs] = *result;
                 return std::make_tuple(attribs, inputs, outputs);
@@ -1259,7 +1327,7 @@ namespace sknd
             {
                 auto& region = callable.as<Region>();
                 auto new_scope = nested_scope(region.label, scope);
-                TRY_DECL(inputs, outputs, compose_region(region, operators, symbols, model, ctx_graph_idx, sub_graph_idx, new_scope))
+                TRY_DECL(inputs, outputs, compose_region(region, operators, symbols, model, graph_idx, new_scope))
                 return std::make_tuple(Dict<ValueExpr>{}, std::move(inputs), std::move(outputs));
             }
         }
@@ -1326,9 +1394,9 @@ namespace sknd
             
             const std::string graph_name = scope && !label.empty() ? *scope + label : next_graph_name();
             
-            new_graph(model, graph_name);
+            new_graph(model, parent_idx, graph_name);
             
-            std::vector<std::string> ids;
+            /*std::vector<std::string> ids;
             collect_inputs(callable, operators, symbols, ids);
             
             std::vector<TensorRef> external_inputs(ids.size());
@@ -1346,21 +1414,21 @@ namespace sknd
                 auto local = make_tensor_like(model.graphs[graph_idx], tensor);
                 replace_dynamic_shapes_with_placeholders(local);
                 locals.at(iden) = Symbol(local, local.dtype(), Symbol::Input);
-            }
+            }*/
             
-            TRY_DECL(attribs, inputs, outputs, compose_callable(callable, operators, locals, model, parent_idx, graph_idx, scope, auto_label))
+            TRY_DECL(attribs, inputs, outputs, compose_callable(callable, operators, symbols, model, graph_idx, scope, auto_label))
             
             auto& graph = model.graphs[graph_idx];
             
-            graph.inputs = std::move(inputs);
+            graph.inputs = inputs;
             graph.outputs = std::move(outputs);
             
-            return std::make_tuple(graph_idx, std::move(external_inputs));
+            return std::make_tuple(graph_idx, std::move(inputs));
         }
         
         Result<std::tuple<std::vector<TensorRef>,std::vector<TensorRef>>>
         compose_region( const Region& region, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
-                       Model& model, const size_t ctx_graph_idx, const size_t sub_graph_idx, const std::optional<std::string>& scope )
+                       Model& model, const size_t graph_idx, const std::optional<std::string>& scope )
         {
             Dict<Symbol> locals = symbols;
             
@@ -1368,7 +1436,7 @@ namespace sknd
             std::unordered_set<TensorRef> intermediates;
             for ( auto& component : region.components )
             {
-                TRY_DECL(_inputs, _outputs, compose(component, operators, locals, model, sub_graph_idx, scope, false))
+                TRY_DECL(_inputs, _outputs, compose(component, operators, locals, model, graph_idx, scope, false))
                 
                 for ( auto& input : _inputs )
                 {
@@ -1393,7 +1461,7 @@ namespace sknd
             
             std::vector<TensorRef> outputs(region.yields.size());
             
-            auto& graph = model.graphs[sub_graph_idx];
+            auto& graph = model.graphs[graph_idx];
             
             for ( size_t i = 0; i < region.yields.size(); ++i )
             {
@@ -1418,7 +1486,7 @@ namespace sknd
                     TensorRef output = make_tensor_like(graph, tensor, {}, {});
                     Shape shape = make_shape_access(tensor);
                     ValueExpr size = tensor.packed() ? make_size_access_expr(tensor.size(), tensor) : nullptr;
-                    graph.operations.push_back(Operation{ "=", {}, {}, { tensor }, { output }, {}, {}, {}, {}, { shape }, { size } });
+                    graph.operations.push_back(Operation{ "=", {}, {}, { tensor }, { output }, {}, {}, {}, {}, {}, { shape }, { size }, true });
                     tensor = output;
                 }
                 
@@ -1430,15 +1498,14 @@ namespace sknd
         
         Result<std::tuple<Dict<Typename>,Dict<ValueExpr>,std::vector<TensorRef>,std::vector<TensorRef>>>
         invoke( const Invocation& invocation, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
-               Model& model, const size_t context_idx, const size_t graph_idx, const std::optional<std::string>& scope )
+               Model& model, const size_t graph_idx, const std::optional<std::string>& scope )
         {
             const Operator& op = *operators.at(invocation.target);
-            auto& context = model.graphs[context_idx];
             auto& graph = model.graphs[graph_idx];
             
             TRY_DECL(types, eval_generic_types(op, invocation.dtypes, invocation.attribs, invocation.args, symbols, invocation.position))
             Dict<Symbol> locals = types_as_symbols(types);
-            TRY_DECL(inputs, eval_inputs(op.inputs, invocation.args, symbols, locals, context))
+            TRY_DECL(inputs, eval_inputs(op.inputs, invocation.args, symbols, locals, graph))
             TRY_DECL(attribs, eval_attribs(op.attribs, invocation.attribs, symbols, locals))
             
             for ( size_t i = 0; i < inputs.size(); ++i )
@@ -1482,7 +1549,7 @@ namespace sknd
                 }
             }
             
-            TRY_CALL(eval_deferred_inputs(op.inputs, invocation.args, symbols, locals, context, inputs))
+            TRY_CALL(eval_deferred_inputs(op.inputs, invocation.args, symbols, locals, graph, inputs))
             TRY_CALL(eval_deferred_attribs(op.attribs, invocation.attribs, invocation.position, symbols, locals, attribs))
             
             for ( auto& param : op.inputs )
@@ -1530,22 +1597,27 @@ namespace sknd
             }
             TRY_CALL(check_asserts(op.asserts, locals, invocation.position, checked, asserts, true))
             
+            bool inlined = op.name.front() == '_';
+            
             std::vector<TensorRef> internals;
-            for ( auto& param : op.constants )
+            if ( op.components.empty() || inlined )
             {
-                auto type = param.type_alias.empty() ? param.type.name : types.at(param.type_alias);
-                TRY_DECL(tensor, make_tensors_for_param(graph, param, locals, type, scope, false))
-                internals.push_back(tensor);
-                locals.emplace(param.name, Symbol(tensor, type, Symbol::Constant));
-                add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), locals);
-            }
-            for ( auto& param : op.variables )
-            {
-                auto type = param.type_alias.empty() ? param.type.name : types.at(param.type_alias);
-                TRY_DECL(tensor, make_tensors_for_param(graph, param, locals, type, scope, true))
-                internals.push_back(tensor);
-                locals.emplace(param.name, Symbol(tensor, type, Symbol::Variable));
-                add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), locals);
+                for ( auto& param : op.constants )
+                {
+                    auto type = param.type_alias.empty() ? param.type.name : types.at(param.type_alias);
+                    TRY_DECL(tensor, make_tensors_for_param(graph, param, locals, type, scope, false))
+                    internals.push_back(tensor);
+                    locals.emplace(param.name, Symbol(tensor, type, Symbol::Constant));
+                    add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), locals);
+                }
+                for ( auto& param : op.variables )
+                {
+                    auto type = param.type_alias.empty() ? param.type.name : types.at(param.type_alias);
+                    TRY_DECL(tensor, make_tensors_for_param(graph, param, locals, type, scope, true))
+                    internals.push_back(tensor);
+                    locals.emplace(param.name, Symbol(tensor, type, Symbol::Variable));
+                    add_shape_symbols(param.name, tensor.shape(), tensor.size_or_null(), locals);
+                }
             }
             
             TRY_CALL(add_placeholder_symbols(op.outputs, locals, !op.components.empty()))
@@ -1574,51 +1646,37 @@ namespace sknd
             
             if ( !op.components.empty() )
             {
-                bool inlined = op.name.front() == '_';
-                
-                const size_t op_idx = graph.operations.size();
-                if ( !inlined )
+                if ( inlined )
                 {
-                    graph.operations.push_back(Operation{ invocation.target });
+                    const bool propagate_label = can_propagate_label(op, locals);
+                    for ( auto& component : op.components )
+                    {
+                        TRY_CALL(compose(component, operators, locals, model, graph_idx, scope, propagate_label))
+                    }
+                    
+                    auto outputs = list_tensors(op.outputs, locals);
+                    TRY_CALL(check_outputs(op.outputs, outputs, locals))
+                    
+                    return std::make_tuple(std::move(types), std::move(attribs), std::move(inputs), std::move(outputs));
                 }
-                
-                const bool propagate_label = can_propagate_label(op, locals);
-                for ( auto& component : op.components )
+                else
                 {
-                    TRY_CALL(compose(component, operators, locals, model, graph_idx, scope, propagate_label))
-                }
-                
-                auto outputs = list_tensors(op.outputs, locals);
-                TRY_CALL(check_outputs(op.outputs, outputs, locals))
-                
-                auto& graph = model.graphs[graph_idx];                      // get graph again based on index as it may be invalidated by compose()
-                
-                if ( !inlined )
-                {
+                    TRY_DECL(outputs, eval_outputs(graph, op.outputs, locals, types, invocation.position, scope))
+                    
                     auto subexprs = make_subexprs(references);
-                    auto nodes = graph.operations.size() - op_idx;
-                    graph.operations[op_idx] = Operation{ invocation.target, std::move(types), attribs, inputs, outputs, 
-                                                          std::move(internals), {}, std::move(asserts), std::move(subexprs),
-                                                          std::move(output_shapes), std::move(output_sizes), nodes, false };
+                    
+                    auto subgraph_idx = model.graphs.size();
+                    
+                    graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, outputs,
+                                                          {}, {}, { map_graph(subgraph_idx) }, std::move(asserts), std::move(subexprs),
+                                                          std::move(output_shapes), std::move(output_sizes), false });
+                    
+                    TRY_CALL(make_graph(model, graph_idx, op, operators, locals))
+                    
+                    model.graphs[subgraph_idx].asserts = model.graphs[graph_idx].operations.back().asserts;
+                    
+                    return std::make_tuple(std::move(types), std::move(attribs), std::move(inputs), std::move(outputs));
                 }
-                
-                auto& parent = graph.operations[op_idx];
-                auto& child = graph.operations.back();
-                if ( op.components.size() == 1 && unqualified_name(child.name).front() == '_' && !inlined )
-                {
-                    parent.contractions = std::move(child.contractions);
-                    parent.subexprs = std::move(child.subexprs);
-                    parent.extrinsic = child.extrinsic;
-                    parent.nodes = 1;
-                    graph.operations.pop_back();
-                }
-                
-                if ( op.graph )
-                {
-                    graph.asserts = graph.operations[op_idx].asserts;
-                }
-
-                return std::make_tuple(std::move(types), std::move(attribs), std::move(inputs), std::move(outputs));
             }
             else
             {
@@ -1639,9 +1697,9 @@ namespace sknd
                 auto subexprs = make_subexprs(references);
                 bool extrinsic = op.lowerings.empty();
                 
-                graph.operations.push_back(Operation{ invocation.target, std::move(types), attribs, inputs, outputs, std::move(internals),
-                                                      std::move(contractions), std::move(asserts), std::move(subexprs),
-                                                      std::move(output_shapes), std::move(output_sizes), 1, extrinsic });
+                graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, outputs, std::move(internals),
+                                                      std::move(contractions), {}, std::move(asserts), std::move(subexprs),
+                                                      std::move(output_shapes), std::move(output_sizes), extrinsic });
                 
                 return std::make_tuple(std::move(types), std::move(attribs), std::move(inputs), std::move(outputs));
             }
@@ -2432,24 +2490,7 @@ namespace sknd
             {
                 return declared_shape.as_placeholder().max_value == max_shape;
             }
-            else if ( composed_shape.is_literal() && declared_shape.is_placeholder() && composed_shape == declared_shape.as_placeholder().max_value )
-            {
-                return true;
-            }
             return composed_shape == declared_shape;
-        }
-        
-        bool can_replace_shape( const ValueExpr& declared_shape, const ValueExpr& composed_shape )
-        {
-            if ( declared_shape.is_placeholder() && declared_shape.as_placeholder().id.empty() )
-            {
-                return false;
-            }
-            else if ( composed_shape.is_literal() && declared_shape.is_placeholder() && composed_shape == declared_shape.as_placeholder().max_value )
-            {
-                return false;
-            }
-            return true;
         }
         
         bool has_reference( const ValueExpr& shape )

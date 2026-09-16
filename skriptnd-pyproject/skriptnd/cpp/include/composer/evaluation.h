@@ -383,13 +383,12 @@ namespace sknd
                     if ( symbol.is<ValueExpr>() )
                     {
                         auto& value = symbol.as<ValueExpr>();
-                        if ( is_literal(value) || is_shape_access(value) || value.is_reference() )
+                        if ( symbol.kind == Symbol::Attrib || symbol.kind == Symbol::Using )
                         {
-                            return value;
-                        }
-                        else if ( symbol.kind == Symbol::Using || symbol.kind == Symbol::Attrib )
-                        {
-                            return ValueExpr(ValueExpr::ReferenceExpr{ iden.name, &value }, value.dtype(), value.max_size_or_null());
+                            if ( !is_literal(value) && !is_shape_access(value) && !value.is_reference() )
+                            {
+                                return ValueExpr(ValueExpr::ReferenceExpr{ iden.name, &value }, value.dtype(), value.max_size_or_null());
+                            }
                         }
                         return value;
                     }
@@ -934,13 +933,12 @@ namespace sknd
             }
             else
             {
-                if ( value.is_literal() || value.is_shape_access() || value.is_size_access() || value.is_reference() )
+                if ( symbol.kind == Symbol::Attrib || symbol.kind == Symbol::Using )
                 {
-                    return value;
-                }
-                else if ( symbol.kind == Symbol::Using || symbol.kind == Symbol::Attrib )
-                {
-                    return ValueExpr(ValueExpr::ReferenceExpr{ iden.name, &value }, symbol.type);
+                    if ( !value.is_literal() && !value.is_shape_access() && !value.is_size_access() && !value.is_reference() )
+                    {
+                        return ValueExpr(ValueExpr::ReferenceExpr{ iden.name, &value }, symbol.type);
+                    }
                 }
                 return value;
             }
@@ -2735,7 +2733,7 @@ namespace sknd
         
         Result<void> check_shape_expr( const ValueExpr& value, const Position& position )
         {
-            if ( value.is_literal() && value.as_int() < 0 )
+            if ( value.is_int() && value.as_int() < 0 )
             {
                 return Error(position, "extent must be non-negative; found %d", (int)value.as_int());
             }

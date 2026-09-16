@@ -434,13 +434,15 @@ class Operation:
 # noinspection PyProtectedMember
 class Graph:
 
-    def __init__(self, model, name=None, inputs=None, outputs=None):
+    def __init__(self, model, parent=None, name=None, inputs=None, outputs=None):
         self._model = model
+        self._parent = parent
         self._inputs = tuple()
         self._outputs = tuple()
         self._tensors = []
         self._packs = []
         self._operations = []
+        self._subgraphs = []
 
         self.name = name
 
@@ -451,12 +453,23 @@ class Graph:
             self.outputs = outputs
 
         assert isinstance(model, Model)
+        assert parent is None or isinstance(parent, Graph)
         model._graphs.append(self)
+        if parent:
+            parent._subgraphs.append(self)
 
     @property
     def model(self):
         # type: ()->Model
         return self._model
+
+    @property
+    def parent(self):
+        return self._parent
+
+    @property
+    def dependent(self):
+        return self._parent is not None
 
     @property
     def inputs(self):
@@ -472,7 +485,7 @@ class Graph:
             if isinstance(tensor, list):
                 assert all(isinstance(t, Tensor) for t in tensor)
             else:
-                assert isinstance(tensor, Tensor)
+                assert tensor is None or isinstance(tensor, Tensor)
 
         self._inputs = tensors
 
@@ -509,6 +522,11 @@ class Graph:
     def operations(self):
         # type: ()->typing.Sequence[Operation]
         return _ListView(self._operations)
+
+    @property
+    def subgraphs(self):
+        # type: ()->typing.Sequence[Graph]
+        return _ListView(self._subgraphs)
 
     def remove_tensor(self, tensor):
         # type: (Tensor)->None
@@ -570,6 +588,15 @@ class Graph:
         self._operations = [op for op in self._operations if op not in operations]
         for operation in operations:
             operation._graph = None
+
+    def remove_subgraph(self, graph):
+        graph._parent = None
+        self._subgraphs = [g for g in self._subgraphs if g is not graph]
+
+    def remove_subgraphs(self, graphs):
+        for graph in graphs:
+            graph._parent = None
+        self._subgraphs = [g for g in self._subgraphs if g not in graphs]
 
     def move_operation(self, at_idx, to_idx):
         self._operations.insert(to_idx, self._operations.pop(at_idx))

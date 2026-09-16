@@ -2239,7 +2239,7 @@ graph nearest_resize_symmetric {
         output: real[4,32,224,224];
     }
     @compose {
-        output = image.nearest_resize{axes=[2,3], size=[224,224], coordinate_transform='SYMMETRIC'}(input);
+        output = image.resize{axes=[2,3], size=[224,224], mode='NEAREST', coordinate_transform='SYMMETRIC'}(input);
     }
 }
 
@@ -2251,7 +2251,7 @@ graph nearest_resize_asymmetric {
         output: real[4,32,224,224];
     }
     @compose {
-        output = image.nearest_resize{axes=[2,3], size=[224,224], coordinate_transform='ASYMMETRIC'}(input);
+        output = image.resize{axes=[2,3], size=[224,224], mode='NEAREST', coordinate_transform='ASYMMETRIC'}(input);
     }
 }
 
@@ -2263,7 +2263,7 @@ graph nearest_resize_aligned {
         output: real[4,32,224,224];
     }
     @compose {
-        output = image.nearest_resize{axes=[2,3], size=[224,224], coordinate_transform='ALIGNED'}(input);
+        output = image.resize{axes=[2,3], size=[224,224], mode='NEAREST', coordinate_transform='ALIGNED'}(input);
     }
 }
 
@@ -2275,7 +2275,7 @@ graph nearest_resize_prefer_ceil {
         output: real[4,32,100,100];
     }
     @compose {
-        output = image.nearest_resize{axes=[2,3], size=[100,100], rounding_method='ROUND_PREFER_CEIL'}(input);
+        output = image.resize{axes=[2,3], size=[100,100], mode='NEAREST', rounding_method='ROUND_PREFER_CEIL'}(input);
     }
 }
 

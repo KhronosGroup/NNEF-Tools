@@ -27,15 +27,20 @@ def _build_model(model):
     for graph in model.graphs:
         for tensor in graph.tensors:
             tensor_map[tensor.name] = _build_tensor(tensor)
+
         for pack in graph.packs:
             tensor_map[pack.name] = _build_tensor_pack(pack, tensor_map)
 
-    for name, tensor in tensor_map.items():
-        remap_tensors_in_expr(tensor.shape, tensor_map)
-        if isinstance(tensor, TensorPack):
-            remap_tensors_in_expr(tensor.size, tensor_map)
+        for tensor in graph.tensors:
+            remap_tensors_in_expr(tensor.shape, tensor_map)
 
-    graph_map = {graph.name: _build_graph(graph, tensor_map) for graph in model.graphs}
+        for pack in graph.packs:
+            remap_tensors_in_expr(pack.shape, tensor_map)
+            remap_tensors_in_expr(pack.size, tensor_map)
+
+    graph_map = {}
+    for graph in model.graphs:
+        graph_map[graph.name] = _build_graph(graph, graph_map, tensor_map)
 
     sknd_model = sknd.Model(name=model.name, graphs=[graph_map[graph.name] for graph in model.graphs])
 
@@ -71,8 +76,10 @@ def _build_tensor_pack(pack, tensor_map):
                            items=[remap_tensor(item, tensor_map) for item in pack])
 
 
-def _build_graph(graph, tensor_map):
-    sknd_graph = sknd.Graph(name=graph.name,
+def _build_graph(graph, graph_map, tensor_map):
+    parent = graph_map[graph.parent.name] if graph.parent else None
+    sknd_graph = sknd.Graph(parent=parent,
+                            name=graph.name,
                             inputs=tuple(remap_tensor(input, tensor_map) for input in graph.inputs),
                             outputs=tuple(remap_tensor(output, tensor_map) for output in graph.outputs),
                             operations=[_build_operation(op, tensor_map) for op in graph.operations],

@@ -51,34 +51,38 @@ def _build_operation(graph, sknd_operation, tensor_map):
                      outputs=tuple(remap_tensor(output, tensor_map) for output in sknd_operation.outputs))
 
 
-def _build_graph(model, sknd_graph, atomic):
-    graph = Graph(model, name=sknd_graph.name)
+def _build_graph(model, sknd_graph, graph_map, tensor_map):
+    parent = graph_map[sknd_graph.parent.name] if sknd_graph.parent else None
+    graph = Graph(model, parent=parent, name=sknd_graph.name)
 
-    tensor_map = {}
     for tensor in sknd_graph.tensors:
         tensor_map[tensor.name] = _build_tensor(graph, tensor)
 
     for pack in sknd_graph.packs:
         tensor_map[pack.name] = _build_tensor_pack(graph, pack, tensor_map)
 
-    for name, tensor in tensor_map.items():
+    for tensor in graph.tensors:
         remap_tensors_in_expr(tensor.shape, tensor_map)
-        if isinstance(tensor, TensorPack):
-            remap_tensors_in_expr(tensor.size, tensor_map)
+
+    for pack in graph.packs:
+        remap_tensors_in_expr(pack.shape, tensor_map)
+        remap_tensors_in_expr(pack.size, tensor_map)
 
     graph.inputs = tuple(remap_tensor(input, tensor_map) for input in sknd_graph.inputs)
     graph.outputs = tuple(remap_tensor(output, tensor_map) for output in sknd_graph.outputs)
 
-    for operation in sknd.atomics(sknd_graph, atomic):
+    for operation in sknd_graph.operations:
         _build_operation(graph, operation, tensor_map)
 
     return graph
 
 
-def _build_model(sknd_model, atomic):
+def _build_model(sknd_model):
     model = Model(name=sknd_model.name)
+    tensor_map = {}
+    graph_map = {}
     for graph in sknd_model.graphs:
-        _build_graph(model, graph, atomic)
+        graph_map[graph.name] = _build_graph(model, graph, graph_map, tensor_map)
     return model
 
 
@@ -91,4 +95,5 @@ class Reader(object):
         sknd_model = sknd.read_model(filename, attribs=attribs, init_data=init_data)
         if sknd_model is None:
             raise IOError('could not read model')
-        return _build_model(sknd_model, self._atomic)
+        sknd.inline_compounds(sknd_model, filter=lambda op: not self._atomic(op))
+        return _build_model(sknd_model)

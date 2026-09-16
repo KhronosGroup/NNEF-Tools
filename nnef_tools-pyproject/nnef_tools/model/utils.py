@@ -128,12 +128,18 @@ def ensure_valid_ids(model):
                     tensor.name += f'_{count + 1}'
 
 
-def replace_tensor_in_graph_inputs(graph, old_tensor, new_tensor):
+def replace_tensor_in_graph_inputs(graph, old_tensor, new_tensor, recursive=False):
     graph.inputs = tuple(new_tensor if t is old_tensor else t for t in graph.inputs)
+    if recursive:
+        for subgraph in graph.subgraphs:
+            replace_tensor_in_graph_inputs(subgraph, old_tensor, new_tensor, recursive=True)
 
 
-def replace_tensor_in_graph_outputs(graph, old_tensor, new_tensor):
+def replace_tensor_in_graph_outputs(graph, old_tensor, new_tensor, recursive=False):
     graph.outputs = tuple(new_tensor if t is old_tensor else t for t in graph.outputs)
+    if recursive:
+        for subgraph in graph.subgraphs:
+            replace_tensor_in_graph_outputs(subgraph, old_tensor, new_tensor, recursive=True)
 
 
 def replace_tensor_in_consumers(old_tensor, new_tensor):
@@ -175,14 +181,14 @@ def bypass_and_remove(graph, op, remove_input_not_output=False, input_index=0):
     if remove_input_not_output:
         replace_tensor_in_consumers(op_input, op_output)
         replace_tensor_in_producers(op_input, op_output)
-        replace_tensor_in_graph_inputs(graph, op_input, op_output)
-        replace_tensor_in_graph_outputs(graph, op_input, op_output)
+        replace_tensor_in_graph_inputs(graph, op_input, op_output, recursive=True)
+        replace_tensor_in_graph_outputs(graph, op_input, op_output, recursive=True)
         graph.remove_tensor(op_input)
     else:
         replace_tensor_in_consumers(op_output, op_input)
         replace_tensor_in_producers(op_output, op_input)
-        replace_tensor_in_graph_inputs(graph, op_output, op_input)
-        replace_tensor_in_graph_outputs(graph, op_output, op_input)
+        replace_tensor_in_graph_inputs(graph, op_output, op_input, recursive=True)
+        replace_tensor_in_graph_outputs(graph, op_output, op_input, recursive=True)
         graph.remove_tensor(op_output)
 
 

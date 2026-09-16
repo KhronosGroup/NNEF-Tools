@@ -430,12 +430,13 @@ def _format_dtype(dtype):
 
 
 def _format_decl_type(tensor):
+    if tensor is None:
+        return f"nullptr_t"
+
     rank = len(tensor.shape)
     dtype = _format_dtype(tensor.dtype)
-    if isinstance(tensor, sknd.TensorPack):
-        return f"sknd::rt::TensorPack<{rank},{dtype},{tensor.max_size}>"
-    else:
-        return f"sknd::rt::Tensor<{rank},{dtype}>"
+    return f"sknd::rt::TensorPack<{rank},{dtype},{tensor.max_size}>" if isinstance(tensor, sknd.TensorPack) else \
+        f"sknd::rt::Tensor<{rank},{dtype}>"
 
 
 def _format_dynamic_mask(tensor):
@@ -805,7 +806,9 @@ def _format_operation(op, indent, context):
                     if output.name in deferred_packs)
     text += "".join(_format_shape_propagation(output, shape, size, indent)
                     for output, shape, size in zip(op.outputs, op.output_shapes, op.output_sizes))
-    text += _format_intrinsic(op, indent, context) if op.is_extrinsic else _format_contractions(op, indent)
+    text += _format_intrinsic(op, indent, context) + "\n" if op.is_extrinsic else \
+            _format_compound(op, indent, context) if op.is_compound else \
+            _format_contractions(op, indent)
     if op.is_primitive and not op.is_extrinsic:
         text += "".join(_format_shape_definition(output, shape, size, indent)
                         for output, shape, size in zip(op.outputs, op.output_shapes, op.output_sizes))
@@ -814,20 +817,24 @@ def _format_operation(op, indent, context):
 
 
 def _format_contractions(op, indent):
-    return "\n".join(_format_nested_loops(contraction, indent) for contraction in op.contractions)
+    return "".join(_format_nested_loops(contraction, indent) for contraction in op.contractions)
+
+
+def _format_compound(op, indent, context):
+    return _format_subgraph(op, op.subgraphs[0], indent, context)
 
 
 def _format_execution_code(operations, indent, context):
-    return "\n".join(_format_operation(op, indent, context) for op in operations)
+    return "".join(_format_operation(op, indent, context) for op in operations)
 
 
-def _is_trivial_block(block):
-    return len(block.operations) == 1 and block.operations[0].name == '='
+def _is_trivial_graph(graph):
+    return len(graph.operations) == 1 and graph.operations[0].name == '='
 
 
-def _format_block_params(inputs, outputs, context):
+def _format_invocation_args(inputs, outputs, context):
     input_params = ", ".join("const {type}& {name}".format(type=_format_decl_type(input),
-                                                           name=_valid_id(input.name))
+                                                           name=_valid_id(input.name) if input is not None else "")
                              for input in inputs)
     output_params = ", ".join("{type}& {name}".format(type=_format_decl_type(output),
                                                       name=_valid_id(output.name))
@@ -882,13 +889,13 @@ def _format_assert_check_code(assertion, indent):
             f"\tthrow std::runtime_error(sknd::string_format(\"{message}\", {args}));\n")
 
 
-def _format_block_code(block, idx, indent, context, condition):
+def _format_graph(graph, idx, indent, context, condition):
     type = "bool" if condition else "void"
-    name = _valid_id(block.name) if idx else "execute"
-    params = _format_block_params(block.inputs, block.outputs, context) if idx else ""
-    code = _format_execution_code(block.primitives, indent, context)
+    name = _valid_id(graph.name) if idx else "execute"
+    params = _format_invocation_args(graph.inputs if not graph.dependent else [], graph.outputs, context) if idx else ""
+    code = _format_execution_code(graph.operations, indent, context)
     if condition:
-        output = block.outputs[0]
+        output = graph.outputs[0]
         params += " = sknd::rt::condition_result<{rank}>()".format(rank=len(output.shape))
         code += "\n" + indent + "return " + _valid_id(output.name) + "(" + ",".join("0" for _ in output.shape) + ");"
     return "{type} {name}( {params} ) {code}".format(type=type,
@@ -897,7 +904,29 @@ def _format_block_code(block, idx, indent, context, condition):
                                                      code=_wrap_brackets(code))
 
 
-def _format_blocks_code(graphs, indent, context):
+def _format_subgraph(op, graph, indent, context):
+    return _format_block(graph, None, op.outputs, indent, context) if graph.parent else _format_invocation(graph, op.inputs + op.outputs)
+
+
+def _format_argref(ref, arg):
+    lhs = _valid_id(ref.name)
+    rhs = _valid_id(arg.name) + '[$]' if isinstance(arg, sknd.TensorPack) else _valid_id(arg.name)
+    return f"auto& {lhs} = {rhs};\n"
+
+
+def _format_block(graph, inputs, outputs, indent, context):
+    code = ""
+    if inputs:
+        code += "".join(f"{indent}{_format_argref(ref, arg)}" for ref, arg in zip(graph.inputs, inputs) if ref is not arg)
+    if outputs:
+        code += "".join(f"{indent}{_format_argref(ref, arg)}" for ref, arg in zip(graph.outputs, outputs) if ref is not arg)
+    code += indent + "{\n"
+    code += _format_execution_code(graph.operations, indent + "\t", context)
+    code += indent + "}\n"
+    return code
+
+
+def _format_graphs(graphs, indent, context):
     cond_graphs = set()
     body_graphs = set()
     for graph in graphs:
@@ -913,10 +942,14 @@ def _format_blocks_code(graphs, indent, context):
                     cond_graphs.add(subgraph.name)
                 subgraph = op.attribs.get('body_graph')
                 body_graphs.add(subgraph.name)
+            elif op.subgraphs:
+                for subgraph in op.subgraphs:
+                    body_graphs.add(subgraph.name)
 
-    return "\n\n\t".join(_format_block_code(block, i, indent, context, block.name in cond_graphs)
-                         for i, block in enumerate(graphs)
-                         if not (block.name in cond_graphs and block.name not in body_graphs and _is_trivial_block(block)))
+    return "\n\n\t".join(_format_graph(graph, i, indent, context, graph.name in cond_graphs)
+                         for i, graph in enumerate(graphs)
+                         if not (graph.name in cond_graphs and graph.name not in body_graphs and _is_trivial_graph(graph))
+                         and not graph.dependent)
 
 
 def _format_intrinsic(op, indent, context):
@@ -940,13 +973,14 @@ def _format_intrinsic(op, indent, context):
         raise ValueError("Unhandled intrinsic operation '{}'".format(op.name))
 
 
-def _format_call(block, args, is_condition=False):
-    if is_condition and _is_trivial_block(block):
+def _format_invocation(graph, args, is_condition=False):
+    if is_condition and _is_trivial_graph(graph):
         cond = args[0]
         iden = _valid_id(cond.name)
         return iden + "({})".format(",".join("0" for _ in cond.shape))
     else:
-        return _valid_id(block.name) + "({})".format(", ".join(_valid_id(arg.name) + '[$]' if isinstance(arg, sknd.TensorPack) else
+        return _valid_id(graph.name) + "({})".format(", ".join("nullptr" if arg is None else
+                                                     _valid_id(arg.name) + '[$]' if isinstance(arg, sknd.TensorPack) else
                                                      _format_value_expr(arg.value) if _can_inline_tensor(arg) else
                                                      _valid_id(arg.name) for arg in args))
 
@@ -971,13 +1005,13 @@ def _format_if(op, indent):
     for condition, branch in zip(conditions, branches):
         cond_inputs = tuple(op.inputs[idx] for idx in cond_input_indices[cond_input_offset:cond_input_offset+len(condition.inputs)])
         branch_inputs = tuple(op.inputs[idx] for idx in branch_input_indices[branch_input_offset:branch_input_offset+len(branch.inputs)])
-        text += "if ( {cond} ) {branch}; else ".format(cond=_format_call(condition, cond_inputs, is_condition=True),
-                                                       branch=_format_call(branch, branch_inputs + op.outputs))
+        text += "if ( {cond} ) {branch}; else ".format(cond=_format_invocation(condition, cond_inputs, is_condition=True),
+                                                       branch=_format_invocation(branch, branch_inputs + op.outputs))
         cond_input_offset += len(condition.inputs)
         branch_input_offset += len(branch.inputs)
 
     branch_inputs = tuple(op.inputs[idx] for idx in branch_input_indices[branch_input_offset:])
-    text += _format_call(branches[-1], branch_inputs + op.outputs) + ";"
+    text += _format_invocation(branches[-1], branch_inputs + op.outputs) + ";"
     return text
 
 
@@ -994,9 +1028,8 @@ def _format_do(op, indent, context):
     static_iters = op.attribs.get('iters')
     dynamic_iters = op.inputs[nvars+nscans]
 
-    auxiliaries = context['auxiliaries']
     index = sknd.Tensor(name='$', dtype=sknd.Dtype.Int, shape=(), max_shape=())
-    vars = tuple(auxiliaries[output] for output in op.outputs[:nvars])
+    vars = tuple(op.internals[:nvars])
     subgraph_inputs = vars + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
     body_inputs = tuple(subgraph_inputs[idx] for idx in op.attribs['body_inputs'])
 
@@ -1009,7 +1042,7 @@ def _format_do(op, indent, context):
         subgraph_inputs = op.outputs[:nvars] + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
         cond_inputs = tuple(subgraph_inputs[idx] for idx in op.attribs['cond_inputs'])
         cond_text = (indent + "\tif ( !{cond} ) break;\n"
-                     .format(cond=_format_call(condition, cond_inputs, is_condition=True)))
+                     .format(cond=_format_invocation(condition, cond_inputs, is_condition=True)))
 
     text += indent + "for ( int $ = 0; {bound}; ++$ )\n".format(
         bound=("$ < " + _format_tensor_ref(dynamic_iters, braces=True)) if dynamic_iters else
@@ -1024,7 +1057,10 @@ def _format_do(op, indent, context):
         text += indent + "\tstd::swap({lhs}, {rhs});\n".format(lhs=_valid_id(vars[i].name),
                                                                rhs=_valid_id(op.outputs[i].name))
 
-    text += indent + "\t" + _format_call(body, body_inputs + op.outputs) + ";\n"
+    if body.parent is None:
+        text += indent + "\t" + _format_invocation(body, body_inputs + op.outputs) + ";\n"
+    else:
+        text += _format_block(body, body_inputs, op.outputs, indent + "\t", context)
 
     if condition or dynamic_iters:
         for i in range(nvars, len(op.outputs)):
@@ -1072,17 +1108,8 @@ def _format_nms(op, indent):
 
 def _format_tensor_declarations(model, indent, context):
     subgraph_io = {tensor.name for graph in model.graphs[1:] if len(graph.operations)
-                   for tensor in itertools.chain(graph.inputs, graph.outputs)}
-
-    auxiliaries = {}
-    for block in model.graphs:
-        for op in block.operations:
-            if op.name == 'do':
-                nvars = op.attribs['nvars']
-                auxiliaries.update({tensor: _make_auxiliary_tensor(tensor) for tensor in op.outputs[:nvars]})
-
-    shaped_tensors = [tensor for graph in reversed(model.graphs) for tensor in graph.tensors]
-    shaped_tensors.extend(auxiliaries.values())
+                   for tensor in (graph.outputs if graph.dependent else itertools.chain(graph.inputs, graph.outputs))
+                   if tensor is not None}
 
     declared_tensors = [tensor for tensor in model.tensors
                         if tensor.name not in subgraph_io and not _can_inline_tensor(tensor)]
@@ -1090,9 +1117,8 @@ def _format_tensor_declarations(model, indent, context):
     deferred_packs = {pack.name for pack in declared_packs if any(item.name in subgraph_io for item in pack)}
 
     text = "\n".join(_format_tensor_declaration(tensor, indent)
-                     for tensor in itertools.chain(declared_tensors, auxiliaries.values(), declared_packs))
+                     for tensor in itertools.chain(declared_tensors, declared_packs))
 
-    context['auxiliaries'] = auxiliaries
     context['tensors'] = declared_tensors
     context['packs'] = declared_packs
     context['deferred_packs'] = deferred_packs
@@ -1101,11 +1127,11 @@ def _format_tensor_declarations(model, indent, context):
 
 
 def _format_tensor_views(tensors):
-    return "\n".join(f"\t\t\t&{_valid_id(tensor.name) }," for tensor in tensors)
+    return "".join(f"\t\t\t&{_valid_id(tensor.name) },\n" for tensor in tensors)
 
 
 def _format_variable_views(tensors):
-    return "\n".join(f"\t\t\t{{ \"{tensor.name}\", &{_valid_id(tensor.name)} }},"
+    return "".join(f"\t\t\t{{ \"{tensor.name}\", &{_valid_id(tensor.name)} }},\n"
                      for tensor in tensors if isinstance(tensor.value, np.ndarray))
 
 
@@ -1114,9 +1140,9 @@ def _wrap_brackets(text, inner=False):
         return "{}"
 
     if inner:
-        return "{\n" + text + "\n\t\t}"
+        return "{\n" + text + "\t\t}"
     else:
-        return "\n\t{\n" + text + "\n\t}"
+        return "\n\t{\n" + text + "\t}"
 
 
 _id_pattern = re.compile('[^~_$0-9a-zA-Z]')
@@ -1139,7 +1165,7 @@ def _generate_model_source(model, name):
                                 tensors=_format_tensor_declarations(model, indent='\t', context=context),
                                 init=_wrap_brackets(_format_tensor_initializers(model, indent='\t\t', context=context)),
                                 checks=_format_checks_code(model.graphs, indent='\t\t', context=context),
-                                blocks=_format_blocks_code(model.graphs, indent='\t\t', context=context),
+                                blocks=_format_graphs(model.graphs, indent='\t\t', context=context),
                                 inputs=_wrap_brackets(_format_tensor_views(inputs), inner=True),
                                 outputs=_wrap_brackets(_format_tensor_views(outputs), inner=True),
                                 variables=_wrap_brackets(_format_variable_views(model.variables), inner=True))

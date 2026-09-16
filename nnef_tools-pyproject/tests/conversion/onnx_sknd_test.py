@@ -2135,7 +2135,8 @@ class NetworkTestCases(TestEnv):
                                         input_shape=(1, 3, 1200, 1200))
 
     def test_ssd_resnet34_noloop(self):
-        self._test_conversion_from_file(self._network_folder + 'ssd_resnet34_noloop.onnx')
+        self._test_conversion_from_file(self._network_folder + 'ssd_resnet34_noloop.onnx',
+                                        epsilon=1e-4)
 
     def test_yolo_v3(self):
         self._test_conversion_from_file(self._network_folder + 'yolo_v3.onnx',

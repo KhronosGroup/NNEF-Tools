@@ -35,6 +35,7 @@ namespace sknd
 {
 
     typedef std::vector<ValueExpr> Shape;
+    struct Graph;
 
 
     /*
@@ -109,12 +110,12 @@ namespace sknd
         std::vector<TensorRef> outputs;                                 // list of output tensors, items may be packed
         std::vector<TensorRef> internals;                               // list of internal tensors, items may be packed
         std::vector<Contraction> contractions;                          // list of contractions that define the lowering of the operation
+        std::vector<Graph*> subgraphs;                                  // list of subgraphs referred to by this operation
         std::vector<Assertion> asserts;                                 // list of dynamic asserts that need to be checked in run-time
         OrderedDict<ValueExpr> subexprs;                                // dictionary shared sub-expressions
         std::vector<Shape> output_shapes;                               // dynamic output shapes
         std::vector<ValueExpr> output_sizes;                            // dynamic sizes of output packs
-        size_t nodes = 1;                                               // size of the subtree that this operation represents
-        bool extrinsic = true;                                          // whether the operation is externally defined
+        bool extrinsic = false;                                         // whether the operation is externally defined
     };
     
     
@@ -123,6 +124,7 @@ namespace sknd
      */
     struct Graph
     {
+        Graph* parent;                                                  // the parent graph which this graph depends on for context
         std::string name;                                               // name of this graph
         std::vector<Operation> operations;                              // list of operations, in topograpic order
         std::vector<TensorRef> inputs;                                  // list of input tensors, items may be packed
@@ -420,33 +422,25 @@ namespace sknd
         }
         os << ')' << std::endl;
         
-        os << indentation << '{' << std::endl;
-        
-        for ( auto& [name, expr] : op.subexprs )
+        if ( !op.extrinsic )
         {
-            os << indentation << '\t' << name << " = " << expr << std::endl;
-        }
-        for ( auto& assert : op.asserts )
-        {
-            os << indentation << '\t' << "assert " << assert << ";" << std::endl;
-        }
-        
-        if ( op.nodes == 1 )
-        {
+            os << indentation << '{' << std::endl;
+            
+            for ( auto& [name, expr] : op.subexprs )
+            {
+                os << indentation << '\t' << name << " = " << expr << std::endl;
+            }
+            for ( auto& assert : op.asserts )
+            {
+                os << indentation << '\t' << "assert " << assert << ";" << std::endl;
+            }
             for ( auto& contraction : op.contractions )
             {
                 os << sknd::indent(indent + 1) << contraction << std::endl;
             }
+            
+            os << indentation << '}' << std::endl;
         }
-        else
-        {
-            for ( auto it = &op + 1; it < &op + op.nodes; it += it->nodes )
-            {
-                os << sknd::indent(indent + 1) << *it;
-            }
-        }
-        
-        os << indentation << '}' << std::endl;
         
         return os;
     }
@@ -458,7 +452,15 @@ namespace sknd
         os << "\t@input {" << std::endl;
         for ( auto& input : graph.inputs )
         {
-            os << "\t\t" << input << ';' << std::endl;
+            if ( input != nullptr )
+            {
+                os << "\t\t" << input << ';' << std::endl;
+            }
+            else
+            {
+                os << "\t\t" << "~: type[]" << ';' << std::endl;
+            }
+            
         }
         os << "\t}" << std::endl;
         
@@ -521,11 +523,9 @@ namespace sknd
         
         os << "\t@compose {" << std::endl;
         
-        for ( size_t i = 0; i < graph.operations.size(); )
+        for ( auto& op : graph.operations )
         {
-            auto& op = graph.operations[i];
             os << indent(2) << op;
-            i += op.nodes;
         }
         os << "\t}" << std::endl;
         

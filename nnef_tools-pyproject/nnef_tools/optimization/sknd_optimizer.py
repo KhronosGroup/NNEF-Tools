@@ -38,7 +38,7 @@ class Optimizer:
                 changed |= self._remove_identity_ops(graph, 'layout.flatten',
                                                      lambda op: op.attribs['rank'] <= 1)
                 changed |= self._remove_identity_ops(graph, 'layout.unflatten',
-                                                     lambda op: len(op.attribs['shape']) == 1)
+                                                     lambda op: len(self._resolve_expr_reference(op.attribs['shape'])) == 1)
                 changed |= self._remove_identity_ops(graph, 'layout.transpose',
                                                      lambda op: self._is_range(op.attribs['perm'], op.attribs['axis']))
                 changed |= self._remove_identity_ops(graph, ('layout.squeeze', 'layout.unsqueeze'),
@@ -151,6 +151,9 @@ class Optimizer:
             if referrer:
                 self._collect_shape_referenced_tensors_from_expr(resolved, referrer)
         return resolved
+
+    def _resolve_expr_reference(self, shape):
+        return shape.target if isinstance(shape, nd.ReferenceExpr) else shape
 
     def _redirect_shape_references(self, target):
         references = self._tensor_references.get(target.name)

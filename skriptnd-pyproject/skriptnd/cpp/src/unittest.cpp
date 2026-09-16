@@ -80,10 +80,6 @@ int main( int argc, const char * argv[] )
             auto model = sknd::read_model(is, "main", importer, error_handler);
             if ( model )
             {
-                if ( atomic )
-                {
-                    sknd::flatten_model(*model, sknd::TrueOperationFilter);
-                }
                 std::cout << "✅ Succesfully parsed model " << entry.path().filename() << std::endl;
                 ++passed;
             }

@@ -770,7 +770,7 @@ static PyObject* buildPyOperation( const sknd::Operation& op, BuildContext& cont
         PyList_SetItem(internals, i, buildPyTensorRef(op.internals[i], context));
     }
 
-    PyObject* contractions = op.extrinsic ? buildPyNone() : PyList_New(op.contractions.size());
+    PyObject* contractions = op.subgraphs.empty() && !op.extrinsic ? PyList_New(op.contractions.size()) : buildPyNone();
     for ( size_t i = 0; i < op.contractions.size(); ++i )
     {
         PyList_SetItem(contractions, i, buildPyContraction(op.contractions[i], context));
@@ -794,16 +794,14 @@ static PyObject* buildPyOperation( const sknd::Operation& op, BuildContext& cont
         PyList_SetItem(output_sizes, i, buildPyValueExpr(op.output_sizes[i], context));
     }
 
-    PyObject* components = Py_None;     // deferred
+    PyObject* subgraphs = Py_None;     // deferred
 
-    return makePyObject(Operation, name, dtypes, attribs, inputs, outputs, internals, contractions, asserts, subexprs,
-                        components, output_shapes, output_sizes);
+    return makePyObject(Operation, name, dtypes, attribs, inputs, outputs, internals,
+                        contractions, subgraphs, asserts, subexprs, output_shapes, output_sizes);
 }
 
-static PyObject* buildPyGraph( const sknd::Graph& graph )
+static PyObject* buildPyGraph( const sknd::Graph& graph, BuildContext& context )
 {
-    BuildContext context;
-
     PyObject* name = buildPyStr(graph.name);
 
     PyObject* tensors = PyList_New(graph.tensors.size());
@@ -826,32 +824,6 @@ static PyObject* buildPyGraph( const sknd::Graph& graph )
     for ( size_t i = 0; i < graph.operations.size(); ++i )
     {
         PyList_SetItem(operations, i, buildPyOperation(graph.operations[i], context));
-    }
-
-    // deferred setting of operation components
-    for ( size_t i = 0; i < graph.operations.size(); ++i )
-    {
-        auto& c_op = graph.operations[i];
-        PyObject* py_op = PyList_GetItem(operations, i);
-
-        size_t n = 0;
-        for ( size_t j = i + 1; j < i + c_op.nodes; ++n )
-        {
-            j += graph.operations[j].nodes;
-        }
-
-        PyObject* components = PyList_New(n);
-
-        size_t k = 0;
-        for ( size_t j = i + 1; j < i + c_op.nodes; ++k )
-        {
-            PyObject* comp = PyList_GetItem(operations, j);
-            Py_INCREF(comp);
-            PyList_SetItem(components, k, comp);
-            j += graph.operations[j].nodes;
-        }
-
-        PyObject_SetAttrString(py_op, "components", components);
     }
 
     // deferred setting of tensor shapes
@@ -886,17 +858,61 @@ static PyObject* buildPyGraph( const sknd::Graph& graph )
         PyList_SetItem(asserts, i, buildPyAssertion(graph.asserts[i], context));
     }
 
-    return makePyObject(Graph, name, operations, inputs, outputs, tensors, packs, asserts);
+    PyObject* parent = Py_None;
+
+    return makePyObject(Graph, parent, name, operations, inputs, outputs, tensors, packs, asserts);
 }
 
 static PyObject* buildPyModel( const sknd::Model& model )
 {
     PyObject* name = buildPyStr(model.name);
 
+    std::map<const sknd::Graph*,PyObject*> graph_map;
+    std::vector<BuildContext> graph_contexts(model.graphs.size());
+
     PyObject* graphs = PyList_New(model.graphs.size());
     for ( size_t i = 0; i < model.graphs.size(); ++i )
     {
-        PyList_SetItem(graphs, i, buildPyGraph(model.graphs[i]));
+        auto& c_graph = model.graphs[i];
+        if ( c_graph.parent )
+        {
+            const size_t parent_idx = c_graph.parent - model.graphs.data();
+            graph_contexts[i] = graph_contexts[parent_idx];
+        }
+        PyObject* py_graph = buildPyGraph(c_graph, graph_contexts[i]);
+        PyList_SetItem(graphs, i, py_graph);
+        graph_map.emplace(&c_graph, py_graph);
+    }
+
+    // deferred setting of operation subgraphs
+    for ( size_t i = 0; i < model.graphs.size(); ++i )
+    {
+        auto& c_graph = model.graphs[i];
+        PyObject* py_graph = PyList_GetItem(graphs, i);
+
+        if ( c_graph.parent )
+        {
+            PyObject_SetAttrString(py_graph, "parent", graph_map[c_graph.parent]);
+        }
+
+        for ( size_t j = 0; j < c_graph.operations.size(); ++j )
+        {
+            auto& c_op = c_graph.operations[j];
+            if ( c_op.subgraphs.size() )
+            {
+                PyObject* py_ops = PyObject_GetAttrString(py_graph, "operations");
+                PyObject* py_op = PyList_GetItem(py_ops, j);
+                PyObject* py_subgraphs = PyList_New(c_op.subgraphs.size());
+                for ( size_t k = 0; k < c_op.subgraphs.size(); ++k )
+                {
+                    PyObject* graph = graph_map[c_op.subgraphs[k]];
+                    Py_INCREF(graph);
+                    PyList_SetItem(py_subgraphs, k, graph);
+                }
+
+                PyObject_SetAttrString(py_op, "subgraphs", py_subgraphs);
+            }
+        }
     }
 
     return makePyObject(Model, name, graphs);
@@ -1134,9 +1150,9 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
     TensorPack = makeDataClass(module, "TensorPack", { "name", "dtype", "shape", "max_shape", "size", "items" },
                                { buildPyInt(0), EmptyListDefault });
     Assertion = makeDataClass(module, "Assertion", { "condition", "message", "args" });
-    Operation = makeDataClass(module, "Operation", { "name", "dtypes", "attribs", "inputs", "outputs", "internals", "contractions", "asserts", "subexprs", "components", "output_shapes", "output_sizes" },
+    Operation = makeDataClass(module, "Operation", { "name", "dtypes", "attribs", "inputs", "outputs", "internals", "contractions", "subgraphs", "asserts", "subexprs", "output_shapes", "output_sizes" },
                               { EmptyDictDefault, EmptyDictDefault, EmptyTupleDefault, EmptyTupleDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault });
-    Graph = makeDataClass(module, "Graph", { "name", "operations", "inputs", "outputs", "tensors", "packs", "asserts" },
+    Graph = makeDataClass(module, "Graph", { "parent", "name", "operations", "inputs", "outputs", "tensors", "packs", "asserts" },
                           { EmptyListDefault, EmptyTupleDefault, EmptyTupleDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault });
     Model = makeDataClass(module, "Model", { "name", "graphs" }, { EmptyListDefault });
 

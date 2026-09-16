@@ -129,10 +129,6 @@ int main( int argc, const char * argv[] )
         auto model = sknd::read_model(is, module.c_str(), importer, error_handler, graph_name);
         if ( model )
         {
-            if ( atomic )
-            {
-                sknd::flatten_model(*model, sknd::TrueOperationFilter);
-            }
             std::cout << "✅ Succesfully parsed model '" + graph_name + "'" << std::endl;
             if ( verbose )
             {
