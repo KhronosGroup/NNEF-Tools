@@ -806,10 +806,10 @@ def _format_operation(op, indent, context):
                     if output.name in deferred_packs)
     text += "".join(_format_shape_propagation(output, shape, size, indent)
                     for output, shape, size in zip(op.outputs, op.output_shapes, op.output_sizes))
-    text += _format_intrinsic(op, indent, context) + "\n" if op.is_extrinsic else \
+    text += _format_intrinsic(op, indent, context) + "\n" if op.is_intrinsic else \
             _format_compound(op, indent, context) if op.is_compound else \
             _format_contractions(op, indent)
-    if op.is_primitive and not op.is_extrinsic:
+    if op.is_primitive:
         text += "".join(_format_shape_definition(output, shape, size, indent)
                         for output, shape, size in zip(op.outputs, op.output_shapes, op.output_sizes))
 
@@ -942,9 +942,6 @@ def _format_graphs(graphs, indent, context):
                     cond_graphs.add(subgraph.name)
                 subgraph = op.attribs.get('body_graph')
                 body_graphs.add(subgraph.name)
-            elif op.subgraphs:
-                for subgraph in op.subgraphs:
-                    body_graphs.add(subgraph.name)
 
     return "\n\n\t".join(_format_graph(graph, i, indent, context, graph.name in cond_graphs)
                          for i, graph in enumerate(graphs)

@@ -63,6 +63,9 @@ namespace sknd
     bool write_tensor( const std::string& filename, const Tensor& tensor, std::string& error ) noexcept;
 
     bool load_variables( const std::string& path, Model& model, const ErrorCallback error ) noexcept;
+
+    void inline_compounds( Model& model, OperationFilter filter = TrueOperationFilter ) noexcept;
+    void atomize_compounds( Model& model, OperationFilter filter = TrueOperationFilter ) noexcept;
     
 }   // namespace sknd
 

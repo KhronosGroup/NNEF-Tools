@@ -672,7 +672,7 @@ namespace sknd
                 };
                 
                 graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, {}, {}, {},
-                                                                        std::move(output_shapes), std::move(output_sizes), true });
+                                                      std::move(output_shapes), std::move(output_sizes), true });
                 return std::make_tuple(inputs, outputs);
             }
             else if ( component.loop && !component.loop->unroll )
@@ -1640,11 +1640,11 @@ namespace sknd
                 collect_references(contractions, locals, references);
                 
                 auto subexprs = make_subexprs(references);
-                bool extrinsic = op.lowerings.empty();
+                bool intrinsic = op.lowerings.empty();
                 
                 graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, outputs, std::move(internals),
                                                       std::move(contractions), {}, std::move(asserts), std::move(subexprs),
-                                                      std::move(output_shapes), std::move(output_sizes), extrinsic });
+                                                      std::move(output_shapes), std::move(output_sizes), intrinsic });
                 
                 return std::make_tuple(std::move(types), std::move(attribs), std::move(inputs), std::move(outputs));
             }

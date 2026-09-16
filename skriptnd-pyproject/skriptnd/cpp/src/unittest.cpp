@@ -47,7 +47,7 @@ int main( int argc, const char * argv[] )
     const std::string folder = argv[1];
     
     bool atomic = false;
-    bool unroll = false;
+    bool inlined = false;
     for ( size_t i = 2; i < argc; ++i )
     {
         const std::string arg = argv[i];
@@ -55,9 +55,13 @@ int main( int argc, const char * argv[] )
         {
             atomic = true;
         }
-        else if ( arg == "--unroll" )
+        else if ( arg == "--inline" )
         {
-            unroll = true;
+            inlined = true;
+        }
+        else
+        {
+            std::cerr << "Unrecognized argument " << arg << std::endl;
         }
     }
     
@@ -80,6 +84,14 @@ int main( int argc, const char * argv[] )
             auto model = sknd::read_model(is, "main", importer, error_handler);
             if ( model )
             {
+                if ( atomic )
+                {
+                    sknd::atomize_compounds(*model);
+                }
+                if ( inlined )
+                {
+                    sknd::inline_compounds(*model);
+                }
                 std::cout << "✅ Succesfully parsed model " << entry.path().filename() << std::endl;
                 ++passed;
             }

@@ -459,5 +459,177 @@ namespace sknd
         }
         return success;
     }
+
+    void replace_tensor_accesses( ValueExpr& value, const std::unordered_map<TensorRef,TensorRef>& tensor_remap )
+    {
+        preorder_traverse(value, [&]( ValueExpr& expr )
+        {
+            if ( expr.is_shape_access() )
+            {
+                auto& access = expr.as_shape_access();
+                auto it = tensor_remap.find(access.tensor);
+                if ( it != tensor_remap.end() )
+                {
+                    access.tensor = it->second;
+                }
+            }
+            else if ( expr.is_size_access() )
+            {
+                auto& access = expr.as_size_access();
+                auto it = tensor_remap.find(access.pack);
+                if ( it != tensor_remap.end() )
+                {
+                    access.pack = it->second;
+                }
+            }
+        });
+    }
+
+    void replace_tensor_usage( Graph& graph, const std::unordered_map<TensorRef,TensorRef>& tensor_remap )
+    {
+        for ( auto& tensor : graph.inputs )
+        {
+            auto it = tensor_remap.find(tensor);
+            if ( it != tensor_remap.end() )
+            {
+                tensor = it->second;
+            }
+        }
+        for ( auto& tensor : graph.outputs )
+        {
+            auto it = tensor_remap.find(tensor);
+            if ( it != tensor_remap.end() )
+            {
+                tensor = it->second;
+            }
+        }
+        for ( auto& op : graph.operations )
+        {
+            for ( auto& tensor : op.inputs )
+            {
+                auto it = tensor_remap.find(tensor);
+                if ( it != tensor_remap.end() )
+                {
+                    tensor = it->second;
+                }
+            }
+            for ( auto& [key, value] : op.attribs )
+            {
+                replace_tensor_accesses(value, tensor_remap);
+            }
+            for ( auto& [key, value] : op.subexprs )
+            {
+                replace_tensor_accesses(value, tensor_remap);
+            }
+            for ( auto& subgraph : op.subgraphs )
+            {
+                replace_tensor_usage(*subgraph, tensor_remap);
+            }
+        }
+        for ( auto& tensor : graph.tensors )
+        {
+            for ( auto& expr : tensor->shape )
+            {
+                replace_tensor_accesses(expr, tensor_remap);
+            }
+        }
+        for ( auto& pack : graph.packs )
+        {
+            for ( auto& expr : pack->shape )
+            {
+                replace_tensor_accesses(expr, tensor_remap);
+            }
+            replace_tensor_accesses(pack->size, tensor_remap);
+        }
+    }
+
+    bool is_compound( const Operation& op )
+    {
+        return op.subgraphs.size() == 1 && !op.intrinsic;
+    }
+
+    void inline_compounds( Model& model, OperationFilter filter ) noexcept
+    {
+        std::unordered_set<Graph*> removed_subgraphs;
+        
+        for ( auto it = model.graphs.rbegin(); it != model.graphs.rend(); ++it )
+        {
+            auto& graph = **it;
+            
+            std::vector<Operation> ops;
+            std::unordered_map<TensorRef,TensorRef> tensor_remap;
+            
+            for ( auto& op : graph.operations )
+            {
+                if ( is_compound(op) && filter(op) )
+                {
+                    auto& body = *op.subgraphs.front();
+                    std::move(body.operations.begin(), body.operations.end(), std::back_inserter(ops));
+                    std::move(body.tensors.begin(), body.tensors.end(), std::back_inserter(graph.tensors));
+                    std::move(body.packs.begin(), body.packs.end(), std::back_inserter(graph.packs));
+                    for ( size_t i = 0; i < op.outputs.size(); ++i )
+                    {
+                        tensor_remap[op.outputs[i]] = body.outputs[i];
+                    }
+                    removed_subgraphs.insert(&body);
+                }
+                else
+                {
+                    ops.push_back(std::move(op));
+                }
+            }
+            
+            graph.operations = std::move(ops);
+            auto last_tensor = std::remove_if(graph.tensors.begin(), graph.tensors.end(), 
+                                              [&]( const auto& tensor ){ return tensor_remap.count(tensor.get()) != 0; });
+            auto last_pack = std::remove_if(graph.packs.begin(), graph.packs.end(),
+                                            [&]( const auto& pack ){ return tensor_remap.count(pack.get()) != 0; });
+            graph.tensors.erase(last_tensor, graph.tensors.end());
+            graph.packs.erase(last_pack, graph.packs.end());
+            
+            replace_tensor_usage(graph, tensor_remap);
+        }
+        
+        for ( auto& graph : model.graphs )
+        {
+            if ( graph->parent && removed_subgraphs.count(graph->parent) )
+            {
+                graph->parent = graph->parent->parent;
+            }
+        }
+        
+        auto last = std::remove_if(model.graphs.begin(), model.graphs.end(),
+                                   [&]( const auto& graph ){ return removed_subgraphs.count(graph.get()); });
+        model.graphs.erase(last, model.graphs.end());
+    }
+
+    void atomize_compounds( Model& model, OperationFilter filter ) noexcept
+    {
+        std::unordered_set<Graph*> removed_subgraphs;
+        
+        for ( auto& graph : model.graphs )
+        {
+            for ( auto& op : graph->operations )
+            {
+                if ( is_compound(op) && filter(op) )
+                {
+                    removed_subgraphs.insert(op.subgraphs.front());
+                    op.subgraphs.clear();
+                }
+            }
+        }
+        
+        for ( auto& graph : model.graphs )
+        {
+            if ( graph->parent && removed_subgraphs.count(graph->parent) )
+            {
+                removed_subgraphs.insert(graph.get());
+            }
+        }
+        
+        auto last = std::remove_if(model.graphs.begin(), model.graphs.end(),
+                                   [&]( const auto& graph ){ return removed_subgraphs.count(graph.get()); });
+        model.graphs.erase(last, model.graphs.end());
+    }
     
 }   // namespace sknd

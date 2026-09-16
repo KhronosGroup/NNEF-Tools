@@ -67,10 +67,12 @@ Operation = _sknd.Operation     # dataclass('Operation', {
                                 #   'attribs': OrderedDict[str, Expr],
                                 #   'inputs': Tuple[Tensor],
                                 #   'outputs': Tuple[Tensor],
+                                #   'internals': List[Tensor],
                                 #   'contractions': List[Contraction],
+                                #   'subgraphs': List[Graph],
                                 #   'asserts': List[Assertion],
                                 #   'subexprs': Dict[Expr],
-                                #   'components': List[Operation],
+                                #   'intrinsic': bool,
                                 # }))
 
 Contraction = _sknd.Contraction # dataclass('Contraction', {
@@ -233,9 +235,8 @@ TensorPack.packed = property(lambda expr: True)
 Operation.constants = property(lambda op: (tensor for tensor in op.internals if tensor.is_constant))
 Operation.variables = property(lambda op: (tensor for tensor in op.internals if tensor.is_variable))
 Operation.referenced = property(_enum_referenced)
-Operation.is_primitive = property(lambda op: op.contractions is not None)
-Operation.is_compound = property(lambda op: op.subgraphs is not None)
-Operation.is_extrinsic = property(lambda op: op.contractions is None and op.subgraphs is None)
+Operation.is_primitive = property(lambda op: not op.is_intrinsic and len(op.subgraphs) == 0)
+Operation.is_compound = property(lambda op: not op.is_intrinsic and len(op.subgraphs) == 1)
 
 Graph.__hash__ = lambda graph: hash(graph.name)
 Graph.dependent = property(lambda graph: graph.parent is not None)
@@ -634,18 +635,22 @@ def _replace_tensor_accesses(value, tensor_remap):
 
 def _replace_tensor_usage(graph, tensor_remap):
     graph.inputs = tuple(tensor_remap.get(tensor) or tensor for tensor in graph.inputs)
+    graph.outputs = tuple(tensor_remap.get(tensor) or tensor for tensor in graph.outputs)
     for op in graph.operations:
         op.inputs = tuple(tensor_remap.get(tensor) or tensor for tensor in op.inputs)
-        if op.subgraphs:
-            for subgraph in op.subgraphs:
-                _replace_tensor_usage(subgraph, tensor_remap)
         for key, value in op.attribs.items():
             _replace_tensor_accesses(value, tensor_remap)
         for key, value in op.subexprs.items():
             _replace_tensor_accesses(value, tensor_remap)
+        for subgraph in op.subgraphs:
+            _replace_tensor_usage(subgraph, tensor_remap)
     for tensor in graph.tensors:
         for expr in tensor.shape:
             _replace_tensor_accesses(expr, tensor_remap)
+    for pack in graph.packs:
+        for expr in pack.shape:
+            _replace_tensor_accesses(expr, tensor_remap)
+        _replace_tensor_accesses(pack.size, tensor_remap)
 
 
 def inline_compounds(model, filter):
@@ -657,6 +662,8 @@ def inline_compounds(model, filter):
             if op.is_compound and filter(op):
                 body = op.subgraphs[0]
                 ops.extend(body.operations)
+                graph.tensors.extend(body.tensors)
+                graph.packs.extend(body.packs)
                 for op_output, body_output in zip(op.outputs, body.outputs):
                     tensor_remap[op_output] = body_output
                 removed_subgraphs.add(body)
@@ -664,7 +671,8 @@ def inline_compounds(model, filter):
                 ops.append(op)
 
         graph.operations = ops
-        graph.tensors = [tensor_remap.get(tensor) or tensor for tensor in graph.tensors]
+        graph.tensors = [tensor for tensor in graph.tensors if tensor not in tensor_remap]
+        graph.packs = [pack for pack in graph.packs if pack not in tensor_remap]
 
         _replace_tensor_usage(graph, tensor_remap)
 
@@ -681,7 +689,8 @@ def atomize_compounds(model, filter):
         for op in graph.operations:
             if op.is_compound and filter(op):
                 removed_subgraphs.add(op.subgraphs[0])
-                op.subgraphs = None
+                op.subgraphs = []
+                op.intrinsic = True
 
     for graph in model.graphs:
         if graph.parent and graph.parent in removed_subgraphs:

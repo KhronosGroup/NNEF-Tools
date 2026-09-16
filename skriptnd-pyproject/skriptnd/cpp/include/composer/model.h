@@ -119,7 +119,7 @@ namespace sknd
         OrderedDict<ValueExpr> subexprs;                                // dictionary shared sub-expressions
         std::vector<Shape> output_shapes;                               // dynamic output shapes
         std::vector<ValueExpr> output_sizes;                            // dynamic sizes of output packs
-        bool extrinsic = false;                                         // whether the operation is externally defined
+        bool intrinsic = true;                                          // whether the operation is considered to be a compiler instrinsic
     };
     
     
@@ -438,7 +438,7 @@ namespace sknd
             os << indentation << '}' << std::endl;
         }
         
-        if ( op.subgraphs.empty() && !op.extrinsic )
+        if ( op.subgraphs.empty() && !op.intrinsic )
         {
             os << indentation << '{' << std::endl;
             
