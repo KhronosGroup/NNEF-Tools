@@ -650,7 +650,7 @@ def _replace_tensor_usage(graph, tensor_remap):
 
 def inline_compounds(model, filter):
     removed_subgraphs = set()
-    for graph in model.graphs:
+    for graph in reversed(model.graphs):
         tensor_remap = {}
         ops = []
         for op in graph.operations:
@@ -671,5 +671,20 @@ def inline_compounds(model, filter):
     for graph in model.graphs:
         if graph.parent and graph.parent in removed_subgraphs:
             graph.parent = graph.parent.parent
+
+    model.graphs = [graph for graph in model.graphs if graph not in removed_subgraphs]
+
+
+def atomize_compounds(model, filter):
+    removed_subgraphs = set()
+    for graph in model.graphs:
+        for op in graph.operations:
+            if op.is_compound and filter(op):
+                removed_subgraphs.add(op.subgraphs[0])
+                op.subgraphs = None
+
+    for graph in model.graphs:
+        if graph.parent and graph.parent in removed_subgraphs:
+            removed_subgraphs.add(graph)
 
     model.graphs = [graph for graph in model.graphs if graph not in removed_subgraphs]

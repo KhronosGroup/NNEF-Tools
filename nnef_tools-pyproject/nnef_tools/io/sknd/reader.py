@@ -88,12 +88,16 @@ def _build_model(sknd_model):
 
 class Reader(object):
 
-    def __init__(self, atomic=None):
+    def __init__(self, inline=None, atomic=None):
+        self._inline = inline
         self._atomic = atomic
 
     def __call__(self, filename, attribs=None, init_data=True):
         sknd_model = sknd.read_model(filename, attribs=attribs, init_data=init_data)
         if sknd_model is None:
             raise IOError('could not read model')
-        sknd.inline_compounds(sknd_model, filter=lambda op: not self._atomic(op))
+        if self._inline:
+            sknd.inline_compounds(sknd_model, filter=self._inline)
+        if self._atomic:
+            sknd.atomize_compounds(sknd_model, filter=self._atomic)
         return _build_model(sknd_model)

@@ -28,7 +28,7 @@ def get_transposer(source_format, target_format, skip_filters):
 
 
 def main(args):
-    reader = Reader(atomic=True)
+    reader = Reader(atomic=lambda op: True)
     writer = Writer()
     transposer = get_transposer(args.input_format.upper(), args.output_format.upper(), args.skip_filters)
 

@@ -398,13 +398,15 @@ class NNEFExecutor(Executor):
 
 class SkriptNDExecutor(Executor):
 
-    def __init__(self, model_path, target=None, device=None, atomic=None, require_intermediates=False):
+    def __init__(self, model_path, target=None, device=None, atomic=None, decomposed=None, require_intermediates=False):
         import skriptnd as sknd
         self.model = sknd.read_model(model_path)
         if not self.model:
             raise IOError('Failed to read model')
         if atomic is not None:
-            sknd.flatten_model(self.model, is_atomic=lambda op: op.name in atomic)
+            sknd.atomize_compounds(self.model, filter=lambda op: op.name in atomic)
+        if decomposed is not None:
+            sknd.inline_compounds(self.model, filter=lambda op: op.name in decomposed)
 
         self.inputs = self.model.graphs[0].inputs
         self.outputs = self.model.graphs[0].outputs
@@ -458,7 +460,8 @@ def get_executor(format, model_path, require_intermediates, custom_operators, de
     elif format == 'nnef':
         return NNEFExecutor(model_path, custom_operators, decomposed)
     elif format == 'sknd':
-        return SkriptNDExecutor(model_path, target=target, device=device, atomic=atomic, require_intermediates=require_intermediates)
+        return SkriptNDExecutor(model_path, target=target, device=device, atomic=atomic,
+                                decomposed=decomposed, require_intermediates=require_intermediates)
     else:
         return None
 
