@@ -868,18 +868,18 @@ static PyObject* buildPyModel( const sknd::Model& model )
     PyObject* name = buildPyStr(model.name);
 
     std::map<const sknd::Graph*,PyObject*> graph_map;
-    std::vector<BuildContext> graph_contexts(model.graphs.size());
+    std::map<const sknd::Graph*,BuildContext> graph_contexts;
 
     PyObject* graphs = PyList_New(model.graphs.size());
     for ( size_t i = 0; i < model.graphs.size(); ++i )
     {
-        auto& c_graph = model.graphs[i];
+        auto& c_graph = *model.graphs[i];
+        auto& context = graph_contexts[&c_graph];
         if ( c_graph.parent )
         {
-            const size_t parent_idx = c_graph.parent - model.graphs.data();
-            graph_contexts[i] = graph_contexts[parent_idx];
+            context = graph_contexts[c_graph.parent];
         }
-        PyObject* py_graph = buildPyGraph(c_graph, graph_contexts[i]);
+        PyObject* py_graph = buildPyGraph(c_graph, context);
         PyList_SetItem(graphs, i, py_graph);
         graph_map.emplace(&c_graph, py_graph);
     }
@@ -887,7 +887,7 @@ static PyObject* buildPyModel( const sknd::Model& model )
     // deferred setting of operation subgraphs
     for ( size_t i = 0; i < model.graphs.size(); ++i )
     {
-        auto& c_graph = model.graphs[i];
+        auto& c_graph = *model.graphs[i];
         PyObject* py_graph = PyList_GetItem(graphs, i);
 
         if ( c_graph.parent )

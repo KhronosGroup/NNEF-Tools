@@ -231,7 +231,7 @@ namespace sknd
         
         for ( auto& graph : model->graphs )
         {
-            for ( auto& op : graph.operations )
+            for ( auto& op : graph->operations )
             {
                 set_output_shapes(op);
             }
@@ -421,7 +421,7 @@ namespace sknd
         bool success = true;
         for ( auto& graph : model.graphs )
         {
-            for ( auto& item : graph.tensors )
+            for ( auto& item : graph->tensors )
             {
                 if ( item->variable )
                 {

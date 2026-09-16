@@ -35,6 +35,10 @@ namespace sknd
 {
 
     typedef std::vector<ValueExpr> Shape;
+
+    struct Tensor;
+    struct TensorPack;
+    struct Operation;
     struct Graph;
 
 
@@ -142,7 +146,7 @@ namespace sknd
     struct Model
     {
         std::string name;                                               // name of the model
-        std::vector<Graph> graphs;                                      // list of graphs in the model
+        std::vector<std::unique_ptr<Graph>> graphs;                     // list of graphs in the model
     };
     
 
@@ -422,7 +426,19 @@ namespace sknd
         }
         os << ')' << std::endl;
         
-        if ( !op.extrinsic )
+        for ( auto& subgraph : op.subgraphs )
+        {
+            os << indentation << '{' << std::endl;
+            
+            for ( auto& op : subgraph->operations )
+            {
+                os << sknd::indent(indent + 1) << op;
+            }
+            
+            os << indentation << '}' << std::endl;
+        }
+        
+        if ( op.subgraphs.empty() && !op.extrinsic )
         {
             os << indentation << '{' << std::endl;
             
@@ -452,15 +468,7 @@ namespace sknd
         os << "\t@input {" << std::endl;
         for ( auto& input : graph.inputs )
         {
-            if ( input != nullptr )
-            {
-                os << "\t\t" << input << ';' << std::endl;
-            }
-            else
-            {
-                os << "\t\t" << "~: type[]" << ';' << std::endl;
-            }
-            
+            os << "\t\t" << input << ';' << std::endl;
         }
         os << "\t}" << std::endl;
         
@@ -538,7 +546,10 @@ namespace sknd
     {
         for ( auto& graph : model.graphs )
         {
-            os << graph << std::endl;
+            if ( !graph->parent )
+            {
+                os << *graph << std::endl;
+            }
         }
         
         return os;
