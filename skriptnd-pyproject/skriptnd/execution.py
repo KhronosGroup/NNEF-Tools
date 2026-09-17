@@ -892,7 +892,7 @@ def _format_assert_check_code(assertion, indent):
 def _format_graph(graph, idx, indent, context, condition):
     type = "bool" if condition else "void"
     name = _valid_id(graph.name) if idx else "execute"
-    params = _format_invocation_args(graph.inputs if not graph.dependent else [], graph.outputs, context) if idx else ""
+    params = _format_invocation_args(graph.inputs if not graph.parent else [], graph.outputs, context) if idx else ""
     code = _format_execution_code(graph.operations, indent, context)
     if condition:
         output = graph.outputs[0]
@@ -946,7 +946,7 @@ def _format_graphs(graphs, indent, context):
     return "\n\n\t".join(_format_graph(graph, i, indent, context, graph.name in cond_graphs)
                          for i, graph in enumerate(graphs)
                          if not (graph.name in cond_graphs and graph.name not in body_graphs and _is_trivial_graph(graph))
-                         and not graph.dependent)
+                         and not graph.parent)
 
 
 def _format_intrinsic(op, indent, context):
@@ -1105,7 +1105,7 @@ def _format_nms(op, indent):
 
 def _format_tensor_declarations(model, indent, context):
     subgraph_io = {tensor.name for graph in model.graphs[1:] if len(graph.operations)
-                   for tensor in (graph.outputs if graph.dependent else itertools.chain(graph.inputs, graph.outputs))
+                   for tensor in (graph.outputs if graph.parent else itertools.chain(graph.inputs, graph.outputs))
                    if tensor is not None}
 
     declared_tensors = [tensor for tensor in model.tensors

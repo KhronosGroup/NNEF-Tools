@@ -239,7 +239,6 @@ Operation.is_primitive = property(lambda op: not op.is_intrinsic and len(op.subg
 Operation.is_compound = property(lambda op: not op.is_intrinsic and len(op.subgraphs) == 1)
 
 Graph.__hash__ = lambda graph: hash(graph.name)
-Graph.dependent = property(lambda graph: graph.parent is not None)
 Graph.variables = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_variable))
 Graph.constants = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_constant))
 Graph.activations = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_activation))
