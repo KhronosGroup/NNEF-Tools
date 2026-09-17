@@ -671,7 +671,17 @@ namespace sknd
                     { "branch_inputs", subgraph_input_mapping(inputs, branch_inputs) },
                 };
                 
-                graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, {}, {}, {},
+                std::vector<Graph*> subgraphs;
+                for ( auto& idx : condition_graphs )
+                {
+                    subgraphs.push_back(model.graphs[idx.as_int()].get());
+                }
+                for ( auto& idx : branch_graphs )
+                {
+                    subgraphs.push_back(model.graphs[idx.as_int()].get());
+                }
+                
+                graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, std::move(subgraphs), {}, {},
                                                       std::move(output_shapes), std::move(output_sizes), true });
                 return std::make_tuple(inputs, outputs);
             }
@@ -866,6 +876,8 @@ namespace sknd
                     attribs.emplace("index", ValueExpr((str_t)index));
                 }
                 
+                std::vector<Graph*> subgraphs = { &body_graph };
+                
                 if ( component.loop->condition )
                 {
                     auto& condition = *component.loop->condition;
@@ -884,6 +896,8 @@ namespace sknd
                     attribs.emplace("pretest", ValueExpr((bool_t)component.loop->pretest));
                     attribs.emplace("cond_graph", ValueExpr((int_t)cond_graph_idx));
                     attribs.emplace("cond_inputs", subgraph_input_mapping(locals, cond_inputs));
+                    
+                    subgraphs.push_back(&cond_graph);
                 }
                 
                 inputs.insert(inputs.end(), locals.begin() + inputs.size(), locals.end());
@@ -895,7 +909,7 @@ namespace sknd
                 rename_results(component.results, outputs, scope);
                 TRY_CALL(add_results_to_symbols(component.results, outputs, graph, symbols, scope, component.position))
                 
-                graph.operations.push_back(Operation{ "do", {}, attribs, inputs, outputs, internals, {}, {}, {}, {},
+                graph.operations.push_back(Operation{ "do", {}, attribs, inputs, outputs, internals, {}, std::move(subgraphs), {}, {},
                                                       std::move(output_shapes), std::move(output_sizes), true });
                 
                 return std::make_tuple(inputs, outputs);
