@@ -120,7 +120,7 @@ def ensure_valid_ids(model):
     tensor_names = {}
     for graph in model.graphs:
         for tensor in graph.tensors:
-            if tensor.name is not None:
+            if tensor.name:
                 tensor.name = valid_id(tensor.name)
                 count = tensor_names.get(tensor.name, 0)
                 tensor_names[tensor.name] = count + 1

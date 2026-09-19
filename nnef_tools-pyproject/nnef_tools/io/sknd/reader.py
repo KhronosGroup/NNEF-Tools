@@ -43,12 +43,17 @@ def _build_operation(graph, sknd_operation, tensor_map):
     for key, value in attribs.items():
         remap_tensors_in_expr(value, tensor_map)
 
+    inputs = tuple(remap_tensor(tensor, tensor_map) for tensor in sknd_operation.inputs)
+    outputs = tuple(remap_tensor(tensor, tensor_map) for tensor in sknd_operation.outputs)
+    internals = list(remap_tensor(tensor, tensor_map) for tensor in sknd_operation.internals)
+
     return Operation(graph,
                      type=sknd_operation.name,
                      dtypes=dtypes,
                      attribs=attribs,
-                     inputs=tuple(remap_tensor(input, tensor_map) for input in sknd_operation.inputs),
-                     outputs=tuple(remap_tensor(output, tensor_map) for output in sknd_operation.outputs))
+                     inputs=inputs,
+                     outputs=outputs,
+                     internals=internals)
 
 
 def _build_graph(model, sknd_graph, graph_map, tensor_map):

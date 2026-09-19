@@ -45,8 +45,7 @@ class TestEnv(sknd_test.TestEnv):
         self._tf_to_sknd_converter = tf_to_sknd.Converter()
         self._sknd_reader = sknd_io.Reader(inline=lambda op: op.name.startswith('main.'))
         self._sknd_writer = sknd_io.Writer(operators=tf_to_sknd.Converter.defined_operations(),
-                                           imports=tf_to_sknd.Converter.defined_imports(),
-                                           inline_subgraphs=False)
+                                           imports=tf_to_sknd.Converter.defined_imports())
         self._sknd_optimizer = sknd_optimizer.Optimizer()
         self._tf_optimizer = tf_optimizer.Optimizer()
         self._optimize = False

@@ -58,8 +58,7 @@ class TestEnv(sknd_test.TestEnv):
         self._onnx_to_sknd_converter = onnx_to_sknd.Converter()
         self._skriptnd_reader = sknd_io.Reader(inline=lambda op: op.name.startswith('main.'))
         self._skriptnd_writer = sknd_io.Writer(operators=onnx_to_sknd.Converter.defined_operations(),
-                                               imports=onnx_to_sknd.Converter.defined_imports(),
-                                               inline_subgraphs=False)
+                                               imports=onnx_to_sknd.Converter.defined_imports())
         self._skriptnd_optimizer = sknd_optimizer.Optimizer()
         self._onnx_optimizer = onnx_optimizer.Optimizer()
         self._optimize = True

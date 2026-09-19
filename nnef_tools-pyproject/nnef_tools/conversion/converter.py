@@ -326,11 +326,12 @@ class Converter:
         return op
 
     def _mirror(self, op):
-        op_inputs = tuple(self._map_tensor(tensor) for tensor in op.inputs)
-        op_outputs = tuple(self._map_tensor(tensor) for tensor in op.outputs)
+        inputs = tuple(self._map_tensor(tensor) for tensor in op.inputs)
+        outputs = tuple(self._map_tensor(tensor) for tensor in op.outputs)
+        internals = list(self._map_tensor(tensor) for tensor in op.internals)
 
         return Operation(self._graph, type=op.type, name=op.name, dtypes=op.dtypes, attribs=op.attribs,
-                         inputs=op_inputs, outputs=op_outputs, custom=True)
+                         inputs=inputs, outputs=outputs, internals=internals, custom=True)
 
     def _remap_attribs(self, attribs, defaults, inputs, outputs, op_type, op_name, version):
         attribs = {key: self._tensor_map[value] if isinstance(value, Tensor) else
@@ -729,8 +730,10 @@ class ConverterToSkriptND(Converter):
 
     def _remove_unused_constants(self, model):
         for graph in model.graphs:
+            internals = {tensor for op in graph.operations for tensor in op.internals}
             removed = [tensor for tensor in graph.tensors
-                       if tensor.data is not None and not tensor.has_consumer and not tensor in graph.outputs]
+                       if tensor.data is not None and not tensor.has_consumer and
+                       tensor not in graph.outputs and tensor not in internals]
             graph.inputs = tuple(tensor for tensor in graph.inputs if tensor not in removed)
             graph.remove_tensors(removed)
 

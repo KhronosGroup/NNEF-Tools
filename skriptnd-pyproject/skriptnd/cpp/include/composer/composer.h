@@ -582,18 +582,15 @@ namespace sknd
                     
                     branch_graphs.push_back((int_t)subgraph_idx);
                     
-                    auto& graph_inputs = subgraph.inputs;
-                    auto& graph_outputs = subgraph.outputs;
-                    
                     if ( branch_graphs.size() == 1 )
                     {
-                        outputs = duplicate_tensors(graph, graph_outputs);
+                        outputs = duplicate_tensors(graph, subgraph.outputs);
                     }
                     else
                     {
-                        TRY_CALL(update_branch_output_shapes(outputs, graph_outputs, graph, component.position))
+                        TRY_CALL(update_branch_output_shapes(outputs, subgraph.outputs, graph, component.position))
                     }
-                    collect_local_placeholder_mapping(graph_inputs, subgraph_inputs, local_placeholder_mapping);
+                    collect_local_placeholder_mapping(subgraph.inputs, subgraph_inputs, local_placeholder_mapping);
                     
                     branch_inputs.insert(branch_inputs.end(), subgraph_inputs.begin(), subgraph_inputs.end());
                     add_all(inputs, subgraph_inputs);
@@ -795,11 +792,8 @@ namespace sknd
                 TRY_DECL(body_graph_idx, body_inputs, compose_subgraph(component.operation, operators, symbols, model, graph, scope, label))
                 auto& body_graph = *model.graphs[body_graph_idx];
                 
-                auto& graph_inputs = body_graph.inputs;
-                auto& graph_outputs = body_graph.outputs;
-                
                 Dict<ValueExpr> local_placeholder_mapping;
-                collect_local_placeholder_mapping(graph_inputs, body_inputs, local_placeholder_mapping);
+                collect_local_placeholder_mapping(body_graph.inputs, body_inputs, local_placeholder_mapping);
                 for ( auto& [iden, expr] : local_placeholder_mapping )
                 {
                     resolve_access_to_tensors(expr, locals);
@@ -807,13 +801,13 @@ namespace sknd
                 
                 add_all(locals, body_inputs);
                 
-                std::vector<TensorRef> outputs(graph_outputs.size());
-                std::vector<Shape> output_shapes(graph_outputs.size());
-                std::vector<ValueExpr> output_sizes(graph_outputs.size());
+                std::vector<TensorRef> outputs(body_graph.outputs.size());
+                std::vector<Shape> output_shapes(body_graph.outputs.size());
+                std::vector<ValueExpr> output_sizes(body_graph.outputs.size());
                 
                 for ( size_t i = 0; i < component.loop->carries.size(); ++i )
                 {
-                    outputs[i] = make_tensor_like(graph, graph_outputs[i]);
+                    outputs[i] = make_tensor_like(graph, body_graph.outputs[i]);
                     output_shapes[i] = outputs[i].shape();
                     resolve_local_placeholders(output_shapes[i], outputs[i].max_shape(), local_placeholder_mapping);
                     simplify(output_shapes[i]);
@@ -841,7 +835,7 @@ namespace sknd
                     
                     for ( size_t i = component.loop->carries.size(); i < outputs.size(); ++i )
                     {
-                        auto& output = *graph_outputs[i];
+                        auto& output = *body_graph.outputs[i];
                         
                         auto shape = output.shape;
                         resolve_local_placeholders(shape, output.max_shape, local_placeholder_mapping);
@@ -1394,54 +1388,75 @@ namespace sknd
         {
             Dict<Symbol> locals = symbols;
             
-            std::vector<TensorRef> inputs;
-            std::unordered_set<TensorRef> intermediates;
+            std::unordered_set<TensorRef> inputs;
+            std::unordered_set<TensorRef> internals;
             for ( auto& component : region.components )
             {
                 TRY_DECL(_inputs, _outputs, compose(component, operators, locals, model, graph, scope, false))
                 
-                for ( auto& input : _inputs )
-                {
-                    if ( input != nullptr && is_implicit_constant(input) )
-                    {
-                        intermediates.insert(input);
-                    }
-                }
                 for ( auto& output : _outputs )
                 {
-                    intermediates.insert(output);
+                    internals.insert(output);
+                    if ( output.packed() )
+                    {
+                        for ( auto& item : output )
+                        {
+                            internals.insert(item);
+                        }
+                    }
                 }
                 
                 for ( auto& input : _inputs )
                 {
-                    if ( input != nullptr && !intermediates.count(input) && std::find(inputs.begin(), inputs.end(), input) == inputs.end() )
+                    if ( input != nullptr  )
                     {
-                        inputs.push_back(input);
+                        if ( is_implicit_pack(input) )
+                        {
+                            for ( auto& item : input )
+                            {
+                                if ( !internals.count(item) && !is_implicit_constant(item) )
+                                {
+                                    inputs.insert(item);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if ( !internals.count(input) && !is_implicit_constant(input) )
+                            {
+                                inputs.insert(input);
+                            }
+                        }
                     }
                 }
             }
             
             std::vector<TensorRef> outputs(region.yields.size());
-            
             for ( size_t i = 0; i < region.yields.size(); ++i )
             {
                 auto& yield = *region.yields[i];
                 TRY_DECL(tensor, eval(yield, locals, as_tensor(graph), as_tensor_pack(graph)))
-                if ( is_implicit_constant(tensor) )
+                
+                if ( is_implicit_pack(tensor) )
                 {
-                    intermediates.insert(tensor);
+                    for ( auto& item : tensor )
+                    {
+                        if ( !internals.count(item) && !is_implicit_constant(item) )
+                        {
+                            inputs.insert(item);
+                        }
+                    }
+                }
+                else
+                {
+                    if ( !internals.count(tensor) && !is_implicit_constant(tensor) )
+                    {
+                        inputs.insert(tensor);
+                    }
                 }
                 
-                bool is_input = std::find(inputs.begin(), inputs.end(), tensor) != inputs.end();
-                bool is_output = std::find(outputs.begin(), outputs.begin() + i, tensor) != outputs.begin() + i;
-                bool is_intermediate = intermediates.count(tensor);
-                
-                if ( !is_intermediate && !is_input )
-                {
-                    inputs.push_back(tensor);
-                }
-                
-                if ( !is_intermediate || is_output )
+                bool is_duplicate_output = std::find(outputs.begin(), outputs.begin() + i, tensor) != outputs.begin() + i;
+                if ( inputs.count(tensor) || is_duplicate_output )
                 {
                     TensorRef output = make_tensor_like(graph, tensor, {}, {});
                     Shape shape = make_shape_access(tensor);
@@ -1453,7 +1468,7 @@ namespace sknd
                 outputs[i] = tensor;
             }
             
-            return std::make_tuple(std::move(inputs), std::move(outputs));
+            return std::make_tuple(std::vector(inputs.begin(), inputs.end()), std::move(outputs));
         }
         
         Result<std::tuple<Dict<Typename>,Dict<ValueExpr>,std::vector<TensorRef>,std::vector<TensorRef>>>

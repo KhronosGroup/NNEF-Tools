@@ -806,7 +806,8 @@ def _format_operation(op, indent, context):
                     if output.name in deferred_packs)
     text += "".join(_format_shape_propagation(output, shape, size, indent)
                     for output, shape, size in zip(op.outputs, op.output_shapes, op.output_sizes))
-    text += _format_intrinsic(op, indent, context) + "\n" if op.is_intrinsic else \
+    text += _format_control_flow(op, indent, context) if op.is_control_flow else \
+            _format_intrinsic(op, indent, context) + "\n" if op.is_intrinsic else \
             _format_compound(op, indent, context) if op.is_compound else \
             _format_contractions(op, indent)
     if op.is_primitive:
@@ -821,7 +822,7 @@ def _format_contractions(op, indent):
 
 
 def _format_compound(op, indent, context):
-    return _format_subgraph(op, op.subgraphs[0], indent, context)
+    return _format_subgraph(op.subgraphs[0], op.inputs, op.outputs, indent, context)
 
 
 def _format_execution_code(operations, indent, context):
@@ -904,8 +905,9 @@ def _format_graph(graph, idx, indent, context, condition):
                                                      code=_wrap_brackets(code))
 
 
-def _format_subgraph(op, graph, indent, context):
-    return _format_block(graph, None, op.outputs, indent, context) if graph.parent else _format_invocation(graph, op.inputs + op.outputs)
+def _format_subgraph(graph, inputs, outputs, indent, context):
+    return _format_block(graph, None, outputs, indent, context) if graph.parent \
+        else indent + _format_invocation(graph, inputs + outputs) + ';'
 
 
 def _format_argref(ref, arg):
@@ -915,12 +917,11 @@ def _format_argref(ref, arg):
 
 
 def _format_block(graph, inputs, outputs, indent, context):
-    code = ""
+    code = indent + "{\n"
     if inputs:
-        code += "".join(f"{indent}{_format_argref(ref, arg)}" for ref, arg in zip(graph.inputs, inputs) if ref is not arg)
+        code += "".join(f"{indent}\t{_format_argref(ref, arg)}" for ref, arg in zip(graph.inputs, inputs) if ref is not arg)
     if outputs:
-        code += "".join(f"{indent}{_format_argref(ref, arg)}" for ref, arg in zip(graph.outputs, outputs) if ref is not arg)
-    code += indent + "{\n"
+        code += "".join(f"{indent}\t{_format_argref(ref, arg)}" for ref, arg in zip(graph.outputs, outputs) if ref is not arg)
     code += _format_execution_code(graph.operations, indent + "\t", context)
     code += indent + "}\n"
     return code
@@ -949,15 +950,18 @@ def _format_graphs(graphs, indent, context):
                          and not graph.parent)
 
 
+def _format_control_flow(op, indent, context):
+    if op.name == 'if':
+        return _format_if(op, indent, context)
+    elif op.name == 'do':
+        return _format_do(op, indent, context)
+
+
 def _format_intrinsic(op, indent, context):
     if op.name == 'layout.reshape':
         return indent + "std::copy_n({input}.data(), {input}.volume(), {output}.data());".format(
             input=_valid_id(op.inputs[0].name),
             output=_valid_id(op.outputs[0].name))
-    elif op.name == 'if':
-        return _format_if(op, indent)
-    elif op.name == 'do':
-        return _format_do(op, indent, context)
     elif op.name == '=':
         return _format_copy(op, indent)
     elif op.name == 'layout.nonzero':
@@ -990,7 +994,7 @@ def _format_copy(op, indent):
     return indent + f"{lhs} = {rhs};"
 
 
-def _format_if(op, indent):
+def _format_if(op, indent, context):
     conditions = op.attribs['cond_graphs']
     branches = op.attribs['branch_graphs']
     cond_input_indices = op.attribs['cond_inputs']
@@ -998,17 +1002,24 @@ def _format_if(op, indent):
     cond_input_offset = 0
     branch_input_offset = 0
 
-    text = indent
+    text = ""
     for condition, branch in zip(conditions, branches):
         cond_inputs = tuple(op.inputs[idx] for idx in cond_input_indices[cond_input_offset:cond_input_offset+len(condition.inputs)])
         branch_inputs = tuple(op.inputs[idx] for idx in branch_input_indices[branch_input_offset:branch_input_offset+len(branch.inputs)])
-        text += "if ( {cond} ) {branch}; else ".format(cond=_format_invocation(condition, cond_inputs, is_condition=True),
-                                                       branch=_format_invocation(branch, branch_inputs + op.outputs))
+
+        text += indent + "if ( {cond} )\n".format(cond=_format_invocation(condition, cond_inputs, is_condition=True))
+        text += _format_subgraph(branch, branch_inputs, op.outputs, indent, context)
+        if not branch.parent:
+            text += '\n'
+        text += indent + "else\n"
+
         cond_input_offset += len(condition.inputs)
         branch_input_offset += len(branch.inputs)
 
     branch_inputs = tuple(op.inputs[idx] for idx in branch_input_indices[branch_input_offset:])
-    text += _format_invocation(branches[-1], branch_inputs + op.outputs) + ";"
+    text += _format_subgraph(branches[-1], branch_inputs, op.outputs, indent, context)
+    if not branches[-1].parent:
+        text += '\n'
     return text
 
 

@@ -79,8 +79,8 @@ class Converter(_Converter):
         self._eliminate_empty_subgraphs(model)
         self._remove_unused_constants(model)
         self._fix_shape_expr_args(model)
-        ensure_valid_ids(model)
         generate_missing_tensor_names_from_op_type(model)
+        ensure_valid_ids(model)
         return model
 
     def should_skip_conversion(self, op):

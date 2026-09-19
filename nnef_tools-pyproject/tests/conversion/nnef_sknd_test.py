@@ -75,8 +75,7 @@ class TestEnv(sknd_test.TestEnv):
         self._nnef_writer = nnef_io.Writer()
         self._nnef_to_sknd_converter = nnef_to_sknd.Converter()
         self._sknd_reader = sknd_io.Reader(inline=lambda op: op.name.startswith('main.'))
-        self._sknd_writer = sknd_io.Writer(operators=nnef_to_sknd.Converter.defined_operations(),
-                                           inline_subgraphs=False)
+        self._sknd_writer = sknd_io.Writer(operators=nnef_to_sknd.Converter.defined_operations())
         self._sknd_optimizer = sknd_optimizer.Optimizer(optimize_batch_norm=False)
         self._nnef_optimizer = nnef_optimizer.Optimizer()
         self._optimize = True

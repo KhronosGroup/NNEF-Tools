@@ -237,6 +237,7 @@ Operation.variables = property(lambda op: (tensor for tensor in op.internals if 
 Operation.referenced = property(_enum_referenced)
 Operation.is_primitive = property(lambda op: not op.is_intrinsic and len(op.subgraphs) == 0)
 Operation.is_compound = property(lambda op: not op.is_intrinsic and len(op.subgraphs) == 1)
+Operation.is_control_flow = property(lambda op: op.is_intrinsic and len(op.subgraphs) != 0)
 
 Graph.__hash__ = lambda graph: hash(graph.name)
 Graph.variables = property(lambda graph: (tensor for tensor in graph.tensors if tensor.is_variable))
@@ -375,7 +376,7 @@ def scan_model(source, attribs=None, init_data=True, flags=DefaultCompilerFlags)
     return model
 
 
-def write_model(model, path, operators=None, imports=None, inline_subgraphs=False, include_variables=True):
+def write_model(model, path, operators=None, imports=None, include_variables=True):
     imported = {_split_module_name(op.name) for graph in model.graphs for op in graph.operations}
     if imports:
         imported.update(imports)
@@ -396,7 +397,7 @@ def write_model(model, path, operators=None, imports=None, inline_subgraphs=Fals
                 print(op, file=file)
                 print('', file=file)
 
-        print_model(model, file, inline_subgraphs=inline_subgraphs, module='main')
+        print_model(model, file, module='main')
 
     if include_variables:
         module_scope = 'main.'

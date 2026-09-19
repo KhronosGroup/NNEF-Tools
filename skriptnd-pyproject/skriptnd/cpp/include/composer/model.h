@@ -247,6 +247,19 @@ namespace sknd
         return os;
     }
 
+    inline std::ostream& operator<<( std::ostream& os, const std::vector<TensorRef>& items )
+    {
+        for ( size_t i = 0; i < items.size(); ++i )
+        {
+            if ( i )
+            {
+                os << ", ";
+            }
+            os << items[i].name();
+        }
+        return os;
+    }
+
     inline std::ostream& operator<<( std::ostream& os, const Tensor& tensor )
     {
         os << tensor.name << ": " << str(tensor.dtype) << tensor.shape;
@@ -424,10 +437,50 @@ namespace sknd
                 os << input.name();
             }
         }
-        os << ')' << std::endl;
+        os << ')';
+        
+        if ( op.internals.size() )
+        {
+            os << '[';
+            for ( size_t i = 0; i < op.internals.size(); ++i )
+            {
+                if ( i )
+                {
+                    os << ", ";
+                }
+                os << op.internals[i];
+            }
+            os << ']';
+        }
+        
+        os << std::endl;
         
         for ( auto& subgraph : op.subgraphs )
         {
+            os << indentation << '(' << subgraph->inputs << ')';
+            
+            bool has_constants = std::any_of(subgraph->tensors.begin(), subgraph->tensors.end(),
+                                             []( const auto& tensor ){ return tensor->value != nullptr; });
+            if ( has_constants )
+            {
+                os << '[';
+                bool first = true;
+                for ( auto& tensor : subgraph->tensors )
+                {
+                    if ( tensor->value != nullptr )
+                    {
+                        if ( !first )
+                        {
+                            os << ", ";
+                        }
+                        os << *tensor;
+                        first = false;
+                    }
+                }
+                os << ']';
+            }
+            
+            os << std::endl;
             os << indentation << '{' << std::endl;
             
             for ( auto& op : subgraph->operations )
@@ -435,6 +488,7 @@ namespace sknd
                 os << sknd::indent(indent + 1) << op;
             }
             
+            os << indentation << '\t' << "yield " << subgraph->outputs << std::endl;
             os << indentation << '}' << std::endl;
         }
         

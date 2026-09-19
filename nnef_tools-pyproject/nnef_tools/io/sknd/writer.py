@@ -105,18 +105,20 @@ def _build_operation(operation, tensor_map):
     for key, value in attribs.items():
         remap_tensors_in_expr(value, tensor_map)
 
+    inputs = tuple(remap_tensor(tensor, tensor_map) for tensor in operation.inputs)
+    outputs = tuple(remap_tensor(tensor, tensor_map) for tensor in operation.outputs)
+    internals = list(remap_tensor(tensor, tensor_map) for tensor in operation.internals)
+
     return sknd.Operation(name=operation.type, dtypes=dtypes, attribs=attribs,
-                          inputs=tuple(remap_tensor(input, tensor_map) for input in operation.inputs),
-                          outputs=tuple(remap_tensor(output, tensor_map) for output in operation.outputs))
+                          inputs=inputs, outputs=outputs, internals=internals)
 
 
 class Writer(object):
 
-    def __init__(self, operators=None, imports=None, compression=None, inline_subgraphs=False):
+    def __init__(self, operators=None, imports=None, compression=None):
         self._operators = operators
         self._imports = imports
         self._compression = compression
-        self._inline_subgraphs = inline_subgraphs
 
     def __call__(self, model, path, include_variables=True):
         folder = None
@@ -134,8 +136,8 @@ class Writer(object):
                 operators = [text for name, text in six.iteritems(self._operators) if name in used_operators]
 
             sknd_model = _build_model(model)
-            sknd.write_model(sknd_model, folder, operators=operators, imports=self._imports,
-                             inline_subgraphs=self._inline_subgraphs, include_variables=include_variables)
+            sknd.write_model(sknd_model, folder, operators=operators,
+                             imports=self._imports, include_variables=include_variables)
         finally:
             if self._compression is not None and folder:
                 compress(folder, path + '.tgz', compression_level=self._compression)

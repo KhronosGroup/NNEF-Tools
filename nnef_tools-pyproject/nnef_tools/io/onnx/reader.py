@@ -122,7 +122,7 @@ def _get_tensor_data(tensor_proto):
     return data
 
 
-def _get_node(node_proto, model, graphs_by_name, tensors_by_name):
+def _get_node(node_proto, model, graph, context_tensors):
     inputs = [as_str(input) for input in node_proto.input]
     outputs = [as_str(output) for output in node_proto.output]
     name = as_str(_get_field(node_proto, 'name'))
@@ -130,12 +130,12 @@ def _get_node(node_proto, model, graphs_by_name, tensors_by_name):
     op_type = as_str(node_proto.op_type)
     attributes = {}
     for attribute in node_proto.attribute:
-        key, value = _get_attribute(attribute, model, graphs_by_name, tensors_by_name)
+        key, value = _get_attribute(attribute, model, graph, context_tensors)
         attributes[key] = value
     return inputs, outputs, name, domain, op_type, attributes
 
 
-def _get_attribute(attribute_proto, model, graphs_by_name, tensors_by_name):
+def _get_attribute(attribute_proto, model, graph, context_tensors):
     assert not attribute_proto.HasField('ref_attr_name')
 
     name = as_str(attribute_proto.name)
@@ -149,7 +149,7 @@ def _get_attribute(attribute_proto, model, graphs_by_name, tensors_by_name):
     elif attribute_proto.HasField('t'):
         value = _get_tensor_data(attribute_proto.t)
     elif attribute_proto.HasField('g'):
-        value = _get_graph(attribute_proto.g, model, graphs_by_name, tensors_by_name)
+        value = _get_graph(attribute_proto.g, model, graph, context_tensors)
     elif attribute_proto.floats:
         value = [float(f) for f in attribute_proto.floats]
     elif attribute_proto.ints:
@@ -159,7 +159,7 @@ def _get_attribute(attribute_proto, model, graphs_by_name, tensors_by_name):
     elif attribute_proto.tensors:
         value = [_get_tensor_data(t) for t in attribute_proto.tensors]
     elif attribute_proto.graphs:
-        value = [_get_graph(g, model, graphs_by_name, tensors_by_name) for g in attribute_proto.graphs]
+        value = [_get_graph(g, model, graph, context_tensors) for g in attribute_proto.graphs]
     else:
         value = []
 
@@ -195,19 +195,18 @@ def _get_tensors(graph_proto, graph, tensors_by_name):
     return tensors_by_name
 
 
-def _get_graph(graph_proto, model, graphs_by_name, tensors_by_name):
+def _get_graph(graph_proto, model, parent, context_tensors):
     name = as_str(_get_field(graph_proto, 'name'))
-    graph = graphs_by_name.get(name)
-    if graph is not None:
-        return graph
+    graph = Graph(model, name=name, parent=parent)
 
-    graph = Graph(model, name=name)
-
-    if len(tensors_by_name) == 0:
+    tensors_by_name = {}
+    if parent is None:
         tensors_by_name[''] = Tensor(graph, name='', shape=(), dtype=np.void, data=np.zeros(shape=(), dtype=np.float32),
                                      variable=False)
 
     _get_tensors(graph_proto, graph, tensors_by_name)
+    if parent is not None:
+        tensors_by_name.update(context_tensors)
 
     initializer_names = {as_str(value_info.name) for value_info in graph_proto.initializer}
     input_names = [as_str(value_info.name) for value_info in graph_proto.input
@@ -221,7 +220,7 @@ def _get_graph(graph_proto, model, graphs_by_name, tensors_by_name):
         tensor.quant = {item.key: tensors_by_name[item.value].data for item in annotation.quant_parameter_tensor_names}
 
     for node in graph_proto.node:
-        inputs, outputs, name, domain, op_type, attributes = _get_node(node, model, graphs_by_name, tensors_by_name)
+        inputs, outputs, name, domain, op_type, attributes = _get_node(node, model, graph, tensors_by_name)
 
         Operation(
             graph=graph,
@@ -231,7 +230,6 @@ def _get_graph(graph_proto, model, graphs_by_name, tensors_by_name):
             outputs=tuple(tensors_by_name[output] for output in outputs),
             attribs=attributes)
 
-    graphs_by_name[graph.name] = graph
     return graph
 
 
@@ -345,7 +343,7 @@ def _add_implicit_loop_and_branch_inputs(model):
 
 def from_onnx_model(onnx_model):
     model = Model(name=as_str(_get_field(onnx_model.graph, 'name')), version=onnx_model.opset_import[0].version)
-    _get_graph(onnx_model.graph, model, {}, {})
+    _get_graph(onnx_model.graph, model, None, {})
     return model
 
 

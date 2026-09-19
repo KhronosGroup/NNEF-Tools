@@ -3161,6 +3161,11 @@ namespace sknd
             return tensor.is_constant() && tensor.name().front() == '.';
         }
         
+        static bool is_implicit_pack( const TensorRef& tensor )
+        {
+            return tensor.packed() && tensor.name().front() == '.';
+        }
+        
         static bool allows_dynamic_fold( const Lexer::Operator op )
         {
             return op == Lexer::Operator::Plus || op == Lexer::Operator::Multiply ||

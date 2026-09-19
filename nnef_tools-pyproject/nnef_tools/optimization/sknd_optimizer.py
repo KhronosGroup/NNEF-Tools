@@ -245,7 +245,8 @@ class Optimizer:
 
     @staticmethod
     def _remove_unused_variables_and_constants(graph):
-        tensors = [tensor for tensor in graph.tensors if tensor.data is not None and len(tensor.consumers) == 0]
+        internals = {tensor for op in graph.operations for tensor in op.internals}
+        tensors = [tensor for tensor in graph.tensors if tensor.data is not None and len(tensor.consumers) == 0 and tensor not in internals]
         graph.remove_tensors(tensors)
         return len(tensors) != 0
 

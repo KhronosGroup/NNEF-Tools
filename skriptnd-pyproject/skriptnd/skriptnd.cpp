@@ -96,8 +96,6 @@ struct BuildContext
     std::map<const sknd::ValueExpr*,PyObject*> subexprs;
 };
 
-static BuildContext EmptyBuildContext = BuildContext();
-
 
 // make tuple by STEALING references to args
 template<typename... Args>
@@ -298,13 +296,23 @@ static PyObject* buildPyTensorRef( const sknd::TensorRef& ref, const BuildContex
     }
     else if ( ref.packed() )
     {
-        PyObject* pack = context.packs.at(ref.as<sknd::TensorPack*>());
+        auto it = context.packs.find(ref.as<sknd::TensorPack*>());
+        if ( it == context.packs.end() )
+        {
+            throw std::runtime_error("Could not map tensor pack '" + ref.name() + "' from C++ to Python");
+        }
+        PyObject* pack = it->second;
         Py_INCREF(pack);
         return pack;
     }
     else
     {
-        PyObject* tensor = context.tensors.at(ref.as<sknd::Tensor*>());
+        auto it = context.tensors.find(ref.as<sknd::Tensor*>());
+        if ( it == context.tensors.end() )
+        {
+            throw std::runtime_error("Could not map tensor '" + ref.name() + "' from C++ to Python");
+        }
+        PyObject* tensor = it->second;
         Py_INCREF(tensor);
         return tensor;
     }
@@ -366,7 +374,12 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
         {
             auto& reference = expr.as_reference();
             PyObject* name = buildPyStr(reference.name);
-            PyObject* target = context.subexprs.at(reference.target); Py_INCREF(target);
+            auto it = context.subexprs.find(reference.target);
+            if ( it == context.subexprs.end() )
+            {
+                throw std::runtime_error("Could not map sub-expression '" + reference.name + "' from C++ to Python");
+            }
+            PyObject* target = it->second; Py_INCREF(target);
             PyObject* dtype = buildPyDtype(expr.dtype());
             return makePyObject(ReferenceExpr, name, target, dtype);
         }
@@ -837,13 +850,17 @@ static PyObject* buildPyGraph( const sknd::Graph& graph, BuildContext& context )
     }
 
     // deferred setting of tensor shapes
-    for ( auto& [c_tensor, py_tensor] : context.tensors )
+    for ( size_t i = 0; i < graph.tensors.size(); ++i )
     {
+        auto& c_tensor = graph.tensors[i];
+        auto py_tensor = PyList_GetItem(tensors, i);
         PyObject* py_shape = buildPyShape(c_tensor->shape, context);
         PyObject_SetAttrString(py_tensor, "shape", py_shape);
     }
-    for ( auto& [c_pack, py_pack] : context.packs )
+    for ( size_t i = 0; i < graph.packs.size(); ++i )
     {
+        auto& c_pack = graph.packs[i];
+        auto py_pack = PyList_GetItem(packs, i);
         PyObject* py_shape = buildPyShape(c_pack->shape, context);
         PyObject_SetAttrString(py_pack, "shape", py_shape);
         PyObject* py_size = buildPyValueExpr(c_pack->size, context);
@@ -1041,7 +1058,15 @@ static PyObject* parse( PyObject* self, PyObject* args, PyObject* kwargs, bool i
         model = sknd::read_model(ss, "main", importer, error_callback, {}, attributes, flags);
     }
 
-    return model ? buildPyModel(*model) : buildPyNone();
+    try
+    {
+        return model ? buildPyModel(*model) : buildPyNone();
+    }
+    catch ( const std::exception& e )
+    {
+        PyErr_SetString(PyExc_RuntimeError, e.what());
+        return NULL;
+    }
 }
 
 static PyObject* parseFile( PyObject* self, PyObject* args, PyObject* kwargs )

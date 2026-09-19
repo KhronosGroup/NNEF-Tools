@@ -15,6 +15,7 @@
 from __future__ import division, print_function, absolute_import
 from .converter import Converter as _Converter, Transform, ConversionError
 from .tf_to_sknd import Converter as _TFConverter, _Transforms as _TFTransforms
+from ..model.utils import ensure_valid_ids, generate_missing_tensor_names_from_op_type
 from ..model import Tensor, Operation
 from ..utils import types
 from ..io.tf.lite import CustomOptionsKey
@@ -119,6 +120,8 @@ class Converter(_TFConverter):
     def __call__(self, model):
         model = _TFConverter.__call__(self, model, lite=True)
         self._fix_custom_options(model)
+        generate_missing_tensor_names_from_op_type(model)
+        ensure_valid_ids(model)
         return model
 
     def _global_attribs(self):

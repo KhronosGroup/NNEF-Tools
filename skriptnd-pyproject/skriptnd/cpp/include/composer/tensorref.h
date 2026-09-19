@@ -71,6 +71,10 @@ namespace sknd
                 std::all_of(as<P*>()->items.begin(), as<P*>()->items.end(), []( const T* item ){ return item->value != nullptr; }); }
             TensorRef at( const size_t i ) { return TensorRef(as<P*>()->items[i]); }
             TensorRef at( const size_t i ) const { return TensorRef(as<P*>()->items[i]); }
+            auto begin() { return as<P*>()->items.begin(); }
+            auto begin() const { return as<P*>()->items.begin(); }
+            auto end() { return as<P*>()->items.end(); }
+            auto end() const { return as<P*>()->items.end(); }
             
             T* operator->() { return as<T*>(); }
             T& operator*() { return *as<T*>(); }

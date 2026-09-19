@@ -143,11 +143,13 @@ class Converter(_Converter):
         self._add_zero_copy_for_constant_outputs(model)
         self._eliminate_empty_subgraphs(model)
         self._remove_unused_constants(model)
+        self._convert_small_variables_to_constants(model)
         self._fix_constant_names(model)
-        ensure_valid_ids(model)
+        self._fix_constants_in_dependent_graphs(model)
         self._fix_loops(model)
         self._fix_shape_expr_args(model)
         generate_missing_tensor_names_from_op_type(model)
+        ensure_valid_ids(model)
         if max_input_shapes:
             self._set_max_input_shapes(model, max_input_shapes)
         return model
@@ -182,6 +184,15 @@ class Converter(_Converter):
         return types.from_numpy(value, type=type, flat=flat) if isinstance(value, np.ndarray) else \
                 types.cast(value, type=type) if type else value
 
+    def _convert_small_variables_to_constants(self, model):
+        from operator import mul
+        for graph in model.graphs:
+            for tensor in graph.tensors:
+                if tensor.is_variable:
+                    volume = reduce(mul, tensor.shape, 1)
+                    if volume <= 1:
+                        tensor.set_data(tensor.data, variable=False)
+
     def _fix_constant_names(self, model):
         used = {tensor.name for graph in model.graphs for tensor in graph.tensors}
 
@@ -196,6 +207,21 @@ class Converter(_Converter):
                         name = '/' + str(counter)
 
                     tensor.name = name
+
+    def _fix_constants_in_dependent_graphs(self, model):
+        for graph in model.graphs:
+            if graph.parent:
+                for tensor in graph.tensors:
+                    if tensor.is_constant and len(tensor.shape) != 0:
+                        value = list(tensor.data.flat) if isinstance(tensor.data, np.ndarray) else tensor.data
+                        Operation(graph,
+                                  type='layout.tensor',
+                                  dtypes={'T': tensor.dtype},
+                                  attribs={'shape': list(tensor.shape), 'value': value},
+                                  inputs=(),
+                                  outputs=tensor)
+                        graph.move_operation(len(graph.operations) - 1, 0)
+                        tensor.set_data(None)
 
     def _fix_loops(self, model):
         body_graphs = {op.attribs['body_graph']: op.attribs
@@ -215,9 +241,12 @@ class Converter(_Converter):
         for graph in model.graphs:
             for op in graph.operations:
                 if op.type == 'do':
+                    nvars = op.attribs['nvars']
                     cond = op.attribs.get('cond_graph')
+                    body = op.attribs.get('body_graph')
                     if cond is not None:
                         op.outputs = (Tensor(graph, name='', dtype=np.void, shape=()),) + op.outputs
+                    op.internals = body.inputs[:nvars]
 
     @staticmethod
     def _interleave(items):
@@ -1120,7 +1149,7 @@ _Transforms = Converter.unpack_transforms({
                 'branch_inputs': '![*then_inputs, *else_inputs]',
             },
         ),
-    'Loop':
+    'Loop': # input-output structure of ONNX Loop: [iter-count, condition, dependencies.., captured-inputs..] -> [dependencies.., scan-outputs..]
         Transform(
             type='do',
             cond={

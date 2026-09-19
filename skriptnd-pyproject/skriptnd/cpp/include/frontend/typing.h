@@ -2301,7 +2301,7 @@ namespace sknd
             {
                 types[name] = type;
             }
-            else if ( it->second != type )
+            else if ( type != Typename::Type && it->second != type )
             {
                 report_error(position, "abiguous deduction of generic type '%s' as '%s'; previously deduced as '%s'",
                              name.c_str(), str(type).c_str(), str(it->second).c_str());

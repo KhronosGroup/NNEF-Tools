@@ -26,8 +26,7 @@ def valid_id(name):
 
 class Printer:
 
-    def __init__(self, inline_subgraphs=False, module=None):
-        self._inline_subgraphs = inline_subgraphs
+    def __init__(self, module=None):
         self._module_scope = module + '.' if module else None
 
     def __call__(self, model, file=None):
@@ -35,27 +34,9 @@ class Printer:
         self._used_ids = {self._make_id(tensor.name) for tensor in model.tensors}
         self._next_shape_id = 0
 
-        self._print_graph(model, model.graphs[0], main=True, file=file)
-
-        if not self._inline_subgraphs:
-            for graph in self._referenced_subgraphs(model):
-                self._print_graph(model, graph, main=False, file=file)
-
-    @staticmethod
-    def _referenced_subgraphs(model):
-        referenced = {model.graphs[0].name}
         for graph in model.graphs:
-            if graph.name in referenced:
-                for op in graph.operations:
-                    for value in op.attribs.values():
-                        if isinstance(value, _sknd.Graph):
-                            referenced.add(value.name)
-                        elif isinstance(value, list):
-                            for item in value:
-                                if isinstance(item, _sknd.Graph):
-                                    referenced.add(item.name)
-
-        return [graph for graph in model.graphs[1:] if graph.name in referenced]
+            if not graph.parent:
+                self._print_graph(graph, file=file)
 
     @staticmethod
     def _strip_scope(name, scope):
@@ -67,6 +48,9 @@ class Printer:
     def _can_inline(self, tensor):
         return tensor.shape is not None and len(tensor.shape) == 0 and \
                tensor.value is not None and not isinstance(tensor.value, (np.ndarray, list))
+
+    def _is_trivial_graph(self, graph):
+        return len(graph.operations) == 1 and graph.operations[0].name == '='
 
     def _format_value(self, value, include_max=False):
         if value is None:
@@ -100,6 +84,21 @@ class Printer:
                 return self._make_id(value.name)
             else:
                 return "[" + ", ".join(self._format_value(v) for v in value) + "]"
+        elif isinstance(value, _sknd.CastExpr):
+            arg = self._format_value(value.arg)
+            return f"{value.dtype.name.lower()}({arg})"
+        elif isinstance(value, _sknd.UnaryExpr):
+            arg = self._format_value(value.arg)
+            return f"{value.op}({arg})"
+        elif isinstance(value, _sknd.BinaryExpr):
+            left = self._format_value(value.left)
+            right = self._format_value(value.right)
+            return f"({left} {value.op} {right})"
+        elif isinstance(value, _sknd.SelectExpr):
+            cond = self._format_value(value.cond)
+            left = self._format_value(value.left)
+            right = self._format_value(value.right)
+            return f"({cond} ? {left} : {right})"
         elif isinstance(value, _sknd.Graph):
             return value.name
         elif isinstance(value, np.ndarray):
@@ -155,25 +154,27 @@ class Printer:
     def _format_subgraph(self, target, inputs):
         if isinstance(target, _sknd.Tensor):
             return self._format_value(target)
-        elif self._inline_subgraphs:
+        elif target.parent:
             if len(target.operations) == 0:
                 if len(target.inputs) == 1:
                     return self._format_value(target.inputs[0])
                 else:
                     return '{ yield ' + ', '.join(self._format_value(input)
                                                   for input in target.inputs) + '; }'
+            elif self._is_trivial_graph(target):
+                return self._format_value(target.inputs[0])
             else:
                 label = self._make_id(target.name)
                 text = label + ': {\n'
                 for op in target.operations:
                     text += "\t\t\t"
                     text += self._format_operation(op.outputs, op.name, op.dtypes.values(),
-                                                   op.attribs, op.inputs) + ";\n"
+                                                   op.attribs, op.inputs, op.internals) + ";\n"
                 text += '\t\t\tyield ' + ', '.join(self._make_id(output.name) for output in target.outputs) + ';\n'
                 text += '\t\t}'
                 return text
         else:
-            name = self._make_id(self._strip_scope(target.name, self._module_scope))
+            name = valid_id(self._strip_scope(target.name, self._module_scope))
             return self._format_invocation(name, inputs)
 
     def _format_invocation(self, name, args, dtypes=None, attribs=None, alias=None, label=None):
@@ -190,7 +191,7 @@ class Printer:
             text += " as " + alias
         return text
 
-    def _format_operation(self, results, name, dtypes, attribs, args, alias=None):
+    def _format_operation(self, results, name, dtypes, attribs, args, locals, alias=None):
         if name == 'do':
             nvars = attribs['nvars']
             nscans = attribs['nscans']
@@ -239,16 +240,14 @@ class Printer:
 
             index = _sknd.Tensor(name=index_name, dtype=_sknd.Dtype.Int, shape=(), max_shape=()) if index_name else None
 
-            subgraph_inputs = body.inputs[:nvars + nscans] + (index,) + args[nvars + nscans + 1:]
+            subgraph_inputs = tuple(locals[:nvars + nscans]) + (index,) + args[nvars + nscans + 1:]
             cond_inputs = [subgraph_inputs[idx] for idx in cond_input_indices] \
                 if condition and isinstance(condition, _sknd.Graph) else None
 
-            body_inputs = [subgraph_inputs[idx] for idx in body_input_indices] \
-                if isinstance(body, _sknd.Graph) else None
-            body_inputs[:nvars] = body.inputs[:nvars]
+            body_inputs = [subgraph_inputs[idx] for idx in body_input_indices]
 
             if nvars > 0:
-                ids = [self._make_id(tensor.name) for tensor in body.inputs[:nvars]]
+                ids = [self._make_id(tensor.name) for tensor in locals[:nvars]]
                 inits = args[:nvars]
                 shapes = [f": {res.dtype.name.lower()}{self._format_shape(res.shape)}"
                           if res.shape is not None and init.shape is not None and
@@ -261,7 +260,7 @@ class Printer:
             if nscans > 0:
                 if nvars > 0:
                     text += ' '
-                ids = [self._make_id(tensor.name) for tensor in body.inputs[nvars:nvars+nscans]]
+                ids = [self._make_id(tensor.name) for tensor in locals[nvars:nvars+nscans]]
                 scans = args[nvars:nvars+nscans]
                 text += 'for '
                 text += ', '.join(f'{id} : {self._format_value(value)}' for id, value in zip(ids, scans))
@@ -297,10 +296,10 @@ class Printer:
 
         return text
 
-    def _print_graph(self, model, graph, main, file):
+    def _print_graph(self, graph, file):
         self._block_scope = graph.name + '.'
 
-        print("graph " + self._make_id(self._strip_scope(graph.name, self._module_scope)) + " {", file=file)
+        print("graph " + valid_id(self._strip_scope(graph.name, self._module_scope)) + " {", file=file)
 
         print("\t@input {", file=file)
         for input in graph.inputs:
@@ -324,15 +323,8 @@ class Printer:
                                                   ignore_dynamic_shape=True) + ";", file=file)
         print("\t}", file=file)
 
-        if self._inline_subgraphs and main:
-            variables = model.variables
-            constants = model.constants
-        else:
-            variables = graph.variables
-            constants = graph.constants
-
-        variables = list(variables)
-        constants = list(tensor for tensor in constants if not self._can_inline(tensor))
+        variables = list(graph.variables)
+        constants = list(tensor for tensor in graph.constants if not self._can_inline(tensor))
 
         if len(constants) > 0:
             print("\t@constant {", file=file)
@@ -349,13 +341,13 @@ class Printer:
 
         print("\t@compose {", file=file)
         for op in graph.operations:
-            print("\t\t" + self._format_operation(op.outputs, op.name, op.dtypes.values(), op.attribs, op.inputs)
+            print("\t\t" + self._format_operation(op.outputs, op.name, op.dtypes.values(), op.attribs, op.inputs, op.internals)
                   + ";", file=file)
         print("\t}", file=file)
 
         print("}\n", file=file)
 
 
-def print_model(model, file=None, inline_subgraphs=False, module=None):
-    printer = Printer(inline_subgraphs=inline_subgraphs, module=module)
+def print_model(model, file=None, module=None):
+    printer = Printer(module=module)
     printer(model, file)

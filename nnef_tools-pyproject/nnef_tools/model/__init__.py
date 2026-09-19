@@ -243,19 +243,21 @@ class TensorPack(list):
 class Operation:
 
     def __init__(self,
-                 graph,         # type: Graph
-                 type=None,     # type: typing.Optional[str]
-                 name=None,     # type: typing.Optional[str]
-                 dtypes=None,   # type: typind.Dict[str, np.dtype]
-                 attribs=None,  # type: typing.Dict[str, typing.Any]
-                 inputs=None,   # type: typing.Union[None, Tensor, _TensorListOrTuple]
-                 outputs=None,  # type: typing.Union[None, Tensor, _TensorListOrTuple]
-                 custom=False,  # type: bool
+                 graph,             # type: Graph
+                 type=None,         # type: typing.Optional[str]
+                 name=None,         # type: typing.Optional[str]
+                 dtypes=None,       # type: typind.Dict[str, np.dtype]
+                 attribs=None,      # type: typing.Dict[str, typing.Any]
+                 inputs=None,       # type: typing.Union[None, Tensor, _TensorListOrTuple]
+                 outputs=None,      # type: typing.Union[None, Tensor, _TensorListOrTuple]
+                 internals=None,    # type: typing.Union[None, _TensorListOrTuple]
+                 custom=False,      # type: bool
                  ):
         # type:(...)->None
         self._graph = graph
         self._inputs = tuple()
         self._outputs = tuple()
+        self.internals = list(internals) if internals is not None else []
 
         assert name is None or isinstance(name, str)
         if attribs is not None:

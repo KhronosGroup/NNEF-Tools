@@ -43,8 +43,7 @@ class TestEnv(sknd_test.TestEnv):
         self._tflite_to_sknd_converter = tflite_to_sknd.Converter()
         self._sknd_reader = sknd_io.Reader(inline=lambda op: op.name.startswith('main.'))
         self._sknd_writer = sknd_io.Writer(operators=tflite_to_sknd.Converter.defined_operations(),
-                                           imports=tflite_to_sknd.Converter.defined_imports(),
-                                           inline_subgraphs=False)
+                                           imports=tflite_to_sknd.Converter.defined_imports())
         self._sknd_optimizer = nnef_optimizer.Optimizer()
         self._tflite_optimizer = tflite_optimizer.Optimizer()
         self._optimize = False
