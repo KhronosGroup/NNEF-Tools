@@ -194,7 +194,7 @@ def bypass_and_remove(graph, op, remove_input_not_output=False, input_index=0):
 
 def _replace_chain(graph, types, func, allow_forks=False):
     def _match_type(type, template):
-        return type in template if isinstance(template, set) else type == template
+        return type in template if isinstance(template, (set, tuple)) else type == template
 
     def _match_link(op, template, is_last):
         return _match_type(op.type, template) and (len(op.outputs) == 1 or is_last)
