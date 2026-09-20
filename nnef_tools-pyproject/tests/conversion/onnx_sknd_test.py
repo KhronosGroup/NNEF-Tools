@@ -52,6 +52,9 @@ class TestEnv(sknd_test.TestEnv):
     _network_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/onnx/nets/') if UNITTEST_FOLDER else None
     _output_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/onnx/ops/') if UNITTEST_FOLDER else None
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, optimize=True, execute=True, keep_generated_code=False)
+
     def setUp(self) -> None:
         self._onnx_reader = onnx_io.Reader(simplify=False, enforce_output_shapes=True)
         self._onnx_writer = onnx_io.Writer()
@@ -61,8 +64,6 @@ class TestEnv(sknd_test.TestEnv):
                                                imports=onnx_to_sknd.Converter.defined_imports())
         self._skriptnd_optimizer = sknd_optimizer.Optimizer()
         self._onnx_optimizer = onnx_optimizer.Optimizer()
-        self._optimize = True
-        self._execute = True
 
     def tearDown(self) -> None:
         pass

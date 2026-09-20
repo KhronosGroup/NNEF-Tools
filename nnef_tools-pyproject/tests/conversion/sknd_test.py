@@ -19,6 +19,12 @@ import skriptnd as sknd
 
 class TestEnv(unittest.TestCase):
 
+    def __init__(self, *args, optimize=True, execute=True, keep_generated_code=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._optimize = optimize
+        self._execute = execute
+        self._keep_generated_code = keep_generated_code
+
     def _convert_to_sknd(self, filename, input_shape=None):
         raise NotImplementedError()
 
@@ -42,7 +48,7 @@ class TestEnv(unittest.TestCase):
         if not model:
             return None
 
-        compiled_model = sknd.compile_model(model, keep_generated_code=False)
+        compiled_model = sknd.compile_model(model, keep_generated_code=self._keep_generated_code)
 
         if not isinstance(input_shape, list):
             input_shape = [input_shape] * len(model.graphs[0].inputs)
