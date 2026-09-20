@@ -1165,7 +1165,7 @@ class TestCases(TestEnv):
             mode='linear',
         )
 
-        self._test_conversion('resize_liner_upsample2x', [node], [input], [output], constants=[scales],
+        self._test_conversion('resize_linear_upsample2x', [node], [input], [output], constants=[scales],
                               values={'scales': [1.0, 1.0, 2.0, 2.0]})
 
     def test_resize_linear_upsample3x(self):
@@ -1179,7 +1179,7 @@ class TestCases(TestEnv):
             mode='linear',
         )
 
-        self._test_conversion('resize_liner_upsample3x', [node], [input], [output], constants=[scales],
+        self._test_conversion('resize_linear_upsample3x', [node], [input], [output], constants=[scales],
                               values={'scales': [1.0, 1.0, 3.0, 3.0]})
 
     def test_resize_linear_upsample4x(self):
@@ -1193,7 +1193,7 @@ class TestCases(TestEnv):
             mode='linear',
         )
 
-        self._test_conversion('resize_liner_upsample4x', [node], [input], [output], constants=[scales],
+        self._test_conversion('resize_linear_upsample4x', [node], [input], [output], constants=[scales],
                               values={'scales': [1.0, 1.0, 4.0, 4.0]})
 
     def test_resize_linear_upsample5x(self):
@@ -1207,7 +1207,7 @@ class TestCases(TestEnv):
             mode='linear',
         )
 
-        self._test_conversion('resize_liner_upsample5x', [node], [input], [output], constants=[scales],
+        self._test_conversion('resize_linear_upsample5x', [node], [input], [output], constants=[scales],
                               values={'scales': [1.0, 1.0, 5.0, 5.0]})
 
     def test_resize_nearest_downsample(self):
