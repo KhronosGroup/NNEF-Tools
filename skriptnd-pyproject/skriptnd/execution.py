@@ -695,30 +695,28 @@ def _format_value_exprs(expr, bracket=True):
         return _format_value_expr(expr, bracket=bracket)
 
 
-def _format_shape_propagation(output, output_shape, output_size, indent):
+def _format_shape_propagation(output, indent):
     text = ""
-    if isinstance(output, sknd.TensorPack) and _is_dynamic_size(output_size) and not _is_placeholder(output_size):
-        length = _format_value_expr(output_size, bracket=False)
+    if isinstance(output, sknd.TensorPack) and _is_dynamic_size(output.size) and not _is_placeholder(output.size):
+        length = _format_value_expr(output.size, bracket=False)
         text += indent + f"{_valid_id(output.name)}.resize({length});\n"
-    if _is_dynamic_shape(output_shape) and all(not _is_placeholder(item) for item in output_shape):
+    if _is_dynamic_shape(output.shape) and all(not _is_placeholder(item) for item in output.shape):
         shape = ", ".join(_format_value_expr(expr, bracket=False) if not sknd.expr_is_packed(expr) else "-1"
-                          for expr in output_shape)
+                          for expr in output.shape)
         text += indent + f"{_valid_id(output.name)}.reshape({shape});\n"
     if isinstance(output, sknd.TensorPack):
-        text += "".join(_format_shape_propagation(item, _item_shape(output_shape, idx), None, indent)
-                        for idx, item in enumerate(output))
+        text += "".join(_format_shape_propagation(item, indent) for item in output)
     return text
 
 
-def _format_shape_definition(output, output_shape, output_size, indent):
+def _format_shape_definition(output, indent):
     text = ""
-    if any(_is_placeholder(item) for item in output_shape):
+    if any(_is_placeholder(item) for item in output.shape):
         shape = ", ".join(_format_value_expr(expr, bracket=False) if not sknd.expr_is_packed(expr) else "-1"
-                          for expr in output_shape)
+                          for expr in output.shape)
         text += indent + f"{_valid_id(output.name)}.reshape({shape});\n"
     if isinstance(output, sknd.TensorPack):
-        text += "".join(_format_shape_definition(item, _item_shape(output_shape, idx), None, indent)
-                        for idx, item in enumerate(output))
+        text += "".join(_format_shape_definition(item, indent) for item in output)
     return text
 
 
@@ -804,15 +802,13 @@ def _format_operation(op, indent, context):
 
     text += "".join(_format_pack_population(output, indent) for output in op.outputs
                     if output.name in deferred_packs)
-    text += "".join(_format_shape_propagation(output, shape, size, indent)
-                    for output, shape, size in zip(op.outputs, op.output_shapes, op.output_sizes))
+    text += "".join(_format_shape_propagation(output, indent) for output in op.outputs)
     text += _format_control_flow(op, indent, context) if op.is_control_flow else \
             _format_intrinsic(op, indent, context) + "\n" if op.is_intrinsic else \
             _format_compound(op, indent, context) if op.is_compound else \
             _format_contractions(op, indent)
     if op.is_primitive:
-        text += "".join(_format_shape_definition(output, shape, size, indent)
-                        for output, shape, size in zip(op.outputs, op.output_shapes, op.output_sizes))
+        text += "".join(_format_shape_definition(output, indent) for output in op.outputs)
 
     return text
 

@@ -49,6 +49,8 @@ namespace sknd
     {
         using Evaluation::has_undefined_symbols;
         
+        struct SubgraphContext;
+        
     private:
         
         AsTensor as_tensor( Graph& graph )
@@ -95,6 +97,8 @@ namespace sknd
             
             TRY_CALL(make_graph(model, op, graph_name, operators, dtypes, attribs))
             
+            override_output_shapes(model);
+            
             return model;
         }
         
@@ -109,6 +113,31 @@ namespace sknd
             _next_pack_idx = 1;
             _next_local_idx = 1;
             _next_placeholder_idx = 1;
+        }
+        
+    private:
+        
+        void override_output_shapes( Model& model )
+        {
+            for ( auto& graph : model.graphs )
+            {
+                auto& context = _contexts.at(graph->name);
+                for ( auto& op : graph->operations )
+                {
+                    for ( auto& output : op.outputs )
+                    {
+                        output.shape() = context.shapes.at(output);
+                        if ( output .packed() )
+                        {
+                            output.size() = context.sizes.at(output);
+                            for ( auto& item : output )
+                            {
+                                item->shape = context.shapes.at(item);
+                            }
+                        }
+                    }
+                }
+            }
         }
         
     private:
@@ -624,9 +653,7 @@ namespace sknd
                     }
                 }
                 
-                std::vector<Shape> output_shapes(outputs.size());
-                std::vector<ValueExpr> output_sizes(outputs.size());
-                
+                auto& context = _contexts.at(graph.name);
                 for ( size_t i = 0; i < outputs.size(); ++i )
                 {
                     auto& output = outputs[i];
@@ -634,11 +661,11 @@ namespace sknd
                     resolve_local_placeholders(shape, output.max_shape(), local_placeholder_mapping);
                     replace_null_shapes_with_placeholders(shape, output.max_shape());
                     output.shape() = canonical(shape);
-                    output_shapes[i] = simplified(shape);
                     
+                    ValueExpr size = nullptr;
                     if ( output.packed() )
                     {
-                        auto size = output.size();
+                        size = output.size();
                         if ( size == nullptr )
                         {
                             size = new_placeholder_expr((int_t)output.max_size());
@@ -648,13 +675,14 @@ namespace sknd
                             resolve_local_placeholders(size, (int_t)output.max_size(), local_placeholder_mapping);
                         }
                         output.size() = canonical(size);
-                        output_sizes[i] = simplified(size);
                         
                         for ( size_t j = 0; j < output.max_size(); ++j )
                         {
                             output[j].shape = item_shape(output.shape(), j);
                         }
                     }
+                    
+                    save_shapes_to_context(context, output, simplified(shape), simplified(size));
                 }
                 
                 rename_results(component.results, outputs, scope);
@@ -678,8 +706,7 @@ namespace sknd
                     subgraphs.push_back(model.graphs[idx.as_int()].get());
                 }
                 
-                graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, std::move(subgraphs), {}, {},
-                                                      std::move(output_shapes), std::move(output_sizes), true });
+                graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, std::move(subgraphs), {}, {}, true });
                 return std::make_tuple(inputs, outputs);
             }
             else if ( component.loop && !component.loop->unroll )
@@ -801,17 +828,14 @@ namespace sknd
                 
                 add_all(locals, body_inputs);
                 
+                auto& context = _contexts.at(graph.name);
                 std::vector<TensorRef> outputs(body_graph.outputs.size());
-                std::vector<Shape> output_shapes(body_graph.outputs.size());
-                std::vector<ValueExpr> output_sizes(body_graph.outputs.size());
-                
                 for ( size_t i = 0; i < component.loop->carries.size(); ++i )
                 {
                     outputs[i] = make_tensor_like(graph, body_graph.outputs[i]);
-                    output_shapes[i] = outputs[i].shape();
-                    resolve_local_placeholders(output_shapes[i], outputs[i].max_shape(), local_placeholder_mapping);
-                    simplify(output_shapes[i]);
-                    outputs[i].shape() = canonical(output_shapes[i]);
+                    Shape shape = outputs[i].shape();
+                    resolve_local_placeholders(shape, outputs[i].max_shape(), local_placeholder_mapping);
+                    outputs[i].shape() = canonical(shape);
                     
                     if ( locals[i]->shape != outputs[i].shape() )
                     {
@@ -819,6 +843,8 @@ namespace sknd
                                      "shape %s of loop body output %d does not match shape %s of loop carried dependency %d",
                                      str(outputs[i].shape()).c_str(), (int)i+1, str(locals[i]->shape).c_str(), (int)i+1);
                     }
+                    
+                    save_shapes_to_context(context, outputs[i], simplified(shape), nullptr);
                 }
                 
                 if ( repeats != nullptr )
@@ -848,8 +874,7 @@ namespace sknd
                         }
                         cache_tensor_pack(graph, pack);
                         outputs[i] = TensorRef(pack);
-                        output_shapes[i] = simplified(shape);
-                        output_sizes[i] = simplified(size);
+                        save_shapes_to_context(context, outputs[i], simplified(shape), simplified(size));
                     }
                 }
                 
@@ -903,8 +928,7 @@ namespace sknd
                 rename_results(component.results, outputs, scope);
                 TRY_CALL(add_results_to_symbols(component.results, outputs, graph, symbols, scope, component.position))
                 
-                graph.operations.push_back(Operation{ "do", {}, attribs, inputs, outputs, internals, {}, std::move(subgraphs), {}, {},
-                                                      std::move(output_shapes), std::move(output_sizes), true });
+                graph.operations.push_back(Operation{ "do", {}, attribs, inputs, outputs, internals, {}, std::move(subgraphs), {}, {}, true });
                 
                 return std::make_tuple(inputs, outputs);
             }
@@ -1431,6 +1455,7 @@ namespace sknd
                 }
             }
             
+            auto& context = _contexts.at(graph.name);
             std::vector<TensorRef> outputs(region.yields.size());
             for ( size_t i = 0; i < region.yields.size(); ++i )
             {
@@ -1461,7 +1486,8 @@ namespace sknd
                     TensorRef output = make_tensor_like(graph, tensor, {}, {});
                     Shape shape = make_shape_access(tensor);
                     ValueExpr size = tensor.packed() ? make_size_access_expr(tensor.size(), tensor) : nullptr;
-                    graph.operations.push_back(Operation{ "=", {}, {}, { tensor }, { output }, {}, {}, {}, {}, {}, { shape }, { size }, true });
+                    graph.operations.push_back(Operation{ "=", {}, {}, { tensor }, { output }, {}, {}, {}, {}, {}, true });
+                    save_shapes_to_context(context, output, shape, size);
                     tensor = output;
                 }
                 
@@ -1469,6 +1495,19 @@ namespace sknd
             }
             
             return std::make_tuple(std::vector(inputs.begin(), inputs.end()), std::move(outputs));
+        }
+        
+        void save_shapes_to_context( SubgraphContext& context, const TensorRef& tensor, const Shape& shape, const ValueExpr& size )
+        {
+            context.shapes[tensor] = shape;
+            if ( tensor.packed() )
+            {
+                context.sizes[tensor] = size;
+                for ( size_t i = 0; i < tensor.max_size(); ++i )
+                {
+                    context.shapes[TensorRef((Tensor*)&tensor[i])] = item_shape(shape, i);
+                }
+            }
         }
         
         bool should_inline( const Component& component )
@@ -1647,6 +1686,8 @@ namespace sknd
                 }
             }
             
+            std::vector<TensorRef> outputs;
+            
             if ( !op.components.empty() )
             {
                 if ( op.components.size() == 1 && should_inline(op.components.front()) )
@@ -1654,7 +1695,7 @@ namespace sknd
                     const bool propagate_label = can_propagate_label(op, locals);
                     TRY_CALL(compose(op.components.front(), operators, locals, model, graph, scope, propagate_label))
                     
-                    auto outputs = list_tensors(op.outputs, locals);
+                    outputs = list_tensors(op.outputs, locals);
                     TRY_CALL(check_outputs(op.outputs, outputs, locals))
                     
                     auto& operation = graph.operations.back();
@@ -1663,12 +1704,10 @@ namespace sknd
                     operation.attribs = attribs;
                     operation.inputs = inputs;
                     operation.outputs = outputs;
-                    
-                    return std::make_tuple(std::move(types), std::move(attribs), std::move(inputs), std::move(outputs));
                 }
                 else
                 {
-                    TRY_DECL(outputs, eval_outputs(graph, op.outputs, locals, types, invocation.position, scope))
+                    TRY_MOVE(outputs, eval_outputs(graph, op.outputs, locals, types, invocation.position, scope))
                     
                     auto subexprs = make_subexprs(references);
                     
@@ -1677,17 +1716,14 @@ namespace sknd
                     auto& subgraph = *model.graphs[subgraph_idx];
                     
                     graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, outputs,
-                                                          {}, {}, { &subgraph }, std::move(asserts), std::move(subexprs),
-                                                          std::move(output_shapes), std::move(output_sizes), false });
+                                                          {}, {}, { &subgraph }, std::move(asserts), std::move(subexprs), false });
                     
                     subgraph.asserts = graph.operations.back().asserts;
-                    
-                    return std::make_tuple(std::move(types), std::move(attribs), std::move(inputs), std::move(outputs));
                 }
             }
             else
             {
-                TRY_DECL(outputs, eval_outputs(graph, op.outputs, locals, types, invocation.position, scope))
+                TRY_MOVE(outputs, eval_outputs(graph, op.outputs, locals, types, invocation.position, scope))
                 
                 for ( size_t i = 0; i < outputs.size(); ++i )
                 {
@@ -1705,11 +1741,16 @@ namespace sknd
                 bool intrinsic = op.lowerings.empty();
                 
                 graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, outputs, std::move(internals),
-                                                      std::move(contractions), {}, std::move(asserts), std::move(subexprs),
-                                                      std::move(output_shapes), std::move(output_sizes), intrinsic });
-                
-                return std::make_tuple(std::move(types), std::move(attribs), std::move(inputs), std::move(outputs));
+                                                      std::move(contractions), {}, std::move(asserts), std::move(subexprs), intrinsic });
             }
+            
+            auto& context = _contexts.at(graph.name);
+            for ( size_t i = 0; i < outputs.size(); ++i )
+            {
+                save_shapes_to_context(context, outputs[i], output_shapes[i], output_sizes[i]);
+            }
+            
+            return std::make_tuple(std::move(types), std::move(attribs), std::move(inputs), std::move(outputs));
         }
         
         static bool has_tensor_packs( const Operator& op )
@@ -4882,6 +4923,8 @@ namespace sknd
         {
             Dict<TensorRef> consts;
             std::unordered_map<Tensors,TensorPack*> packs;
+            std::unordered_map<TensorRef,Shape> shapes;
+            std::unordered_map<TensorRef,ValueExpr> sizes;
         };
         
     private:

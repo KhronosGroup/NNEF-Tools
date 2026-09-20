@@ -803,24 +803,12 @@ static PyObject* buildPyOperation( const sknd::Operation& op, BuildContext& cont
         PyList_SetItem(asserts, i, buildPyAssertion(op.asserts[i], context));
     }
 
-    PyObject* output_shapes = PyList_New(op.output_shapes.size());
-    for ( size_t i = 0; i < op.output_shapes.size(); ++i )
-    {
-        PyList_SetItem(output_shapes, i, buildPyShape(op.output_shapes[i], context));
-    }
-
-    PyObject* output_sizes = PyList_New(op.output_sizes.size());
-    for ( size_t i = 0; i < op.output_sizes.size(); ++i )
-    {
-        PyList_SetItem(output_sizes, i, buildPyValueExpr(op.output_sizes[i], context));
-    }
-
     PyObject* subgraphs = Py_None;     // deferred
 
     PyObject* intrinsic = buildPyBoolean(op.intrinsic);
 
     return makePyObject(Operation, name, dtypes, attribs, inputs, outputs, internals,
-                        contractions, subgraphs, asserts, subexprs, output_shapes, output_sizes, intrinsic);
+                        contractions, subgraphs, asserts, subexprs, intrinsic);
 }
 
 static PyObject* buildPyGraph( const sknd::Graph& graph, BuildContext& context )
@@ -1184,8 +1172,8 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
                                { buildPyInt(0), EmptyListDefault });
     Assertion = makeDataClass(module, "Assertion", { "condition", "message", "args" });
 
-    Operation = makeDataClass(module, "Operation", { "name", "dtypes", "attribs", "inputs", "outputs", "internals", "contractions", "subgraphs", "asserts", "subexprs", "output_shapes", "output_sizes", "is_intrinsic" },
-                              { EmptyDictDefault, EmptyDictDefault, EmptyTupleDefault, EmptyTupleDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, buildPyBoolean(true) });
+    Operation = makeDataClass(module, "Operation", { "name", "dtypes", "attribs", "inputs", "outputs", "internals", "contractions", "subgraphs", "asserts", "subexprs", "is_intrinsic" },
+                              { EmptyDictDefault, EmptyDictDefault, EmptyTupleDefault, EmptyTupleDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault, buildPyBoolean(true) });
     Graph = makeDataClass(module, "Graph", { "parent", "name", "operations", "inputs", "outputs", "tensors", "packs", "asserts" },
                           { EmptyListDefault, EmptyTupleDefault, EmptyTupleDefault, EmptyListDefault, EmptyListDefault, EmptyListDefault });
     Model = makeDataClass(module, "Model", { "name", "graphs" }, { EmptyListDefault });

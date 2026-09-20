@@ -117,8 +117,6 @@ namespace sknd
         std::vector<Graph*> subgraphs;                                  // list of subgraphs referred to by this operation
         std::vector<Assertion> asserts;                                 // list of dynamic asserts that need to be checked in run-time
         OrderedDict<ValueExpr> subexprs;                                // dictionary shared sub-expressions
-        std::vector<Shape> output_shapes;                               // dynamic output shapes
-        std::vector<ValueExpr> output_sizes;                            // dynamic sizes of output packs
         bool intrinsic = true;                                          // whether the operation is considered to be a compiler instrinsic
     };
     

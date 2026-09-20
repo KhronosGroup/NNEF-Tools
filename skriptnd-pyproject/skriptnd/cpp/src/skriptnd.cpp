@@ -71,33 +71,6 @@ namespace sknd
         return nullptr;
     }
 
-    Shape item_shape( const Shape& pack_shape, const size_t idx )
-    {
-        Shape shape(pack_shape.size());
-        for ( size_t i = 0; i < shape.size(); ++i )
-        {
-            shape[i] = pack_shape[i].packed() ? pack_shape[i].at(idx) : pack_shape[i];
-        }
-        return shape;
-    }
-
-    void set_output_shapes( Operation& op )
-    {
-        for ( size_t i = 0; i < op.outputs.size(); ++i )
-        {
-            auto& output = op.outputs[i];
-            output.shape() = op.output_shapes[i];
-            if ( output.packed() )
-            {
-                for ( size_t j = 0; j < output.max_size(); ++j )
-                {
-                    output[j].shape = item_shape(op.output_shapes[i], j);
-                }
-                output.size()= op.output_sizes[i];
-            }
-        }
-    }
-
     std::optional<Model> read_model( const std::string& path,
                                     const ImportCallback importer,
                                     const ErrorCallback error,
@@ -227,14 +200,6 @@ namespace sknd
         {
             error(model.error().position, model.error().message, model.error().trace, false);
             return std::nullopt;
-        }
-        
-        for ( auto& graph : model->graphs )
-        {
-            for ( auto& op : graph->operations )
-            {
-                set_output_shapes(op);
-            }
         }
         
         return error_count ? std::optional<Model>() : std::move(*model);
