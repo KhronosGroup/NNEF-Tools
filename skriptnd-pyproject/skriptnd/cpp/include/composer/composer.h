@@ -1471,6 +1471,37 @@ namespace sknd
             return std::make_tuple(std::vector(inputs.begin(), inputs.end()), std::move(outputs));
         }
         
+        bool should_inline( const Component& component )
+        {
+            if ( !component.branches.empty() )
+            {
+                for ( auto& branch : component.branches )
+                {
+                    if ( !branch.consequent.is<Invocation>() || !should_inline(branch.consequent.as<Invocation>()) )
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            else if ( component.loop )
+            {
+                return false;
+            }
+            else
+            {
+                return component.operation.is<Invocation>() && should_inline(component.operation.as<Invocation>());
+            }
+        }
+        
+        bool should_inline( const Invocation& invocation )
+        {
+            auto pos = invocation.target.find_last_of('.');
+            auto target_module = invocation.target.substr(0, pos);
+            auto target_name = invocation.target.substr(pos + 1);
+            return target_name.front() == '_';
+        }
+        
         Result<std::tuple<Dict<Typename>,Dict<ValueExpr>,std::vector<TensorRef>,std::vector<TensorRef>>>
         invoke( const Invocation& invocation, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
                Model& model, Graph& graph, const std::optional<std::string>& scope )
@@ -1571,10 +1602,8 @@ namespace sknd
             }
             TRY_CALL(check_asserts(op.asserts, locals, invocation.position, checked, asserts, true))
             
-            bool inlined = op.name.front() == '_';
-            
             std::vector<TensorRef> internals;
-            if ( op.components.empty() || inlined )
+            if ( op.components.empty() || op.name.front() == '_' )
             {
                 for ( auto& param : op.constants )
                 {
@@ -1620,16 +1649,20 @@ namespace sknd
             
             if ( !op.components.empty() )
             {
-                if ( inlined )
+                if ( op.components.size() == 1 && should_inline(op.components.front()) )
                 {
                     const bool propagate_label = can_propagate_label(op, locals);
-                    for ( auto& component : op.components )
-                    {
-                        TRY_CALL(compose(component, operators, locals, model, graph, scope, propagate_label))
-                    }
+                    TRY_CALL(compose(op.components.front(), operators, locals, model, graph, scope, propagate_label))
                     
                     auto outputs = list_tensors(op.outputs, locals);
                     TRY_CALL(check_outputs(op.outputs, outputs, locals))
+                    
+                    auto& operation = graph.operations.back();
+                    operation.name = invocation.target;
+                    operation.dtypes = types;
+                    operation.attribs = attribs;
+                    operation.inputs = inputs;
+                    operation.outputs = outputs;
                     
                     return std::make_tuple(std::move(types), std::move(attribs), std::move(inputs), std::move(outputs));
                 }
