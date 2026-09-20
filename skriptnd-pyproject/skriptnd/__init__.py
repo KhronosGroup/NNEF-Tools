@@ -19,7 +19,6 @@ from .parser import *
 from .printer import *
 from .binary import *
 from .execution import *
-import typing
 import copy
 import os
 
@@ -165,12 +164,8 @@ UniformExpr.packed = property(lambda expr: True)
 RangeExpr.packed = property(lambda expr: True)
 
 
-def _local_name(name):
-    return name[name.rfind('.', 1) + 1:]
-
-
 def _shape_access_str(x):
-    s = _local_name(x.tensor.name)
+    s = local_name(x.tensor.name)
     if x.item is not None:
         s += '[' + str(x.item) + ']'
     s += '.shape'
@@ -180,11 +175,11 @@ def _shape_access_str(x):
 
 
 def _size_access_str(x):
-    return _local_name(x.pack.name) + '.size'
+    return local_name(x.pack.name) + '.size'
 
 
 def _tensor_access_str(x):
-    s = _local_name(x.tensor.name)
+    s = local_name(x.tensor.name)
     if x.item is not None:
         s += '[' + str(x.item) + ']'
     s += '[' + ','.join(str(i) for i in x.indices) + ']'
@@ -201,9 +196,9 @@ def _enum_referenced(op):
                     yield x.pack
 
 
-PlaceholderExpr.__str__ = lambda x: (x.id if x.id and not x.id.startswith('.') else '~') + '|' + str(x.max_value)
-IdentifierExpr.__str__ = lambda x: _local_name(x.name)
-ReferenceExpr.__str__ = lambda x: _local_name(x.name)
+PlaceholderExpr.__str__ = lambda x: x.id
+IdentifierExpr.__str__ = lambda x: local_name(x.name)
+ReferenceExpr.__str__ = lambda x: local_name(x.name)
 SizeAccess.__str__ = _size_access_str
 ShapeAccess.__str__ = _shape_access_str
 TensorAccess.__str__ = _tensor_access_str
@@ -397,7 +392,7 @@ def write_model(model, path, operators=None, imports=None, include_variables=Tru
                 print(op, file=file)
                 print('', file=file)
 
-        print_model(model, file, module='main')
+        print_model(model, file)
 
     if include_variables:
         module_scope = 'main.'
@@ -653,7 +648,12 @@ def _replace_tensor_usage(graph, tensor_remap):
         _replace_tensor_accesses(pack.size, tensor_remap)
 
 
-def inline_compounds(model, filter):
+def _inline_name(name, scope):
+    pos = name.rfind('.', 1)
+    return scope + '_' + name[pos+1:] if name[:pos] == scope else name
+
+
+def inline_compounds(model, filter, inline_names=True):
     removed_subgraphs = set()
     for graph in reversed(model.graphs):
         tensor_remap = {}
@@ -664,6 +664,12 @@ def inline_compounds(model, filter):
                 ops.extend(body.operations)
                 graph.tensors.extend(body.tensors)
                 graph.packs.extend(body.packs)
+                if inline_names:
+                    for tensor in body.tensors:
+                        tensor.name = _inline_name(tensor.name, body.name)
+                    for operation in body.operations:
+                        for subgraph in operation.subgraphs:
+                            subgraph.name = _inline_name(subgraph.name, body.name)
                 for op_output, body_output in zip(op.outputs, body.outputs):
                     tensor_remap[op_output] = body_output
                 removed_subgraphs.add(body)
@@ -675,6 +681,9 @@ def inline_compounds(model, filter):
         graph.packs = [pack for pack in graph.packs if pack not in tensor_remap]
 
         _replace_tensor_usage(graph, tensor_remap)
+
+        for op_output, body_output in tensor_remap.items():
+            body_output.name = op_output.name
 
     for graph in model.graphs:
         if graph.parent and graph.parent in removed_subgraphs:

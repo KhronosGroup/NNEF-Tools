@@ -17,6 +17,15 @@ import numpy as np
 import re
 
 
+def local_name(name):
+    return name[name.rfind('.', 1) + 1:]
+
+
+def split_scope(name):
+    pos = name.rfind('.', 1)
+    return name[:pos], name[pos+1:]
+
+
 def valid_id(name):
     id = re.sub('[^~_0-9a-zA-Z]+', '_', name)
     if len(id) > 0 and id[0].isdigit():
@@ -26,11 +35,7 @@ def valid_id(name):
 
 class Printer:
 
-    def __init__(self, module=None):
-        self._module_scope = module + '.' if module else None
-
     def __call__(self, model, file=None):
-        self._block_scope = ''
         self._used_ids = {self._make_id(tensor.name) for tensor in model.tensors}
         self._next_shape_id = 0
 
@@ -38,12 +43,8 @@ class Printer:
             if not graph.parent:
                 self._print_graph(graph, file=file)
 
-    @staticmethod
-    def _strip_scope(name, scope):
-        return name[len(scope):] if scope and name.startswith(scope) and len(name) > len(scope) else name
-
     def _make_id(self, name):
-        return valid_id(self._strip_scope(name, self._block_scope))
+        return valid_id(local_name(name))
 
     def _can_inline(self, tensor):
         return tensor.shape is not None and len(tensor.shape) == 0 and \
@@ -52,25 +53,9 @@ class Printer:
     def _is_trivial_graph(self, graph):
         return len(graph.operations) == 1 and graph.operations[0].name == '='
 
-    def _format_value(self, value, include_max=False):
+    def _format_value(self, value):
         if value is None:
             return "~"  # null tensor
-        elif isinstance(value, _sknd.PlaceholderExpr):
-            s = '~'
-            if include_max:
-                s += '|'
-                s += self._format_value(value.max_value)
-            return s
-        elif isinstance(value, _sknd.ShapeAccess):
-            s = self._make_id(value.tensor.name)
-            if value.item is not None:
-                s += '[' + str(value.item) + ']'
-            s += '.shape'
-            if value.dim is not None:
-                s += '[' + str(value.dim) + ']'
-            return s
-        elif isinstance(value, _sknd.SizeAccess):
-            return self._make_id(value.pack.name) + '.size'
         elif isinstance(value, _sknd.Tensor):
             if self._can_inline(value):
                 if isinstance(value.value, bool):
@@ -84,21 +69,6 @@ class Printer:
                 return self._make_id(value.name)
             else:
                 return "[" + ", ".join(self._format_value(v) for v in value) + "]"
-        elif isinstance(value, _sknd.CastExpr):
-            arg = self._format_value(value.arg)
-            return f"{value.dtype.name.lower()}({arg})"
-        elif isinstance(value, _sknd.UnaryExpr):
-            arg = self._format_value(value.arg)
-            return f"{value.op}({arg})"
-        elif isinstance(value, _sknd.BinaryExpr):
-            left = self._format_value(value.left)
-            right = self._format_value(value.right)
-            return f"({left} {value.op} {right})"
-        elif isinstance(value, _sknd.SelectExpr):
-            cond = self._format_value(value.cond)
-            left = self._format_value(value.left)
-            right = self._format_value(value.right)
-            return f"({cond} ? {left} : {right})"
         elif isinstance(value, _sknd.Graph):
             return value.name
         elif isinstance(value, np.ndarray):
@@ -112,19 +82,23 @@ class Printer:
         else:
             return str(value)
 
-    def _format_shape(self, shape, include_max=False, ignore_dynamic_shape=False):
+    def _format_placeholder(self, x):
+        return (x.id if x.id and not x.id.startswith('.') else '~') + '|' + str(x.max_value)
+
+    def _format_shape(self, shape, ignore_dynamic_shape=False):
         return "[" + ",".join('~' if ignore_dynamic_shape and isinstance(s, _sknd.Expr) else
-                              self._format_value(s, include_max)
+                              self._format_placeholder(s) if isinstance(s, _sknd.PlaceholderExpr) else
+                              self._format_value(s)
                               for s in shape) + "]"
 
     def _format_param(self, name, dtype, shape, default=None, optional=False, packed=False, repeats=None,
-                      include_shape_max=False, ignore_dynamic_shape=False):
+                      ignore_dynamic_shape=False):
         text = self._make_id(name) + ": "
         if optional:
             text += "optional "
         text += dtype.name.lower()
         if shape is not None:
-            text += self._format_shape(shape, include_shape_max, ignore_dynamic_shape)
+            text += self._format_shape(shape, ignore_dynamic_shape)
         if packed:
             text += ".."
         if repeats is not None:
@@ -174,7 +148,7 @@ class Printer:
                 text += '\t\t}'
                 return text
         else:
-            name = valid_id(self._strip_scope(target.name, self._module_scope))
+            name = self._make_id(target.name)
             return self._format_invocation(name, inputs)
 
     def _format_invocation(self, name, args, dtypes=None, attribs=None, alias=None, label=None):
@@ -297,19 +271,15 @@ class Printer:
         return text
 
     def _print_graph(self, graph, file):
-        self._block_scope = graph.name + '.'
-
-        print("graph " + valid_id(self._strip_scope(graph.name, self._module_scope)) + " {", file=file)
+        print("graph " + self._make_id(graph.name) + " {", file=file)
 
         print("\t@input {", file=file)
         for input in graph.inputs:
             if isinstance(input, _sknd.TensorPack):
                 print("\t\t" + self._format_param(input.name, input.dtype, input.shape,
-                                                  packed=True, repeats=len(input),
-                                                  include_shape_max=True) + ";", file=file)
+                                                  packed=True, repeats=len(input)) + ";", file=file)
             else:
-                print("\t\t" + self._format_param(input.name, input.dtype, input.shape,
-                                                  include_shape_max=True) + ";", file=file)
+                print("\t\t" + self._format_param(input.name, input.dtype, input.shape) + ";", file=file)
         print("\t}", file=file)
 
         print("\t@output {", file=file)
@@ -348,6 +318,6 @@ class Printer:
         print("}\n", file=file)
 
 
-def print_model(model, file=None, module=None):
-    printer = Printer(module=module)
+def print_model(model, file=None):
+    printer = Printer()
     printer(model, file)
