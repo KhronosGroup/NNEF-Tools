@@ -332,7 +332,7 @@ operator resize {
 operator rescale {
     @attrib {
         axes: int..(k) = [0:d];
-        factor: real..(k);
+        factor: dynamic real..(k);
         mode: str = 'NEAREST';
         coordinate_transform: str = 'SYMMETRIC';
         rounding_method: str = 'ROUND_PREFER_FLOOR';
@@ -369,9 +369,17 @@ operator rescale {
             rounding_method;
     }
     @compose {
-        output = resize{axes=axes, size=size, mode=mode, rounding_method=rounding_method,
-                        coordinate_transform=coordinate_transform, antialias=antialias,
-                        cubic_coeff_a=cubic_coeff_a}(input);
+        output = if mode == 'NEAREST' then
+                     _nearest_resize{axes=axes, size=size,
+                                     coordinate_transform=coordinate_transform,
+                                     rounding_method=rounding_method}(input)
+                 elif mode == 'LINEAR' then
+                     _linear_resize{axes=axes, size=size, antialias=antialias,
+                                    coordinate_transform=coordinate_transform}(input)
+                 else
+                     _cubic_resize{axes=axes, size=size, antialias=antialias,
+                                   coordinate_transform=coordinate_transform,
+                                   coeff_a=cubic_coeff_a}(input);
     }
 }
 
