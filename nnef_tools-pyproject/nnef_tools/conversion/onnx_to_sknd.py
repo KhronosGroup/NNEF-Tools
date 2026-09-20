@@ -360,28 +360,6 @@ class Converter(_Converter):
                'ASYMMETRIC' if coordinate_transformation_mode == 'asymmetric' else \
                'ALIGNED' if coordinate_transformation_mode == 'align_corners' else None
 
-    def handle_slice_bounds(self, value, tensor, axes):
-        if axes is None:
-            axes = list(range(len(value)))
-        if isinstance(value, list):
-            return [self._handle_slice_bound(item, tensor, axis) for axis, item in zip(axes, value)]
-        else:
-            return value
-
-    def _handle_slice_bound(self, value, tensor, axis):
-        return self._make_shape_access(tensor, axis) if value >= _INT_MAX else -1 if value <= -_INT_MAX else \
-               self._shift_negative_by_shape(tensor, axis, value) if value < 0 else value
-
-    def _make_shape_access(self, tensor, axis):
-        shape = ShapeExpr(ShapeExpr.Op.Shape, args=[tensor])
-        axis = ShapeExpr(ShapeExpr.Op.Const, args=[axis])
-        return ShapeExpr(ShapeExpr.Op.Subscript, args=[shape, axis])
-
-    def _shift_negative_by_shape(self, tensor, axis, value):
-        shape = self._make_shape_access(tensor, axis)
-        value = ShapeExpr(ShapeExpr.Op.Const, args=[-value])
-        return ShapeExpr(ShapeExpr.Op.Sub, args=[shape, value])
-
     def _eval_symbolic_shape(self, tensor):
         op = tensor.producer
         if op is None and tensor.data is None:

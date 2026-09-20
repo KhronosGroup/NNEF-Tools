@@ -111,7 +111,7 @@ def read_flatbuffers(filename):
     name = name.decode() if name is not None else None
 
     model = Model(name)
-    graph = Graph(model, name or 'G')
+    graph = Graph(model, name=name or 'G')
 
     tensors = []
     for i in range(subgraph.TensorsLength()):

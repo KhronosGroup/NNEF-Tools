@@ -691,13 +691,15 @@ _Transforms = Converter.unpack_transforms({
                          ' and not is_bit_set(new_axis_mask,i)]'),
                 ('new_axes', '![i for i in range(rank) if is_bit_set(new_axis_mask,i)]'),
                 ('del_axes', '![i for i in range(rank) if is_bit_set(shrink_axis_mask,i)]'),
+                ('input', '!unsqueeze_input(I[0], new_axes) if len(new_axes) else I[0]'),
+                ('output', '!squeeze_output(O[0], del_axes) if len(del_axes) else O[0]'),
             ]),
-            inputs='!unsqueeze_input(I[0], new_axes) if len(new_axes) else I[0]',
-            outputs='!squeeze_output(O[0], del_axes) if len(del_axes) else O[0]',
+            inputs='!input',
+            outputs='!output',
             attribs={
                 'axes': '!axes',
-                'begin': '![b for i, b in enumerate(masked_beg) if i in axes]',
-                'end': '![e for i, e in enumerate(masked_end) if i in axes]',
+                'begin': '!handle_slice_bounds([b for i, b in enumerate(masked_beg) if i in axes], input, axes)',
+                'end': '!handle_slice_bounds([e for i, e in enumerate(masked_end) if i in axes], input, axes)',
                 'stride': '![s for i, s in enumerate(stride) if i in axes]',
             }
         ),
@@ -753,13 +755,14 @@ _Transforms = Converter.unpack_transforms({
         ),
     ('ResizeBilinear', 'ResizeNearestNeighbor'):
         Transform(
-            type=('image.linear_resize', 'image.nearest_resize'),
+            type='image.resize',
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
                 'axes': '!list(range(I[0].rank - 3, I[0].rank - 1))',
                 'size': '!arg_as_attrib(I[1])',
                 'coordinate_transform': '!"ALIGNED" if align_corners else "SYMMETRIC" if half_pixel_centers else "ASYMMETRIC"',
+                'mode': '!"LINEAR" if _type_ == "ResizeBilinear" or _type_ == "RESIZE_BILINEAR" else "NEAREST"',
             }
         ),
     'LRN':

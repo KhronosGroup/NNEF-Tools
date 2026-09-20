@@ -227,10 +227,9 @@ class Converter:
             using[key] = value
 
         error = None
-        if transform.cond is not None:
-            for condition, message in transform.cond.items():
-                if not self._evaluate(op_attribs, op_inputs, op_outputs, condition, using):
-                    error = message if error is None else error + ', ' + message
+        for condition, message in transform.cond.items():
+            if not self._evaluate(op_attribs, op_inputs, op_outputs, condition, using):
+                error = message if error is None else error + ', ' + message
 
         return error
 
@@ -238,20 +237,21 @@ class Converter:
         if transform is None:
             return "Conversion of operator '{}' is not implemented".format(op.type)
 
-        try:
-            message = self._check_conditions(op, version, transform)
-        except ConversionError as e:
-            message = str(e)
+        if transform.cond is not None:
+            try:
+                message = self._check_conditions(op, version, transform)
+            except ConversionError as e:
+                message = str(e)
 
-        if message is not None:
-            attribs = {key: value for key, value in six.iteritems(op.attribs) if not key.startswith('_')}
-            input_shapes = ", ".join(str([t.shape for t in tensor]) if isinstance(tensor, list) else str(tensor.shape)
-                                     for tensor in op.inputs)
-            output_shapes = ", ".join(str([t.shape for t in tensor]) if isinstance(tensor, list) else str(tensor.shape)
-                                      for tensor in op.outputs)
-            return "Conversion of operator '{}' is not possible: {}"\
-                   "\n  attributes: {}\n  input-shapes: {}\n  output-shapes: {}"\
-                .format(op.type, message, attribs, input_shapes, output_shapes)
+            if message is not None:
+                attribs = {key: value for key, value in six.iteritems(op.attribs) if not key.startswith('_')}
+                input_shapes = ", ".join(str([t.shape for t in tensor]) if isinstance(tensor, list) else str(tensor.shape)
+                                         for tensor in op.inputs)
+                output_shapes = ", ".join(str([t.shape for t in tensor]) if isinstance(tensor, list) else str(tensor.shape)
+                                          for tensor in op.outputs)
+                return "Conversion of operator '{}' is not possible: {}"\
+                       "\n  attributes: {}\n  input-shapes: {}\n  output-shapes: {}"\
+                    .format(op.type, message, attribs, input_shapes, output_shapes)
 
         return None
 
@@ -856,6 +856,28 @@ class ConverterToSkriptND(Converter):
                 if none_on_failure:
                     return None
                 raise ConversionError(f"Conversion of shape expression is not possible: " + str(e))
+
+    def handle_slice_bounds(self, value, tensor, axes):
+        if axes is None:
+            axes = list(range(len(value)))
+        if isinstance(value, list):
+            return [self._handle_slice_bound(item, tensor, axis) for axis, item in zip(axes, value)]
+        else:
+            return value
+
+    def _handle_slice_bound(self, value, tensor, axis):
+        return self._make_shape_access(tensor, axis) if value >= _INT_MAX else -1 if value <= -_INT_MAX else \
+               self._shift_negative_by_shape(tensor, axis, value) if value < 0 else value
+
+    def _make_shape_access(self, tensor, axis):
+        shape = ShapeExpr(ShapeExpr.Op.Shape, args=[tensor])
+        axis = ShapeExpr(ShapeExpr.Op.Const, args=[axis])
+        return ShapeExpr(ShapeExpr.Op.Subscript, args=[shape, axis])
+
+    def _shift_negative_by_shape(self, tensor, axis, value):
+        shape = self._make_shape_access(tensor, axis)
+        value = ShapeExpr(ShapeExpr.Op.Const, args=[-value])
+        return ShapeExpr(ShapeExpr.Op.Sub, args=[shape, value])
 
 
 class ConverterFromSkriptND(Converter):

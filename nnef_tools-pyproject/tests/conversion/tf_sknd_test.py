@@ -844,7 +844,7 @@ class TestCases(TestEnv):
 
     def test_strided_slice_new_axis(self):
         input = tf.placeholder(shape=(4, 32, 32, 3), dtype=tf.float32)
-        output = input[:, 1:-1, 1:-1, tf.newaxis, :]
+        output = input[:, tf.newaxis, 1:-1, 1:-1, :]
 
         self._test_conversion('strided_slice-new_axis')
 
