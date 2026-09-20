@@ -325,11 +325,11 @@ def _format_nested_loops(contraction, indent):
                 value = "std::numeric_limits<sknd::rt::int_t>::min()"
 
         if contraction.left.packed and isinstance(contraction.left.tensor, sknd.TensorPack):
-            return "\n".join(indent + f"{_valid_id(tensor.name)} = {value};"
+            return "".join(indent + f"{_valid_id(tensor.name)} = {value};\n"
                              for tensor in contraction.left.tensor.items)
         else:
             tensor = _valid_id(contraction.left.tensor.name)
-            return indent + f"{tensor} = {value};"
+            return indent + f"{tensor} = {value};\n"
 
     dynamic_output_shapes = {_valid_id(x.id) for x in sknd.recursive_enumerate_expr(contraction.left)
                              if _is_placeholder(x)}
