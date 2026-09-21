@@ -635,6 +635,23 @@ operator sigmoid {
     }
 }
 
+operator hard_sigmoid {
+    @input {
+        x: real[s..];
+    }
+    @attrib {
+        alpha: real = 0.2;
+        beta: real = 0.5;
+    }
+    @output {
+        y: real[s..];
+    }
+    @lower {
+        y[i..] = alpha * x[i..] + beta >? 0.0 <? 1.0,
+            i < s;
+    }
+}
+
 operator softplus {
     @input {
         x: real[s..];

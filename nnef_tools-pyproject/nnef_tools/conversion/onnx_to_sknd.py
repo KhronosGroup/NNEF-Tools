@@ -698,6 +698,20 @@ _Transforms = Converter.unpack_transforms({
                 'theta': '!alpha',
             },
         ),
+    'HardSigmoid':
+        Transform(
+            type='nn.hard_sigmoid',
+            defaults={
+                'alpha': 0.2,
+                'beta': 0.5,
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'alpha': '!alpha',
+                'beta': '!beta',
+            },
+        ),
     'Transpose':
         Transform(
             type='layout.transpose',

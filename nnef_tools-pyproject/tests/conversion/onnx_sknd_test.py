@@ -1716,6 +1716,9 @@ class TestCases(TestEnv):
     def test_sigmoid(self):
         self._test_unary('Sigmoid')
 
+    def test_hard_sigmoid(self):
+        self._test_unary('HardSigmoid', opset_version=22)
+
     def test_softplus(self):
         self._test_unary('Softplus')
 

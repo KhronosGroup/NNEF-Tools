@@ -2018,6 +2018,18 @@ graph sigmoid {
     }
 }
 
+graph hard_sigmoid {
+    @input {
+        input: real[4,32,224,224];
+    }
+    @output {
+        output: real[4,32,224,224];
+    }
+    @compose {
+        output = nn.hard_sigmoid(input);
+    }
+}
+
 graph softplus {
     @input {
         input: real[4,32,224,224];
