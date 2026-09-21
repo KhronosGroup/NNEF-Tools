@@ -37,6 +37,9 @@ class TestEnv(sknd_test.TestEnv):
     _network_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/tflite/nets/') if UNITTEST_FOLDER else None
     _output_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/tflite/ops/') if UNITTEST_FOLDER else None
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, optimize=False, execute=True, keep_generated_code=False)
+
     def setUp(self) -> None:
         self._tflite_reader = lite_io.Reader()
         self._tflite_writer = lite_io.Writer()
@@ -46,8 +49,6 @@ class TestEnv(sknd_test.TestEnv):
                                            imports=tflite_to_sknd.Converter.defined_imports())
         self._sknd_optimizer = nnef_optimizer.Optimizer()
         self._tflite_optimizer = tflite_optimizer.Optimizer()
-        self._optimize = False
-        self._execute = True
 
     def tearDown(self) -> None:
         tf.reset_default_graph()

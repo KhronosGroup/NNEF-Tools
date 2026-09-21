@@ -692,10 +692,9 @@ _Transforms = Converter.unpack_transforms({
                 ('new_axes', '![i for i in range(rank) if is_bit_set(new_axis_mask,i)]'),
                 ('del_axes', '![i for i in range(rank) if is_bit_set(shrink_axis_mask,i)]'),
                 ('input', '!unsqueeze_input(I[0], new_axes) if len(new_axes) else I[0]'),
-                ('output', '!squeeze_output(O[0], del_axes) if len(del_axes) else O[0]'),
             ]),
             inputs='!input',
-            outputs='!output',
+            outputs='!squeeze_output(O[0], del_axes) if len(del_axes) else O[0]',
             attribs={
                 'axes': '!axes',
                 'begin': '!handle_slice_bounds([b for i, b in enumerate(masked_beg) if i in axes], input, axes)',

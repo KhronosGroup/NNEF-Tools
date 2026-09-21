@@ -40,6 +40,9 @@ class TestEnv(sknd_test.TestEnv):
     _network_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/tf/nets/') if UNITTEST_FOLDER else None
     _output_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/tf/ops/') if UNITTEST_FOLDER else None
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, optimize=False, execute=True, keep_generated_code=False)
+
     def setUp(self) -> None:
         self._tf_reader = tf_io.Reader()
         self._tf_to_sknd_converter = tf_to_sknd.Converter()
@@ -48,8 +51,6 @@ class TestEnv(sknd_test.TestEnv):
                                            imports=tf_to_sknd.Converter.defined_imports())
         self._sknd_optimizer = sknd_optimizer.Optimizer()
         self._tf_optimizer = tf_optimizer.Optimizer()
-        self._optimize = False
-        self._execute = True
 
     def tearDown(self) -> None:
         tf.reset_default_graph()
