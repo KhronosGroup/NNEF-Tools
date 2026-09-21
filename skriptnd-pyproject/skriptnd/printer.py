@@ -166,17 +166,16 @@ class Printer:
         return text
 
     def _format_operation(self, results, name, dtypes, attribs, args, locals, alias=None):
+        repeats = None
         if name == 'do':
             nvars = attribs['nvars']
             nscans = attribs['nscans']
-            static_iters = attribs.get('iters')
-            dynamic_iters = args[nvars + nscans]
-            repeats = self._format_value(static_iters) \
-                if static_iters is not None and dynamic_iters is not None else None
-            text = self._format_result(results, repeats)
-        else:
-            text = self._format_result(results, None)
+            tensor_iters = args[nvars + nscans]
+            expr_iters = attribs.get('iters')
+            if expr_iters is not None and tensor_iters is not None:
+                repeats = self._format_value(expr_iters)
 
+        text = self._format_result(results, repeats)
         text += " = "
 
         if name == 'if':
@@ -207,12 +206,9 @@ class Printer:
             body_input_indices = attribs['body_inputs']
             nvars = attribs['nvars']
             nscans = attribs['nscans']
-            static_iters = attribs.get('iters')
-            dynamic_iters = args[nvars + nscans]
-            index_name = attribs.get('index')
             pretest = attribs.get('pretest', False)
-
-            index = _sknd.Tensor(name=index_name, dtype=_sknd.Dtype.Int, shape=(), max_shape=()) if index_name else None
+            iters = args[nvars + nscans] or attribs.get('iters')
+            index = locals[nvars + nscans] if len(locals) > nvars + nscans else None
 
             subgraph_inputs = tuple(locals[:nvars + nscans]) + (index,) + args[nvars + nscans + 1:]
             cond_inputs = [subgraph_inputs[idx] for idx in cond_input_indices] \
@@ -248,14 +244,12 @@ class Printer:
                 text += ' '
             text += 'do'
 
-            if index_name is not None or dynamic_iters is not None or static_iters is not None:
+            if index is not None or iters is not None:
                 text += '..('
-                if index_name is not None:
-                    text += self._make_id(index_name) + ' -> '
-                if dynamic_iters is not None:
-                    text += self._format_value(dynamic_iters)
-                elif static_iters is not None:
-                    text += self._format_value(static_iters)
+                if index is not None:
+                    text += self._make_id(index.name) + ' -> '
+                if iters is not None:
+                    text += self._format_value(iters)
                 text += ')'
 
             text += ' ' + self._format_subgraph(body, body_inputs)

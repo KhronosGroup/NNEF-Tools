@@ -1025,14 +1025,13 @@ def _format_tensor_ref(tensor, braces=False):
 
 def _format_do(op, indent, context):
     condition = op.attribs.get('cond_graph')
-    pretest = op.attribs.get('pretest')
+    pretest = op.attribs.get('pretest', True)
     body = op.attribs['body_graph']
     nvars = op.attribs['nvars']
     nscans = op.attribs['nscans']
-    static_iters = op.attribs.get('iters')
-    dynamic_iters = op.inputs[nvars+nscans]
+    iters = op.inputs[nvars+nscans] or op.attribs.get('iters')
+    index = op.internals[nvars+nscans] if len(op.internals) > nvars + nscans else None
 
-    index = sknd.Tensor(name='$', dtype=sknd.Dtype.Int, shape=(), max_shape=())
     vars = tuple(op.internals[:nvars])
     subgraph_inputs = vars + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
     body_inputs = tuple(subgraph_inputs[idx] for idx in op.attribs['body_inputs'])
@@ -1040,40 +1039,41 @@ def _format_do(op, indent, context):
     text = ""
 
     for i in range(nvars):
-        text += indent + "{lhs} = {rhs};\n".format(lhs=_format_tensor_ref(op.outputs[i]), rhs=_format_tensor_ref(op.inputs[i]))
+        text += indent + f"{_format_tensor_ref(op.outputs[i])} = {_format_tensor_ref(op.inputs[i])};\n"
 
     if condition:
         subgraph_inputs = op.outputs[:nvars] + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
         cond_inputs = tuple(subgraph_inputs[idx] for idx in op.attribs['cond_inputs'])
-        cond_text = (indent + "\tif ( !{cond} ) break;\n"
-                     .format(cond=_format_invocation(condition, cond_inputs, is_condition=True)))
+        cond_text = indent + f"\tif ( !{_format_invocation(condition, cond_inputs, is_condition=True)} ) break;\n"
 
-    text += indent + "for ( int $ = 0; {bound}; ++$ )\n".format(
-        bound=("$ < " + _format_tensor_ref(dynamic_iters, braces=True)) if dynamic_iters else
-              ("$ < " + _format_value_expr(static_iters)) if static_iters else "")
+    bound = ("$ < " + (_format_tensor_ref(iters, braces=True) if isinstance(iters, sknd.Tensor) else
+                       _format_value_expr(iters))) if iters is not None else ""
+    text += indent + f"for ( int $ = 0; {bound}; ++$ )\n"
 
     text += indent + "{\n"
+
+    if index is not None:
+        text += indent + f"\t{_valid_id(index.name)} = $;\n"
 
     if condition and pretest:
         text += cond_text
 
     for i in range(nvars):
-        text += indent + "\tstd::swap({lhs}, {rhs});\n".format(lhs=_valid_id(vars[i].name),
-                                                               rhs=_valid_id(op.outputs[i].name))
+        text += indent + f"\tstd::swap({_valid_id(vars[i].name)}, {_valid_id(op.outputs[i].name)});\n"
 
     if body.parent is None:
         text += indent + "\t" + _format_invocation(body, body_inputs + op.outputs) + ";\n"
     else:
         text += _format_block(body, body_inputs, op.outputs, indent + "\t", context)
 
-    if condition or dynamic_iters:
+    if condition or isinstance(iters, (sknd.Tensor, sknd.Expr)):
         for i in range(nvars, len(op.outputs)):
             text += indent + "\t" + _valid_id(op.outputs[i].name) + ".resize($+1);\n"
 
     if condition and not pretest:
         text += cond_text
 
-    text += indent + "}"
+    text += indent + "}\n"
 
     return text
 
@@ -1114,6 +1114,13 @@ def _format_tensor_declarations(model, indent, context):
     subgraph_io = {tensor.name for graph in model.graphs[1:] if len(graph.operations)
                    for tensor in (graph.outputs if graph.parent else itertools.chain(graph.inputs, graph.outputs))
                    if tensor is not None}
+
+    for graph in model.graphs:
+        for op in graph.operations:
+            if op.name == 'do':
+                nvars = op.attribs['nvars']
+                nscans = op.attribs['nscans']
+                subgraph_io.update({tensor for tensor in op.internals[nvars:nvars+nscans]})
 
     declared_tensors = [tensor for tensor in model.tensors
                         if tensor.name not in subgraph_io and not _can_inline_tensor(tensor)]

@@ -776,7 +776,6 @@ namespace sknd
                 
                 const size_t nscans = locals.size() - nvars;
                 
-                std::string index;
                 if ( component.loop->index )
                 {
                     auto& iden = component.loop->index->name;
@@ -785,7 +784,6 @@ namespace sknd
                     add_shape_symbols(iden, {}, nullptr, symbols);
                     locals.push_back(tensor);
                     internals.push_back(tensor);
-                    index = iden;
                 }
                 else
                 {
@@ -798,17 +796,16 @@ namespace sknd
                 bool count_is_tensor = !count_is_null && is_tensor_expr(*component.loop->count, symbols);
                 if ( count_is_tensor )
                 {
+                    if ( repeats != nullptr && !repeats.is_literal() )
+                    {
+                        return Error(component.loop->count->position, "explicit loop count must not be tensor if implied loop count is dynamic");
+                    }
                     TRY_DECL(count, eval(*component.loop->count, symbols, as_tensor(graph), as_tensor_pack(graph)))
                     if ( !is_singular(count->shape) )
                     {
                         return Error(component.loop->count->position, "loop count must be a singular tensor, found tensor of shape %s",
                                      str(count->shape).c_str());
                     }
-                    inputs.push_back(count);
-                }
-                else if ( repeats != nullptr && repeats.is_literal() )
-                {
-                    auto count = make_constant(graph, repeats, Typename::Int);
                     inputs.push_back(count);
                 }
                 else
@@ -889,10 +886,6 @@ namespace sknd
                 if ( repeats != nullptr )
                 {
                     attribs.emplace("iters", repeats);
-                }
-                if ( !index.empty() )
-                {
-                    attribs.emplace("index", ValueExpr((str_t)index));
                 }
                 
                 std::vector<Graph*> subgraphs = { &body_graph };

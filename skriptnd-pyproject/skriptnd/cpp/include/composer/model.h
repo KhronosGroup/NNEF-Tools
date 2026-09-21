@@ -253,7 +253,14 @@ namespace sknd
             {
                 os << ", ";
             }
-            os << items[i].name();
+            if ( items[i] == nullptr )
+            {
+                os << '~';
+            }
+            else
+            {
+                os << items[i].name();
+            }
         }
         return os;
     }

@@ -137,7 +137,7 @@ class Tensor:
     @property
     def is_activation(self):
         # type: ()->bool
-        return self.data is None
+        return self.data is None and not self._variable
 
     @property
     def is_null(self):

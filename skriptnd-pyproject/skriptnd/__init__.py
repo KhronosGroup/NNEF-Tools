@@ -51,6 +51,7 @@ Tensor = _sknd.Tensor           # dataclass('Tensor', {
                                 #   'max_shape': Tuple[int],
                                 #   'quant': Dict[str, object]},
                                 #   'value': object,
+                                #   'variable': bool,
                                 # })
 TensorPack = _sknd.TensorPack   # dataclass('TensorPack', {
                                 #   'name': str,

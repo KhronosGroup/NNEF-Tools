@@ -224,28 +224,25 @@ class Converter(_Converter):
                         tensor.set_data(None)
 
     def _fix_loops(self, model):
-        body_graphs = {op.attribs['body_graph']: op.attribs
-                       for graph in model.graphs for op in graph.operations if op.type == 'do'}
-
-        for body, attribs in body_graphs.items():
-            nvars = attribs['nvars']
-            has_cond = 'cond_graph' in attribs
-
-            body.inputs = self.tupled(body.inputs[1], has_cond) + body.inputs[2:2+nvars] + (body.inputs[0],) + body.inputs[2+nvars:]
-
-            if not has_cond:
-                body.remove_operation(body.outputs[0].producer, unlink=True)
-
-            body.outputs = self.tupled(body.outputs[0], has_cond) + body.outputs[1:]
-
         for graph in model.graphs:
             for op in graph.operations:
                 if op.type == 'do':
                     nvars = op.attribs['nvars']
                     cond = op.attribs.get('cond_graph')
                     body = op.attribs.get('body_graph')
-                    if cond is not None:
+                    has_cond = cond is not None
+
+                    body.inputs = (self.tupled(body.inputs[1], cond is not None) + body.inputs[2:2 + nvars] +
+                                   (body.inputs[0],) + body.inputs[2 + nvars:])
+
+                    if not has_cond:
+                        body.remove_operation(body.outputs[0].producer, unlink=True)
+
+                    body.outputs = self.tupled(body.outputs[0], has_cond) + body.outputs[1:]
+
+                    if has_cond:
                         op.outputs = (Tensor(graph, name='', dtype=np.void, shape=()),) + op.outputs
+
                     op.internals = body.inputs[:nvars]
 
     @staticmethod
@@ -1148,9 +1145,8 @@ _Transforms = Converter.unpack_transforms({
                 'body_graph': '!body',
                 'body_inputs': '!list(range(int(has_cond) + num_deps + _implicit_input_count_ + 1))',
                 'iters': '!iters',
-                'index': '!body.inputs[0].name',
                 'pretest': '!True if has_cond else None',
-                'nvars': '!len(I) - (1 if has_cond else 2) - _implicit_input_count_',
+                'nvars': '!num_deps + int(has_cond)',
                 'nscans': 0,
             },
         ),
