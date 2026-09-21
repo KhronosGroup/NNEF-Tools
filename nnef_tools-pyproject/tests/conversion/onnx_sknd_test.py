@@ -2103,7 +2103,12 @@ class NetworkTestCases(TestEnv):
                                         input_shape=(1, 3, 224, 224), epsilon=1e-4)
 
     def test_mobilenet_v2(self):
-        self._test_conversion_from_file(self._network_folder + 'mobilenet_v2.onnx', epsilon=1e-4)
+        self._test_conversion_from_file(self._network_folder + 'mobilenet_v2.onnx',
+                                        epsilon=1e-4)
+
+    def test_mobilenet_v3(self):
+        self._test_conversion_from_file(self._network_folder + 'mobilenet_v3.onnx',
+                                        input_shape=(1, 3, 224, 224))
 
     def test_resnet50_v1(self):
         self._test_conversion_from_file(self._network_folder + 'resnet50_v1.onnx',
