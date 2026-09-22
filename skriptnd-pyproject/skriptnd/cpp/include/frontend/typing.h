@@ -194,9 +194,9 @@ namespace sknd
                         report_error(param.position, "implicitly defined shape/rank symbols are not allowed in input shape declaration");
                     }
                 }
-                else if ( !op.graph )
+                else
                 {
-                    report_error(param.position, "input shape can only be omitted for graphs");
+                    report_error(param.position, "input shape must be specified");
                 }
                 if ( param.rank && main )
                 {
@@ -241,11 +241,7 @@ namespace sknd
                     {
                         report_error(param.position, "packed inputs of main graph must have their pack sizes defined");
                     }
-                    if ( !param.shape )
-                    {
-                        report_error(param.position, "inputs of main graph must have their shape specified");
-                    }
-                    else
+                    if ( param.shape )
                     {
                         auto& shape = *param.shape;
                         if ( std::any_of(shape.extents.begin(), shape.extents.end(), []( const Extent& extent ){ return !extent.value; }) )
