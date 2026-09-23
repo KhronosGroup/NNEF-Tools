@@ -246,29 +246,31 @@ class Operation:
                  graph,             # type: Graph
                  type=None,         # type: typing.Optional[str]
                  name=None,         # type: typing.Optional[str]
-                 dtypes=None,       # type: typind.Dict[str, np.dtype]
+                 dtypes=None,       # type: typing.Dict[str, np.dtype]
                  attribs=None,      # type: typing.Dict[str, typing.Any]
-                 inputs=None,       # type: typing.Union[None, Tensor, _TensorListOrTuple]
-                 outputs=None,      # type: typing.Union[None, Tensor, _TensorListOrTuple]
-                 internals=None,    # type: typing.Union[None, _TensorListOrTuple]
+                 inputs=None,       # type: typing.Union[None, Tensor, typing.List[Tensor], typing.Tuple[Tensor]]
+                 outputs=None,      # type: typing.Union[None, Tensor, typing.List[Tensor], typing.Tuple[Tensor]]
+                 internals=None,    # type: typing.Union[None, Tensor, typing.List[Tensor], typing.Tuple[Tensor]]
+                 subgraphs=None,    # type: typing.List[Graph]
                  custom=False,      # type: bool
                  ):
         # type:(...)->None
         self._graph = graph
         self._inputs = tuple()
         self._outputs = tuple()
-        self.internals = list(internals) if internals is not None else []
 
         assert name is None or isinstance(name, str)
         if attribs is not None:
             assert isinstance(attribs, dict)
             assert all(isinstance(key, str) for key in six.iterkeys(attribs))
 
-        self.type = type                # type: typing.Optional[str]
-        self.name = name                # type: typing.Optional[str]
-        self.dtypes = dtypes or {}      # type: typing.Dict[str, np.dtype]
-        self.attribs = attribs or {}    # type: typing.Dict[str, typing.Any]
-        self.custom = custom            # type: bool
+        self.type = type                        # type: typing.Optional[str]
+        self.name = name                        # type: typing.Optional[str]
+        self.dtypes = dtypes or {}              # type: typing.Dict[str, np.dtype]
+        self.attribs = attribs or {}            # type: typing.Dict[str, typing.Any]
+        self.subgraphs = subgraphs or []        # type: typing.List[Graph]
+        self.internals = list(internals or [])    # type: typing.List[Tensor]
+        self.custom = custom                    # type: bool
 
         assert isinstance(graph, Graph)
         graph._operations.append(self)

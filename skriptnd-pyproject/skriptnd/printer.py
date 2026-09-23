@@ -143,7 +143,7 @@ class Printer:
                 for op in target.operations:
                     text += "\t\t\t"
                     text += self._format_operation(op.outputs, op.name, op.dtypes.values(),
-                                                   op.attribs, op.inputs, op.internals) + ";\n"
+                                                   op.attribs, op.inputs, op.internals, op.subgraphs) + ";\n"
                 text += '\t\t\tyield ' + ', '.join(self._make_id(output.name) for output in target.outputs) + ';\n'
                 text += '\t\t}'
                 return text
@@ -165,7 +165,7 @@ class Printer:
             text += " as " + alias
         return text
 
-    def _format_operation(self, results, name, dtypes, attribs, args, locals, alias=None):
+    def _format_operation(self, results, name, dtypes, attribs, args, locals, subgraphs, alias=None):
         repeats = None
         if name == 'do':
             nvars = attribs['nvars']
@@ -179,8 +179,9 @@ class Printer:
         text += " = "
 
         if name == 'if':
-            conditions = attribs['cond_graphs']
-            branches = attribs['branch_graphs']
+            branch_count = len(subgraphs) // 2
+            conditions = subgraphs[:branch_count]
+            branches = subgraphs[branch_count:]
             cond_input_indices = attribs['cond_inputs']
             branch_input_indices = attribs['branch_inputs']
             cond_input_offset = 0
@@ -200,10 +201,10 @@ class Printer:
                 if isinstance(branch, _sknd.Graph) else None
             text += ' else ' + self._format_subgraph(branch, branch_inputs)
         elif name == 'do':
-            condition = attribs.get('cond_graph')
-            cond_input_indices = attribs.get('cond_inputs')
-            body = attribs['body_graph']
+            body = subgraphs[0]
+            condition = subgraphs[1] if len(subgraphs) > 1 else None
             body_input_indices = attribs['body_inputs']
+            cond_input_indices = attribs.get('cond_inputs')
             nvars = attribs['nvars']
             nscans = attribs['nscans']
             pretest = attribs.get('pretest', False)
@@ -305,7 +306,7 @@ class Printer:
 
         print("\t@compose {", file=file)
         for op in graph.operations:
-            print("\t\t" + self._format_operation(op.outputs, op.name, op.dtypes.values(), op.attribs, op.inputs, op.internals)
+            print("\t\t" + self._format_operation(op.outputs, op.name, op.dtypes.values(), op.attribs, op.inputs, op.internals, op.subgraphs)
                   + ";", file=file)
         print("\t}", file=file)
 

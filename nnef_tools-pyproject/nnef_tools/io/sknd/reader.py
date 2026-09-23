@@ -36,7 +36,7 @@ def _build_tensor_pack(graph, sknd_pack, tensor_map):
                       items=[remap_tensor(item, tensor_map) for item in sknd_pack])
 
 
-def _build_operation(graph, sknd_operation, tensor_map):
+def _build_operation(graph, sknd_operation, tensor_map, graph_map):
     attribs = dict(sknd_operation.attribs)
     dtypes = {k: sknd.DtypeToNumpy[t] for k, t in sknd_operation.dtypes.items()}
 
@@ -46,6 +46,7 @@ def _build_operation(graph, sknd_operation, tensor_map):
     inputs = tuple(remap_tensor(tensor, tensor_map) for tensor in sknd_operation.inputs)
     outputs = tuple(remap_tensor(tensor, tensor_map) for tensor in sknd_operation.outputs)
     internals = list(remap_tensor(tensor, tensor_map) for tensor in sknd_operation.internals)
+    subgraphs = list(graph_map[graph.name] for graph in sknd_operation.subgraphs)
 
     return Operation(graph,
                      type=sknd_operation.name,
@@ -53,12 +54,12 @@ def _build_operation(graph, sknd_operation, tensor_map):
                      attribs=attribs,
                      inputs=inputs,
                      outputs=outputs,
-                     internals=internals)
+                     internals=internals,
+                     subgraphs=subgraphs)
 
 
-def _build_graph(model, sknd_graph, graph_map, tensor_map):
-    parent = graph_map[sknd_graph.parent.name] if sknd_graph.parent else None
-    graph = Graph(model, parent=parent, name=sknd_graph.name)
+def _build_graph(sknd_graph, graph_map, tensor_map):
+    graph = graph_map[sknd_graph.name]
 
     for tensor in sknd_graph.tensors:
         tensor_map[tensor.name] = _build_tensor(graph, tensor)
@@ -77,7 +78,7 @@ def _build_graph(model, sknd_graph, graph_map, tensor_map):
     graph.outputs = tuple(remap_tensor(output, tensor_map) for output in sknd_graph.outputs)
 
     for operation in sknd_graph.operations:
-        _build_operation(graph, operation, tensor_map)
+        _build_operation(graph, operation, tensor_map, graph_map)
 
     return graph
 
@@ -87,7 +88,10 @@ def _build_model(sknd_model):
     tensor_map = {}
     graph_map = {}
     for graph in sknd_model.graphs:
-        graph_map[graph.name] = _build_graph(model, graph, graph_map, tensor_map)
+        parent = graph_map[graph.parent.name] if graph.parent else None
+        graph_map[graph.name] = Graph(model, parent=parent, name=graph.name)
+    for graph in sknd_model.graphs:
+        _build_graph(graph, graph_map, tensor_map)
     return model
 
 

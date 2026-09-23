@@ -329,9 +329,10 @@ class Converter:
         inputs = tuple(self._map_tensor(tensor) for tensor in op.inputs)
         outputs = tuple(self._map_tensor(tensor) for tensor in op.outputs)
         internals = list(self._map_tensor(tensor) for tensor in op.internals)
+        subgraphs = list(self._graph_map[graph] for graph in op.subgraphs)
 
         return Operation(self._graph, type=op.type, name=op.name, dtypes=op.dtypes, attribs=op.attribs,
-                         inputs=inputs, outputs=outputs, internals=internals, custom=True)
+                         inputs=inputs, outputs=outputs, internals=internals, subgraphs=subgraphs, custom=True)
 
     def _remap_attribs(self, attribs, defaults, inputs, outputs, op_type, op_name, version):
         attribs = {key: self._tensor_map[value] if isinstance(value, Tensor) else

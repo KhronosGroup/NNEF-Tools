@@ -930,21 +930,20 @@ def _format_graphs(graphs, indent, context):
     for graph in graphs:
         for op in graph.operations:
             if op.name == 'if':
-                for subgraph in op.attribs['cond_graphs']:
+                branch_count = len(op.subgraphs) // 2
+                for subgraph in op.subgraphs[:branch_count]:
                     cond_graphs.add(subgraph.name)
-                for subgraph in op.attribs['branch_graphs']:
+                for subgraph in op.subgraphs[branch_count:]:
                     body_graphs.add(subgraph.name)
             elif op.name == 'do':
-                subgraph = op.attribs.get('cond_graph')
-                if subgraph:
-                    cond_graphs.add(subgraph.name)
-                subgraph = op.attribs.get('body_graph')
+                subgraph = op.subgraphs[0]
                 body_graphs.add(subgraph.name)
+                if len(op.subgraphs) > 1:
+                    subgraph = op.subgraphs[1]
+                    cond_graphs.add(subgraph.name)
 
     return "\n\n\t".join(_format_graph(graph, i, indent, context, graph.name in cond_graphs)
-                         for i, graph in enumerate(graphs)
-                         if not (graph.name in cond_graphs and graph.name not in body_graphs and _is_trivial_graph(graph))
-                         and not graph.parent)
+                         for i, graph in enumerate(graphs) if not graph.parent)
 
 
 def _format_control_flow(op, indent, context):
@@ -992,8 +991,9 @@ def _format_copy(op, indent):
 
 
 def _format_if(op, indent, context):
-    conditions = op.attribs['cond_graphs']
-    branches = op.attribs['branch_graphs']
+    branch_count = len(op.subgraphs) // 2
+    conditions = op.subgraphs[:branch_count]
+    branches = op.subgraphs[branch_count:]
     cond_input_indices = op.attribs['cond_inputs']
     branch_input_indices = op.attribs['branch_inputs']
     cond_input_offset = 0
@@ -1025,11 +1025,11 @@ def _format_tensor_ref(tensor, braces=False):
 
 
 def _format_do(op, indent, context):
-    condition = op.attribs.get('cond_graph')
-    pretest = op.attribs.get('pretest', True)
-    body = op.attribs['body_graph']
+    body = op.subgraphs[0]
+    condition = op.subgraphs[1] if len(op.subgraphs) > 1 else None
     nvars = op.attribs['nvars']
     nscans = op.attribs['nscans']
+    pretest = op.attribs.get('pretest', True)
     iters = op.inputs[nvars+nscans] or op.attribs.get('iters')
     index = op.internals[nvars+nscans] if len(op.internals) > nvars + nscans else None
 

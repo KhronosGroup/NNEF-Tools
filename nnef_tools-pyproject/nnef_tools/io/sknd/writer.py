@@ -40,7 +40,11 @@ def _build_model(model):
 
     graph_map = {}
     for graph in model.graphs:
-        graph_map[graph.name] = _build_graph(graph, graph_map, tensor_map)
+        parent = graph_map[graph.parent.name] if graph.parent else None
+        graph_map[graph.name] = sknd.Graph(parent=parent, name=graph.name)
+
+    for graph in model.graphs:
+        _build_graph(graph, graph_map, tensor_map)
 
     sknd_model = sknd.Model(name=model.name, graphs=[graph_map[graph.name] for graph in model.graphs])
 
@@ -77,14 +81,12 @@ def _build_tensor_pack(pack, tensor_map):
 
 
 def _build_graph(graph, graph_map, tensor_map):
-    parent = graph_map[graph.parent.name] if graph.parent else None
-    sknd_graph = sknd.Graph(parent=parent,
-                            name=graph.name,
-                            inputs=tuple(remap_tensor(input, tensor_map) for input in graph.inputs),
-                            outputs=tuple(remap_tensor(output, tensor_map) for output in graph.outputs),
-                            operations=[_build_operation(op, tensor_map) for op in graph.operations],
-                            tensors=[tensor_map[tensor.name] for tensor in graph.tensors],
-                            packs=[])
+    sknd_graph = graph_map[graph.name]
+
+    sknd_graph.inputs = tuple(remap_tensor(input, tensor_map) for input in graph.inputs)
+    sknd_graph.outputs = tuple(remap_tensor(output, tensor_map) for output in graph.outputs)
+    sknd_graph.operations = [_build_operation(op, tensor_map, graph_map) for op in graph.operations]
+    sknd_graph.tensors = [tensor_map[tensor.name] for tensor in graph.tensors]
 
     for op in sknd_graph.operations:
         for key, value in op.attribs.items():
@@ -98,7 +100,7 @@ def _build_graph(graph, graph_map, tensor_map):
     return sknd_graph
 
 
-def _build_operation(operation, tensor_map):
+def _build_operation(operation, tensor_map, graph_map):
     attribs = {k: list(v) if isinstance(v, list) else v for k, v in operation.attribs.items() if v is not None}
     dtypes = {k: sknd.DtypeFromNumpy[t] for k, t in operation.dtypes.items()}
 
@@ -108,9 +110,12 @@ def _build_operation(operation, tensor_map):
     inputs = tuple(remap_tensor(tensor, tensor_map) for tensor in operation.inputs)
     outputs = tuple(remap_tensor(tensor, tensor_map) for tensor in operation.outputs)
     internals = list(remap_tensor(tensor, tensor_map) for tensor in operation.internals)
+    subgraphs = list(remap_tensor(graph, tensor_map) if isinstance(graph, Tensor) else graph_map[graph.name]
+                     for graph in operation.subgraphs)
 
     return sknd.Operation(name=operation.type, dtypes=dtypes, attribs=attribs,
-                          inputs=inputs, outputs=outputs, internals=internals)
+                          inputs=inputs, outputs=outputs, internals=internals,
+                          subgraphs=subgraphs)
 
 
 class Writer(object):

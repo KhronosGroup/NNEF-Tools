@@ -142,8 +142,8 @@ namespace sknd
         
     private:
         
-        Result<void> make_graph( Model& model, const Operator& op, const std::string& graph_name, const Dict<const Operator*>& operators,
-                                const Dict<Typename>& dtypes, const Dict<ValueExpr>& attribs )
+        Result<Graph*> make_graph( Model& model, const Operator& op, const std::string& graph_name, const Dict<const Operator*>& operators,
+                                  const Dict<Typename>& dtypes, const Dict<ValueExpr>& attribs )
         {
             Dict<Symbol> symbols;
             
@@ -243,7 +243,7 @@ namespace sknd
                 TRY_CALL(eval_quantization(graph, op.quantizations, symbols, operators))
             }
             
-            return {};
+            return &graph;
         }
         
         Graph& new_graph( Model& model, Graph* parent, const std::string& name )
@@ -493,8 +493,8 @@ namespace sknd
             
             if ( !component.branches.empty() )
             {
-                std::vector<ValueExpr> condition_graphs;
-                std::vector<ValueExpr> branch_graphs;
+                std::vector<Graph*> condition_graphs;
+                std::vector<Graph*> branch_graphs;
                 
                 std::vector<TensorRef> inputs;
                 std::vector<TensorRef> outputs;
@@ -534,35 +534,33 @@ namespace sknd
                     }
                     if ( !shortcut )
                     {
-                        TRY_DECL(subgraph_idx, subgraph_inputs, compose_subgraph(condition, operators, symbols, model, graph, scope, label))
-                        auto& subgraph = *model.graphs[subgraph_idx];
+                        TRY_DECL(subgraph, subgraph_inputs, compose_subgraph(condition, operators, symbols, model, graph, scope, label))
                         
-                        auto& result = *subgraph.outputs.front();
+                        auto& result = *subgraph->outputs.front();
                         if ( !is_singular(result.shape) )
                         {
                             return Error(position(condition), "condition must be a singular tensor, found tensor of shape %s",
                                          str(result.shape).c_str());
                         }
                         
-                        condition_graphs.push_back((int_t)subgraph_idx);
+                        condition_graphs.push_back(subgraph);
                         cond_inputs.insert(cond_inputs.end(), subgraph_inputs.begin(), subgraph_inputs.end());
                         add_all(inputs, subgraph_inputs);
                     }
                     
-                    TRY_DECL(subgraph_idx, subgraph_inputs, compose_subgraph(consequent, operators, symbols, model, graph, scope, label))
-                    auto& subgraph = *model.graphs[subgraph_idx];
+                    TRY_DECL(subgraph, subgraph_inputs, compose_subgraph(consequent, operators, symbols, model, graph, scope, label))
                     
-                    branch_graphs.push_back((int_t)subgraph_idx);
+                    branch_graphs.push_back(subgraph);
                     
                     if ( branch_graphs.size() == 1 )
                     {
-                        outputs = duplicate_tensors(graph, subgraph.outputs);
+                        outputs = duplicate_tensors(graph, subgraph->outputs);
                     }
                     else
                     {
-                        TRY_CALL(update_branch_output_shapes(outputs, subgraph.outputs, graph, component.position))
+                        TRY_CALL(update_branch_output_shapes(outputs, subgraph->outputs, graph, component.position))
                     }
-                    collect_local_placeholder_mapping(subgraph.inputs, subgraph_inputs, local_placeholder_mapping);
+                    collect_local_placeholder_mapping(subgraph->inputs, subgraph_inputs, local_placeholder_mapping);
                     
                     branch_inputs.insert(branch_inputs.end(), subgraph_inputs.begin(), subgraph_inputs.end());
                     add_all(inputs, subgraph_inputs);
@@ -580,16 +578,12 @@ namespace sknd
                     }
                     else                                // add else branch as well
                     {
-                        TRY_DECL(subgraph_idx, subgraph_inputs, compose_subgraph(component.operation, operators, symbols, model, graph, scope, label))
-                        auto& subgraph = *model.graphs[subgraph_idx];
+                        TRY_DECL(subgraph, subgraph_inputs, compose_subgraph(component.operation, operators, symbols, model, graph, scope, label))
                         
-                        branch_graphs.push_back((int_t)subgraph_idx);
+                        branch_graphs.push_back(subgraph);
                         
-                        auto& graph_inputs = subgraph.inputs;
-                        auto& graph_outputs = subgraph.outputs;
-                        
-                        TRY_CALL(update_branch_output_shapes(outputs, graph_outputs, graph, component.position))
-                        collect_local_placeholder_mapping(graph_inputs, subgraph_inputs, local_placeholder_mapping);
+                        TRY_CALL(update_branch_output_shapes(outputs, subgraph->outputs, graph, component.position))
+                        collect_local_placeholder_mapping(subgraph->inputs, subgraph_inputs, local_placeholder_mapping);
                         
                         branch_inputs.insert(branch_inputs.end(), subgraph_inputs.begin(), subgraph_inputs.end());
                         add_all(inputs, subgraph_inputs);
@@ -633,20 +627,18 @@ namespace sknd
                 
                 const Dict<ValueExpr> attribs =
                 {
-                    { "cond_graphs", ValueExpr(condition_graphs.data(), condition_graphs.size(), Typename::Int) },
                     { "cond_inputs", subgraph_input_mapping(inputs, cond_inputs) },
-                    { "branch_graphs", ValueExpr(branch_graphs.data(), branch_graphs.size(), Typename::Int) },
                     { "branch_inputs", subgraph_input_mapping(inputs, branch_inputs) },
                 };
                 
                 std::vector<Graph*> subgraphs;
-                for ( auto& idx : condition_graphs )
+                for ( auto& graph : condition_graphs )
                 {
-                    subgraphs.push_back(model.graphs[idx.as_int()].get());
+                    subgraphs.push_back(graph);
                 }
-                for ( auto& idx : branch_graphs )
+                for ( auto& graph : branch_graphs )
                 {
-                    subgraphs.push_back(model.graphs[idx.as_int()].get());
+                    subgraphs.push_back(graph);
                 }
                 
                 graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, std::move(subgraphs), {}, {}, true });
@@ -756,11 +748,10 @@ namespace sknd
                     inputs.push_back(TensorRef(nullptr));
                 }
                 
-                TRY_DECL(body_graph_idx, body_inputs, compose_subgraph(component.operation, operators, symbols, model, graph, scope, label))
-                auto& body_graph = *model.graphs[body_graph_idx];
+                TRY_DECL(body_graph, body_inputs, compose_subgraph(component.operation, operators, symbols, model, graph, scope, label))
                 
                 Dict<ValueExpr> local_placeholder_mapping;
-                collect_local_placeholder_mapping(body_graph.inputs, body_inputs, local_placeholder_mapping);
+                collect_local_placeholder_mapping(body_graph->inputs, body_inputs, local_placeholder_mapping);
                 for ( auto& [iden, expr] : local_placeholder_mapping )
                 {
                     resolve_access_to_tensors(expr, locals);
@@ -769,10 +760,10 @@ namespace sknd
                 add_all(locals, body_inputs);
                 
                 auto& context = _contexts.at(graph.name);
-                std::vector<TensorRef> outputs(body_graph.outputs.size());
+                std::vector<TensorRef> outputs(body_graph->outputs.size());
                 for ( size_t i = 0; i < component.loop->carries.size(); ++i )
                 {
-                    outputs[i] = make_tensor_like(graph, body_graph.outputs[i]);
+                    outputs[i] = make_tensor_like(graph, body_graph->outputs[i]);
                     Shape shape = outputs[i].shape();
                     resolve_local_placeholders(shape, outputs[i].max_shape(), local_placeholder_mapping);
                     outputs[i].shape() = canonical(shape);
@@ -801,7 +792,7 @@ namespace sknd
                     
                     for ( size_t i = component.loop->carries.size(); i < outputs.size(); ++i )
                     {
-                        auto& output = *body_graph.outputs[i];
+                        auto& output = *body_graph->outputs[i];
                         
                         auto shape = output.shape;
                         resolve_local_placeholders(shape, output.max_shape, local_placeholder_mapping);
@@ -822,7 +813,6 @@ namespace sknd
                 {
                     { "nvars", ValueExpr((int_t)nvars) },
                     { "nscans", ValueExpr((int_t)nscans) },
-                    { "body_graph", ValueExpr((int_t)body_graph_idx) },
                     { "body_inputs", subgraph_input_mapping(locals, body_inputs) },
                 };
                 
@@ -831,17 +821,16 @@ namespace sknd
                     attribs.emplace("iters", repeats);
                 }
                 
-                std::vector<Graph*> subgraphs = { &body_graph };
+                std::vector<Graph*> subgraphs = { body_graph };
                 
                 if ( component.loop->condition )
                 {
                     auto& condition = *component.loop->condition;
-                    TRY_DECL(cond_graph_idx, cond_inputs, compose_subgraph(condition, operators, symbols, model, graph, scope, label))
-                    auto& cond_graph = *model.graphs[cond_graph_idx];
+                    TRY_DECL(cond_graph, cond_inputs, compose_subgraph(condition, operators, symbols, model, graph, scope, label))
                     
                     add_all(locals, cond_inputs);
                     
-                    auto& cond_result = *cond_graph.outputs.front();
+                    auto& cond_result = *cond_graph->outputs.front();
                     if ( !is_singular(cond_result.shape) )
                     {
                         return Error(position(condition), "condition must be a singular tensor, found tensor of shape %s",
@@ -849,10 +838,9 @@ namespace sknd
                     }
                     
                     attribs.emplace("pretest", ValueExpr((bool_t)component.loop->pretest));
-                    attribs.emplace("cond_graph", ValueExpr((int_t)cond_graph_idx));
                     attribs.emplace("cond_inputs", subgraph_input_mapping(locals, cond_inputs));
                     
-                    subgraphs.push_back(&cond_graph);
+                    subgraphs.push_back(cond_graph);
                 }
                 
                 inputs.insert(inputs.end(), locals.begin() + inputs.size(), locals.end());
@@ -1149,12 +1137,10 @@ namespace sknd
             }
         }
         
-        Result<std::tuple<size_t,std::vector<TensorRef>>>
+        Result<std::tuple<Graph*,std::vector<TensorRef>>>
         compose_subgraph( const Callable& callable, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
                          Model& model, Graph& parent, const std::optional<std::string>& scope, const std::string& auto_label )
         {
-            const size_t graph_idx = model.graphs.size();
-            
             const std::string label = callable.is<Invocation>() ? callable.as<Invocation>().label : callable.as<Region>().label;
             
             if ( callable.is<Invocation>() )
@@ -1176,16 +1162,16 @@ namespace sknd
                         const GraphInstance& instance = it->second;
                         if ( instance.types == types && instance.attribs == attribs )
                         {
-                            return std::make_tuple(instance.index, inputs);
+                            return std::make_tuple(instance.graph, inputs);
                         }
                     }
                     
                     const std::string graph_name = scope && !label.empty() ? *scope + label : invocation.target + next_graph_name();
-                    TRY_CALL(make_graph(model, op, graph_name, operators, types, attribs))
+                    TRY_DECL(graph, make_graph(model, op, graph_name, operators, types, attribs))
                     
-                    _instances.emplace(graph_name, GraphInstance{ graph_idx, std::move(types), std::move(attribs) });
+                    _instances.emplace(graph_name, GraphInstance{ graph, std::move(types), std::move(attribs) });
                     
-                    return std::make_tuple(graph_idx, std::move(inputs));
+                    return std::make_tuple(graph, std::move(inputs));
                 }
             }
             
@@ -1198,7 +1184,7 @@ namespace sknd
             graph.inputs = inputs;
             graph.outputs = std::move(outputs);
             
-            return std::make_tuple(graph_idx, std::move(inputs));
+            return std::make_tuple(&graph, std::move(inputs));
         }
         
         Result<std::tuple<std::vector<TensorRef>,std::vector<TensorRef>>>
@@ -4681,7 +4667,7 @@ namespace sknd
         
         struct GraphInstance
         {
-            size_t index = 0;
+            Graph* graph;
             Dict<Typename> types;
             Dict<ValueExpr> attribs;
         };

@@ -147,6 +147,7 @@ class Converter(_Converter):
         self._fix_constant_names(model)
         self._fix_constants_in_dependent_graphs(model)
         self._fix_loops(model)
+        self._fix_branches(model)
         self._fix_shape_expr_args(model)
         generate_missing_tensor_names_from_op_type(model)
         ensure_valid_ids(model)
@@ -244,6 +245,26 @@ class Converter(_Converter):
                         op.outputs = (Tensor(graph, name='', dtype=np.void, shape=()),) + op.outputs
 
                     op.internals = body.inputs[:nvars]
+
+                    op.subgraphs.append(body)
+                    if has_cond:
+                        op.subgraphs.append(cond)
+
+                    del op.attribs['body_graph']
+                    if has_cond:
+                        del op.attribs['cond_graph']
+
+    def _fix_branches(self, model):
+        for graph in model.graphs:
+            for op in graph.operations:
+                if op.type == 'if':
+                    cond_graphs = op.attribs['cond_graphs']
+                    branch_graphs = op.attribs['branch_graphs']
+
+                    op.subgraphs = cond_graphs + branch_graphs
+
+                    del op.attribs['cond_graphs']
+                    del op.attribs['branch_graphs']
 
     @staticmethod
     def _interleave(items):
