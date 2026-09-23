@@ -172,9 +172,9 @@ namespace sknd
             {
                 auto& param = op.inputs[(*order)[i]];
                 declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats.value, Declaration::Input);
-                if ( param.repeats.value && (!op.graph || param.repeats.bound) )
+                if ( param.repeats.value )
                 {
-                    if ( main )
+                    if ( op.graph )
                     {
                         check_repeat_bound(decls, param.repeats.value, param.repeats.bound);
                     }
@@ -184,7 +184,7 @@ namespace sknd
                 if ( param.shape )
                 {
                     auto& shape = *param.shape;
-                    if ( main )
+                    if ( op.graph )
                     {
                         check_shape_component_bounds(decls, shape);
                     }
@@ -198,9 +198,9 @@ namespace sknd
                 {
                     report_error(param.position, "input shape must be specified");
                 }
-                if ( param.rank && main )
+                if ( param.rank && op.graph )
                 {
-                    report_error(param.rank->position, "capturing input rank in main graph is not allowed");
+                    report_error(param.rank->position, "capturing input rank in graph is not allowed");
                 }
             }
             for ( auto& [iden, decl] : decls )
@@ -217,6 +217,10 @@ namespace sknd
                 check_param(param, decls, Lexer::Block::Attrib);
                 if ( op.graph )
                 {
+                    if ( param.type.optional )
+                    {
+                        report_error(param.position, "graph attribute must not be optional");
+                    }
                     if ( param.type.dynamic )
                     {
                         report_error(param.position, "graph attribute must not be dynamic");
@@ -234,21 +238,6 @@ namespace sknd
                 if ( param.shape )
                 {
                     check_shape_components(decls, *param.shape, param.repeats.value, false, false);
-                }
-                if ( main )
-                {
-                    if ( param.type.packed && !param.repeats.value )
-                    {
-                        report_error(param.position, "packed inputs of main graph must have their pack sizes defined");
-                    }
-                    if ( param.shape )
-                    {
-                        auto& shape = *param.shape;
-                        if ( std::any_of(shape.extents.begin(), shape.extents.end(), []( const Extent& extent ){ return !extent.value; }) )
-                        {
-                            report_error(shape.position, "inputs of main graph must have their shape components specified");
-                        }
-                    }
                 }
             }
             for ( size_t i = 0; i < op.usings.size(); ++i )
@@ -659,7 +648,7 @@ namespace sknd
                 auto& iden = find_affine_id(*repeats);
                 if ( !iden.empty() && !decls.count(iden) && !bound )
                 {
-                    report_error(repeats->position, "upper bound must be specified in main graph for dynamic pack size");
+                    report_error(repeats->position, "upper bound must be specified in graph for dynamic pack size");
                 }
             }
         }
