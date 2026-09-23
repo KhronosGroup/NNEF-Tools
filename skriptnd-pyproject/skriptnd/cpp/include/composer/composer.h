@@ -49,7 +49,7 @@ namespace sknd
     {
         using Evaluation::has_undefined_symbols;
         
-        struct SubgraphContext;
+        struct GraphContext;
         
     private:
         
@@ -105,7 +105,7 @@ namespace sknd
         void reset()
         {
             _contexts.clear();
-            _subgraphs.clear();
+            _instances.clear();
             _placeholders.clear();
             _trace.clear();
             _next_tensor_idx = 1;
@@ -248,7 +248,7 @@ namespace sknd
         
         Graph& new_graph( Model& model, Graph* parent, const std::string& name )
         {
-            _contexts[name] = SubgraphContext();
+            _contexts[name] = GraphContext();
             model.graphs.push_back(std::make_unique<Graph>(Graph{ parent, name }));
             return *model.graphs.back();
         }
@@ -1116,43 +1116,6 @@ namespace sknd
             return std::nullopt;
         }
         
-        bool shapes_equal( const std::vector<TensorRef>& tensors1, const std::vector<TensorRef>& tensors2 )
-        {
-            assert(tensors1.size() == tensors2.size());
-            for ( size_t i = 0; i < tensors1.size(); ++i )
-            {
-                if ( !shapes_equal(tensors1[i], tensors2[i]) )
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-        
-        bool shapes_equal( const TensorRef& tensor1, const TensorRef& tensor2 )
-        {
-            assert(tensor1.packed() == tensor2.packed());
-            if ( tensor1.packed() )
-            {
-                if ( tensor1.max_size() != tensor2.max_size() )
-                {
-                    return false;
-                }
-                for ( size_t i = 0; i < tensor1.max_size(); ++i )
-                {
-                    if ( tensor1[i].shape != tensor2[i].shape )
-                    {
-                        return false;
-                    }
-                }
-                return true;
-            }
-            else
-            {
-                return tensor1->shape == tensor2->shape;
-            }
-        }
-        
         Result<std::tuple<Dict<ValueExpr>,std::vector<TensorRef>,std::vector<TensorRef>>>
         compose_callable( const Callable& callable, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
                          Model& model, Graph& graph, const std::optional<std::string>& scope, const std::string& auto_label )
@@ -1201,46 +1164,26 @@ namespace sknd
                 
                 if ( op.graph )
                 {
-                    const std::string graph_name = label.empty() ? invocation.target : scope ? *scope + label : next_graph_name();
-                    
                     TRY_DECL(types, eval_generic_types(op, invocation.dtypes, invocation.attribs, invocation.args, symbols, invocation.position))
                     Dict<Symbol> locals = types_as_symbols(types);
                     TRY_DECL(inputs, eval_inputs(op.inputs, invocation.args, symbols, locals, parent))
                     TRY_DECL(attribs, eval_attribs(op.attribs, invocation.attribs, symbols, locals))
                     TRY_CALL(eval_deferred_attribs(op.attribs, invocation.attribs, invocation.position, symbols, locals, attribs))
                     
-                    auto it = _subgraphs.find(graph_name);
-                    if ( it != _subgraphs.end() )
+                    auto range = _instances.equal_range(invocation.target);
+                    for ( auto it = range.first; it != range.second; ++it )
                     {
-                        const SubgraphInfo& bi = it->second;
-                        const Graph& graph = *model.graphs[bi.index];
-                        
-                        if ( bi.types != types )
+                        const GraphInstance& instance = it->second;
+                        if ( instance.types == types && instance.attribs == attribs )
                         {
-                            return Error(invocation.position, "graph called with different generic types from previous invocation at [%d,%d]; "
-                                                              "to call the same graph with different generic types, it must be labelled",
-                                         (int)bi.position.line, (int)bi.position.column);
+                            return std::make_tuple(instance.index, inputs);
                         }
-                        
-                        if ( bi.attribs != attribs )
-                        {
-                            return Error(invocation.position, "graph called with different attributes from previous invocation at [%d,%d]; "
-                                                              "to call the same graph with different attributes, it must be labelled",
-                                         (int)bi.position.line, (int)bi.position.column);
-                        }
-                        
-                        if ( !shapes_equal(inputs, graph.inputs) )
-                        {
-                            return Error(invocation.position, "graph called with different input shapes from previous invocation at [%d,%d]; "
-                                                              "to call the same graph with different input shapes, it must be labelled",
-                                         (int)bi.position.line, (int)bi.position.column);
-                        }
-                        return std::make_tuple(bi.index, inputs);
                     }
                     
+                    const std::string graph_name = scope && !label.empty() ? *scope + label : invocation.target + next_graph_name();
                     TRY_CALL(make_graph(model, op, graph_name, operators, types, attribs))
                     
-                    _subgraphs.emplace(graph_name, SubgraphInfo{ graph_idx, std::move(types), std::move(attribs), invocation.position });
+                    _instances.emplace(graph_name, GraphInstance{ graph_idx, std::move(types), std::move(attribs) });
                     
                     return std::make_tuple(graph_idx, std::move(inputs));
                 }
@@ -1349,7 +1292,7 @@ namespace sknd
             return std::make_tuple(std::vector(inputs.begin(), inputs.end()), std::move(outputs));
         }
         
-        void save_shapes_to_context( SubgraphContext& context, const TensorRef& tensor, const Shape& shape, const ValueExpr& size )
+        void save_shapes_to_context( GraphContext& context, const TensorRef& tensor, const Shape& shape, const ValueExpr& size )
         {
             context.shapes[tensor] = shape;
             if ( tensor.packed() )
@@ -4736,15 +4679,14 @@ namespace sknd
         
     private:
         
-        struct SubgraphInfo
+        struct GraphInstance
         {
             size_t index = 0;
             Dict<Typename> types;
             Dict<ValueExpr> attribs;
-            Position position;
         };
         
-        struct SubgraphContext
+        struct GraphContext
         {
             Dict<TensorRef> consts;
             std::unordered_map<Tensors,TensorPack*> packs;
@@ -4752,12 +4694,15 @@ namespace sknd
             std::unordered_map<TensorRef,ValueExpr> sizes;
         };
         
+        template<typename T>
+        using MultiDict = std::multimap<std::string,T>;
+        
     private:
         
         unsigned _flags;
         const ErrorCallback _error;
-        Dict<SubgraphContext> _contexts;
-        Dict<SubgraphInfo> _subgraphs;
+        Dict<GraphContext> _contexts;
+        MultiDict<GraphInstance> _instances;
         Dict<ValueExpr> _placeholders;
         StackTrace _trace;
         size_t _next_tensor_idx;

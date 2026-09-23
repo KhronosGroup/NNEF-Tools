@@ -461,39 +461,42 @@ namespace sknd
         
         for ( auto& subgraph : op.subgraphs )
         {
-            os << indentation << '(' << subgraph->inputs << ')';
-            
-            bool has_constants = std::any_of(subgraph->tensors.begin(), subgraph->tensors.end(),
-                                             []( const auto& tensor ){ return tensor->value != nullptr; });
-            if ( has_constants )
+            if ( subgraph->parent )
             {
-                os << '[';
-                bool first = true;
-                for ( auto& tensor : subgraph->tensors )
+                os << indentation << '(' << subgraph->inputs << ')';
+                
+                bool has_constants = std::any_of(subgraph->tensors.begin(), subgraph->tensors.end(),
+                                                 []( const auto& tensor ){ return tensor->value != nullptr; });
+                if ( has_constants )
                 {
-                    if ( tensor->value != nullptr )
+                    os << '[';
+                    bool first = true;
+                    for ( auto& tensor : subgraph->tensors )
                     {
-                        if ( !first )
+                        if ( tensor->value != nullptr )
                         {
-                            os << ", ";
+                            if ( !first )
+                            {
+                                os << ", ";
+                            }
+                            os << *tensor;
+                            first = false;
                         }
-                        os << *tensor;
-                        first = false;
                     }
+                    os << ']';
                 }
-                os << ']';
+                
+                os << std::endl;
+                os << indentation << '{' << std::endl;
+                
+                for ( auto& op : subgraph->operations )
+                {
+                    os << sknd::indent(indent + 1) << op;
+                }
+                
+                os << indentation << '\t' << "yield " << subgraph->outputs << std::endl;
+                os << indentation << '}' << std::endl;
             }
-            
-            os << std::endl;
-            os << indentation << '{' << std::endl;
-            
-            for ( auto& op : subgraph->operations )
-            {
-                os << sknd::indent(indent + 1) << op;
-            }
-            
-            os << indentation << '\t' << "yield " << subgraph->outputs << std::endl;
-            os << indentation << '}' << std::endl;
         }
         
         if ( op.subgraphs.empty() && !op.intrinsic )
