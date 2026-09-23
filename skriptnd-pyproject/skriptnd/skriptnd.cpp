@@ -374,7 +374,7 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
         {
             auto& reference = expr.as_reference();
             PyObject* name = buildPyStr(reference.name);
-            auto it = context.subexprs.find(reference.target);
+            auto it = context.subexprs.find(reference.target.get());
             if ( it == context.subexprs.end() )
             {
                 throw std::runtime_error("Could not map sub-expression '" + reference.name + "' from C++ to Python");
@@ -660,17 +660,21 @@ static PyObject* buildPyAttribs( const std::map<std::string,sknd::ValueExpr>& it
     return dict;
 }
 
-static PyObject* buildPySubexprs( const sknd::OrderedDict<sknd::ValueExpr>& items, BuildContext& context )
+static PyObject* buildPySubexprs( const std::vector<sknd::ValueExpr>& items, BuildContext& context )
 {
-    PyObject* dict = PyDict_New();
-    for ( auto& [key, value] : items )
+    PyObject* list = PyList_New(items.size());
+    for ( size_t i = 0; i < items.size(); ++i )
     {
-        PyObject* obj = buildPyValueExpr(value, context);
-        PyDict_SetItemString(dict, key.c_str(), obj);
-        Py_DECREF(obj);
-        context.subexprs[&value] = obj;
+        auto& ref = items[i].as_reference();
+        PyObject* name = buildPyStr(ref.name);
+        PyObject* target = buildPyValueExpr(*ref.target, context);
+        PyObject* dtype = buildPyDtype(items[i].dtype());
+        PyObject* obj = makePyObject(ReferenceExpr, name, target, dtype);
+        PyList_SetItem(list, i, obj);
+
+        context.subexprs[ref.target.get()] = target;
     }
-    return dict;
+    return list;
 }
 
 static PyObject* buildPyDtypes( const std::map<std::string,sknd::Typename>& dtypes )

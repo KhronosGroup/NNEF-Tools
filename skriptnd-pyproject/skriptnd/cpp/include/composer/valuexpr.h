@@ -976,7 +976,7 @@ namespace sknd
     struct ValueExpr::ReferenceExpr
     {
         std::string name;
-        const ValueExpr* target;
+        std::shared_ptr<ValueExpr> target;
         
         bool operator==( const ReferenceExpr& x ) const { return name == x.name; };
         bool operator!=( const ReferenceExpr& x ) const { return !(*this == x); };

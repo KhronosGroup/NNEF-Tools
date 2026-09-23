@@ -482,9 +482,9 @@ namespace sknd
             {
                 replace_tensor_accesses(value, tensor_remap);
             }
-            for ( auto& [key, value] : op.subexprs )
+            for ( auto& expr : op.subexprs )
             {
-                replace_tensor_accesses(value, tensor_remap);
+                replace_tensor_accesses(*expr.as_reference().target, tensor_remap);
             }
             for ( auto& subgraph : op.subgraphs )
             {
@@ -595,6 +595,81 @@ namespace sknd
         auto last = std::remove_if(model.graphs.begin(), model.graphs.end(),
                                    [&]( const auto& graph ){ return removed_subgraphs.count(graph.get()); });
         model.graphs.erase(last, model.graphs.end());
+    }
+
+    void collect_references( const ValueExpr& expr, std::vector<ValueExpr>& references )
+    {
+        recurse(expr, [&]( const ValueExpr& x ){ collect_references(x, references); }, true);
+        if ( expr.is_reference() )
+        {
+            if ( std::find(references.begin(), references.end(), expr) == references.end() )
+            {
+                references.push_back(expr);
+            }
+        }
+    }
+
+    void collect_references( const TensorRef& tensor, std::vector<ValueExpr>& references )
+    {
+        for ( auto& s : tensor.shape() )
+        {
+            collect_references(s, references);
+        }
+        if ( tensor.packed() )
+        {
+            collect_references(tensor.size(), references);
+        }
+    }
+
+    void collect_references( const Contraction& contraction, std::vector<ValueExpr>& references )
+    {
+        for ( auto& [id, expr] : contraction.locals )
+        {
+            collect_references(expr, references);
+        }
+        for ( auto& [id, expr] : contraction.bounds )
+        {
+            collect_references(expr, references);
+        }
+        collect_references(contraction.left, references);
+        collect_references(contraction.right, references);
+    }
+
+    void collect_references( const Assertion& assert, std::vector<ValueExpr>& references )
+    {
+        collect_references(assert.condition, references);
+        for ( auto& expr : assert.args )
+        {
+            collect_references(expr, references);
+        }
+    }
+
+    void collect_references( const Operation& op, std::vector<ValueExpr>& references )
+    {
+        for ( auto& [id, expr] : op.attribs )
+        {
+            collect_references(expr, references);
+        }
+        for ( auto& tensor : op.inputs )
+        {
+            collect_references(tensor, references);
+        }
+        for ( auto& assert : op.asserts )
+        {
+            collect_references(assert, references);
+        }
+        for ( auto& tensor : op.internals )
+        {
+            collect_references(tensor, references);
+        }
+        for ( auto& tensor : op.outputs )
+        {
+            collect_references(tensor, references);
+        }
+        for ( auto& contraction : op.contractions )
+        {
+            collect_references(contraction, references);
+        }
     }
     
 }   // namespace sknd

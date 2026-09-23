@@ -71,7 +71,7 @@ Operation = _sknd.Operation     # dataclass('Operation', {
                                 #   'contractions': List[Contraction],
                                 #   'subgraphs': List[Graph],
                                 #   'asserts': List[Assertion],
-                                #   'subexprs': Dict[Expr],
+                                #   'subexprs': List[Expr],
                                 #   'intrinsic': bool,
                                 # }))
 
@@ -636,8 +636,8 @@ def _replace_tensor_usage(graph, tensor_remap):
         op.inputs = tuple(tensor_remap.get(tensor) or tensor for tensor in op.inputs)
         for key, value in op.attribs.items():
             _replace_tensor_accesses(value, tensor_remap)
-        for key, value in op.subexprs.items():
-            _replace_tensor_accesses(value, tensor_remap)
+        for expr in op.subexprs:
+            _replace_tensor_accesses(expr.target, tensor_remap)
         for subgraph in op.subgraphs:
             _replace_tensor_usage(subgraph, tensor_remap)
     for tensor in graph.tensors:

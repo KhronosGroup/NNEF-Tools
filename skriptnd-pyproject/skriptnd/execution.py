@@ -789,12 +789,13 @@ def _format_operation(op, indent, context):
 
     text += indent + "// " + _format_invocation_in_comment(op.name, op.attribs, op.inputs, op.outputs) + "\n"
 
-    for iden, expr in op.subexprs.items():
-        iden = _valid_id(iden)
-        size = sknd.expr_max_size(expr)
-        dtype = _format_dtype(sknd.expr_dtype(expr))
-        value = _format_value_expr(expr, bracket=False) if not isinstance(expr, sknd.ListExpr) \
-            else "{ " + ", ".join(_format_value_expr(item, bracket=False) for item in expr) + " }"
+    for expr in op.subexprs:
+        iden = _valid_id(expr.name)
+        target = expr.target
+        size = sknd.expr_max_size(target)
+        dtype = _format_dtype(sknd.expr_dtype(target))
+        value = _format_value_expr(target, bracket=False) if not isinstance(target, sknd.ListExpr) \
+            else "{ " + ", ".join(_format_value_expr(item, bracket=False) for item in target) + " }"
         if size is not None:
             text += indent + f"const sknd::rt::ValuePack<{dtype},{size}> {iden} = {value};\n"
         else:

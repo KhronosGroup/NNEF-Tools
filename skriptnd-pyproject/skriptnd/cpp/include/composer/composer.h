@@ -1608,10 +1608,6 @@ namespace sknd
             
             TRY_CALL(add_placeholder_symbols(op.outputs, locals, !op.components.empty()))
             
-            std::vector<ValueExpr::ReferenceExpr*> references;
-            collect_references(attribs, locals, references);
-            collect_references(asserts, locals, references);
-            
             std::vector<Shape> output_shapes(op.outputs.size());
             std::vector<ValueExpr> output_sizes(op.outputs.size());
             for ( size_t i = 0; i < op.outputs.size(); ++i )
@@ -1620,13 +1616,11 @@ namespace sknd
                 
                 TRY_DECL(shape, eval_shape(*param.shape, locals))
                 output_shapes[i] = simplified(shape);
-                collect_references(output_shapes[i], locals, references);
                 
                 if ( param.type.packed )
                 {
                     TRY_DECL(size, eval_shape_expr(*param.repeats.value, locals))
                     output_sizes[i] = simplified(size);
-                    collect_references(output_sizes[i], locals, references);
                 }
             }
             
@@ -1651,7 +1645,7 @@ namespace sknd
             {
                 TRY_MOVE(outputs, eval_outputs(graph, op.outputs, locals, types, invocation.position, scope))
                 
-                auto subexprs = make_subexprs(references);
+                auto subexprs = collect_subexprs(op.attribs, op.usings, locals);
                 
                 graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, outputs,
                                                       {}, {}, { subgraph }, std::move(asserts), std::move(subexprs), false });
@@ -1683,9 +1677,8 @@ namespace sknd
                 }
                 
                 TRY_DECL(contractions, eval_lowerings(op.lowerings, locals, graph))
-                collect_references(contractions, locals, references);
                 
-                auto subexprs = make_subexprs(references);
+                auto subexprs = collect_subexprs(op.attribs, op.usings, locals);
                 bool intrinsic = op.lowerings.empty();
                 
                 graph.operations.push_back(Operation{ invocation.target, types, attribs, inputs, outputs, std::move(internals),
@@ -1734,94 +1727,55 @@ namespace sknd
             });
         }
         
-        static void collect_references( const std::vector<Contraction>& contractions, const Dict<Symbol>& symbols,
-                                       std::vector<ValueExpr::ReferenceExpr*>& references )
+        std::vector<ValueExpr> collect_subexprs( const std::vector<Param>& attribs, const std::vector<Using>& usings, const Dict<Symbol>& symbols )
         {
-            for ( auto& contraction : contractions )
+            std::vector<ValueExpr> subexprs;
+            for ( auto& param : attribs )
             {
-                collect_references(contraction.left, symbols, references);
-                collect_references(contraction.right, symbols, references);
-                for ( auto& [id, expr] : contraction.locals )
+                auto& value = symbols.at(param.name).as<ValueExpr>();
+                if ( value.is_reference() )
                 {
-                    collect_references(expr, symbols, references);
-                }
-                for ( auto& [id, expr] : contraction.bounds )
-                {
-                    collect_references(expr, symbols, references);
+                    subexprs.push_back(value);
                 }
             }
-        }
-        
-        static void collect_references( const std::vector<Assertion>& asserts, const Dict<Symbol>& symbols,
-                                       std::vector<ValueExpr::ReferenceExpr*>& references )
-        {
-            for ( auto& assert : asserts )
+            for ( auto& usage : usings )
             {
-                collect_references(assert.condition, symbols, references);
-                for ( auto& expr : assert.args )
+                if ( usage.identifier->kind == Expr::List )
                 {
-                    collect_references(expr, symbols, references);
-                }
-            }
-        }
-        
-        static void collect_references( const Dict<ValueExpr>& values, const Dict<Symbol>& symbols,
-                                       std::vector<ValueExpr::ReferenceExpr*>& references )
-        {
-            for ( auto& [id, expr] : values )
-            {
-                collect_references(expr, symbols, references);
-            }
-        }
-        
-        static void collect_references( const Shape& shape, const Dict<Symbol>& symbols, 
-                                       std::vector<ValueExpr::ReferenceExpr*>& references )
-        {
-            for ( auto& s : shape )
-            {
-                collect_references(s, symbols, references);
-            }
-        }
-        
-        static void collect_references( const ValueExpr& expr, const Dict<Symbol>& symbols, 
-                                       std::vector<ValueExpr::ReferenceExpr*>& references )
-        {
-            recurse(expr, [&]( const ValueExpr& x ){ collect_references(x, symbols, references); }, true);
-            if ( expr.is_reference() )
-            {
-                auto& reference = expr.as_reference();
-                if ( std::find(references.begin(), references.end(), &reference) == references.end() )
-                {
-                    references.push_back(const_cast<ValueExpr::ReferenceExpr*>(&reference));
-                }
-            }
-        }
-        
-        OrderedDict<ValueExpr> make_subexprs( const std::vector<ValueExpr::ReferenceExpr*>& references )
-        {
-            Dict<std::string> remap;
-            for ( auto& ref : references )
-            {
-                if ( !is_local_name(ref->name) )
-                {
-                    auto it = remap.find(ref->name);
-                    if ( it == remap.end() )
+                    auto& list = as_list(*usage.identifier);
+                    for ( auto item : list.items )
                     {
-                        it = remap.emplace(ref->name, next_local_name()).first;
+                        auto& expr = expanded(*item);
+                        if ( expr.kind == Expr::Zip )
+                        {
+                            auto& zip = as_zip(expr);
+                            for ( auto item : zip.items )
+                            {
+                                auto& value = symbols.at(as_identifier(*item).name).as<ValueExpr>();
+                                if ( value.is_reference() )
+                                {
+                                    subexprs.push_back(value);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            auto& value = symbols.at(as_identifier(expr).name).as<ValueExpr>();
+                            if ( value.is_reference() )
+                            {
+                                subexprs.push_back(value);
+                            }
+                        }
                     }
-                    ref->name = it->second;
                 }
-            }
-            
-            OrderedDict<ValueExpr> subexprs;
-            for ( auto& ref : references )
-            {
-                auto it = subexprs.find(ref->name);
-                if ( it == subexprs.end() )
+                else
                 {
-                    it = subexprs.emplace(ref->name, *ref->target).first;
+                    auto& value = symbols.at(as_identifier(*usage.identifier).name).as<ValueExpr>();
+                    if ( value.is_reference() )
+                    {
+                        subexprs.push_back(value);
+                    }
                 }
-                ref->target = &it->second;
             }
             return subexprs;
         }
@@ -2269,9 +2223,9 @@ namespace sknd
                         replace_tensor(expr, oldRef, newRef);
                     }
                 }
-                for ( auto& [iden, expr] : op.subexprs )
+                for ( auto& expr : op.subexprs )
                 {
-                    replace_tensor(expr, oldRef, newRef);
+                    replace_tensor(*expr.as_reference().target, oldRef, newRef);
                 }
             }
             for ( auto& input : graph.inputs )
@@ -2494,20 +2448,26 @@ namespace sknd
             return any_of(shape, []( const ValueExpr& x ){ return x.is_reference(); });
         }
         
-        void replace_references( ValueExpr& expr, Dict<Symbol>& symbols )
+        static bool non_referenced( const ValueExpr& value )
         {
-            postorder_traverse(expr, [&]( ValueExpr& x )
+            return value.is_literal() || value.is_shape_access() || value.is_size_access() || value.is_reference();
+        }
+        
+        ValueExpr as_reference( const std::string& name, const ValueExpr& value )
+        {
+            if ( value == nullptr || non_referenced(value) )
             {
-                if ( x.is_reference() )
-                {
-                    auto& reference = x.as_reference();
-                    ValueExpr value = *reference.target;
-                    replace_references(value, symbols);
-                    auto& [name, symbol] = *symbols.emplace(next_local_name(), Symbol(value, value.dtype(), Symbol::Using)).first;
-                    reference.target = &symbol.as<ValueExpr>();
-                    reference.name = name;
-                }
-            });
+                return value;
+            }
+            else if ( value.is_list() && std::all_of(value.as_list().begin(), value.as_list().end(), non_referenced) )
+            {
+                return value;
+            }
+            else if ( value.is_uniform() && value.as_uniform().size.is_literal() && non_referenced(value.as_uniform().value) )
+            {
+                return value;
+            }
+            return ValueExpr(ValueExpr::ReferenceExpr{ next_local_name(), std::make_shared<ValueExpr>(value) }, value.dtype(), value.max_size_or_null());
         }
         
         Result<void> check_shape_repeats( const Shapedef& shape, const Dict<Symbol>& symbols, const size_t repeats )
@@ -2615,16 +2575,15 @@ namespace sknd
                     }
                     if ( !(param.repeats.value && !value.packed() && value != nullptr) )
                     {
-                        replace_references(value, locals);
-                        locals.emplace(param.name, Symbol(value, type, Symbol::Attrib));
                         attribs.emplace(param.name, value);
+                        locals.emplace(param.name, Symbol(as_reference(param.name, value), type, Symbol::Attrib));
                     }
                 }
                 else if ( param.type.optional )
                 {
                     auto value = ValueExpr(nullptr);
-                    locals.emplace(param.name, Symbol(value, type, Symbol::Attrib));
                     attribs.emplace(param.name, value);
+                    locals.emplace(param.name, Symbol(value, type, Symbol::Attrib));
                 }
             }
             return attribs;
@@ -2639,6 +2598,7 @@ namespace sknd
                 {
                     auto it = args.find(param.name);
                     auto expr = it != args.end() ? it->second : param.default_value;
+                    auto type = resolve_type(param, locals);
                     
                     TRY_DECL(value, eval_optional(*expr, expr == param.default_value ? locals : symbols))
                     if ( param.repeats.value && !value.packed() && value != nullptr )
@@ -2670,11 +2630,8 @@ namespace sknd
                         return Error(param.repeats.position, "packed attribute value must not be of dynamic length");
                     }
                     
-                    replace_references(value, locals);
-                    
-                    auto type = resolve_type(param, locals);
-                    locals.emplace(param.name, Symbol(value, type, Symbol::Attrib));
                     attribs.emplace(param.name, value);
+                    locals.emplace(param.name, Symbol(as_reference(param.name, value), type, Symbol::Attrib));
                 }
                 if ( param.repeats.value )
                 {
@@ -2870,21 +2827,25 @@ namespace sknd
                             auto item_rank = (int_t)rank / item_count;
                             for ( size_t i = 0; i < item_count; ++i )
                             {
-                                auto symbol = value == nullptr ? NullSymbol : Symbol(ValueExpr(ptr + i, item_rank, item_count, type), type, Symbol::Using);
-                                symbols.emplace(as_identifier(*zip.items[i]).name, symbol);
+                                auto& iden = as_identifier(*zip.items[i]);
+                                auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(iden.name, ValueExpr(ptr + i, item_rank, item_count, type)), type, Symbol::Using);
+                                symbols.emplace(iden.name, symbol);
                             }
                         }
                         else
                         {
-                            auto symbol = value == nullptr ? NullSymbol : Symbol(ValueExpr(ptr, rank.as_int(), type), type, Symbol::Using);
-                            symbols.emplace(as_identifier(*expand.item).name, symbol);
+                            auto& iden = as_identifier(*expand.item);
+                            auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(iden.name, ValueExpr(ptr, rank.as_int(), type)),
+                                                                                 type, Symbol::Using);
+                            symbols.emplace(iden.name, symbol);
                         }
                         k += rank.as_int();
                     }
                     else
                     {
-                        auto symbol = value == nullptr ? NullSymbol : Symbol(value[k++], type, Symbol::Using);
-                        symbols.emplace(as_identifier(*item).name, symbol);
+                        auto& iden = as_identifier(*item);
+                        auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(iden.name, value[k++]), type, Symbol::Using);
+                        symbols.emplace(iden.name, symbol);
                     }
                 }
                 if ( !has_flexible_item )
@@ -2900,7 +2861,7 @@ namespace sknd
                 {
                     TRY_MOVE(declared_rank, eval(*usage.rank, symbols))
                 }
-                auto symbol = value == nullptr ? NullSymbol : Symbol(value, type, Symbol::Using);
+                auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(iden.name, value), type, Symbol::Using);
                 symbols.emplace(iden.name, symbol);
             }
             if ( declared_rank != nullptr && canonical(declared_rank) != canonical(value.size()) )

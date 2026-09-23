@@ -27,7 +27,6 @@
 #include "either.h"
 #include "packable.h"
 #include "valuexpr.h"
-#include "ordereddict.h"
 #include "tensorref.h"
 
 
@@ -116,7 +115,7 @@ namespace sknd
         std::vector<Contraction> contractions;                          // list of contractions that define the lowering of the operation
         std::vector<Graph*> subgraphs;                                  // list of subgraphs referred to by this operation
         std::vector<Assertion> asserts;                                 // list of dynamic asserts that need to be checked in run-time
-        OrderedDict<ValueExpr> subexprs;                                // dictionary shared sub-expressions
+        std::vector<ValueExpr> subexprs;                                // dictionary shared sub-expressions
         bool intrinsic = true;                                          // whether the operation is considered to be a compiler instrinsic
     };
     
@@ -501,9 +500,10 @@ namespace sknd
         {
             os << indentation << '{' << std::endl;
             
-            for ( auto& [name, expr] : op.subexprs )
+            for ( auto& expr : op.subexprs )
             {
-                os << indentation << '\t' << name << " = " << expr << std::endl;
+                auto& ref = expr.as_reference();
+                os << indentation << '\t' << ref.name << " = " << *ref.target << std::endl;
             }
             for ( auto& assert : op.asserts )
             {
