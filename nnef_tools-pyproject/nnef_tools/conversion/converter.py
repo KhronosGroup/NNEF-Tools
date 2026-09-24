@@ -34,21 +34,23 @@ _INT_MAX = 2 ** 31 - 1
 class Transform:
 
     def __init__(self, type, name=None, inputs=None, outputs=None, dtypes=None, attribs=None,
-                 defaults=None, using=None, cond=None, custom=False):
+                 graphs=None, defaults=None, using=None, cond=None, custom=False):
         self.type = type
         self.name = name or '!_name_'
         self.inputs = inputs or ()
         self.outputs = outputs or ()
-        self.attribs = attribs or {}
         self.dtypes = dtypes or {}
+        self.attribs = attribs or {}
+        self.graphs = graphs or []
         self.defaults = defaults
         self.using = using or {}
         self.cond = cond
         self.custom = custom
 
     def with_type(self, type):
-        return Transform(type=type, name=self.name, inputs=self.inputs, outputs=self.outputs, attribs=self.attribs,
-                         dtypes=self.dtypes, defaults=self.defaults, using=self.using, cond=self.cond, custom=self.custom)
+        return Transform(type=type, name=self.name, inputs=self.inputs, outputs=self.outputs,
+                         dtypes=self.dtypes, attribs=self.attribs, graphs=self.graphs,
+                         defaults=self.defaults, using=self.using, cond=self.cond, custom=self.custom)
 
 
 class ConversionError(Exception):
@@ -302,7 +304,7 @@ class Converter:
                 inputs = (inputs,)
 
         for idx, item in enumerate(inputs):
-            self._check_value(item, 'input', idx, op.type, op.name, tensor=True)
+            self._check_value(item, 'input', idx, op.type, op.name, is_tensor=True)
 
         offset = len(self._graph.operations)
 
@@ -315,10 +317,21 @@ class Converter:
                 outputs = (outputs,)
 
         for idx, item in enumerate(outputs):
-            self._check_value(item, 'output', idx, op.type, op.name, tensor=True)
+            self._check_value(item, 'output', idx, op.type, op.name, is_tensor=True)
 
-        op = Operation(self._graph, type=type, name=name, dtypes=dtypes, attribs=attribs, inputs=inputs, outputs=outputs,
-                       custom=transform.custom)
+        if isinstance(transform.graphs, list):
+            graphs = [self._evaluate(op_attribs, op_inputs, op_outputs, item, using)
+                      for item in transform.graphs]
+        else:
+            graphs = self._evaluate(op_attribs, op_inputs, op_outputs, transform.graphs, using)
+            if isinstance(inputs, (Graph, Exception)):
+                graphs = (graphs,)
+
+        for idx, item in enumerate(graphs):
+            self._check_value(item, 'graph', idx, op.type, op.name, is_graph=True)
+
+        op = Operation(self._graph, type=type, name=name, dtypes=dtypes, attribs=attribs,
+                       inputs=inputs, outputs=outputs, subgraphs=graphs, custom=transform.custom)
 
         if len(self._graph.operations) - offset > 1:
             self._graph.reverse(offset)
@@ -362,16 +375,19 @@ class Converter:
     def _filter_none(self, items):
         return (item for item in items if item is not None)
 
-    def _check_value(self, value, kind, key, op_type, op_name, tensor=False):
+    def _check_value(self, value, kind, key, op_type, op_name, is_tensor=False, is_graph=False):
         if isinstance(value, Exception):
             err_type = type(value).__name__ + ": " if type(value) != ConversionError else ""
-            raise ConversionError("Could not evaluate {kind} '{key}' while converting operator '{name}' of type '{type}'; {err}{cause}"
-                                  .format(kind=kind, key=key, type=op_type, name=op_name or '', err=err_type, cause=str(value) or repr(value)))
-        if tensor and value is not None and not isinstance(value, Tensor) and not \
+            cause = str(value) or repr(value)
+            raise ConversionError(f"Could not evaluate {kind} '{key}' while converting operator "
+                                  f"'{op_name}' of type '{op_type}'; {err_type}{cause}")
+        if is_tensor and value is not None and not isinstance(value, Tensor) and not \
                 (isinstance(value, list) and all(isinstance(item, Tensor) for item in value)):
-            raise ConversionError("While converting operator '{name}' of type '{op_type}', {kind} '{key}' must result in a tensor, "
-                                  "but found {value_type}"
-                                  .format(kind=kind, key=key, name=op_name or '', op_type=op_type, value_type=type(value)))
+            raise ConversionError(f"While converting operator '{op_name}' of type '{op_type}', {kind} '{key}' "
+                                  f"must result in a tensor, but found {type(value)}")
+        if is_graph and value is not None and not isinstance(value, (Graph, Tensor)):
+            raise ConversionError(f"While converting operator '{op_name}' of type '{op_type}', {kind} '{key}' "
+                                  f"must result in a tensor, but found {type(value)}")
 
     def _read_constant(self, tensor, type, flat):
         raise NotImplementedError()

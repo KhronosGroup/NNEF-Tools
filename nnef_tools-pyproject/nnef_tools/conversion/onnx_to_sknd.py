@@ -147,7 +147,6 @@ class Converter(_Converter):
         self._fix_constant_names(model)
         self._fix_constants_in_dependent_graphs(model)
         self._fix_loops(model)
-        self._fix_branches(model)
         self._fix_shape_expr_args(model)
         generate_missing_tensor_names_from_op_type(model)
         ensure_valid_ids(model)
@@ -229,42 +228,21 @@ class Converter(_Converter):
             for op in graph.operations:
                 if op.type == 'do':
                     nvars = op.attribs['nvars']
-                    cond = op.attribs.get('cond_graph')
-                    body = op.attribs.get('body_graph')
-                    has_cond = cond is not None
+                    body = op.subgraphs[0]
+                    cond = op.subgraphs[1] if len(op.subgraphs) > 1 else None
 
                     body.inputs = (self.tupled(body.inputs[1], cond is not None) + body.inputs[2:2 + nvars] +
                                    (body.inputs[0],) + body.inputs[2 + nvars:])
 
-                    if not has_cond:
+                    if not cond:
                         body.remove_operation(body.outputs[0].producer, unlink=True)
 
-                    body.outputs = self.tupled(body.outputs[0], has_cond) + body.outputs[1:]
+                    body.outputs = self.tupled(body.outputs[0], cond is not None) + body.outputs[1:]
 
-                    if has_cond:
+                    if cond:
                         op.outputs = (Tensor(graph, name='', dtype=np.void, shape=()),) + op.outputs
 
                     op.internals = body.inputs[:nvars]
-
-                    op.subgraphs.append(body)
-                    if has_cond:
-                        op.subgraphs.append(cond)
-
-                    del op.attribs['body_graph']
-                    if has_cond:
-                        del op.attribs['cond_graph']
-
-    def _fix_branches(self, model):
-        for graph in model.graphs:
-            for op in graph.operations:
-                if op.type == 'if':
-                    cond_graphs = op.attribs['cond_graphs']
-                    branch_graphs = op.attribs['branch_graphs']
-
-                    op.subgraphs = cond_graphs + branch_graphs
-
-                    del op.attribs['cond_graphs']
-                    del op.attribs['branch_graphs']
 
     @staticmethod
     def _interleave(items):
@@ -1153,11 +1131,10 @@ _Transforms = Converter.unpack_transforms({
                 'else_inputs': '!range(1 + _implicit_input_count_[0], 1 + _implicit_input_count_[0] + _implicit_input_count_[1])',
             },
             attribs={
-                'cond_graphs': '![I[0]]',
-                'branch_graphs': '![then_branch, else_branch]',
                 'cond_inputs': [0],
                 'branch_inputs': '![*then_inputs, *else_inputs]',
             },
+            graphs='![I[0], then_branch, else_branch]',
         ),
     'Loop': # input-output structure of ONNX Loop: [iter-count, condition, dependencies.., captured-inputs..] -> [dependencies.., scan-outputs..]
         Transform(
@@ -1175,15 +1152,14 @@ _Transforms = Converter.unpack_transforms({
             inputs='!tupled(I[1], has_cond) + I[2:2+num_deps] + (I[0] if has_count and iters is None else None,) + I[2+num_deps:]',
             outputs='!tuple(O[:num_deps]) + tuple(stack_output(output) for output in O[num_deps:])',
             attribs={
-                'cond_graph': '!body.inputs[1] if has_cond else None',
                 'cond_inputs': '![0] if has_cond else []',
-                'body_graph': '!body',
                 'body_inputs': '!list(range(int(has_cond) + num_deps + _implicit_input_count_ + 1))',
                 'iters': '!iters',
                 'pretest': '!True if has_cond else None',
                 'nvars': '!num_deps + int(has_cond)',
                 'nscans': 0,
             },
+            graphs='![body, body.inputs[1]] if has_cond else [body]',
         ),
     'LSTM':
         Transform(

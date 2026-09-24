@@ -258,6 +258,8 @@ class Operation:
         self._graph = graph
         self._inputs = tuple()
         self._outputs = tuple()
+        self._internals = list()
+        self._subgraphs = list()
 
         assert name is None or isinstance(name, str)
         if attribs is not None:
@@ -268,8 +270,6 @@ class Operation:
         self.name = name                        # type: typing.Optional[str]
         self.dtypes = dtypes or {}              # type: typing.Dict[str, np.dtype]
         self.attribs = attribs or {}            # type: typing.Dict[str, typing.Any]
-        self.subgraphs = subgraphs or []        # type: typing.List[Graph]
-        self.internals = list(internals or [])    # type: typing.List[Tensor]
         self.custom = custom                    # type: bool
 
         assert isinstance(graph, Graph)
@@ -279,6 +279,10 @@ class Operation:
             self.inputs = inputs
         if outputs is not None:
             self.outputs = outputs
+        if internals is not None:
+            self.internals = internals
+        if subgraphs is not None:
+            self.subgraphs = subgraphs
 
     def copy_with(self, graph=None, type=None, name=None, dtypes=None, attribs=None, inputs=None, outputs=None, custom=None):
         return Operation(graph=graph if graph is not None else self.graph,
@@ -405,6 +409,26 @@ class Operation:
         outputs = self.outputs
         self._outputs = ()
         return outputs
+
+    @property
+    def internals(self):
+        # type: ()->typing.Sequence[Tensor]
+        return _ListView(self._internals)
+
+    @internals.setter
+    def internals(self, internals):
+        assert all(isinstance(item, Tensor) for item in internals)
+        self._internals = list(internals)
+
+    @property
+    def subgraphs(self):
+        # type: ()->typing.Sequence[Graph]
+        return _ListView(self._subgraphs)
+
+    @subgraphs.setter
+    def subgraphs(self, graphs):
+        assert all(isinstance(item, (Graph, Tensor)) for item in graphs)
+        self._subgraphs = list(graphs)
 
     @property
     def type(self):
