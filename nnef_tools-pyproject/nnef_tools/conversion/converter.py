@@ -324,7 +324,7 @@ class Converter:
                       for item in transform.graphs]
         else:
             graphs = self._evaluate(op_attribs, op_inputs, op_outputs, transform.graphs, using)
-            if isinstance(inputs, (Graph, Exception)):
+            if isinstance(graphs, (Graph, Exception)):
                 graphs = (graphs,)
 
         for idx, item in enumerate(graphs):
@@ -385,9 +385,9 @@ class Converter:
                 (isinstance(value, list) and all(isinstance(item, Tensor) for item in value)):
             raise ConversionError(f"While converting operator '{op_name}' of type '{op_type}', {kind} '{key}' "
                                   f"must result in a tensor, but found {type(value)}")
-        if is_graph and value is not None and not isinstance(value, (Graph, Tensor)):
+        if is_graph and value is not None and not isinstance(value, Graph):
             raise ConversionError(f"While converting operator '{op_name}' of type '{op_type}', {kind} '{key}' "
-                                  f"must result in a tensor, but found {type(value)}")
+                                  f"must result in a graph, but found {type(value)}")
 
     def _read_constant(self, tensor, type, flat):
         raise NotImplementedError()

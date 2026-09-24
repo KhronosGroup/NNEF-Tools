@@ -427,7 +427,7 @@ class Operation:
 
     @subgraphs.setter
     def subgraphs(self, graphs):
-        assert all(isinstance(item, (Graph, Tensor)) for item in graphs)
+        assert all(isinstance(item, Graph) for item in graphs)
         self._subgraphs = list(graphs)
 
     @property

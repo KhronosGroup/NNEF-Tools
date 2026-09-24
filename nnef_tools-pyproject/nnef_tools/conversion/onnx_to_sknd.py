@@ -228,18 +228,18 @@ class Converter(_Converter):
             for op in graph.operations:
                 if op.type == 'do':
                     nvars = op.attribs['nvars']
+                    cond = op.attribs.get('cond')
                     body = op.subgraphs[0]
-                    cond = op.subgraphs[1] if len(op.subgraphs) > 1 else None
 
                     body.inputs = (self.tupled(body.inputs[1], cond is not None) + body.inputs[2:2 + nvars] +
                                    (body.inputs[0],) + body.inputs[2 + nvars:])
 
-                    if not cond:
+                    if cond is None:
                         body.remove_operation(body.outputs[0].producer, unlink=True)
 
                     body.outputs = self.tupled(body.outputs[0], cond is not None) + body.outputs[1:]
 
-                    if cond:
+                    if cond is not None:
                         op.outputs = (Tensor(graph, name='', dtype=np.void, shape=()),) + op.outputs
 
                     op.internals = body.inputs[:nvars]
@@ -1134,7 +1134,7 @@ _Transforms = Converter.unpack_transforms({
                 'cond_inputs': [0],
                 'branch_inputs': '![*then_inputs, *else_inputs]',
             },
-            graphs='![I[0], then_branch, else_branch]',
+            graphs='![then_branch, else_branch]',
         ),
     'Loop': # input-output structure of ONNX Loop: [iter-count, condition, dependencies.., captured-inputs..] -> [dependencies.., scan-outputs..]
         Transform(
@@ -1152,14 +1152,13 @@ _Transforms = Converter.unpack_transforms({
             inputs='!tupled(I[1], has_cond) + I[2:2+num_deps] + (I[0] if has_count and iters is None else None,) + I[2+num_deps:]',
             outputs='!tuple(O[:num_deps]) + tuple(stack_output(output) for output in O[num_deps:])',
             attribs={
-                'cond_inputs': '![0] if has_cond else []',
+                'cond': '!0 if has_cond else None',
                 'body_inputs': '!list(range(int(has_cond) + num_deps + _implicit_input_count_ + 1))',
                 'iters': '!iters',
-                'pretest': '!True if has_cond else None',
                 'nvars': '!num_deps + int(has_cond)',
                 'nscans': 0,
             },
-            graphs='![body, body.inputs[1]] if has_cond else [body]',
+            graphs='![body]',
         ),
     'LSTM':
         Transform(

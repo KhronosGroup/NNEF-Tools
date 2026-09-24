@@ -1368,7 +1368,7 @@ namespace sknd
                 do
                 {
                     TRY_CALL(lexer.accept())
-                    TRY_DECL(condition, parse_callable(lexer))
+                    TRY_DECL(condition, parse_expr(lexer))
                     TRY_CALL(lexer.accept(Keyword::Then))
                     TRY_DECL(consequent, parse_callable(lexer))
                     
@@ -1386,12 +1386,11 @@ namespace sknd
                 TRY_DECL(carries, parse_loop_carries(lexer, Keyword::With, Operator::Assign))
                 TRY_DECL(scans, parse_loop_scans(lexer, Keyword::For, Operator::Colon))
                 
-                Shared<Callable> condition;
+                Shared<Expr> condition;
                 if ( lexer.is_token(Keyword::While) )
                 {
                     TRY_CALL(lexer.accept())
-                    TRY_DECL(callable, parse_callable(lexer))
-                    condition = std::make_shared<Callable>(std::move(callable));
+                    TRY_MOVE(condition, parse_iden_expr(lexer))
                 }
                 
                 TRY_DECL(unroll, lexer.accept_if(Keyword::Unroll))
@@ -1403,15 +1402,7 @@ namespace sknd
                 
                 TRY_DECL(body, parse_callable(lexer))
                 
-                bool pretest = condition != nullptr;
-                if ( !pretest && lexer.is_token(Keyword::While) )
-                {
-                    TRY_CALL(lexer.accept())
-                    TRY_DECL(callable, parse_callable(lexer))
-                    condition = std::make_shared<Callable>(std::move(callable));
-                }
-                
-                auto loop = std::make_shared<Loop>(Loop{ carries, scans, condition, count, iter, pretest, unroll });
+                auto loop = std::make_shared<Loop>(Loop{ carries, scans, condition, count, iter, unroll });
                 return Component{ position, std::move(results), std::move(body), {}, loop };
             }
             else

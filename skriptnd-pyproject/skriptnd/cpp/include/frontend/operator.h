@@ -123,7 +123,7 @@ namespace sknd
     
     struct Branch
     {
-        const Callable condition;
+        const Shared<Expr> condition;
         const Callable consequent;
     };
     
@@ -131,10 +131,9 @@ namespace sknd
     {
         const Pairs<Typed,Shared<Expr>> carries;
         const Pairs<std::string,Shared<Expr>> scans;
-        const Shared<Callable> condition;
+        const Shared<Expr> condition;
         const Shared<Expr> count;
         const Shared<IdentifierExpr> index;
-        const bool pretest;
         const bool unroll;
     };
     
@@ -433,7 +432,7 @@ namespace sknd
             {
                 os << (j++ ? ", " : "for ") << iden << " : " << *expr;
             }
-            if ( component.loop->condition && component.loop->pretest )
+            if ( component.loop->condition )
             {
                 if ( !component.loop->carries.empty() || !component.loop->scans.empty() )
                 {
@@ -463,10 +462,6 @@ namespace sknd
                 os << ')';
             }
             os << component.operation;
-            if ( component.loop->condition && !component.loop->pretest )
-            {
-                os << " while " << *component.loop->condition;
-            }
         }
         else
         {

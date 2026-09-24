@@ -887,19 +887,11 @@ def _format_assert_check_code(assertion, indent):
             f"\tthrow std::runtime_error(sknd::string_format(\"{message}\", {args}));\n")
 
 
-def _format_graph(graph, idx, indent, context, condition):
-    type = "bool" if condition else "void"
+def _format_graph(graph, idx, indent, context):
     name = _valid_id(graph.name) if idx else "execute"
     params = _format_invocation_args(graph.inputs if not graph.parent else [], graph.outputs, context) if idx else ""
     code = _format_execution_code(graph.operations, indent, context)
-    if condition:
-        output = graph.outputs[0]
-        params += " = sknd::rt::condition_result<{rank}>()".format(rank=len(output.shape))
-        code += "\n" + indent + "return " + _valid_id(output.name) + "(" + ",".join("0" for _ in output.shape) + ");"
-    return "{type} {name}( {params} ) {code}".format(type=type,
-                                                     name=name,
-                                                     params=params,
-                                                     code=_wrap_brackets(code))
+    return f"void {name}( {params} ) {_wrap_brackets(code)}"
 
 
 def _format_subgraph(graph, inputs, outputs, indent, context):
@@ -925,24 +917,7 @@ def _format_block(graph, inputs, outputs, indent, context):
 
 
 def _format_graphs(graphs, indent, context):
-    cond_graphs = set()
-    body_graphs = set()
-    for graph in graphs:
-        for op in graph.operations:
-            if op.name == 'if':
-                branch_count = len(op.subgraphs) // 2
-                for subgraph in op.subgraphs[:branch_count]:
-                    cond_graphs.add(subgraph.name)
-                for subgraph in op.subgraphs[branch_count:]:
-                    body_graphs.add(subgraph.name)
-            elif op.name == 'do':
-                subgraph = op.subgraphs[0]
-                body_graphs.add(subgraph.name)
-                if len(op.subgraphs) > 1:
-                    subgraph = op.subgraphs[1]
-                    cond_graphs.add(subgraph.name)
-
-    return "\n\n\t".join(_format_graph(graph, i, indent, context, graph.name in cond_graphs)
+    return "\n\n\t".join(_format_graph(graph, i, indent, context)
                          for i, graph in enumerate(graphs) if not graph.parent)
 
 
@@ -970,16 +945,16 @@ def _format_intrinsic(op, indent, context):
         raise ValueError("Unhandled intrinsic operation '{}'".format(op.name))
 
 
-def _format_invocation(graph, args, is_condition=False):
-    if is_condition and _is_trivial_graph(graph):
-        cond = args[0]
-        iden = _valid_id(cond.name)
-        return iden + "({})".format(",".join("0" for _ in cond.shape))
-    else:
-        return _valid_id(graph.name) + "({})".format(", ".join("nullptr" if arg is None else
-                                                     _valid_id(arg.name) + '[$]' if isinstance(arg, sknd.TensorPack) else
-                                                     _format_value_expr(arg.value) if _can_inline_tensor(arg) else
-                                                     _valid_id(arg.name) for arg in args))
+def _format_invocation(graph, args):
+    return _valid_id(graph.name) + "({})".format(", ".join("nullptr" if arg is None else
+                                                 _valid_id(arg.name) + '[$]' if isinstance(arg, sknd.TensorPack) else
+                                                 _format_value_expr(arg.value) if _can_inline_tensor(arg) else
+                                                 _valid_id(arg.name) for arg in args))
+
+
+def _format_condition(cond):
+    iden = _valid_id(cond.name)
+    return iden + "({})".format(",".join("0" for _ in cond.shape))
 
 
 def _format_copy(op, indent):
@@ -991,26 +966,22 @@ def _format_copy(op, indent):
 
 
 def _format_if(op, indent, context):
-    branch_count = len(op.subgraphs) // 2
-    conditions = op.subgraphs[:branch_count]
-    branches = op.subgraphs[branch_count:]
+    branches = op.subgraphs
     cond_input_indices = op.attribs['cond_inputs']
     branch_input_indices = op.attribs['branch_inputs']
-    cond_input_offset = 0
+    conditions = [op.inputs[idx] for idx in cond_input_indices]
     branch_input_offset = 0
 
     text = ""
     for condition, branch in zip(conditions, branches):
-        cond_inputs = tuple(op.inputs[idx] for idx in cond_input_indices[cond_input_offset:cond_input_offset+len(condition.inputs)])
         branch_inputs = tuple(op.inputs[idx] for idx in branch_input_indices[branch_input_offset:branch_input_offset+len(branch.inputs)])
 
-        text += indent + "if ( {cond} )\n".format(cond=_format_invocation(condition, cond_inputs, is_condition=True))
+        text += indent + "if ( {cond} )\n".format(cond=_format_condition(condition))
         text += _format_subgraph(branch, branch_inputs, op.outputs, indent, context)
         if not branch.parent:
             text += '\n'
         text += indent + "else\n"
 
-        cond_input_offset += len(condition.inputs)
         branch_input_offset += len(branch.inputs)
 
     branch_inputs = tuple(op.inputs[idx] for idx in branch_input_indices[branch_input_offset:])
@@ -1026,12 +997,12 @@ def _format_tensor_ref(tensor, braces=False):
 
 def _format_do(op, indent, context):
     body = op.subgraphs[0]
-    condition = op.subgraphs[1] if len(op.subgraphs) > 1 else None
+    cond = op.attribs.get('cond')
     nvars = op.attribs['nvars']
     nscans = op.attribs['nscans']
-    pretest = op.attribs.get('pretest', True)
     iters = op.inputs[nvars+nscans] or op.attribs.get('iters')
     index = op.internals[nvars+nscans] if len(op.internals) > nvars + nscans else None
+    condition = op.outputs[cond] if cond is not None else None
 
     vars = tuple(op.internals[:nvars])
     subgraph_inputs = vars + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
@@ -1042,22 +1013,19 @@ def _format_do(op, indent, context):
     for i in range(nvars):
         text += indent + f"{_format_tensor_ref(op.outputs[i])} = {_format_tensor_ref(op.inputs[i])};\n"
 
-    if condition:
-        subgraph_inputs = op.outputs[:nvars] + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
-        cond_inputs = tuple(subgraph_inputs[idx] for idx in op.attribs['cond_inputs'])
-        cond_text = indent + f"\tif ( !{_format_invocation(condition, cond_inputs, is_condition=True)} ) break;\n"
-
     bound = ("$ < " + (_format_tensor_ref(iters, braces=True) if isinstance(iters, sknd.Tensor) else
                        _format_value_expr(iters))) if iters is not None else ""
+    if condition:
+        if bound:
+            bound += " and "
+        bound += _format_condition(condition)
+
     text += indent + f"for ( int $ = 0; {bound}; ++$ )\n"
 
     text += indent + "{\n"
 
     if index is not None:
         text += indent + f"\t{_valid_id(index.name)} = $;\n"
-
-    if condition and pretest:
-        text += cond_text
 
     for i in range(nvars):
         text += indent + f"\tstd::swap({_valid_id(vars[i].name)}, {_valid_id(op.outputs[i].name)});\n"
@@ -1070,9 +1038,6 @@ def _format_do(op, indent, context):
     if condition or isinstance(iters, (sknd.Tensor, sknd.Expr)):
         for i in range(nvars, len(op.outputs)):
             text += indent + "\t" + _valid_id(op.outputs[i].name) + ".resize($+1);\n"
-
-    if condition and not pretest:
-        text += cond_text
 
     text += indent + "}\n"
 

@@ -2531,7 +2531,12 @@ graph while_do {
         y: real[];
     }
     @compose {
-        y = with xi = x while block1: math.lt(xi, 100.0) do block2: math.mul(xi, 2.0);
+        c = math.lt(x, 100.0);
+        y, ~ = with xi = x, ci = c while ci do block: {
+            xj = math.mul(xi, 2.0);
+            cj = math.lt(xj, 100.0);
+            yield xj, cj;
+        };
     }
 }
 
@@ -2543,7 +2548,11 @@ graph do_while {
         y: real[];
     }
     @compose {
-        y = with xi = x do block1: math.mul(xi, 2.0) while block2: math.lt(xi, 100.0);
+        y, ~ = with xi = x, ci = true while ci do block: {
+            xj = math.mul(xi, 2.0);
+            cj = math.lt(xj, 100.0);
+            yield xj, cj;
+        };
     }
 }
 

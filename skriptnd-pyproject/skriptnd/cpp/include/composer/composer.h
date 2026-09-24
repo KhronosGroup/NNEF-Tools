@@ -493,7 +493,6 @@ namespace sknd
             
             if ( !component.branches.empty() )
             {
-                std::vector<Graph*> condition_graphs;
                 std::vector<Graph*> branch_graphs;
                 
                 std::vector<TensorRef> inputs;
@@ -506,14 +505,12 @@ namespace sknd
                 bool shortcut = false;
                 for ( size_t i = 0; i < component.branches.size() && !shortcut; ++i )
                 {
-                    const Callable& condition = component.branches[i].condition;
+                    const Expr& condition = *component.branches[i].condition;
                     const Callable& consequent = component.branches[i].consequent;
                     
-                    auto expr = condition.is<Region>() && condition.as<Region>().components.empty() ?
-                                condition.as<Region>().yields.front() : nullptr;
-                    if ( expr && !is_tensor_expr(*expr, symbols) )
+                    if ( !is_tensor_expr(condition, symbols) )
                     {
-                        TRY_DECL(value, eval(*expr, symbols))
+                        TRY_DECL(value, eval(condition, symbols))
                         if ( value.is_literal() )
                         {
                             if ( !value.as_bool() )             // skip this branch, it's never executed
@@ -523,7 +520,7 @@ namespace sknd
                             
                             shortcut = true;                    // this becomes the `else` branch
                             
-                            if ( condition_graphs.empty() )     // branching is completely eliminated
+                            if ( branch_graphs.empty() )        // branching is completely eliminated
                             {
                                 TRY_DECL(attribs, inputs, outputs, compose_callable(consequent, operators, symbols, model, graph, scope, label))
                                 rename_results(component.results, outputs, scope);
@@ -534,18 +531,15 @@ namespace sknd
                     }
                     if ( !shortcut )
                     {
-                        TRY_DECL(subgraph, subgraph_inputs, compose_subgraph(condition, operators, symbols, model, graph, scope, label))
-                        
-                        auto& result = *subgraph->outputs.front();
-                        if ( !is_singular(result.shape) )
+                        TRY_DECL(cond_tensor, eval(condition, symbols, as_tensor(graph), as_tensor_pack(graph)))
+                        if ( !is_singular(cond_tensor->shape) )
                         {
-                            return Error(position(condition), "condition must be a singular tensor, found tensor of shape %s",
-                                         str(result.shape).c_str());
+                            return Error(condition.position, "condition must be a singular tensor, found tensor of shape %s",
+                                         str(cond_tensor->shape).c_str());
                         }
                         
-                        condition_graphs.push_back(subgraph);
-                        cond_inputs.insert(cond_inputs.end(), subgraph_inputs.begin(), subgraph_inputs.end());
-                        add_all(inputs, subgraph_inputs);
+                        cond_inputs.push_back(cond_tensor);
+                        add_all(inputs, { cond_tensor });
                     }
                     
                     TRY_DECL(subgraph, subgraph_inputs, compose_subgraph(consequent, operators, symbols, model, graph, scope, label))
@@ -568,7 +562,7 @@ namespace sknd
                 
                 if ( !shortcut )
                 {
-                    if ( condition_graphs.empty() )     // only else branch was not eliminated
+                    if ( branch_graphs.empty() )     // only else branch was not eliminated
                     {
                         TRY_DECL(attribs, inputs, outputs, compose_callable(component.operation, operators, symbols, model, graph, scope, label))
                         rename_results(component.results, outputs, scope);
@@ -631,17 +625,7 @@ namespace sknd
                     { "branch_inputs", subgraph_input_mapping(inputs, branch_inputs) },
                 };
                 
-                std::vector<Graph*> subgraphs;
-                for ( auto& graph : condition_graphs )
-                {
-                    subgraphs.push_back(graph);
-                }
-                for ( auto& graph : branch_graphs )
-                {
-                    subgraphs.push_back(graph);
-                }
-                
-                graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, std::move(subgraphs), {}, {}, true });
+                graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, std::move(branch_graphs), {}, {}, true });
                 return std::make_tuple(inputs, outputs);
             }
             else if ( component.loop && !component.loop->unroll )
@@ -825,22 +809,25 @@ namespace sknd
                 
                 if ( component.loop->condition )
                 {
-                    auto& condition = *component.loop->condition;
-                    TRY_DECL(cond_graph, cond_inputs, compose_subgraph(condition, operators, symbols, model, graph, scope, label))
-                    
-                    add_all(locals, cond_inputs);
-                    
-                    auto& cond_result = *cond_graph->outputs.front();
-                    if ( !is_singular(cond_result.shape) )
+                    auto& cond_iden = as_identifier(*component.loop->condition);
+                    auto& condition = *symbols.at(cond_iden.name).as<TensorRef>();
+                    if ( !is_singular(condition.shape) )
                     {
-                        return Error(position(condition), "condition must be a singular tensor, found tensor of shape %s",
-                                     str(cond_result.shape).c_str());
+                        return Error(component.loop->condition->position, "condition must be a singular tensor, found tensor of shape %s",
+                                     str(condition.shape).c_str());
                     }
                     
-                    attribs.emplace("pretest", ValueExpr((bool_t)component.loop->pretest));
-                    attribs.emplace("cond_inputs", subgraph_input_mapping(locals, cond_inputs));
+                    size_t cond_idx = 0;
+                    for ( auto& [iden, expr] : component.loop->carries )
+                    {
+                        if ( iden.name == cond_iden.name )
+                        {
+                            break;
+                        }
+                        ++cond_idx;
+                    }
                     
-                    subgraphs.push_back(cond_graph);
+                    attribs.emplace("cond", ValueExpr((int_t)cond_idx));
                 }
                 
                 inputs.insert(inputs.end(), locals.begin() + inputs.size(), locals.end());

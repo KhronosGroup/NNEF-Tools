@@ -1078,7 +1078,23 @@ namespace sknd
                 }
                 if ( component.loop->condition )
                 {
-                    check_condition(*component.loop->condition, operators, decls);
+                    check_condition(*component.loop->condition, decls);
+                    
+                    auto& cond_iden = as_identifier(*component.loop->condition);
+                    
+                    bool found = false;
+                    for ( auto& [iden, expr] : component.loop->carries )
+                    {
+                        if ( iden.name == cond_iden.name )
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if ( !found )
+                    {
+                        report_error(component.loop->condition->position, "loop condition must be introduced by the 'with' clause");
+                    }
                 }
                 if ( component.loop->count )
                 {
@@ -1118,7 +1134,7 @@ namespace sknd
             {
                 for ( auto& [condition, consequent] : component.branches )
                 {
-                    check_condition(condition, operators, decls);
+                    check_condition(*condition, decls);
                 }
             }
             
@@ -1193,24 +1209,14 @@ namespace sknd
             check_updates(decls, component.results, updates);
         }
         
-        void check_condition( const Callable& condition, const Dict<const Operator*>& operators, const Dict<Declaration>& decls ) const
+        void check_condition( const Expr& expr, const Dict<Declaration>& decls ) const
         {
-            auto cond_type = result_type(condition, decls, operators, true);
-            if ( !cond_type.empty() )
+            auto [type, rank] = check_expr(expr, decls);
+            if ( type && rank )
             {
-                if ( cond_type.size() == 1 )
+                if ( type->name != Typename::Bool || type->packed || type->optional )
                 {
-                    auto& type = cond_type.front();
-                    if ( type.name != Typename::Bool || type.packed || type.optional )
-                    {
-                        report_error(position(condition), "condition must be of type 'bool' (found '%s')",
-                                     str(type).c_str());
-                    }
-                }
-                else
-                {
-                    report_error(position(condition), "condition must return a single result (found %d)",
-                                 (int)cond_type.size());
+                    report_error(expr.position, "condition must be of type 'bool' (found '%s')", str(*type).c_str());
                 }
             }
         }
@@ -1670,22 +1676,16 @@ namespace sknd
             for ( auto& component : op.components )
             {
                 auto label = auto_label(component, decls);
-                check_label(component.operation, operators, label, labels, 0);
-                if ( component.loop && component.loop->condition )
-                {
-                    check_label(*component.loop->condition, operators, label, labels, 1);
-                }
-                size_t repetition = 0;
+                check_label(component.operation, operators, label, labels, false);
                 for ( auto& [condition, operation] : component.branches )
                 {
-                    check_label(condition, operators, label, labels, repetition++);
-                    check_label(operation, operators, label, labels, repetition++);
+                    check_label(operation, operators, label, labels, true);
                 }
             }
         }
         
         void check_label( const Callable& callable, const Dict<const Operator*>& operators, const std::string& auto_label,
-                         Dict<Position>& labels, const size_t repetition ) const
+                         Dict<Position>& labels, const bool repetition ) const
         {
             if ( callable.is<Invocation>() )
             {
@@ -1734,17 +1734,8 @@ namespace sknd
                 {
                     return true;
                 }
-                if ( component.loop && component.loop->condition && component.loop->condition->is<Invocation>() &&
-                    has_variables(component.loop->condition->as<Invocation>(), operators) )
-                {
-                    return true;
-                }
                 for ( auto& [condition, operation] : component.branches )
                 {
-                    if ( condition.is<Invocation>() && has_variables(condition.as<Invocation>(), operators) )
-                    {
-                        return true;
-                    }
                     if ( operation.is<Invocation>() && has_variables(operation.as<Invocation>(), operators) )
                     {
                         return true;
@@ -2148,20 +2139,12 @@ namespace sknd
             {
                 for ( auto& item : component.branches )
                 {
-                    allow_private_primitives &= !is_callable(item.condition) && is_static_expr(*item.condition.as<Region>().yields.front(), decls);
+                    allow_private_primitives &= is_static_expr(*item.condition, decls);
                 }
                 
                 for ( auto& item : component.branches )
                 {
-                    check_invocation_access(module, item.condition, operators, decls, false);
                     check_invocation_access(module, item.consequent, operators, decls, allow_private_primitives);
-                }
-            }
-            else if ( component.loop )
-            {
-                if ( component.loop->condition )
-                {
-                    check_invocation_access(module, *component.loop->condition, operators, decls, false);
                 }
             }
             check_invocation_access(module, component.operation, operators, decls, allow_private_primitives);
@@ -2321,16 +2304,13 @@ namespace sknd
                     Dict<Declaration> _decls;
                     
                     auto& condition = component.branches[i].condition;
-                    if ( condition.is<Region>() && condition.as<Region>().components.empty() )
+                    enum_promoted_optionals(*condition, promoted);
+                    if ( !promoted.empty() )
                     {
-                        enum_promoted_optionals(*condition.as<Region>().yields.front(), promoted);
-                        if ( !promoted.empty() )
+                        _decls = decls;
+                        for ( auto& id : promoted )
                         {
-                            _decls = decls;
-                            for ( auto& id : promoted )
-                            {
-                                _decls.at(id).type.optional = false;
-                            }
+                            _decls.at(id).type.optional = false;
                         }
                     }
                     
@@ -3769,25 +3749,17 @@ namespace sknd
         template<typename Symbols, bool (*IsStatic)(const Expr&, const Symbols&) = is_static_expr>
         static bool has_single_callable( const Component& component, const Symbols& symbols )
         {
-            if ( component.loop )
-            {
-                return !component.loop->condition || !component.loop->condition->is<Invocation>();
-            }
-            else if ( !component.branches.empty() )
+            if ( !component.branches.empty() )
             {
                 size_t dynamic_count = 0;
                 size_t callable_count = is_callable(component.operation) ? 1 : 0;
                 for ( auto& [condition, consequent] : component.branches )
                 {
-                    if ( is_callable(condition) || !IsStatic(*condition.template as<Region>().yields.front(), symbols) )
+                    if ( !IsStatic(*condition, symbols) )
                     {
                         ++dynamic_count;
                     }
                     
-                    if ( is_callable(condition) )
-                    {
-                        ++callable_count;
-                    }
                     if ( is_callable(consequent) )
                     {
                         ++callable_count;

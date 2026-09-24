@@ -179,42 +179,32 @@ class Printer:
         text += " = "
 
         if name == 'if':
-            branch_count = len(subgraphs) // 2
-            conditions = subgraphs[:branch_count]
-            branches = subgraphs[branch_count:]
             cond_input_indices = attribs['cond_inputs']
             branch_input_indices = attribs['branch_inputs']
-            cond_input_offset = 0
+            conditions = [args[idx] for idx in cond_input_indices]
             branch_input_offset = 0
-            for i, (condition, branch) in enumerate(zip(conditions, branches)):
-                cond_inputs = [args[idx] for idx in cond_input_indices[cond_input_offset:cond_input_offset + len(condition.inputs)]] \
-                    if isinstance(condition, _sknd.Graph) else None
+            for i, (condition, branch) in enumerate(zip(conditions, subgraphs)):
                 branch_inputs = [args[idx] for idx in branch_input_indices[branch_input_offset:branch_input_offset + len(branch.inputs)]] \
                     if isinstance(branch, _sknd.Graph) else None
-                text += (('if ' if i == 0 else ' elif ') + self._format_subgraph(condition, cond_inputs) +
+                text += (('if ' if i == 0 else ' elif ') + self._format_value(conditions[i]) +
                          ' then ' + self._format_subgraph(branch, branch_inputs))
-                cond_input_offset += 1 if isinstance(condition, _sknd.Tensor) else len(condition.inputs)
                 branch_input_offset += 1 if isinstance(branch, _sknd.Tensor) else len(branch.inputs)
 
-            branch = branches[-1]
+            branch = subgraphs[-1]
             branch_inputs = [args[idx] for idx in branch_input_indices[branch_input_offset:branch_input_offset + len(branch.inputs)]] \
                 if isinstance(branch, _sknd.Graph) else None
             text += ' else ' + self._format_subgraph(branch, branch_inputs)
         elif name == 'do':
             body = subgraphs[0]
-            condition = subgraphs[1] if len(subgraphs) > 1 else None
             body_input_indices = attribs['body_inputs']
-            cond_input_indices = attribs.get('cond_inputs')
             nvars = attribs['nvars']
             nscans = attribs['nscans']
-            pretest = attribs.get('pretest', False)
+            cond = attribs.get('cond')
             iters = args[nvars + nscans] or attribs.get('iters')
             index = locals[nvars + nscans] if len(locals) > nvars + nscans else None
+            condition = locals[cond] if cond is not None else None
 
             subgraph_inputs = tuple(locals[:nvars + nscans]) + (index,) + args[nvars + nscans + 1:]
-            cond_inputs = [subgraph_inputs[idx] for idx in cond_input_indices] \
-                if condition and isinstance(condition, _sknd.Graph) else None
-
             body_inputs = [subgraph_inputs[idx] for idx in body_input_indices]
 
             if nvars > 0:
@@ -236,12 +226,12 @@ class Printer:
                 text += 'for '
                 text += ', '.join(f'{id} : {self._format_value(value)}' for id, value in zip(ids, scans))
 
-            if condition and pretest:
+            if condition:
                 if nvars > 0 or nscans > 0:
                     text += ' '
-                text += 'while ' + self._format_subgraph(condition, cond_inputs)
+                text += 'while ' + self._format_value(condition)
 
-            if nvars > 0 or nscans > 0 or (condition and pretest):
+            if nvars > 0 or nscans > 0 or condition:
                 text += ' '
             text += 'do'
 
@@ -254,9 +244,6 @@ class Printer:
                 text += ')'
 
             text += ' ' + self._format_subgraph(body, body_inputs)
-
-            if condition and not pretest:
-                text += ' while ' + self._format_subgraph(condition, cond_inputs)
 
         elif name == '=':    # assignment
             text += self._format_value(args[0])
