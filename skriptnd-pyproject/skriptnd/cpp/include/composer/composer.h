@@ -628,6 +628,27 @@ namespace sknd
                 graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, std::move(branch_graphs), {}, {}, true });
                 return std::make_tuple(inputs, outputs);
             }
+            else if ( component.swtch )
+            {
+                TRY_DECL(expr_value, component.swtch->expr ? eval(*component.swtch->expr, symbols) : ValueExpr(nullptr))
+                for ( auto& [condition, invocation] : component.swtch->cases )
+                {
+                    TRY_DECL(cond_value, condition ? eval(*condition, symbols) : ValueExpr(true))
+                    if ( expr_value != nullptr && condition )
+                    {
+                        cond_value = (cond_value == expr_value);
+                    }
+                    
+                    if ( cond_value.as_bool() )
+                    {
+                        TRY_DECL(attribs, inputs, outputs, compose_callable(invocation, operators, symbols, model, graph, scope, label))
+                        rename_results(component.results, outputs, scope);
+                        TRY_CALL(add_results_to_symbols(component.results, outputs, graph, symbols, scope, component.position))
+                        return std::make_tuple(inputs, outputs);
+                    }
+                }
+                return Error(component.position, "none of the cases evaluated to true in switch statement");
+            }
             else if ( component.loop && !component.loop->unroll )
             {
                 Dict<Symbol> saved_symbols = symbols;

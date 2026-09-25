@@ -315,17 +315,19 @@ operator resize {
             rounding_method;
     }
     @compose {
-        output = if mode == 'NEAREST' then
-                     _nearest_resize{axes=axes, size=size,
-                                     coordinate_transform=coordinate_transform,
-                                     rounding_method=rounding_method}(input)
-                 elif mode == 'LINEAR' then
-                     _linear_resize{axes=axes, size=size, antialias=antialias,
-                                    coordinate_transform=coordinate_transform}(input)
-                 else
-                     _cubic_resize{axes=axes, size=size, antialias=antialias,
-                                   coordinate_transform=coordinate_transform,
-                                   coeff_a=cubic_coeff_a}(input);
+        output = switch (mode) {
+            case 'NEAREST':
+                _nearest_resize{axes=axes, size=size,
+                                coordinate_transform=coordinate_transform,
+                                rounding_method=rounding_method}(input)
+            case 'LINEAR':
+                _linear_resize{axes=axes, size=size, antialias=antialias,
+                               coordinate_transform=coordinate_transform}(input)
+            case 'CUBIC':
+                _cubic_resize{axes=axes, size=size, antialias=antialias,
+                              coordinate_transform=coordinate_transform,
+                              coeff_a=cubic_coeff_a}(input)
+        };
     }
 }
 
@@ -369,17 +371,19 @@ operator rescale {
             rounding_method;
     }
     @compose {
-        output = if mode == 'NEAREST' then
-                     _nearest_resize{axes=axes, size=size,
-                                     coordinate_transform=coordinate_transform,
-                                     rounding_method=rounding_method}(input)
-                 elif mode == 'LINEAR' then
-                     _linear_resize{axes=axes, size=size, antialias=antialias,
-                                    coordinate_transform=coordinate_transform}(input)
-                 else
-                     _cubic_resize{axes=axes, size=size, antialias=antialias,
-                                   coordinate_transform=coordinate_transform,
-                                   coeff_a=cubic_coeff_a}(input);
+        output = switch (mode) {
+            case 'NEAREST':
+                _nearest_resize{axes=axes, size=size,
+                                coordinate_transform=coordinate_transform,
+                                rounding_method=rounding_method}(input)
+            case 'LINEAR':
+                _linear_resize{axes=axes, size=size, antialias=antialias,
+                               coordinate_transform=coordinate_transform}(input)
+            case 'CUBIC':
+                _cubic_resize{axes=axes, size=size, antialias=antialias,
+                              coordinate_transform=coordinate_transform,
+                              coeff_a=cubic_coeff_a}(input)
+        };
     }
 }
 
@@ -528,11 +532,13 @@ operator grid_sample {
             "'padding' must be one of {paddings}", padding;
     }
     @compose {
-        output = if mode == 'NEAREST' then
-                     _nearest_grid_sample{padding=padding, aligned=aligned}(input, grid)
-                 elif mode == 'LINEAR' then
-                     _linear_grid_sample{padding=padding, aligned=aligned}(input, grid)
-                 else
-                     _cubic_grid_sample{padding=padding, aligned=aligned}(input, grid);
+        output = switch (mode) {
+            case 'NEAREST':
+                _nearest_grid_sample{padding=padding, aligned=aligned}(input, grid)
+            case 'LINEAR':
+                _linear_grid_sample{padding=padding, aligned=aligned}(input, grid)
+            case 'CUBIC':
+                _cubic_grid_sample{padding=padding, aligned=aligned}(input, grid)
+        };
     }
 }

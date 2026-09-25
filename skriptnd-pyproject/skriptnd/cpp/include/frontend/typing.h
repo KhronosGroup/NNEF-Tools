@@ -1137,6 +1137,69 @@ namespace sknd
                     check_condition(*condition, decls);
                 }
             }
+            else if ( component.swtch )
+            {
+                Type expr_type;
+                if ( component.swtch->expr )
+                {
+                    auto& expr = *component.swtch->expr;
+                    auto [type, rank] = check_expr(expr, decls);
+                    if ( type && type->tensor )
+                    {
+                        report_error(expr.position, "switch expression must not be of tensor type");
+                    }
+                    if ( type && type->dynamic )
+                    {
+                        report_error(expr.position, "switch expression must not be of dynamic type");
+                    }
+                    if ( type && type->optional )
+                    {
+                        report_error(expr.position, "switch expression must not be of optional type");
+                    }
+                    if ( type )
+                    {
+                        expr_type = *type;
+                    }
+                }
+                for ( auto& [condition, invocation] : component.swtch->cases )
+                {
+                    if ( condition )
+                    {
+                        auto [type, rank] = check_expr(*condition, decls);
+                        if ( type && type->tensor )
+                        {
+                            report_error(condition->position, "case condition must not be of tensor type");
+                        }
+                        if ( type && type->dynamic )
+                        {
+                            report_error(condition->position, "case condition must not be of dynamic type");
+                        }
+                        if ( type && type->optional )
+                        {
+                            report_error(condition->position, "case condition must not be of optional type");
+                        }
+                        if ( component.swtch->expr )
+                        {
+                            if ( type && expr_type.name != Typename::Type && expr_type != *type )
+                            {
+                                report_error(condition->position, "case condition type does not match expression type (%s vs %s)",
+                                             str(*type).c_str(), str(expr_type).c_str());
+                            }
+                        }
+                        else
+                        {
+                            if ( rank && *rank )
+                            {
+                                report_error(condition->position, "case condition must not be packed");
+                            }
+                            if ( type && type->name != Typename::Bool )
+                            {
+                                report_error(condition->position, "case condition must be of type bool; found '%s'", str(*type).c_str());
+                            }
+                        }
+                    }
+                }
+            }
             
             auto types = result_type(component, decls, operators);
             if ( !types.empty() )
@@ -1179,7 +1242,7 @@ namespace sknd
                         auto loop_repeats = static_repeats(component, decls, component.loop->carries.size());
                         repeats.assign(repeats.size(), loop_repeats);
                     }
-                    else if ( component.branches.empty() && component.operation.is<Region>() )
+                    else if ( component.branches.empty() && !component.swtch && component.operation.is<Region>() )
                     {
                         auto& region = component.operation.as<Region>();
                         for ( size_t i = 0; i < region.yields.size(); ++i )
@@ -1681,6 +1744,13 @@ namespace sknd
                 {
                     check_label(operation, operators, label, labels, true);
                 }
+                if ( component.swtch )
+                {
+                    for ( auto& [condition, invocation ] : component.swtch->cases )
+                    {
+                        check_label(invocation, operators, label, labels, true);
+                    }
+                }
             }
         }
         
@@ -1739,6 +1809,16 @@ namespace sknd
                     if ( operation.is<Invocation>() && has_variables(operation.as<Invocation>(), operators) )
                     {
                         return true;
+                    }
+                }
+                if ( component.swtch )
+                {
+                    for ( auto& [condition, invocation] : component.swtch->cases )
+                    {
+                        if ( has_variables(invocation, operators) )
+                        {
+                            return true;
+                        }
                     }
                 }
             }
@@ -2147,6 +2227,13 @@ namespace sknd
                     check_invocation_access(module, item.consequent, operators, decls, allow_private_primitives);
                 }
             }
+            else if ( component.swtch )
+            {
+                for ( auto& item : component.swtch->cases )
+                {
+                    check_invocation_access(module, item.invocation, operators, decls, allow_private_primitives);
+                }
+            }
             check_invocation_access(module, component.operation, operators, decls, allow_private_primitives);
         }
         
@@ -2335,6 +2422,44 @@ namespace sknd
                         report_error(component.position, "operation result type mismatch (%s vs %s)",
                                      types_str(common_type).c_str(), types_str(item_type).c_str());
                         return {};
+                    }
+                }
+                return common_type;
+            }
+            else if ( component.swtch )
+            {
+                std::vector<Type> common_type;
+                auto& cases = component.swtch->cases;
+                for ( size_t i = 0; i < cases.size(); ++i )
+                {
+                    auto item_type = result_type(cases[i].invocation, decls, operators, true);
+                    if ( item_type.empty() )
+                    {
+                        return {};
+                    }
+                    if ( i == 0 )
+                    {
+                        common_type = item_type;
+                    }
+                    else
+                    {
+                        for ( size_t k = 0; k < item_type.size(); ++k )
+                        {
+                            if ( common_type[k].name == Typename::Type )
+                            {
+                                common_type[k].name = item_type[k].name;
+                            }
+                            else if ( item_type[k].name == Typename::Type )
+                            {
+                                item_type[k].name = common_type[k].name;
+                            }
+                        }
+                        if ( item_type != common_type )
+                        {
+                            report_error(component.position, "operation result type mismatch (%s vs %s)",
+                                         types_str(common_type).c_str(), types_str(item_type).c_str());
+                            return {};
+                        }
                     }
                 }
                 return common_type;

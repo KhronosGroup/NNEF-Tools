@@ -126,6 +126,19 @@ namespace sknd
         const Shared<Expr> condition;
         const Callable consequent;
     };
+
+    struct Case
+    {
+        const Shared<Expr> condition;
+        const Invocation invocation;
+    };
+
+    struct Switch
+    {
+        const Position position;
+        const Shared<Expr> expr;
+        std::vector<Case> cases;
+    };
     
     struct Loop
     {
@@ -143,6 +156,7 @@ namespace sknd
         const std::vector<Packable<Typed>> results;
         const Callable operation;
         const std::vector<Branch> branches;
+        const Shared<Switch> swtch;
         const Shared<Loop> loop;
     };
     

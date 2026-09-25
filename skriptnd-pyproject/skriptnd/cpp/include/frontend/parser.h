@@ -1165,6 +1165,24 @@ namespace sknd
             return Lowering{ position, left, right, op, locals, bounds, condition, unroll_index, unroll_count };
         }
         
+        Result<Invocation> parse_invocation( Lexer& lexer )
+        {
+            auto position = lexer.position();
+            
+            TRY_DECL(iden, parse_identifier(lexer, true))
+            bool qualified = iden.find('.') != std::string::npos;
+            if ( !qualified && lexer.is_token(Operator::Colon) )
+            {
+                TRY_CALL(lexer.accept())
+                TRY_DECL(name, parse_identifier(lexer, true))
+                return parse_invocation(lexer, iden, name, position);
+            }
+            else
+            {
+                return parse_invocation(lexer, {}, iden, position);
+            }
+        }
+        
         Result<Invocation> parse_invocation( Lexer& lexer, const std::string& label, const std::string& name, const Position& position )
         {
             bool qualified = name.find('.') != std::string::npos;
@@ -1379,7 +1397,36 @@ namespace sknd
                 TRY_CALL(lexer.accept(Keyword::Else))
                 TRY_DECL(alternative, parse_callable(lexer))
                 
-                return Component{ position, std::move(results), std::move(alternative), std::move(branches), nullptr };
+                return Component{ position, std::move(results), std::move(alternative), std::move(branches), {}, {} };
+            }
+            else if ( lexer.is_token(Keyword::Switch) )
+            {
+                TRY_CALL(lexer.accept())
+                TRY_DECL(expr, !lexer.is_token(Operator::LeftBrace) ? parse_expr(lexer) : Shared<Expr>())
+                
+                TRY_CALL(lexer.accept(Operator::LeftBrace))
+                
+                std::vector<Case> cases;
+                while ( lexer.is_token(Keyword::Case) )
+                {
+                    TRY_CALL(lexer.accept())
+                    TRY_DECL(condition, parse_expr(lexer))
+                    TRY_CALL(lexer.accept(Operator::Colon))
+                    TRY_DECL(invocation, parse_invocation(lexer))
+                    cases.push_back(Case{ condition, invocation });
+                }
+                if ( lexer.is_token(Keyword::Default) )
+                {
+                    TRY_CALL(lexer.accept())
+                    TRY_CALL(lexer.accept(Operator::Colon))
+                    TRY_DECL(invocation, parse_invocation(lexer))
+                    cases.push_back(Case{ nullptr, invocation });
+                }
+                
+                TRY_CALL(lexer.accept(Operator::RightBrace))
+                
+                auto swtch = std::make_shared<Switch>(Switch{ position, expr, std::move(cases) });
+                return Component{ position, std::move(results), Region{}, {}, swtch, {} };
             }
             else if ( lexer.is_oneof(Keyword::With, Keyword::For, Keyword::While, Keyword::Do) )
             {
@@ -1403,12 +1450,12 @@ namespace sknd
                 TRY_DECL(body, parse_callable(lexer))
                 
                 auto loop = std::make_shared<Loop>(Loop{ carries, scans, condition, count, iter, unroll });
-                return Component{ position, std::move(results), std::move(body), {}, loop };
+                return Component{ position, std::move(results), std::move(body), {}, {}, loop };
             }
             else
             {
                 TRY_DECL(callable, parse_callable(lexer))
-                return Component{ position, std::move(results), std::move(callable), {}, nullptr };
+                return Component{ position, std::move(results), std::move(callable), {}, {}, {} };
             }
         }
         
