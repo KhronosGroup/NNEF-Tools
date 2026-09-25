@@ -1130,12 +1130,9 @@ namespace sknd
                     }
                 }
             }
-            else if ( component.branches.size() )
+            else if ( component.branch )
             {
-                for ( auto& [condition, consequent] : component.branches )
-                {
-                    check_condition(*condition, decls);
-                }
+                check_condition(*component.branch->condition, decls);
             }
             else if ( component.swtch )
             {
@@ -1242,7 +1239,7 @@ namespace sknd
                         auto loop_repeats = static_repeats(component, decls, component.loop->carries.size());
                         repeats.assign(repeats.size(), loop_repeats);
                     }
-                    else if ( component.branches.empty() && !component.swtch && component.operation.is<Region>() )
+                    else if ( !component.branch && !component.swtch && component.operation.is<Region>() )
                     {
                         auto& region = component.operation.as<Region>();
                         for ( size_t i = 0; i < region.yields.size(); ++i )
@@ -1740,11 +1737,12 @@ namespace sknd
             {
                 auto label = auto_label(component, decls);
                 check_label(component.operation, operators, label, labels, false);
-                for ( auto& [condition, operation] : component.branches )
+                if ( component.branch )
                 {
-                    check_label(operation, operators, label, labels, true);
+                    check_label(component.branch->consequent, operators, label, labels, true);
+                    check_label(component.branch->alternate, operators, label, labels, true);
                 }
-                if ( component.swtch )
+                else if ( component.swtch )
                 {
                     for ( auto& [condition, invocation ] : component.swtch->cases )
                     {
@@ -1804,14 +1802,18 @@ namespace sknd
                 {
                     return true;
                 }
-                for ( auto& [condition, operation] : component.branches )
+                if ( component.branch )
                 {
-                    if ( operation.is<Invocation>() && has_variables(operation.as<Invocation>(), operators) )
+                    if ( component.branch->consequent.is<Invocation>() && has_variables(component.branch->consequent.as<Invocation>(), operators) )
+                    {
+                        return true;
+                    }
+                    if ( component.branch->alternate.is<Invocation>() && has_variables(component.branch->alternate.as<Invocation>(), operators) )
                     {
                         return true;
                     }
                 }
-                if ( component.swtch )
+                else if ( component.swtch )
                 {
                     for ( auto& [condition, operation] : component.swtch->cases )
                     {
@@ -2215,17 +2217,12 @@ namespace sknd
         void check_invocation_access( const Module& module, const Component& component, const Dict<const Operator*>& operators,
                                      const Dict<Declaration>& decls, bool allow_private_primitives ) const
         {
-            if ( component.branches.size() )
+            if ( component.branch )
             {
-                for ( auto& item : component.branches )
-                {
-                    allow_private_primitives &= is_static_expr(*item.condition, decls);
-                }
+                allow_private_primitives &= is_static_expr(*component.branch->condition, decls);
                 
-                for ( auto& item : component.branches )
-                {
-                    check_invocation_access(module, item.consequent, operators, decls, allow_private_primitives);
-                }
+                check_invocation_access(module, component.branch->consequent, operators, decls, allow_private_primitives);
+                check_invocation_access(module, component.branch->alternate, operators, decls, allow_private_primitives);
             }
             else if ( component.swtch )
             {
@@ -2378,53 +2375,51 @@ namespace sknd
         
         std::vector<Type> result_type( const Component& component, const Dict<Declaration>& decls, const Dict<const Operator*>& operators ) const
         {
-            if ( component.branches.size() )
+            if ( component.branch )
             {
-                auto common_type = result_type(component.operation, decls, operators, true);
-                if ( common_type.empty() )
+                std::vector<std::string> promoted;
+                Dict<Declaration> _decls;
+                
+                enum_promoted_optionals(*component.branch->condition, promoted);
+                if ( !promoted.empty() )
+                {
+                    _decls = decls;
+                    for ( auto& id : promoted )
+                    {
+                        _decls.at(id).type.optional = false;
+                    }
+                }
+                
+                auto then_type = result_type(component.branch->consequent, !promoted.empty() ? _decls : decls, operators, true);
+                auto else_type = result_type(component.branch->alternate, !promoted.empty() ? _decls : decls, operators, true);
+                if ( then_type.empty() || else_type.empty() )
                 {
                     return {};
                 }
-                for ( size_t i = 0; i < component.branches.size(); ++i )
+                if ( then_type.size() != else_type.size() )
                 {
-                    std::vector<std::string> promoted;
-                    Dict<Declaration> _decls;
-                    
-                    auto& condition = component.branches[i].condition;
-                    enum_promoted_optionals(*condition, promoted);
-                    if ( !promoted.empty() )
+                    report_error(component.position, "result count mismatch in if-then-else statement (%d vs %d)",
+                                 (int)then_type.size(), (int)else_type.size());
+                    return {};
+                }
+                for ( size_t k = 0; k < then_type.size(); ++k )
+                {
+                    if ( then_type[k].name == Typename::Type )
                     {
-                        _decls = decls;
-                        for ( auto& id : promoted )
-                        {
-                            _decls.at(id).type.optional = false;
-                        }
+                        then_type[k].name = else_type[k].name;
                     }
-                    
-                    auto item_type = result_type(component.branches[i].consequent, !promoted.empty() ? _decls : decls, operators, true);
-                    if ( item_type.empty() )
+                    else if ( else_type[k].name == Typename::Type )
                     {
-                        return {};
-                    }
-                    for ( size_t k = 0; k < item_type.size(); ++k )
-                    {
-                        if ( common_type[k].name == Typename::Type )
-                        {
-                            common_type[k].name = item_type[k].name;
-                        }
-                        else if ( item_type[k].name == Typename::Type )
-                        {
-                            item_type[k].name = common_type[k].name;
-                        }
-                    }
-                    if ( item_type != common_type )
-                    {
-                        report_error(component.position, "operation result type mismatch (%s vs %s)",
-                                     types_str(common_type).c_str(), types_str(item_type).c_str());
-                        return {};
+                        else_type[k].name = then_type[k].name;
                     }
                 }
-                return common_type;
+                if ( then_type != else_type )
+                {
+                    report_error(component.position, "result type mismatch in if-then-else statement (%s vs %s)",
+                                 types_str(then_type).c_str(), types_str(else_type).c_str());
+                    return {};
+                }
+                return then_type;
             }
             else if ( component.swtch )
             {
@@ -2443,6 +2438,12 @@ namespace sknd
                     }
                     else
                     {
+                        if ( item_type.size() != common_type.size() )
+                        {
+                            report_error(component.position, "result count mismatch in switch statement (%d vs %d)",
+                                         (int)common_type.size(), (int)item_type.size());
+                            return {};
+                        }
                         for ( size_t k = 0; k < item_type.size(); ++k )
                         {
                             if ( common_type[k].name == Typename::Type )
@@ -2456,7 +2457,7 @@ namespace sknd
                         }
                         if ( item_type != common_type )
                         {
-                            report_error(component.position, "operation result type mismatch (%s vs %s)",
+                            report_error(component.position, "result type mismatch in switch statement (%s vs %s)",
                                          types_str(common_type).c_str(), types_str(item_type).c_str());
                             return {};
                         }
@@ -3874,23 +3875,11 @@ namespace sknd
         template<typename Symbols, bool (*IsStatic)(const Expr&, const Symbols&) = is_static_expr>
         static bool has_single_callable( const Component& component, const Symbols& symbols )
         {
-            if ( !component.branches.empty() )
+            if ( component.branch )
             {
-                size_t dynamic_count = 0;
-                size_t callable_count = is_callable(component.operation) ? 1 : 0;
-                for ( auto& [condition, consequent] : component.branches )
-                {
-                    if ( !IsStatic(*condition, symbols) )
-                    {
-                        ++dynamic_count;
-                    }
-                    
-                    if ( is_callable(consequent) )
-                    {
-                        ++callable_count;
-                    }
-                }
-                return dynamic_count == 0 || callable_count <= 1;
+                return IsStatic(*component.branch->condition, symbols) ||
+                        !is_callable(component.branch->consequent) ||
+                        !is_callable(component.branch->alternate);
             }
             else
             {

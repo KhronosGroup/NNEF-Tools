@@ -179,21 +179,14 @@ class Printer:
         text += " = "
 
         if name == 'if':
-            cond_input_indices = attribs['cond_inputs']
-            branch_input_indices = attribs['branch_inputs']
-            conditions = [args[idx] for idx in cond_input_indices]
-            branch_input_offset = 0
-            for i, (condition, branch) in enumerate(zip(conditions, subgraphs)):
-                branch_inputs = [args[idx] for idx in branch_input_indices[branch_input_offset:branch_input_offset + len(branch.inputs)]] \
-                    if isinstance(branch, _sknd.Graph) else None
-                text += (('if ' if i == 0 else ' elif ') + self._format_value(conditions[i]) +
-                         ' then ' + self._format_subgraph(branch, branch_inputs))
-                branch_input_offset += 1 if isinstance(branch, _sknd.Tensor) else len(branch.inputs)
-
-            branch = subgraphs[-1]
-            branch_inputs = [args[idx] for idx in branch_input_indices[branch_input_offset:branch_input_offset + len(branch.inputs)]] \
-                if isinstance(branch, _sknd.Graph) else None
-            text += ' else ' + self._format_subgraph(branch, branch_inputs)
+            condition = args[0] or attribs.get('cond')
+            then_branch = subgraphs[0]
+            else_branch = subgraphs[1]
+            then_inputs = args[1:1+len(then_branch.inputs)]
+            else_inputs = args[1+len(then_branch.inputs):]
+            text += (f"if {self._format_value(condition)} "
+                     f"then {self._format_subgraph(then_branch, then_inputs)} "
+                     f"else {self._format_subgraph(else_branch, else_inputs)}")
         elif name == 'do':
             body = subgraphs[0]
             body_input_indices = attribs['body_inputs']

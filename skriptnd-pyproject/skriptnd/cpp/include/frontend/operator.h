@@ -123,8 +123,10 @@ namespace sknd
     
     struct Branch
     {
+        const Position position;
         const Shared<Expr> condition;
         const Callable consequent;
+        const Callable alternate;
     };
 
     struct Case
@@ -155,7 +157,7 @@ namespace sknd
         const Position position;
         const std::vector<Packable<Typed>> results;
         const Callable operation;
-        const std::vector<Branch> branches;
+        const Shared<Branch> branch;
         const Shared<Switch> swtch;
         const Shared<Loop> loop;
     };
@@ -416,14 +418,9 @@ namespace sknd
         
         os << " = ";
         
-        if ( component.branches.size() )
+        if ( component.branch )
         {
-            size_t i = 0;
-            for ( auto& [condition, consequent] : component.branches )
-            {
-                os << (i++ == 0 ? "if " : " elif ") << condition << " then " << consequent;
-            }
-            os << " else " << component.operation;
+            os << "if " << *component.branch->condition << " then " << component.branch->condition << " else " << component.branch->alternate;
         }
         else if ( component.loop )
         {

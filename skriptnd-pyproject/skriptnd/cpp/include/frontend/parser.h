@@ -1381,23 +1381,15 @@ namespace sknd
             
             if ( lexer.is_token(Keyword::If) )
             {
-                std::vector<Branch> branches;
-                
-                do
-                {
-                    TRY_CALL(lexer.accept())
-                    TRY_DECL(condition, parse_expr(lexer))
-                    TRY_CALL(lexer.accept(Keyword::Then))
-                    TRY_DECL(consequent, parse_callable(lexer))
-                    
-                    branches.push_back(Branch{ condition, consequent });
-                }
-                while ( lexer.is_token(Keyword::Elif) );
-                
+                TRY_CALL(lexer.accept())
+                TRY_DECL(condition, parse_expr(lexer))
+                TRY_CALL(lexer.accept(Keyword::Then))
+                TRY_DECL(consequent, parse_callable(lexer))
                 TRY_CALL(lexer.accept(Keyword::Else))
-                TRY_DECL(alternative, parse_callable(lexer))
+                TRY_DECL(alternate, parse_callable(lexer))
                 
-                return Component{ position, std::move(results), std::move(alternative), std::move(branches), {}, {} };
+                auto branch = std::make_shared<Branch>(Branch{ position, condition, consequent, alternate });
+                return Component{ position, std::move(results), Region{}, branch, {}, {} };
             }
             else if ( lexer.is_token(Keyword::Switch) )
             {

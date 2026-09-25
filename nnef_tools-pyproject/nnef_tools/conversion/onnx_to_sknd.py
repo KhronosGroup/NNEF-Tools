@@ -1126,14 +1126,6 @@ _Transforms = Converter.unpack_transforms({
             type='if',
             inputs='!tuple(I)',
             outputs='!tuple(O)',
-            using={
-                'then_inputs': '!range(1, _implicit_input_count_[0] + 1)',
-                'else_inputs': '!range(1 + _implicit_input_count_[0], 1 + _implicit_input_count_[0] + _implicit_input_count_[1])',
-            },
-            attribs={
-                'cond_inputs': [0],
-                'branch_inputs': '![*then_inputs, *else_inputs]',
-            },
             graphs='![then_branch, else_branch]',
         ),
     'Loop': # input-output structure of ONNX Loop: [iter-count, condition, dependencies.., captured-inputs..] -> [dependencies.., scan-outputs..]

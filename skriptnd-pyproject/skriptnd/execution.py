@@ -966,27 +966,19 @@ def _format_copy(op, indent):
 
 
 def _format_if(op, indent, context):
-    branches = op.subgraphs
-    cond_input_indices = op.attribs['cond_inputs']
-    branch_input_indices = op.attribs['branch_inputs']
-    conditions = [op.inputs[idx] for idx in cond_input_indices]
-    branch_input_offset = 0
+    condition = op.inputs[0] or op.attribs.get('cond')
+    then_branch = op.subgraphs[0]
+    else_branch = op.subgraphs[1]
+    then_inputs = op.inputs[1:1 + len(then_branch.inputs)]
+    else_inputs = op.inputs[1 + len(then_branch.inputs):]
 
-    text = ""
-    for condition, branch in zip(conditions, branches):
-        branch_inputs = tuple(op.inputs[idx] for idx in branch_input_indices[branch_input_offset:branch_input_offset+len(branch.inputs)])
-
-        text += indent + "if ( {cond} )\n".format(cond=_format_condition(condition))
-        text += _format_subgraph(branch, branch_inputs, op.outputs, indent, context)
-        if not branch.parent:
-            text += '\n'
-        text += indent + "else\n"
-
-        branch_input_offset += len(branch.inputs)
-
-    branch_inputs = tuple(op.inputs[idx] for idx in branch_input_indices[branch_input_offset:])
-    text += _format_subgraph(branches[-1], branch_inputs, op.outputs, indent, context)
-    if not branches[-1].parent:
+    text = indent + f"if ( {_format_condition(condition)} )\n"
+    text += _format_subgraph(then_branch, then_inputs, op.outputs, indent, context)
+    if not then_branch.parent:
+        text += '\n'
+    text += indent + "else\n"
+    text += _format_subgraph(else_branch, else_inputs, op.outputs, indent, context)
+    if not else_branch.parent:
         text += '\n'
     return text
 

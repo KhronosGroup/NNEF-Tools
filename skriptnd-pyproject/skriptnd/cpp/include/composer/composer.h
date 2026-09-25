@@ -491,98 +491,47 @@ namespace sknd
         {
             auto label = propagate_label ? "~" : auto_label(component, symbols);
             
-            if ( !component.branches.empty() )
+            if ( component.branch )
             {
-                std::vector<Graph*> branch_graphs;
+                TensorRef cond_tensor;
+                ValueExpr cond_value;
                 
-                std::vector<TensorRef> inputs;
-                std::vector<TensorRef> outputs;
-                
-                std::vector<TensorRef> cond_inputs, branch_inputs;
-                
-                Dict<ValueExpr> local_placeholder_mapping;
-                
-                bool shortcut = false;
-                for ( size_t i = 0; i < component.branches.size() && !shortcut; ++i )
+                auto& condition = *component.branch->condition;
+                if ( !is_tensor_expr(condition, symbols) )
                 {
-                    const Expr& condition = *component.branches[i].condition;
-                    const Callable& consequent = component.branches[i].consequent;
-                    
-                    if ( !is_tensor_expr(condition, symbols) )
+                    TRY_MOVE(cond_value, eval(condition, symbols))
+                    if ( cond_value.is_literal() )
                     {
-                        TRY_DECL(value, eval(condition, symbols))
-                        if ( value.is_literal() )
-                        {
-                            if ( !value.as_bool() )             // skip this branch, it's never executed
-                            {
-                                continue;
-                            }
-                            
-                            shortcut = true;                    // this becomes the `else` branch
-                            
-                            if ( branch_graphs.empty() )        // branching is completely eliminated
-                            {
-                                TRY_DECL(attribs, inputs, outputs, compose_callable(consequent, operators, symbols, model, graph, scope, label))
-                                rename_results(component.results, outputs, scope);
-                                TRY_CALL(add_results_to_symbols(component.results, outputs, graph, symbols, scope, component.position))
-                                return std::make_tuple(inputs, outputs);
-                            }
-                        }
-                    }
-                    if ( !shortcut )
-                    {
-                        TRY_DECL(cond_tensor, eval(condition, symbols, as_tensor(graph), as_tensor_pack(graph)))
-                        if ( !is_singular(cond_tensor->shape) )
-                        {
-                            return Error(condition.position, "condition must be a singular tensor, found tensor of shape %s",
-                                         str(cond_tensor->shape).c_str());
-                        }
-                        
-                        cond_inputs.push_back(cond_tensor);
-                        add_all(inputs, { cond_tensor });
-                    }
-                    
-                    TRY_DECL(subgraph, subgraph_inputs, compose_subgraph(consequent, operators, symbols, model, graph, scope, label))
-                    
-                    branch_graphs.push_back(subgraph);
-                    
-                    if ( branch_graphs.size() == 1 )
-                    {
-                        outputs = duplicate_tensors(graph, subgraph->outputs);
-                    }
-                    else
-                    {
-                        TRY_CALL(update_branch_output_shapes(outputs, subgraph->outputs, graph, component.position))
-                    }
-                    collect_local_placeholder_mapping(subgraph->inputs, subgraph_inputs, local_placeholder_mapping);
-                    
-                    branch_inputs.insert(branch_inputs.end(), subgraph_inputs.begin(), subgraph_inputs.end());
-                    add_all(inputs, subgraph_inputs);
-                }
-                
-                if ( !shortcut )
-                {
-                    if ( branch_graphs.empty() )     // only else branch was not eliminated
-                    {
-                        TRY_DECL(attribs, inputs, outputs, compose_callable(component.operation, operators, symbols, model, graph, scope, label))
+                        auto& callable = cond_value.as_bool() ? component.branch->consequent : component.branch->alternate;
+                        TRY_DECL(attribs, inputs, outputs, compose_callable(callable, operators, symbols, model, graph, scope, label))
                         rename_results(component.results, outputs, scope);
                         TRY_CALL(add_results_to_symbols(component.results, outputs, graph, symbols, scope, component.position))
-                        
                         return std::make_tuple(inputs, outputs);
                     }
-                    else                                // add else branch as well
+                }
+                else
+                {
+                    TRY_MOVE(cond_tensor, eval(condition, symbols, as_tensor(graph), as_tensor_pack(graph)))
+                    if ( !is_singular(cond_tensor->shape) )
                     {
-                        TRY_DECL(subgraph, subgraph_inputs, compose_subgraph(component.operation, operators, symbols, model, graph, scope, label))
-                        
-                        branch_graphs.push_back(subgraph);
-                        
-                        TRY_CALL(update_branch_output_shapes(outputs, subgraph->outputs, graph, component.position))
-                        collect_local_placeholder_mapping(subgraph->inputs, subgraph_inputs, local_placeholder_mapping);
-                        
-                        branch_inputs.insert(branch_inputs.end(), subgraph_inputs.begin(), subgraph_inputs.end());
-                        add_all(inputs, subgraph_inputs);
+                        return Error(condition.position, "condition must be a singular tensor, found tensor of shape %s",
+                                     str(cond_tensor->shape).c_str());
                     }
                 }
+                
+                TRY_DECL(then_graph, then_inputs, compose_subgraph(component.branch->consequent, operators, symbols, model, graph, scope, label))
+                TRY_DECL(else_graph, else_inputs, compose_subgraph(component.branch->alternate, operators, symbols, model, graph, scope, label))
+                
+                Dict<ValueExpr> local_placeholder_mapping;
+                collect_local_placeholder_mapping(then_graph->inputs, then_inputs, local_placeholder_mapping);
+                collect_local_placeholder_mapping(else_graph->inputs, else_inputs, local_placeholder_mapping);
+                
+                std::vector<TensorRef> inputs = { cond_tensor };
+                add_all(inputs, then_inputs);
+                add_all(inputs, else_inputs);
+                
+                auto outputs = duplicate_tensors(graph, then_graph->outputs);
+                TRY_CALL(update_branch_output_shapes(outputs, else_graph->outputs, graph, component.position))
                 
                 auto& context = _contexts.at(graph.name);
                 for ( size_t i = 0; i < outputs.size(); ++i )
@@ -619,13 +568,13 @@ namespace sknd
                 rename_results(component.results, outputs, scope);
                 TRY_CALL(add_results_to_symbols(component.results, outputs, graph, symbols, scope, component.position))
                 
-                const Dict<ValueExpr> attribs =
+                Dict<ValueExpr> attribs;
+                if ( cond_tensor == nullptr )
                 {
-                    { "cond_inputs", subgraph_input_mapping(inputs, cond_inputs) },
-                    { "branch_inputs", subgraph_input_mapping(inputs, branch_inputs) },
-                };
+                    attribs["cond"] = cond_value;
+                }
                 
-                graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, std::move(branch_graphs), {}, {}, true });
+                graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, { then_graph, else_graph }, {}, {}, true });
                 return std::make_tuple(inputs, outputs);
             }
             else if ( component.swtch )
@@ -1301,14 +1250,15 @@ namespace sknd
         
         bool should_inline( const Component& component )
         {
-            if ( !component.branches.empty() )
+            if ( component.branch )
             {
-                for ( auto& branch : component.branches )
+                if ( !component.branch->consequent.is<Invocation>() || !should_inline(component.branch->consequent.as<Invocation>()) )
                 {
-                    if ( !branch.consequent.is<Invocation>() || !should_inline(branch.consequent.as<Invocation>()) )
-                    {
-                        return false;
-                    }
+                    return false;
+                }
+                if ( !component.branch->alternate.is<Invocation>() || !should_inline(component.branch->alternate.as<Invocation>()) )
+                {
+                    return false;
                 }
                 return true;
             }
