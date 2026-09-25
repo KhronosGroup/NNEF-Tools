@@ -130,7 +130,7 @@ namespace sknd
     struct Case
     {
         const Shared<Expr> condition;
-        const Invocation invocation;
+        const Callable operation;
     };
 
     struct Switch

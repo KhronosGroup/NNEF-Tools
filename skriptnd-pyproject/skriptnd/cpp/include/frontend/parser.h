@@ -1412,15 +1412,15 @@ namespace sknd
                     TRY_CALL(lexer.accept())
                     TRY_DECL(condition, parse_expr(lexer))
                     TRY_CALL(lexer.accept(Operator::Colon))
-                    TRY_DECL(invocation, parse_invocation(lexer))
-                    cases.push_back(Case{ condition, invocation });
+                    TRY_DECL(operation, parse_callable(lexer))
+                    cases.push_back(Case{ condition, operation });
                 }
                 if ( lexer.is_token(Keyword::Default) )
                 {
                     TRY_CALL(lexer.accept())
                     TRY_CALL(lexer.accept(Operator::Colon))
-                    TRY_DECL(invocation, parse_invocation(lexer))
-                    cases.push_back(Case{ nullptr, invocation });
+                    TRY_DECL(operation, parse_callable(lexer))
+                    cases.push_back(Case{ nullptr, operation });
                 }
                 
                 TRY_CALL(lexer.accept(Operator::RightBrace))

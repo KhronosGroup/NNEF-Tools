@@ -1161,7 +1161,7 @@ namespace sknd
                         expr_type = *type;
                     }
                 }
-                for ( auto& [condition, invocation] : component.swtch->cases )
+                for ( auto& [condition, operation] : component.swtch->cases )
                 {
                     if ( condition )
                     {
@@ -1813,9 +1813,9 @@ namespace sknd
                 }
                 if ( component.swtch )
                 {
-                    for ( auto& [condition, invocation] : component.swtch->cases )
+                    for ( auto& [condition, operation] : component.swtch->cases )
                     {
-                        if ( has_variables(invocation, operators) )
+                        if ( operation.is<Invocation>() && has_variables(operation.as<Invocation>(), operators) )
                         {
                             return true;
                         }
@@ -2231,7 +2231,7 @@ namespace sknd
             {
                 for ( auto& item : component.swtch->cases )
                 {
-                    check_invocation_access(module, item.invocation, operators, decls, allow_private_primitives);
+                    check_invocation_access(module, item.operation, operators, decls, allow_private_primitives);
                 }
             }
             check_invocation_access(module, component.operation, operators, decls, allow_private_primitives);
@@ -2432,7 +2432,7 @@ namespace sknd
                 auto& cases = component.swtch->cases;
                 for ( size_t i = 0; i < cases.size(); ++i )
                 {
-                    auto item_type = result_type(cases[i].invocation, decls, operators, true);
+                    auto item_type = result_type(cases[i].operation, decls, operators, true);
                     if ( item_type.empty() )
                     {
                         return {};
