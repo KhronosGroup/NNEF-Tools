@@ -1145,7 +1145,6 @@ _Transforms = Converter.unpack_transforms({
             outputs='!tuple(O[:num_deps]) + tuple(stack_output(output) for output in O[num_deps:])',
             attribs={
                 'cond': '!0 if has_cond else None',
-                'body_inputs': '!list(range(int(has_cond) + num_deps + _implicit_input_count_ + 1))',
                 'iters': '!iters',
                 'nvars': '!num_deps + int(has_cond)',
                 'nscans': 0,
