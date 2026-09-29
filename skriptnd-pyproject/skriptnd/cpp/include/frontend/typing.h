@@ -310,13 +310,13 @@ namespace sknd
             for ( auto& component : op.components )
             {
                 check_component(component, operators, decls, defs, false);
-                check_invocation_access(module, component, operators, decls, !is_private && !op.graph && op.components.size() == 1);
+                check_invocation_access(module, component.expression, operators, decls, !is_private && !op.graph && op.components.size() == 1);
             }
             
             for ( auto& component : op.updates )
             {
                 check_component(component, operators, decls, defs, true);
-                check_invocation_access(module, component, operators, decls, !is_private && !op.graph && op.updates.size() == 1);
+                check_invocation_access(module, component.expression, operators, decls, !is_private && !op.graph && op.updates.size() == 1);
             }
             
             for ( auto& quantization : op.quantizations )
@@ -1029,244 +1029,59 @@ namespace sknd
         void check_component( const Component& component, const Dict<const Operator*>& operators, Dict<Declaration>& decls, Dict<Definition>& defs,
                              const bool updates ) const
         {
-            Dict<Declaration> saved_decls;
-            bool restore_decls = false;
-            
-            if ( component.loop )
-            {
-                saved_decls = decls;
-                restore_decls = true;
-                
-                for ( auto& [iden, expr] : component.loop->carries )
-                {
-                    auto [type, rank] = check_expr(*expr, decls);
-                    if ( type && rank )
-                    {
-                        if ( type->optional )
-                        {
-                            report_error(expr->position, "loop carried dependency declaration must not be of optional type");
-                        }
-                        if ( iden.type.name != Typename::Type && iden.type.name != type->name )
-                        {
-                            report_error(expr->position, "mismatch between declared and derived type of loop carried dependency (%s vs %s)",
-                                         str(iden.type.name).c_str(), str(type->name).c_str());
-                        }
-                        if ( iden.shape )
-                        {
-                            check_shape_components(decls, *iden.shape, nullptr);
-                        }
-                        declare_symbol(decls, expr->position, iden.name, as_tensor(*type), iden.shape, *rank, Declaration::LoopLocal | Declaration::AllowShadowing);
-                    }
-                }
-                
-                for ( auto& [iden, expr] : component.loop->scans )
-                {
-                    auto [type, rank] = check_expr(*expr, decls);
-                    if ( type && rank )
-                    {
-                        if ( !type->packed )
-                        {
-                            report_error(expr->position, "scan input declaration must be of packed type");
-                        }
-                        declare_symbol(decls, expr->position, iden, as_non_packed(*type), nullptr, nullptr, Declaration::LoopLocal | Declaration::AllowShadowing);
-                    }
-                }
-                if ( component.loop->index )
-                {
-                    auto type = make_type(Typename::Int, false, !component.loop->unroll, false, false);
-                    declare_symbol(decls, component.loop->index->position, component.loop->index->name, type, nullptr, nullptr, Declaration::LoopLocal | Declaration::AllowShadowing);
-                }
-                if ( component.loop->condition )
-                {
-                    check_condition(*component.loop->condition, decls);
-                    
-                    auto& cond_iden = as_identifier(*component.loop->condition);
-                    
-                    bool found = false;
-                    for ( auto& [iden, expr] : component.loop->carries )
-                    {
-                        if ( iden.name == cond_iden.name )
-                        {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if ( !found )
-                    {
-                        report_error(component.loop->condition->position, "loop condition must be introduced by the 'with' clause");
-                    }
-                }
-                if ( component.loop->count )
-                {
-                    auto [type, rank] = check_expr(*component.loop->count, decls);
-                    if ( rank && *rank )
-                    {
-                        report_error(component.loop->count->position, "loop count must not be packed");
-                    }
-                    if ( type && (type->name != Typename::Int || type->packed) )
-                    {
-                        report_error(component.loop->count->position, "loop count must be of (optional) type 'int' or 'int[]', found '%s'",
-                                     str(*type).c_str());
-                    }
-                    if ( type && type->tensor && component.loop->unroll )
-                    {
-                        report_error(component.loop->count->position, "loop count must not be of tensor type for unrolled loops, found '%s'",
-                                     str(*type).c_str());
-                    }
-                    if ( type && type->optional && component.loop->scans.empty() && !component.loop->condition )
-                    {
-                        report_error(component.position, "loop without scan inputs and condition must not have optional loop count");
-                    }
-                }
-                else if ( component.loop->scans.empty() )
-                {
-                    if ( !component.loop->condition )
-                    {
-                        report_error(component.position, "loop without scan inputs and condition must have its loop count explicitly defined");
-                    }
-                    if ( component.results.size() > component.loop->carries.size() )
-                    {
-                        report_error(component.position, "loop without scan inputs and loop count must not have scan outputs");
-                    }
-                }
-            }
-            else if ( component.branch )
-            {
-                check_condition(*component.branch->condition, decls);
-            }
-            else if ( component.swtch )
-            {
-                Type expr_type;
-                if ( component.swtch->expr )
-                {
-                    auto& expr = *component.swtch->expr;
-                    auto [type, rank] = check_expr(expr, decls);
-                    if ( type && type->tensor )
-                    {
-                        report_error(expr.position, "switch expression must not be of tensor type");
-                    }
-                    if ( type && type->dynamic )
-                    {
-                        report_error(expr.position, "switch expression must not be of dynamic type");
-                    }
-                    if ( type && type->optional )
-                    {
-                        report_error(expr.position, "switch expression must not be of optional type");
-                    }
-                    if ( type )
-                    {
-                        expr_type = *type;
-                    }
-                }
-                for ( auto& [condition, operation] : component.swtch->cases )
-                {
-                    if ( condition )
-                    {
-                        auto [type, rank] = check_expr(*condition, decls);
-                        if ( type && type->tensor )
-                        {
-                            report_error(condition->position, "case condition must not be of tensor type");
-                        }
-                        if ( type && type->dynamic )
-                        {
-                            report_error(condition->position, "case condition must not be of dynamic type");
-                        }
-                        if ( type && type->optional )
-                        {
-                            report_error(condition->position, "case condition must not be of optional type");
-                        }
-                        if ( component.swtch->expr )
-                        {
-                            if ( type && expr_type.name != Typename::Type && expr_type != *type )
-                            {
-                                report_error(condition->position, "case condition type does not match expression type (%s vs %s)",
-                                             str(*type).c_str(), str(expr_type).c_str());
-                            }
-                        }
-                        else
-                        {
-                            if ( rank && *rank )
-                            {
-                                report_error(condition->position, "case condition must not be packed");
-                            }
-                            if ( type && type->name != Typename::Bool )
-                            {
-                                report_error(condition->position, "case condition must be of type bool; found '%s'", str(*type).c_str());
-                            }
-                        }
-                    }
-                }
-            }
-            
-            auto types = result_type(component, decls, operators);
+            auto types = check_control_flow(component.expression, decls, operators);
             if ( !types.empty() )
             {
-                if ( component.loop )
+                std::vector<Shared<Expr>> repeats(component.results.size());
+                if ( component.expression.is<Loop>() )
                 {
-                    if ( types.size() < component.loop->carries.size() )
+                    auto& loop = component.expression.as<Loop>();
+                    auto loop_repeats = static_repeats(loop, decls, loop.carries.size());
+                    repeats.assign(repeats.size(), loop_repeats);
+                }
+                else if ( component.expression.is<Region>() )
+                {
+                    auto& region = component.expression.as<Region>();
+                    for ( size_t i = 0; i < region.yields.size(); ++i )
                     {
-                        report_error(position(component.operation),
-                                     "loop body must have at least as many outputs as loop carried dependencies (%d); found %d",
-                                     (int)component.loop->carries.size(), (int)types.size());
-                    }
-                    else
-                    {
-                        size_t i = 0;
-                        for ( auto& [iden, expr] : component.loop->carries )
+                        auto rank = eval_rank(*region.yields[i], decls);
+                        if ( rank )
                         {
-                            auto& type = types[i++];
-                            auto it = decls.find(iden.name);
-                            if ( it != decls.end() )
-                            {
-                                auto& decl_type = it->second.type;
-                                if ( type != decl_type )
-                                {
-                                    report_error(position(component.operation),
-                                                 "type of loop body output %d does not match that of loop carried dependency %d (%s vs %s)",
-                                                 (int)i, (int)i, str(type).c_str(), str(decl_type).c_str());
-                                }
-                            }
+                            repeats[i] = *rank;
                         }
                     }
                 }
-                
-                const char* op_name = component.operation.is<Invocation>() ? component.operation.as<Invocation>().target.c_str() : nullptr;
-                if ( check_argument_count(component.results.size(), min_output_count(types), types.size(), component.position, op_name, "results") )
-                {
-                    std::vector<Shared<Expr>> repeats(component.results.size());
-                    if ( component.loop )
-                    {
-                        auto loop_repeats = static_repeats(component, decls, component.loop->carries.size());
-                        repeats.assign(repeats.size(), loop_repeats);
-                    }
-                    else if ( !component.branch && !component.swtch && component.operation.is<Region>() )
-                    {
-                        auto& region = component.operation.as<Region>();
-                        for ( size_t i = 0; i < region.yields.size(); ++i )
-                        {
-                            auto rank = eval_rank(*region.yields[i], decls);
-                            if ( rank )
-                            {
-                                repeats[i] = *rank;
-                            }
-                        }
-                    }
-                    if ( restore_decls )
-                    {
-                        std::swap(decls, saved_decls);
-                        restore_decls = false;
-                    }
-                    declare_results(decls, component.results, types, repeats, component.position, updates);
-                }
-            }
-            
-            if ( restore_decls )
-            {
-                std::swap(decls, saved_decls);
+                declare_results(decls, component.results, types, repeats, component.position, updates);
             }
             
             define_results(defs, component.results);
             check_updates(decls, component.results, updates);
+        }
+        
+        std::vector<Type> check_control_flow( const ControlFlow& ctrl, const Dict<Declaration>& decls, const Dict<const Operator*>& operators,
+                                             const bool repeated = false, const size_t nvars = 0 ) const
+        {
+            if ( ctrl.is<Invocation>() )
+            {
+                return check_invocation(ctrl.as<Invocation>(), decls, operators, false, repeated, nvars);
+            }
+            else if ( ctrl.is<Region>() )
+            {
+                return check_region(ctrl.as<Region>(), decls, operators, repeated, nvars);
+            }
+            else if ( ctrl.is<Branch>() )
+            {
+                return check_branch(ctrl.as<Branch>(), decls, operators);
+            }
+            else if ( ctrl.is<Switch>() )
+            {
+                return check_switch(ctrl.as<Switch>(), decls, operators);
+            }
+            else if ( ctrl.is<Loop>() )
+            {
+                return check_loop(ctrl.as<Loop>(), decls, operators);
+            }
+            return {};
         }
         
         void check_condition( const Expr& expr, const Dict<Declaration>& decls ) const
@@ -1736,28 +1551,35 @@ namespace sknd
             for ( auto& component : op.components )
             {
                 auto label = auto_label(component, decls);
-                check_label(component.operation, operators, label, labels, false);
-                if ( component.branch )
-                {
-                    check_label(component.branch->consequent, operators, label, labels, true);
-                    check_label(component.branch->alternate, operators, label, labels, true);
-                }
-                else if ( component.swtch )
-                {
-                    for ( auto& [condition, invocation ] : component.swtch->cases )
-                    {
-                        check_label(invocation, operators, label, labels, true);
-                    }
-                }
+                check_label(component.expression, operators, label, labels, false);
             }
         }
         
-        void check_label( const Callable& callable, const Dict<const Operator*>& operators, const std::string& auto_label,
+        void check_label( const ControlFlow& ctrl, const Dict<const Operator*>& operators, const std::string& auto_label,
                          Dict<Position>& labels, const bool repetition ) const
         {
-            if ( callable.is<Invocation>() )
+            if ( ctrl.is<Branch>() )
             {
-                auto& invocation = callable.as<Invocation>();
+                auto& branch = ctrl.as<Branch>();
+                check_label(branch.consequent, operators, auto_label, labels, true);
+                check_label(branch.alternate, operators, auto_label, labels, true);
+            }
+            else if ( ctrl.is<Switch>() )
+            {
+                auto& swtch = ctrl.as<Switch>();
+                for ( auto& [condition, consequent ] : swtch.cases )
+                {
+                    check_label(consequent, operators, auto_label, labels, true);
+                }
+            }
+            else if ( ctrl.is<Loop>() )
+            {
+                auto& loop = ctrl.as<Loop>();
+                check_label(loop.body, operators, auto_label, labels, false);
+            }
+            if ( ctrl.is<Invocation>() )
+            {
+                auto& invocation = ctrl.as<Invocation>();
                 auto label = !invocation.label.empty() ? invocation.label : auto_label;
                 if ( label.empty() )
                 {
@@ -1798,29 +1620,42 @@ namespace sknd
             }
             for ( auto& component : op.components )
             {
-                if ( component.operation.is<Invocation>() && has_variables(component.operation.as<Invocation>(), operators) )
+                auto& expr = component.expression;
+                if ( expr.is<Branch>() )
                 {
-                    return true;
-                }
-                if ( component.branch )
-                {
-                    if ( component.branch->consequent.is<Invocation>() && has_variables(component.branch->consequent.as<Invocation>(), operators) )
+                    auto& branch = expr.as<Branch>();
+                    if ( branch.consequent.is<Invocation>() && has_variables(branch.consequent.as<Invocation>(), operators) )
                     {
                         return true;
                     }
-                    if ( component.branch->alternate.is<Invocation>() && has_variables(component.branch->alternate.as<Invocation>(), operators) )
+                    if ( branch.alternate.is<Invocation>() && has_variables(branch.alternate.as<Invocation>(), operators) )
                     {
                         return true;
                     }
                 }
-                else if ( component.swtch )
+                else if ( expr.is<Switch>() )
                 {
-                    for ( auto& [condition, operation] : component.swtch->cases )
+                    for ( auto& [condition, consequent] : expr.as<Switch>().cases )
                     {
-                        if ( operation.is<Invocation>() && has_variables(operation.as<Invocation>(), operators) )
+                        if ( consequent.is<Invocation>() && has_variables(consequent.as<Invocation>(), operators) )
                         {
                             return true;
                         }
+                    }
+                }
+                else if ( expr.is<Loop>() )
+                {
+                    auto& loop = expr.as<Loop>();
+                    if ( loop.body.is<Invocation>() && has_variables(loop.body.as<Invocation>(), operators) )
+                    {
+                        return true;
+                    }
+                }
+                else if ( expr.is<Invocation>() )
+                {
+                    if ( has_variables(expr.as<Invocation>(), operators) )
+                    {
+                        return true;
                     }
                 }
             }
@@ -1943,7 +1778,7 @@ namespace sknd
         }
         
         std::vector<Type> check_invocation( const Invocation& invocation, const Dict<Declaration>& decls, const Dict<const Operator*>& operators,
-                                           const bool quantization, const bool subgraph = false, const bool repeated = false, const size_t nvars = 0 ) const
+                                           const bool quantization, const bool repeated = false, const size_t nvars = 0 ) const
         {
             auto it = operators.find(invocation.target);
             if ( it == operators.end() )
@@ -1965,11 +1800,6 @@ namespace sknd
             }
             
             auto& op = *it->second;
-            if ( op.graph && !subgraph )
-            {
-                report_error(invocation.position, "'%s' is defined as graph, which is not allowed to be invoked in this context", op.name.c_str());
-                return {};
-            }
             
             Dict<Typename> dtypes = check_dtypes(op, invocation);
             check_attribs(op, invocation.attribs, decls, dtypes, invocation.position);
@@ -2118,6 +1948,284 @@ namespace sknd
             return types;
         }
         
+        std::vector<Type> check_branch( const Branch& branch, const Dict<Declaration>& decls, const Dict<const Operator*>& operators ) const
+        {
+            check_condition(*branch.condition, decls);
+            
+            std::vector<std::string> promoted;
+            Dict<Declaration> _decls;
+            
+            enum_promoted_optionals(*branch.condition, promoted);
+            if ( !promoted.empty() )
+            {
+                _decls = decls;
+                for ( auto& id : promoted )
+                {
+                    _decls.at(id).type.optional = false;
+                }
+            }
+            
+            auto then_type = check_control_flow(branch.consequent, !promoted.empty() ? _decls : decls, operators);
+            auto else_type = check_control_flow(branch.alternate, !promoted.empty() ? _decls : decls, operators);
+            if ( then_type.empty() || else_type.empty() )
+            {
+                return {};
+            }
+            if ( then_type.size() != else_type.size() )
+            {
+                report_error(branch.position, "result count mismatch in if-then-else expression (%d vs %d)",
+                             (int)then_type.size(), (int)else_type.size());
+                return {};
+            }
+            for ( size_t k = 0; k < then_type.size(); ++k )
+            {
+                if ( then_type[k].name == Typename::Type )
+                {
+                    then_type[k].name = else_type[k].name;
+                }
+                else if ( else_type[k].name == Typename::Type )
+                {
+                    else_type[k].name = then_type[k].name;
+                }
+            }
+            if ( then_type != else_type )
+            {
+                report_error(branch.position, "result type mismatch in if-then-else expression (%s vs %s)",
+                             types_str(then_type).c_str(), types_str(else_type).c_str());
+                return {};
+            }
+            return then_type;
+        }
+        
+        std::vector<Type> check_switch( const Switch& swtch, const Dict<Declaration>& decls, const Dict<const Operator*>& operators ) const
+        {
+            Type expr_type;
+            if ( swtch.expr )
+            {
+                auto& expr = *swtch.expr;
+                auto [type, rank] = check_expr(expr, decls);
+                if ( type && type->tensor )
+                {
+                    report_error(expr.position, "switch expression must not be of tensor type");
+                }
+                if ( type && type->dynamic )
+                {
+                    report_error(expr.position, "switch expression must not be of dynamic type");
+                }
+                if ( type && type->optional )
+                {
+                    report_error(expr.position, "switch expression must not be of optional type");
+                }
+                if ( type )
+                {
+                    expr_type = *type;
+                }
+            }
+            for ( auto& [condition, operation] : swtch.cases )
+            {
+                if ( condition )
+                {
+                    auto [type, rank] = check_expr(*condition, decls);
+                    if ( type && type->tensor )
+                    {
+                        report_error(condition->position, "case condition must not be of tensor type");
+                    }
+                    if ( type && type->dynamic )
+                    {
+                        report_error(condition->position, "case condition must not be of dynamic type");
+                    }
+                    if ( type && type->optional )
+                    {
+                        report_error(condition->position, "case condition must not be of optional type");
+                    }
+                    if ( swtch.expr )
+                    {
+                        if ( type && expr_type.name != Typename::Type && expr_type != *type )
+                        {
+                            report_error(condition->position, "case condition type does not match expression type (%s vs %s)",
+                                         str(*type).c_str(), str(expr_type).c_str());
+                        }
+                    }
+                    else
+                    {
+                        if ( rank && *rank )
+                        {
+                            report_error(condition->position, "case condition must not be packed");
+                        }
+                        if ( type && type->name != Typename::Bool )
+                        {
+                            report_error(condition->position, "case condition must be of type bool; found '%s'", str(*type).c_str());
+                        }
+                    }
+                }
+            }
+            
+            std::vector<Type> common_type;
+            auto& cases = swtch.cases;
+            for ( size_t i = 0; i < cases.size(); ++i )
+            {
+                auto& [condition, consequent] = cases[i];
+                auto item_type = check_control_flow(consequent, decls, operators);
+                if ( item_type.empty() )
+                {
+                    return {};
+                }
+                if ( i == 0 )
+                {
+                    common_type = item_type;
+                }
+                else
+                {
+                    if ( item_type.size() != common_type.size() )
+                    {
+                        report_error(swtch.position, "result count mismatch in switch expression (%d vs %d)",
+                                     (int)common_type.size(), (int)item_type.size());
+                        return {};
+                    }
+                    for ( size_t k = 0; k < item_type.size(); ++k )
+                    {
+                        if ( common_type[k].name == Typename::Type )
+                        {
+                            common_type[k].name = item_type[k].name;
+                        }
+                        else if ( item_type[k].name == Typename::Type )
+                        {
+                            item_type[k].name = common_type[k].name;
+                        }
+                    }
+                    if ( item_type != common_type )
+                    {
+                        report_error(swtch.position, "result type mismatch in switch expression (%s vs %s)",
+                                     types_str(common_type).c_str(), types_str(item_type).c_str());
+                        return {};
+                    }
+                }
+            }
+            return common_type;
+        }
+        
+        std::vector<Type> check_loop( const Loop& loop, const Dict<Declaration>& context_decls, const Dict<const Operator*>& operators ) const
+        {
+            auto decls = context_decls;
+            for ( auto& [iden, expr] : loop.carries )
+            {
+                auto [type, rank] = check_expr(*expr, decls);
+                if ( type && rank )
+                {
+                    if ( type->optional )
+                    {
+                        report_error(expr->position, "loop carried dependency declaration must not be of optional type");
+                    }
+                    if ( iden.type.name != Typename::Type && iden.type.name != type->name )
+                    {
+                        report_error(expr->position, "mismatch between declared and derived type of loop carried dependency (%s vs %s)",
+                                     str(iden.type.name).c_str(), str(type->name).c_str());
+                    }
+                    if ( iden.shape )
+                    {
+                        check_shape_components(decls, *iden.shape, nullptr);
+                    }
+                    declare_symbol(decls, expr->position, iden.name, as_tensor(*type), iden.shape, *rank, Declaration::LoopLocal | Declaration::AllowShadowing);
+                }
+            }
+            
+            for ( auto& [iden, expr] : loop.scans )
+            {
+                auto [type, rank] = check_expr(*expr, decls);
+                if ( type && rank )
+                {
+                    if ( !type->packed )
+                    {
+                        report_error(expr->position, "scan input declaration must be of packed type");
+                    }
+                    declare_symbol(decls, expr->position, iden, as_non_packed(*type), nullptr, nullptr, Declaration::LoopLocal | Declaration::AllowShadowing);
+                }
+            }
+            if ( loop.index )
+            {
+                auto type = make_type(Typename::Int, false, !loop.unroll, false, false);
+                declare_symbol(decls, loop.index->position, loop.index->name, type, nullptr, nullptr, Declaration::LoopLocal | Declaration::AllowShadowing);
+            }
+            if ( loop.condition )
+            {
+                check_condition(*loop.condition, decls);
+                
+                auto& cond_iden = as_identifier(*loop.condition);
+                
+                bool found = false;
+                for ( auto& [iden, expr] : loop.carries )
+                {
+                    if ( iden.name == cond_iden.name )
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if ( !found )
+                {
+                    report_error(loop.condition->position, "loop condition must be introduced by the 'with' clause");
+                }
+            }
+            if ( loop.count )
+            {
+                auto [type, rank] = check_expr(*loop.count, decls);
+                if ( rank && *rank )
+                {
+                    report_error(loop.count->position, "loop count must not be packed");
+                }
+                if ( type && (type->name != Typename::Int || type->packed) )
+                {
+                    report_error(loop.count->position, "loop count must be of (optional) type 'int' or 'int[]', found '%s'",
+                                 str(*type).c_str());
+                }
+                if ( type && type->tensor && loop.unroll )
+                {
+                    report_error(loop.count->position, "loop count must not be of tensor type for unrolled loops, found '%s'",
+                                 str(*type).c_str());
+                }
+                if ( type && type->optional && loop.scans.empty() && !loop.condition )
+                {
+                    report_error(loop.position, "loop without scan inputs and condition must not have optional loop count");
+                }
+            }
+            else if ( loop.scans.empty() )
+            {
+                if ( !loop.condition )
+                {
+                    report_error(loop.position, "loop without scan inputs and condition must have its loop count explicitly defined");
+                }
+            }
+            
+            auto types = check_control_flow(loop.body, decls, operators, true, loop.carries.size());
+            
+            if ( types.size() < loop.carries.size() )
+            {
+                report_error(loop.position,
+                             "loop body must have at least as many outputs as loop carried dependencies (%d); found %d",
+                             (int)loop.carries.size(), (int)types.size());
+            }
+            else
+            {
+                size_t i = 0;
+                for ( auto& [iden, expr] : loop.carries )
+                {
+                    auto& type = types[i++];
+                    auto it = decls.find(iden.name);
+                    if ( it != decls.end() )
+                    {
+                        auto& decl_type = it->second.type;
+                        if ( type != decl_type )
+                        {
+                            report_error(loop.position,
+                                         "type of loop body output %d does not match that of loop carried dependency %d (%s vs %s)",
+                                         (int)i, (int)i, str(type).c_str(), str(decl_type).c_str());
+                        }
+                    }
+                }
+            }
+            return types;
+        }
+        
         Dict<Typename> check_dtypes( const Operator& op, const Invocation& invocation ) const
         {
             if ( invocation.dtypes.size() > op.dtypes.size() )
@@ -2214,32 +2322,42 @@ namespace sknd
             }
         }
         
-        void check_invocation_access( const Module& module, const Component& component, const Dict<const Operator*>& operators,
+        void check_invocation_access( const Module& module, const ControlFlow& ctrl, const Dict<const Operator*>& operators,
                                      const Dict<Declaration>& decls, bool allow_private_primitives ) const
         {
-            if ( component.branch )
+            if ( ctrl.is<Branch>() )
             {
-                allow_private_primitives &= is_static_expr(*component.branch->condition, decls);
+                auto& branch = ctrl.as<Branch>();
                 
-                check_invocation_access(module, component.branch->consequent, operators, decls, allow_private_primitives);
-                check_invocation_access(module, component.branch->alternate, operators, decls, allow_private_primitives);
+                allow_private_primitives &= is_static_expr(*branch.condition, decls);
+                
+                check_invocation_access(module, branch.consequent, operators, decls, allow_private_primitives);
+                check_invocation_access(module, branch.alternate, operators, decls, allow_private_primitives);
             }
-            else if ( component.swtch )
+            else if ( ctrl.is<Switch>() )
             {
-                for ( auto& item : component.swtch->cases )
+                auto& swtch = ctrl.as<Switch>();
+                for ( auto& [condition, consequent] : swtch.cases )
                 {
-                    check_invocation_access(module, item.operation, operators, decls, allow_private_primitives);
+                    check_invocation_access(module, consequent, operators, decls, allow_private_primitives);
                 }
             }
-            check_invocation_access(module, component.operation, operators, decls, allow_private_primitives);
-        }
-        
-        void check_invocation_access( const Module& module, const Callable& callable, const Dict<const Operator*>& operators,
-                                     const Dict<Declaration>& decls, bool allow_private_primitives ) const
-        {
-            if ( callable.is<Invocation>() )
+            else if ( ctrl.is<Loop>() )
             {
-                auto& invocation = callable.as<Invocation>();
+                auto& loop = ctrl.as<Loop>();
+                check_invocation_access(module, loop.body, operators, decls, allow_private_primitives);
+            }
+            else if ( ctrl.is<Region>() )
+            {
+                auto& region = ctrl.as<Region>();
+                for ( auto& component : region.components )
+                {
+                    check_invocation_access(module, component.expression, operators, decls, false);
+                }
+            }
+            else if ( ctrl.is<Invocation>() )
+            {
+                auto& invocation = ctrl.as<Invocation>();
                 auto pos = invocation.target.find_last_of('.');
                 auto target_module = invocation.target.substr(0, pos);
                 auto target_name = invocation.target.substr(pos + 1);
@@ -2276,14 +2394,6 @@ namespace sknd
                                          invocation.target.c_str());
                         }
                     }
-                }
-            }
-            else
-            {
-                auto& region = callable.as<Region>();
-                for ( auto& component : region.components )
-                {
-                    check_invocation_access(module, component, operators, decls, false);
                 }
             }
         }
@@ -2360,126 +2470,11 @@ namespace sknd
             }
         }
         
-        std::vector<Type> result_type( const Callable& callable, const Dict<Declaration>& decls, const Dict<const Operator*>& operators,
-                                      const bool subgraph = false, const bool repeated = false, const size_t nvars = 0 ) const
+        Shared<Expr> static_repeats( const Loop& loop, const Dict<Declaration>& decls, const size_t nvars ) const
         {
-            if ( callable.is<Invocation>() )
-            {
-                return check_invocation(callable.as<Invocation>(), decls, operators, false, subgraph, repeated, nvars);
-            }
-            else
-            {
-                return check_region(callable.as<Region>(), decls, operators, repeated, nvars);
-            }
-        }
-        
-        std::vector<Type> result_type( const Component& component, const Dict<Declaration>& decls, const Dict<const Operator*>& operators ) const
-        {
-            if ( component.branch )
-            {
-                std::vector<std::string> promoted;
-                Dict<Declaration> _decls;
-                
-                enum_promoted_optionals(*component.branch->condition, promoted);
-                if ( !promoted.empty() )
-                {
-                    _decls = decls;
-                    for ( auto& id : promoted )
-                    {
-                        _decls.at(id).type.optional = false;
-                    }
-                }
-                
-                auto then_type = result_type(component.branch->consequent, !promoted.empty() ? _decls : decls, operators, true);
-                auto else_type = result_type(component.branch->alternate, !promoted.empty() ? _decls : decls, operators, true);
-                if ( then_type.empty() || else_type.empty() )
-                {
-                    return {};
-                }
-                if ( then_type.size() != else_type.size() )
-                {
-                    report_error(component.position, "result count mismatch in if-then-else statement (%d vs %d)",
-                                 (int)then_type.size(), (int)else_type.size());
-                    return {};
-                }
-                for ( size_t k = 0; k < then_type.size(); ++k )
-                {
-                    if ( then_type[k].name == Typename::Type )
-                    {
-                        then_type[k].name = else_type[k].name;
-                    }
-                    else if ( else_type[k].name == Typename::Type )
-                    {
-                        else_type[k].name = then_type[k].name;
-                    }
-                }
-                if ( then_type != else_type )
-                {
-                    report_error(component.position, "result type mismatch in if-then-else statement (%s vs %s)",
-                                 types_str(then_type).c_str(), types_str(else_type).c_str());
-                    return {};
-                }
-                return then_type;
-            }
-            else if ( component.swtch )
-            {
-                std::vector<Type> common_type;
-                auto& cases = component.swtch->cases;
-                for ( size_t i = 0; i < cases.size(); ++i )
-                {
-                    auto item_type = result_type(cases[i].operation, decls, operators, true);
-                    if ( item_type.empty() )
-                    {
-                        return {};
-                    }
-                    if ( i == 0 )
-                    {
-                        common_type = item_type;
-                    }
-                    else
-                    {
-                        if ( item_type.size() != common_type.size() )
-                        {
-                            report_error(component.position, "result count mismatch in switch statement (%d vs %d)",
-                                         (int)common_type.size(), (int)item_type.size());
-                            return {};
-                        }
-                        for ( size_t k = 0; k < item_type.size(); ++k )
-                        {
-                            if ( common_type[k].name == Typename::Type )
-                            {
-                                common_type[k].name = item_type[k].name;
-                            }
-                            else if ( item_type[k].name == Typename::Type )
-                            {
-                                item_type[k].name = common_type[k].name;
-                            }
-                        }
-                        if ( item_type != common_type )
-                        {
-                            report_error(component.position, "result type mismatch in switch statement (%s vs %s)",
-                                         types_str(common_type).c_str(), types_str(item_type).c_str());
-                            return {};
-                        }
-                    }
-                }
-                return common_type;
-            }
-            else if ( component.loop )
-            {
-                return result_type(component.operation, decls, operators, true, true, component.loop->carries.size());
-            }
-            else
-            {
-                return result_type(component.operation, decls, operators);
-            }
-        }
-        
-        Shared<Expr> static_repeats( const Component& component, const Dict<Declaration>& decls, const size_t nvars ) const
-        {
-            bool dynamic = component.loop->count && eval_type(*component.loop->count, decls)->tensor;
-            auto repeats = !dynamic ? component.loop->count : nullptr;
-            for ( auto& [iden, expr] : component.loop->scans )
+            bool dynamic = loop.count && eval_type(*loop.count, decls)->tensor;
+            auto repeats = !dynamic ? loop.count : nullptr;
+            for ( auto& [iden, expr] : loop.scans )
             {
                 auto arg_repeats = eval_rank(*expr, decls);
                 if ( arg_repeats && *arg_repeats )  // otherwise error has already been reported
@@ -2490,7 +2485,7 @@ namespace sknd
                     }
                     else if ( !ranks_equal(*repeats, **arg_repeats, decls) )
                     {
-                        report_error(component.position, "mismatch between implied loop counts (%s vs %s)",
+                        report_error(loop.position, "mismatch between implied loop counts (%s vs %s)",
                                      str(*repeats).c_str(), str(**arg_repeats).c_str());
                     }
                 }
@@ -3856,7 +3851,7 @@ namespace sknd
         static std::string auto_label( const Component& component, const Symbols& symbols )
         {
             if ( component.results.size() == 1 && !component.results.front().packed() && !component.results.front()->name.empty() &&
-                has_single_callable<Symbols,IsStatic>(component, symbols) )
+                callable_count<Symbols,IsStatic>(component.expression, symbols) <= 1 )
             {
                 const Packable<Typed>& result = component.results.front();
                 return result->name;
@@ -3867,23 +3862,45 @@ namespace sknd
             }
         }
         
-        static bool is_callable( const Callable& callable )
-        {
-            return callable.is<Invocation>() || !callable.as<Region>().components.empty();
-        }
-        
         template<typename Symbols, bool (*IsStatic)(const Expr&, const Symbols&) = is_static_expr>
-        static bool has_single_callable( const Component& component, const Symbols& symbols )
+        static size_t callable_count( const ControlFlow& ctrl, const Symbols& symbols )
         {
-            if ( component.branch )
+            if ( ctrl.is<Branch>() )
             {
-                return IsStatic(*component.branch->condition, symbols) ||
-                        !is_callable(component.branch->consequent) ||
-                        !is_callable(component.branch->alternate);
+                auto& branch = ctrl.as<Branch>();
+                if ( IsStatic(*branch.condition, symbols) )
+                {
+                    return std::max(callable_count<Symbols,IsStatic>(branch.consequent, symbols),
+                                    callable_count<Symbols,IsStatic>(branch.alternate, symbols));
+                }
+                else
+                {
+                    return callable_count<Symbols,IsStatic>(branch.consequent, symbols)
+                         + callable_count<Symbols,IsStatic>(branch.alternate, symbols);
+                }
+            }
+            else if ( ctrl.is<Switch>() )
+            {
+                auto& swtch = ctrl.as<Switch>();
+                size_t max = 0;
+                for ( auto& [condition, consequent] : swtch.cases )
+                {
+                    auto count = callable_count<Symbols,IsStatic>(consequent, symbols);
+                    if ( count > max )
+                    {
+                        max = count;
+                    }
+                }
+                return max;
+            }
+            else if ( ctrl.is<Region>() )
+            {
+                auto& region = ctrl.as<Region>();
+                return region.components.size();
             }
             else
             {
-                return true;
+                return 1;
             }
         }
         

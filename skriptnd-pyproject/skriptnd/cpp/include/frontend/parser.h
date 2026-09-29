@@ -1165,24 +1165,6 @@ namespace sknd
             return Lowering{ position, left, right, op, locals, bounds, condition, unroll_index, unroll_count };
         }
         
-        Result<Invocation> parse_invocation( Lexer& lexer )
-        {
-            auto position = lexer.position();
-            
-            TRY_DECL(iden, parse_identifier(lexer, true))
-            bool qualified = iden.find('.') != std::string::npos;
-            if ( !qualified && lexer.is_token(Operator::Colon) )
-            {
-                TRY_CALL(lexer.accept())
-                TRY_DECL(name, parse_identifier(lexer, true))
-                return parse_invocation(lexer, iden, name, position);
-            }
-            else
-            {
-                return parse_invocation(lexer, {}, iden, position);
-            }
-        }
-        
         Result<Invocation> parse_invocation( Lexer& lexer, const std::string& label, const std::string& name, const Position& position )
         {
             bool qualified = name.find('.') != std::string::npos;
@@ -1196,6 +1178,123 @@ namespace sknd
             TRY_CALL(lexer.accept(Operator::RightParen))
             
             return Invocation{position, label, target, std::move(types), std::move(attribs), std::move(args)};
+        }
+        
+        Result<ControlFlow> parse_control_flow( Lexer& lexer )
+        {
+            auto position = lexer.position();
+            
+            if ( lexer.is_token(Keyword::If) )
+            {
+                TRY_CALL(lexer.accept())
+                TRY_DECL(condition, parse_expr(lexer))
+                TRY_CALL(lexer.accept(Keyword::Then))
+                TRY_DECL(consequent, parse_control_flow(lexer))
+                TRY_CALL(lexer.accept(Keyword::Else))
+                TRY_DECL(alternate, parse_control_flow(lexer))
+                
+                return ControlFlow(Branch{ position, condition, consequent, alternate });
+            }
+            else if ( lexer.is_token(Keyword::Switch) )
+            {
+                TRY_CALL(lexer.accept())
+                TRY_DECL(expr, !lexer.is_token(Operator::LeftBrace) ? parse_expr(lexer) : Shared<Expr>())
+                
+                TRY_CALL(lexer.accept(Operator::LeftBrace))
+                
+                Pairs<Shared<Expr>,ControlFlow> cases;
+                while ( lexer.is_token(Keyword::Case) )
+                {
+                    TRY_CALL(lexer.accept())
+                    TRY_DECL(condition, parse_expr(lexer))
+                    TRY_CALL(lexer.accept(Operator::Colon))
+                    TRY_DECL(operation, parse_control_flow(lexer))
+                    cases.emplace_back(condition, operation);
+                }
+                if ( lexer.is_token(Keyword::Default) )
+                {
+                    TRY_CALL(lexer.accept())
+                    TRY_CALL(lexer.accept(Operator::Colon))
+                    TRY_DECL(operation, parse_control_flow(lexer))
+                    cases.emplace_back(nullptr, operation);
+                }
+                
+                TRY_CALL(lexer.accept(Operator::RightBrace))
+                
+                return ControlFlow(Switch{ position, expr, std::move(cases) });
+            }
+            else if ( lexer.is_oneof(Keyword::With, Keyword::For, Keyword::While, Keyword::Do) )
+            {
+                TRY_DECL(carries, parse_loop_carries(lexer, Keyword::With, Operator::Assign))
+                TRY_DECL(scans, parse_loop_scans(lexer, Keyword::For, Operator::Colon))
+                
+                Shared<Expr> condition;
+                if ( lexer.is_token(Keyword::While) )
+                {
+                    TRY_CALL(lexer.accept())
+                    TRY_MOVE(condition, parse_iden_expr(lexer))
+                }
+                
+                TRY_DECL(unroll, lexer.accept_if(Keyword::Unroll))
+                if ( !unroll )
+                {
+                    TRY_CALL(lexer.accept(Keyword::Do))
+                }
+                TRY_DECL(iter, count, parse_iter_count(lexer, true))
+                
+                TRY_DECL(body, parse_control_flow(lexer))
+                
+                return ControlFlow(Loop{ position, carries, scans, condition, count, iter, std::move(body), unroll });
+            }
+            else
+            {
+                if ( lexer.is_token(Operator::LeftBrace) )
+                {
+                    TRY_DECL(region, parse_region(lexer))
+                    return ControlFlow(std::move(region));
+                }
+                else if ( !lexer.is_token(Category::Identifier) )
+                {
+                    TRY_DECL(expr, parse_expr(lexer))
+                    return ControlFlow(Region{ position, {}, {}, { expr } });
+                }
+                else
+                {
+                    TRY_DECL(iden, parse_identifier(lexer, true))
+                    bool qualified = iden.find('.') != std::string::npos;
+                    if ( !qualified && lexer.is_token(Operator::Colon) )
+                    {
+                        TRY_CALL(lexer.accept())
+                        if ( lexer.is_token(Operator::LeftBrace) )
+                        {
+                            TRY_DECL(region, parse_region(lexer, iden))
+                            return ControlFlow(std::move(region));
+                        }
+                        else
+                        {
+                            TRY_DECL(name, parse_identifier(lexer, true))
+                            TRY_DECL(invocation, parse_invocation(lexer, iden, name, position))
+                            return ControlFlow(std::move(invocation));
+                        }
+                    }
+                    else if ( lexer.is_oneof(Operator::Less, Operator::LeftBrace, Operator::LeftParen) )
+                    {
+                        TRY_DECL(invocation, parse_invocation(lexer, {}, iden, position))
+                        return ControlFlow(std::move(invocation));
+                    }
+                    else
+                    {
+                        Shared<Expr> prim = std::make_shared<IdentifierExpr>(position, iden);
+                        while ( lexer.is_token(Operator::LeftBracket) )
+                        {
+                            TRY_DECL(index, parse_index_expr(lexer, prim))
+                            prim = index;
+                        }
+                        TRY_DECL(expr, parse_expr_with_prim(lexer, prim))
+                        return ControlFlow(Region{ position, {}, {}, { expr } });
+                    }
+                }
+            }
         }
         
         Result<Region> parse_region( Lexer& lexer, const std::string& label = {} )
@@ -1232,58 +1331,6 @@ namespace sknd
             TRY_CALL(lexer.accept(Operator::RightBrace))
             
             return Region{ position, label, std::move(components), std::move(yields) };
-        }
-        
-        Result<Callable> parse_callable( Lexer& lexer )
-        {
-            auto position = lexer.position();
-            
-            if ( lexer.is_token(Operator::LeftBrace) )
-            {
-                TRY_DECL(region, parse_region(lexer))
-                return Callable(std::move(region));
-            }
-            else if ( !lexer.is_token(Category::Identifier) )
-            {
-                TRY_DECL(expr, parse_expr(lexer))
-                return Callable(Region{ position, {}, {}, { expr } });
-            }
-            else
-            {
-                TRY_DECL(iden, parse_identifier(lexer, true))
-                bool qualified = iden.find('.') != std::string::npos;
-                if ( !qualified && lexer.is_token(Operator::Colon) )
-                {
-                    TRY_CALL(lexer.accept())
-                    if ( lexer.is_token(Operator::LeftBrace) )
-                    {
-                        TRY_DECL(region, parse_region(lexer, iden))
-                        return Callable(std::move(region));
-                    }
-                    else
-                    {
-                        TRY_DECL(name, parse_identifier(lexer, true))
-                        TRY_DECL(invocation, parse_invocation(lexer, iden, name, position))
-                        return Callable(std::move(invocation));
-                    }
-                }
-                else if ( lexer.is_oneof(Operator::Less, Operator::LeftBrace, Operator::LeftParen) )
-                {
-                    TRY_DECL(invocation, parse_invocation(lexer, {}, iden, position))
-                    return Callable(std::move(invocation));
-                }
-                else
-                {
-                    Shared<Expr> prim = std::make_shared<IdentifierExpr>(position, iden);
-                    while ( lexer.is_token(Operator::LeftBracket) )
-                    {
-                        TRY_DECL(index, parse_index_expr(lexer, prim))
-                        prim = index;
-                    }
-                    TRY_DECL(expr, parse_expr_with_prim(lexer, prim))
-                    return Callable(Region{ position, {}, {}, { expr } });
-                }
-            }
         }
         
         static Result<Quantization> parse_quantization( Lexer& lexer, bool graph )
@@ -1378,77 +1425,9 @@ namespace sknd
             
             TRY_DECL(results, parse_results(lexer))
             TRY_CALL(lexer.accept(Operator::Assign))
+            TRY_DECL(expr, parse_control_flow(lexer))
             
-            if ( lexer.is_token(Keyword::If) )
-            {
-                TRY_CALL(lexer.accept())
-                TRY_DECL(condition, parse_expr(lexer))
-                TRY_CALL(lexer.accept(Keyword::Then))
-                TRY_DECL(consequent, parse_callable(lexer))
-                TRY_CALL(lexer.accept(Keyword::Else))
-                TRY_DECL(alternate, parse_callable(lexer))
-                
-                auto branch = std::make_shared<Branch>(Branch{ position, condition, consequent, alternate });
-                return Component{ position, std::move(results), Region{}, branch, {}, {} };
-            }
-            else if ( lexer.is_token(Keyword::Switch) )
-            {
-                TRY_CALL(lexer.accept())
-                TRY_DECL(expr, !lexer.is_token(Operator::LeftBrace) ? parse_expr(lexer) : Shared<Expr>())
-                
-                TRY_CALL(lexer.accept(Operator::LeftBrace))
-                
-                std::vector<Case> cases;
-                while ( lexer.is_token(Keyword::Case) )
-                {
-                    TRY_CALL(lexer.accept())
-                    TRY_DECL(condition, parse_expr(lexer))
-                    TRY_CALL(lexer.accept(Operator::Colon))
-                    TRY_DECL(operation, parse_callable(lexer))
-                    cases.push_back(Case{ condition, operation });
-                }
-                if ( lexer.is_token(Keyword::Default) )
-                {
-                    TRY_CALL(lexer.accept())
-                    TRY_CALL(lexer.accept(Operator::Colon))
-                    TRY_DECL(operation, parse_callable(lexer))
-                    cases.push_back(Case{ nullptr, operation });
-                }
-                
-                TRY_CALL(lexer.accept(Operator::RightBrace))
-                
-                auto swtch = std::make_shared<Switch>(Switch{ position, expr, std::move(cases) });
-                return Component{ position, std::move(results), Region{}, {}, swtch, {} };
-            }
-            else if ( lexer.is_oneof(Keyword::With, Keyword::For, Keyword::While, Keyword::Do) )
-            {
-                TRY_DECL(carries, parse_loop_carries(lexer, Keyword::With, Operator::Assign))
-                TRY_DECL(scans, parse_loop_scans(lexer, Keyword::For, Operator::Colon))
-                
-                Shared<Expr> condition;
-                if ( lexer.is_token(Keyword::While) )
-                {
-                    TRY_CALL(lexer.accept())
-                    TRY_MOVE(condition, parse_iden_expr(lexer))
-                }
-                
-                TRY_DECL(unroll, lexer.accept_if(Keyword::Unroll))
-                if ( !unroll )
-                {
-                    TRY_CALL(lexer.accept(Keyword::Do))
-                }
-                TRY_DECL(iter, count, parse_iter_count(lexer, true))
-                
-                TRY_DECL(body, parse_callable(lexer))
-                
-                auto loop = std::make_shared<Loop>(Loop{ carries, scans, condition, count, iter, unroll });
-                return Component{ position, std::move(results), std::move(body), {}, {}, loop };
-            }
-            else
-            {
-                TRY_DECL(callable, parse_callable(lexer))
-                return Component{ position, std::move(results), std::move(callable), {}, {}, {} };
-            }
+            return Component{ position, std::move(results), std::move(expr) };
         }
         
         static Result<std::pair<Shared<IdentifierExpr>,Shared<Expr>>> parse_iter_count( Lexer& lexer, bool allow_omit_count )

@@ -895,7 +895,7 @@ def _format_graph(graph, idx, indent, context):
 
 
 def _format_subgraph(graph, inputs, outputs, indent, context):
-    return _format_block(graph, None, outputs, indent, context) if graph.parent \
+    return _format_block(graph, outputs, indent, context) if graph.parent \
         else indent + _format_invocation(graph, inputs + outputs) + ';'
 
 
@@ -905,10 +905,8 @@ def _format_argref(ref, arg):
     return f"auto& {lhs} = {rhs};\n"
 
 
-def _format_block(graph, inputs, outputs, indent, context):
+def _format_block(graph, outputs, indent, context):
     code = indent + "{\n"
-    if inputs:
-        code += "".join(f"{indent}\t{_format_argref(ref, arg)}" for ref, arg in zip(graph.inputs, inputs) if ref is not arg)
     if outputs:
         code += "".join(f"{indent}\t{_format_argref(ref, arg)}" for ref, arg in zip(graph.outputs, outputs) if ref is not arg)
     code += _format_execution_code(graph.operations, indent + "\t", context)
@@ -969,15 +967,13 @@ def _format_if(op, indent, context):
     condition = op.inputs[0] or op.attribs.get('cond')
     then_branch = op.subgraphs[0]
     else_branch = op.subgraphs[1]
-    then_inputs = op.inputs[1:1 + len(then_branch.inputs)]
-    else_inputs = op.inputs[1 + len(then_branch.inputs):]
 
     text = indent + f"if ( {_format_condition(condition)} )\n"
-    text += _format_subgraph(then_branch, then_inputs, op.outputs, indent, context)
+    text += _format_block(then_branch, op.outputs, indent, context)
     if not then_branch.parent:
         text += '\n'
     text += indent + "else\n"
-    text += _format_subgraph(else_branch, else_inputs, op.outputs, indent, context)
+    text += _format_block(else_branch, op.outputs, indent, context)
     if not else_branch.parent:
         text += '\n'
     return text
@@ -995,10 +991,7 @@ def _format_do(op, indent, context):
     iters = op.inputs[nvars+nscans] or op.attribs.get('iters')
     index = op.internals[nvars+nscans] if len(op.internals) > nvars + nscans else None
     condition = op.outputs[cond] if cond is not None else None
-
     vars = tuple(op.internals[:nvars])
-    subgraph_inputs = vars + op.inputs[nvars:nvars+nscans] + (index,) + op.inputs[nvars+nscans+1:]
-    body_inputs = tuple(subgraph_inputs[idx] for idx in op.attribs['body_inputs'])
 
     text = ""
 
@@ -1022,10 +1015,10 @@ def _format_do(op, indent, context):
     for i in range(nvars):
         text += indent + f"\tstd::swap({_valid_id(vars[i].name)}, {_valid_id(op.outputs[i].name)});\n"
 
-    if body.parent is None:
-        text += indent + "\t" + _format_invocation(body, body_inputs + op.outputs) + ";\n"
-    else:
-        text += _format_block(body, body_inputs, op.outputs, indent + "\t", context)
+    text += "".join(f"{indent}\t{_format_argref(ref, arg)}"
+                    for ref, arg in zip(op.internals[nvars:nvars+nscans], op.inputs[nvars:nvars+nscans]))
+
+    text += _format_block(body, op.outputs, indent + "\t", context)
 
     if condition or isinstance(iters, (sknd.Tensor, sknd.Expr)):
         for i in range(nvars, len(op.outputs)):

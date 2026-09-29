@@ -125,31 +125,25 @@ class Printer:
         else:
             assert False
 
-    def _format_subgraph(self, target, inputs):
-        if isinstance(target, _sknd.Tensor):
-            return self._format_value(target)
-        elif target.parent:
-            if len(target.operations) == 0:
-                if len(target.inputs) == 1:
-                    return self._format_value(target.inputs[0])
-                else:
-                    return '{ yield ' + ', '.join(self._format_value(input)
-                                                  for input in target.inputs) + '; }'
-            elif self._is_trivial_graph(target):
+    def _format_block(self, target):
+        if len(target.operations) == 0:
+            if len(target.inputs) == 1:
                 return self._format_value(target.inputs[0])
             else:
-                label = self._make_id(target.name)
-                text = label + ': {\n'
-                for op in target.operations:
-                    text += "\t\t\t"
-                    text += self._format_operation(op.outputs, op.name, op.dtypes.values(),
-                                                   op.attribs, op.inputs, op.internals, op.subgraphs) + ";\n"
-                text += '\t\t\tyield ' + ', '.join(self._make_id(output.name) for output in target.outputs) + ';\n'
-                text += '\t\t}'
-                return text
+                return '{ yield ' + ', '.join(self._format_value(input)
+                                              for input in target.inputs) + '; }'
+        elif self._is_trivial_graph(target):
+            return self._format_value(target.inputs[0])
         else:
-            name = self._make_id(target.name)
-            return self._format_invocation(name, inputs)
+            label = self._make_id(target.name)
+            text = label + ': {\n'
+            for op in target.operations:
+                text += "\t\t\t"
+                text += self._format_operation(op.outputs, op.name, op.dtypes.values(),
+                                               op.attribs, op.inputs, op.internals, op.subgraphs) + ";\n"
+            text += '\t\t\tyield ' + ', '.join(self._make_id(output.name) for output in target.outputs) + ';\n'
+            text += '\t\t}'
+            return text
 
     def _format_invocation(self, name, args, dtypes=None, attribs=None, alias=None, label=None):
         text = ""
@@ -182,23 +176,17 @@ class Printer:
             condition = args[0] or attribs.get('cond')
             then_branch = subgraphs[0]
             else_branch = subgraphs[1]
-            then_inputs = args[1:1+len(then_branch.inputs)]
-            else_inputs = args[1+len(then_branch.inputs):]
             text += (f"if {self._format_value(condition)} "
-                     f"then {self._format_subgraph(then_branch, then_inputs)} "
-                     f"else {self._format_subgraph(else_branch, else_inputs)}")
+                     f"then {self._format_block(then_branch)} "
+                     f"else {self._format_block(else_branch)}")
         elif name == 'do':
             body = subgraphs[0]
-            body_input_indices = attribs['body_inputs']
             nvars = attribs['nvars']
             nscans = attribs['nscans']
             cond = attribs.get('cond')
             iters = args[nvars + nscans] or attribs.get('iters')
             index = locals[nvars + nscans] if len(locals) > nvars + nscans else None
             condition = locals[cond] if cond is not None else None
-
-            subgraph_inputs = tuple(locals[:nvars + nscans]) + (index,) + args[nvars + nscans + 1:]
-            body_inputs = [subgraph_inputs[idx] for idx in body_input_indices]
 
             if nvars > 0:
                 ids = [self._make_id(tensor.name) for tensor in locals[:nvars]]
@@ -236,7 +224,7 @@ class Printer:
                     text += self._format_value(iters)
                 text += ')'
 
-            text += ' ' + self._format_subgraph(body, body_inputs)
+            text += ' ' + self._format_block(body)
 
         elif name == '=':    # assignment
             text += self._format_value(args[0])

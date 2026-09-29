@@ -30,6 +30,13 @@ namespace sknd
     using Pairs = std::vector<std::pair<K,V>>;
 
     struct Component;
+    struct Invocation;
+    struct Region;
+    struct Branch;
+    struct Switch;
+    struct Loop;
+
+    typedef Variant<Invocation,Region,Branch,Switch,Loop> ControlFlow;
 
     
     struct TypeParam
@@ -118,37 +125,31 @@ namespace sknd
         const std::vector<Component> components;
         const std::vector<Shared<Expr>> yields;
     };
-
-    typedef Either<Region,Invocation> Callable;
     
     struct Branch
     {
         const Position position;
         const Shared<Expr> condition;
-        const Callable consequent;
-        const Callable alternate;
-    };
-
-    struct Case
-    {
-        const Shared<Expr> condition;
-        const Callable operation;
+        const ControlFlow consequent;
+        const ControlFlow alternate;
     };
 
     struct Switch
     {
         const Position position;
         const Shared<Expr> expr;
-        std::vector<Case> cases;
+        const Pairs<Shared<Expr>,ControlFlow> cases;
     };
     
     struct Loop
     {
+        const Position position;
         const Pairs<Typed,Shared<Expr>> carries;
         const Pairs<std::string,Shared<Expr>> scans;
         const Shared<Expr> condition;
         const Shared<Expr> count;
         const Shared<IdentifierExpr> index;
+        const ControlFlow body;
         const bool unroll;
     };
     
@@ -156,10 +157,7 @@ namespace sknd
     {
         const Position position;
         const std::vector<Packable<Typed>> results;
-        const Callable operation;
-        const Shared<Branch> branch;
-        const Shared<Switch> swtch;
-        const Shared<Loop> loop;
+        const ControlFlow expression;
     };
     
     struct Quantization
@@ -322,6 +320,9 @@ namespace sknd
         }
         return os;
     }
+
+    inline std::ostream& operator<<( std::ostream& os, const Component& component );
+    inline std::ostream& operator<<( std::ostream& os, const ControlFlow& ctrl );
     
     inline std::ostream& operator<<( std::ostream& os, const Invocation& invocation )
     {
@@ -381,8 +382,6 @@ namespace sknd
         return os;
     }
 
-    inline std::ostream& operator<<( std::ostream& os, const Component& component );
-
     inline std::ostream& operator<<( std::ostream& os, const Region& region )
     {
         os << "{\n";
@@ -404,6 +403,102 @@ namespace sknd
         os << "\t\t" << '}';
         return os;
     }
+
+    inline std::ostream& operator<<( std::ostream& os, const Branch& branch )
+    {
+        os << "if " << *branch.condition << " then " << branch.consequent << " else " << branch.alternate;
+        return os;
+    }
+
+    inline std::ostream& operator<<( std::ostream& os, const Switch& swtch )
+    {
+        os << "switch " << swtch.expr << " {" << std::endl;
+        for ( auto& [condition, consequent] : swtch.cases )
+        {
+            os << "\tcase " << *condition << ": " << consequent << std::endl;
+        }
+        os << "}" << std::endl;
+        return os;
+    }
+
+    inline std::ostream& operator<<( std::ostream& os, const Loop& loop )
+    {
+        size_t i = 0;
+        for ( auto& [iden, expr] : loop.carries )
+        {
+            os << (i++ ? ", " : "with ") << iden.name;
+            if ( iden.shape )
+            {
+                os << (!iden.type_alias.empty() ? iden.type_alias : str(iden.type.name)) << *iden.shape;
+            }
+            os << " = " << *expr;
+        }
+        if ( !loop.carries.empty() && !loop.scans.empty() )
+        {
+            os << ' ';
+        }
+        size_t j = 0;
+        for ( auto& [iden, expr] : loop.scans )
+        {
+            os << (j++ ? ", " : "for ") << iden << " : " << *expr;
+        }
+        if ( loop.condition )
+        {
+            if ( !loop.carries.empty() || !loop.scans.empty() )
+            {
+                os << ' ';
+            }
+            os << "while " << *loop.condition;
+        }
+        if ( loop.unroll )
+        {
+            os << " unroll ";
+        }
+        else
+        {
+            os << " do ";
+        }
+        if ( loop.index || loop.count )
+        {
+            os << ".." << '(';
+            if ( loop.index )
+            {
+                os << *loop.index << " -> ";
+            }
+            if ( loop.count )
+            {
+                os << *loop.count;
+            }
+            os << ')';
+        }
+        os << loop.body;
+        return os;
+    }
+
+    inline std::ostream& operator<<( std::ostream& os, const ControlFlow& ctrl )
+    {
+        if ( ctrl.is<Branch>() )
+        {
+            os << ctrl.as<Branch>();
+        }
+        else if ( ctrl.is<Switch>() )
+        {
+            os << ctrl.as<Switch>();
+        }
+        else if ( ctrl.is<Loop>() )
+        {
+            os << ctrl.as<Loop>();
+        }
+        else if ( ctrl.is<Region>() )
+        {
+            os << ctrl.as<Region>();
+        }
+        else if ( ctrl.is<Invocation>() )
+        {
+            os << ctrl.as<Invocation>();
+        }
+        return os;
+    }
     
     inline std::ostream& operator<<( std::ostream& os, const Component& component )
     {
@@ -416,69 +511,7 @@ namespace sknd
             os << component.results[i];
         }
         
-        os << " = ";
-        
-        if ( component.branch )
-        {
-            os << "if " << *component.branch->condition << " then " << component.branch->condition << " else " << component.branch->alternate;
-        }
-        else if ( component.loop )
-        {
-            size_t i = 0;
-            for ( auto& [iden, expr] : component.loop->carries )
-            {
-                os << (i++ ? ", " : "with ") << iden.name;
-                if ( iden.shape )
-                {
-                    os << (!iden.type_alias.empty() ? iden.type_alias : str(iden.type.name)) << *iden.shape;
-                }
-                os << " = " << *expr;
-            }
-            if ( !component.loop->carries.empty() && !component.loop->scans.empty() )
-            {
-                os << ' ';
-            }
-            size_t j = 0;
-            for ( auto& [iden, expr] : component.loop->scans )
-            {
-                os << (j++ ? ", " : "for ") << iden << " : " << *expr;
-            }
-            if ( component.loop->condition )
-            {
-                if ( !component.loop->carries.empty() || !component.loop->scans.empty() )
-                {
-                    os << ' ';
-                }
-                os << "while " << *component.loop->condition;
-            }
-            if ( component.loop && component.loop->unroll )
-            {
-                os << " unroll ";
-            }
-            else
-            {
-                os << " do ";
-            }
-            if ( component.loop->index || component.loop->count )
-            {
-                os << ".." << '(';
-                if ( component.loop->index )
-                {
-                    os << *component.loop->index << " -> ";
-                }
-                if ( component.loop->count )
-                {
-                    os << *component.loop->count;
-                }
-                os << ')';
-            }
-            os << component.operation;
-        }
-        else
-        {
-            os << component.operation;
-        }
-        
+        os << " = " << component.expression;
         return os;
     }
     
@@ -549,12 +582,6 @@ namespace sknd
         
         os << "}\n";
         return os;
-    }
-
-    
-    inline const Position& position( const Callable& callable )
-    {
-        return callable.is<Invocation>() ? callable.as<Invocation>().position : callable.as<Region>().position;
     }
 
 }   // namespace sknd
