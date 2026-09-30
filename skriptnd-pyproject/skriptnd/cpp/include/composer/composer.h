@@ -578,39 +578,24 @@ namespace sknd
             add_all(inputs, then_graph->inputs);
             add_all(inputs, else_graph->inputs);
             
-            auto outputs = duplicate_tensors(graph, then_graph->outputs);
-            TRY_CALL(update_branch_output_shapes(outputs, else_graph->outputs, graph, branch.position))
+            std::vector<TensorRef> outputs(then_graph->outputs.size());
             
             auto& context = _contexts.at(graph.name);
+            auto& then_context = _contexts.at(then_graph->name);
+            
             for ( size_t i = 0; i < outputs.size(); ++i )
             {
-                auto& output = outputs[i];
-                auto shape = output.shape();
-                resolve_local_placeholders(shape, output.max_shape(), {});
-                replace_null_shapes_with_placeholders(shape, output.max_shape());
-                output.shape() = canonical(shape);
-                
-                ValueExpr size = nullptr;
-                if ( output.packed() )
+                auto& output1 = then_graph->outputs[i];
+                auto& output2 = else_graph->outputs[i];
+                if ( output1.shape().size() != output2.shape().size() )
                 {
-                    size = output.size();
-                    if ( size == nullptr )
-                    {
-                        size = new_placeholder_expr((int_t)output.max_size());
-                    }
-                    else
-                    {
-                        resolve_local_placeholders(size, (int_t)output.max_size(), {});
-                    }
-                    output.size() = canonical(size);
-                    
-                    for ( size_t j = 0; j < output.max_size(); ++j )
-                    {
-                        output[j].shape = item_shape(output.shape(), j);
-                    }
+                    return Error(branch.position, "rank of output %d must be the same for all branches; found %s vs %s",
+                                 (int)i, str(output1.shape()).c_str(), str(output2.shape()).c_str());
                 }
                 
-                save_shapes_to_context(context, output, simplified(shape), simplified(size));
+                auto& output = outputs[i] = make_branch_output(graph, output1, output2);
+                
+                propagate_shape_through_region(output, output1, context, then_context);
             }
             
             Dict<ValueExpr> attribs;
@@ -755,13 +740,12 @@ namespace sknd
                 }
                 
                 auto& context = _contexts.at(graph.name);
+                auto& body_context = _contexts.at(body_graph->name);
+                
                 std::vector<TensorRef> outputs(body_graph->outputs.size());
                 for ( size_t i = 0; i < loop.carries.size(); ++i )
                 {
                     outputs[i] = make_tensor_like(graph, body_graph->outputs[i]);
-                    Shape shape = outputs[i].shape();
-                    resolve_local_placeholders(shape, outputs[i].max_shape(), {});
-                    outputs[i].shape() = canonical(shape);
                     
                     if ( internals[i]->shape != outputs[i].shape() )
                     {
@@ -770,7 +754,7 @@ namespace sknd
                                      str(outputs[i].shape()).c_str(), (int)i+1, str(internals[i]->shape).c_str(), (int)i+1);
                     }
                     
-                    save_shapes_to_context(context, outputs[i], simplified(shape), nullptr);
+                    propagate_shape_through_region(outputs[i], body_graph->outputs[i], context, body_context);
                 }
                 
                 if ( repeats != nullptr )
@@ -789,18 +773,15 @@ namespace sknd
                     {
                         auto& output = *body_graph->outputs[i];
                         
-                        auto shape = output.shape;
-                        resolve_local_placeholders(shape, output.max_shape, {});
-                        auto canonic_shape = canonical(shape);
-                        
-                        auto pack = make_tensor_pack(graph, output.dtype, max_repeats, canonic_size, canonic_shape, output.max_shape);
+                        auto pack = make_tensor_pack(graph, output.dtype, max_repeats, canonic_size, output.shape, output.max_shape);
                         for ( size_t k = 0; k < (size_t)max_repeats; ++k )
                         {
-                            pack->items[k] = make_tensor(graph, output.dtype, canonic_shape, output.max_shape);
+                            pack->items[k] = make_tensor(graph, output.dtype, output.shape, output.max_shape);
                         }
                         cache_tensor_pack(graph, pack);
                         outputs[i] = TensorRef(pack);
-                        save_shapes_to_context(context, outputs[i], simplified(shape), simplified(size));
+                        
+                        propagate_shape_through_region(outputs[i], body_graph->outputs[i], context, body_context, size);
                     }
                 }
                 
@@ -1027,6 +1008,48 @@ namespace sknd
             return std::make_tuple(std::vector(inputs.begin(), inputs.end()), std::move(outputs));
         }
         
+        void propagate_shape_through_region( TensorRef& output, const TensorRef& body_output, GraphContext& context, GraphContext& body_context,
+                                             const ValueExpr& known_size = nullptr )
+        {
+            Shape shape(output.shape().size());
+            for ( size_t i = 0; i < output.shape().size(); ++i )
+            {
+                if ( output.shape()[i] == nullptr )
+                {
+                    shape[i] = output.shape()[i] = new_placeholder_expr(output.max_shape()[i]);
+                }
+                else
+                {
+                    shape[i] = body_context.shapes.at(body_output)[i];
+                    trace_accesses_within_graph(shape[i], body_context);
+                    if ( has_placeholders(shape[i]) )
+                    {
+                        shape[i] = new_placeholder_expr(output.max_shape()[i]);
+                    }
+                }
+            }
+            
+            ValueExpr size = known_size;
+            if ( output.packed() && size == nullptr )
+            {
+                if ( output.size() == nullptr )
+                {
+                    size = output.size() = new_placeholder_expr((int_t)output.max_size());
+                }
+                else
+                {
+                    size = body_context.sizes.at(body_output);
+                    trace_accesses_within_graph(size, body_context);
+                    if ( has_placeholders(size) )
+                    {
+                        size = new_placeholder_expr((int_t)output.max_size());
+                    }
+                }
+            }
+            
+            save_shapes_to_context(context, output, simplified(shape), size != nullptr ? simplified(size) : size);
+        }
+        
         Graph* find_graph_instance( const std::string& name, const Dict<Typename>& types, const Dict<ValueExpr>& attribs )
         {
             auto range = _instances.equal_range(name);
@@ -1147,24 +1170,45 @@ namespace sknd
             }
         }
         
-        void resolve_access_to_tensors( ValueExpr& expr, const std::vector<TensorRef>& tensors )
+        bool has_placeholders( const ValueExpr& expr )
         {
-            if ( expr.is_shape_access() )
+            return any_of(expr, []( const ValueExpr& x ){ return x.is_placeholder(); });
+        }
+        
+        static void trace_accesses_within_graph( ValueExpr& expr, const GraphContext& context )
+        {
+            postorder_traverse(expr, [&context]( ValueExpr& x )
             {
-                auto& access = expr.as_shape_access();
-                if ( std::find(tensors.begin(), tensors.end(), access.tensor) != tensors.end() )
+                switch ( x.kind() )
                 {
-                    expr = access.tensor.shape()[access.dim.as_int()];
+                    case ValueExpr::ShapeAccess:
+                    {
+                        auto& access = x.as_shape_access();
+                        auto it = context.shapes.find(access.tensor);
+                        if ( it != context.shapes.end() )
+                        {
+                            x = it->second[access.dim.as_int()];
+                            trace_accesses_within_graph(x, context);
+                        }
+                        break;
+                    }
+                    case ValueExpr::SizeAccess:
+                    {
+                        auto& access = x.as_size_access();
+                        auto it = context.sizes.find(access.pack);
+                        if ( it != context.sizes.end() )
+                        {
+                            x = it->second;
+                            trace_accesses_within_graph(x, context);
+                        }
+                        break;
+                    }
+                    default:
+                    {
+                        break;
+                    }
                 }
-            }
-            else if ( expr.is_size_access() )
-            {
-                auto& access = expr.as_size_access();
-                if ( std::find(tensors.begin(), tensors.end(), access.pack) != tensors.end() )
-                {
-                    expr = access.pack.size();
-                }
-            }
+            });
         }
         
         void add_all( std::vector<TensorRef>& items, const std::vector<TensorRef>& new_items )
@@ -1853,62 +1897,47 @@ namespace sknd
             }
         }
         
-        Result<void> update_branch_output_shapes( std::vector<TensorRef>& outputs, const std::vector<TensorRef>& updates,
-                                                 Graph& graph, const Position& position )
+        TensorRef make_branch_output( Graph& graph, const TensorRef& output1, const TensorRef& output2 )
         {
-            for ( size_t i = 0; i < outputs.size(); ++i )
+            auto dtype = output1.dtype();
+            auto shape = common_shape(output1.shape(), output2.shape());
+            std::vector<int_t> max_shape(output1.max_shape().size());
+            for ( size_t i = 0; i < max_shape.size(); ++i )
             {
-                auto& output = outputs[i];
-                auto& update = updates[i];
-                
-                if ( output.packed() && update.packed() )
-                {
-                    for ( size_t j = 0; j < output.max_size() && j < update.max_size(); ++j )
-                    {
-                        if ( output[j].shape.size() != update[j].shape.size() )
-                        {
-                            return Error(position, "rank of output %d must be the same for all branches; found %s vs %s",
-                                         (int)i, str(output[j].shape).c_str(), str(update[j].shape).c_str());
-                        }
-                        update_branch_output_shape(output[j], update[j]);
-                    }
-                    if ( update.max_size() > output.max_size() )
-                    {
-                        auto old_size = output.max_size();
-                        auto& items = output.as<TensorPack*>()->items;
-                        items.resize(update.max_size());
-                        for ( size_t j = old_size; j < update.max_size(); ++j )
-                        {
-                            items[j] = &*make_tensor_like(graph, TensorRef((Tensor*)&update[j]), std::nullopt, {});
-                        }
-                    }
-                }
-                else
-                {
-                    if ( output->shape.size() != update->shape.size() )
-                    {
-                        return Error(position, "rank of output %d must be the same for all branches; found %s vs %s",
-                                     (int)i, str(output->shape).c_str(), str(update->shape).c_str());
-                    }
-                    update_branch_output_shape(*output, *update);
-                }
+                max_shape[i] = std::max(output1.max_shape()[i], output2.max_shape()[i]);
             }
-            return Result<void>();
+            
+            if ( output1.packed() )
+            {
+                auto size = common_size(output1.size(), output2.size());
+                const size_t max_size = std::max(output1.max_size(), output2.max_size());
+                auto pack = make_tensor_pack(graph, dtype, max_size, size, shape, max_shape);
+                for ( size_t i = 0; i < max_size; ++i )
+                {
+                    pack->items[i] = make_tensor(graph, dtype, item_shape(shape, i), max_shape);
+                }
+                cache_tensor_pack(graph, pack);
+                return pack;
+            }
+            else
+            {
+                return make_tensor(graph, dtype, shape, max_shape);
+            }
         }
         
-        void update_branch_output_shape( Tensor& output, const Tensor& update )
+        Shape common_shape( const Shape& shape1, const Shape& shape2 ) const
         {
-            for ( size_t i = 0; i < output.shape.size(); ++i )
+            Shape shape(shape1.size());
+            for ( size_t i = 0; i < shape.size(); ++i )
             {
-                if ( output.shape[i] != nullptr && output.shape[i] != update.shape[i] )
-                {
-                    output.shape[i] = nullptr;
-                }
-                if ( update.max_shape[i] > output.max_shape[i] )
-                {
-                    output.max_shape[i] = update.max_shape[i];
-                }
+                shape[i] = shape1[i] == shape2[i] ? shape1[i] : ValueExpr(nullptr);
             }
+            return shape;
+        }
+        
+        ValueExpr common_size( const ValueExpr& size1, const ValueExpr& size2 )
+        {
+            return size1 == size2 ? size1 : ValueExpr(nullptr);
         }
         
         Result<void> check_loop_variable_shapes( const std::vector<TensorRef>& inputs, const std::vector<TensorRef>& outputs,
