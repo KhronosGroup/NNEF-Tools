@@ -347,7 +347,7 @@ namespace sknd
                 }
             }
             
-            check_labels(op, operators, decls);
+            check_labels(op.components, operators);
         }
         
         void declare_symbol( Dict<Declaration>& decls, const Position& position, const std::string& name, const Type& type,
@@ -1545,43 +1545,21 @@ namespace sknd
             }
         }
         
-        void check_labels( const Operator& op, const Dict<const Operator*>& operators, const Dict<Declaration>& decls ) const
+        void check_labels( const std::vector<Component>& components, const Dict<const Operator*>& operators ) const
         {
             Dict<Position> labels;
-            for ( auto& component : op.components )
+            for ( auto& component : components )
             {
-                auto label = auto_label(component, decls);
-                check_label(component.expression, operators, label, labels, false);
+                check_label(component.expression, operators, labels);
             }
         }
         
-        void check_label( const ControlFlow& ctrl, const Dict<const Operator*>& operators, const std::string& auto_label,
-                         Dict<Position>& labels, const bool repetition ) const
+        void check_label( const ControlFlow& ctrl, const Dict<const Operator*>& operators, Dict<Position>& labels ) const
         {
-            if ( ctrl.is<Branch>() )
-            {
-                auto& branch = ctrl.as<Branch>();
-                check_label(branch.consequent, operators, auto_label, labels, true);
-                check_label(branch.alternate, operators, auto_label, labels, true);
-            }
-            else if ( ctrl.is<Switch>() )
-            {
-                auto& swtch = ctrl.as<Switch>();
-                for ( auto& [condition, consequent ] : swtch.cases )
-                {
-                    check_label(consequent, operators, auto_label, labels, true);
-                }
-            }
-            else if ( ctrl.is<Loop>() )
-            {
-                auto& loop = ctrl.as<Loop>();
-                check_label(loop.body, operators, auto_label, labels, false);
-            }
             if ( ctrl.is<Invocation>() )
             {
                 auto& invocation = ctrl.as<Invocation>();
-                auto label = !invocation.label.empty() ? invocation.label : auto_label;
-                if ( label.empty() )
+                if ( invocation.label.empty() )
                 {
                     auto it = operators.find(invocation.target);
                     if ( it != operators.end() && !it->second->graph && has_variables(invocation, operators) )
@@ -1590,15 +1568,39 @@ namespace sknd
                                      invocation.target.c_str());
                     }
                 }
-                else if ( label != "~" )
+                else
                 {
-                    auto [it, inserted] = labels.emplace(label, invocation.position);
-                    if ( !inserted && (!invocation.label.empty() || !repetition) )
+                    auto [it, inserted] = labels.emplace(invocation.label, invocation.position);
+                    if ( !inserted )
                     {
                         report_error(invocation.position, "label '%s' is already used at [%d,%d]",
-                                     label.c_str(), (int)it->second.line, (int)it->second.column);
+                                     invocation.label.c_str(), (int)it->second.line, (int)it->second.column);
                     }
                 }
+            }
+            else if ( ctrl.is<Region>() )
+            {
+                auto& region = ctrl.as<Region>();
+                check_labels(region.components, operators);
+            }
+            else if ( ctrl.is<Branch>() )
+            {
+                auto& branch = ctrl.as<Branch>();
+                check_label(branch.consequent, operators, labels);
+                check_label(branch.alternate, operators, labels);
+            }
+            else if ( ctrl.is<Switch>() )
+            {
+                auto& swtch = ctrl.as<Switch>();
+                for ( auto& [condition, consequent ] : swtch.cases )
+                {
+                    check_label(consequent, operators, labels);
+                }
+            }
+            else if ( ctrl.is<Loop>() )
+            {
+                auto& loop = ctrl.as<Loop>();
+                check_label(loop.body, operators, labels);
             }
         }
         
@@ -3845,63 +3847,6 @@ namespace sknd
                 }
             }
             return all_recurse(expr, [&]( const Expr& e ){ return is_static_expr(e, decls); });
-        }
-        
-        template<typename Symbols, bool (*IsStatic)(const Expr&, const Symbols&) = is_static_expr>
-        static std::string auto_label( const Component& component, const Symbols& symbols )
-        {
-            if ( component.results.size() == 1 && !component.results.front().packed() && !component.results.front()->name.empty() &&
-                callable_count<Symbols,IsStatic>(component.expression, symbols) <= 1 )
-            {
-                const Packable<Typed>& result = component.results.front();
-                return result->name;
-            }
-            else
-            {
-                return {};
-            }
-        }
-        
-        template<typename Symbols, bool (*IsStatic)(const Expr&, const Symbols&) = is_static_expr>
-        static size_t callable_count( const ControlFlow& ctrl, const Symbols& symbols )
-        {
-            if ( ctrl.is<Branch>() )
-            {
-                auto& branch = ctrl.as<Branch>();
-                if ( IsStatic(*branch.condition, symbols) )
-                {
-                    return std::max(callable_count<Symbols,IsStatic>(branch.consequent, symbols),
-                                    callable_count<Symbols,IsStatic>(branch.alternate, symbols));
-                }
-                else
-                {
-                    return callable_count<Symbols,IsStatic>(branch.consequent, symbols)
-                         + callable_count<Symbols,IsStatic>(branch.alternate, symbols);
-                }
-            }
-            else if ( ctrl.is<Switch>() )
-            {
-                auto& swtch = ctrl.as<Switch>();
-                size_t max = 0;
-                for ( auto& [condition, consequent] : swtch.cases )
-                {
-                    auto count = callable_count<Symbols,IsStatic>(consequent, symbols);
-                    if ( count > max )
-                    {
-                        max = count;
-                    }
-                }
-                return max;
-            }
-            else if ( ctrl.is<Region>() )
-            {
-                auto& region = ctrl.as<Region>();
-                return region.components.size();
-            }
-            else
-            {
-                return 1;
-            }
         }
         
     private:
