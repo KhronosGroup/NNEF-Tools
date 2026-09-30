@@ -1211,7 +1211,7 @@ namespace sknd
                     TRY_DECL(operation, parse_control_flow(lexer))
                     cases.emplace_back(condition, operation);
                 }
-                if ( lexer.is_token(Keyword::Default) )
+                if ( lexer.is_token(Keyword::Else) )
                 {
                     TRY_CALL(lexer.accept())
                     TRY_CALL(lexer.accept(Operator::Colon))
