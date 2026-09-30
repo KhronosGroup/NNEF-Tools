@@ -285,9 +285,9 @@ namespace sknd
                     declare_dynamic_shape_components(decls, *param.shape);
                     check_shape_components(decls, *param.shape, param.repeats.value, true, false, !op.graph);
                 }
-                else if ( !op.graph )
+                else
                 {
-                    report_error(param.position, "output shape can only be omitted for graphs");
+                    report_error(param.position, "output shape must be specified");
                 }
             }
             
