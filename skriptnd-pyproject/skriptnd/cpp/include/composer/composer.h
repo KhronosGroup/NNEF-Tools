@@ -593,9 +593,24 @@ namespace sknd
                                  (int)i, str(output1.shape()).c_str(), str(output2.shape()).c_str());
                 }
                 
-                auto& output = outputs[i] = make_branch_output(graph, output1, output2);
+                auto& output = outputs[i] = make_common_output(graph, output1, output2);
                 
-                propagate_shape_through_region(output, output1, context, then_context);
+                auto shape = propagate_shape_through_region(output1, then_context);
+                for ( size_t k = 0; k < output.shape().size(); ++k )
+                {
+                    if ( output1.shape()[k] != output2.shape()[k] )
+                    {
+                        shape[k] = output.shape()[k];
+                    }
+                }
+                
+                ValueExpr size = nullptr;
+                if ( output.packed() )
+                {
+                    size = output1.size() != output2.size() ? output.size() : propagate_size_through_region(output1, then_context);
+                }
+                
+                save_shapes_to_context(context, output, simplified(shape), simplified(size));
             }
             
             Dict<ValueExpr> attribs;
@@ -754,7 +769,8 @@ namespace sknd
                                      str(outputs[i].shape()).c_str(), (int)i+1, str(internals[i]->shape).c_str(), (int)i+1);
                     }
                     
-                    propagate_shape_through_region(outputs[i], body_graph->outputs[i], context, body_context);
+                    auto shape = propagate_shape_through_region(body_graph->outputs[i], body_context);
+                    save_shapes_to_context(context, outputs[i], simplified(shape), nullptr);
                 }
                 
                 if ( repeats != nullptr )
@@ -781,7 +797,8 @@ namespace sknd
                         cache_tensor_pack(graph, pack);
                         outputs[i] = TensorRef(pack);
                         
-                        propagate_shape_through_region(outputs[i], body_graph->outputs[i], context, body_context, size);
+                        auto shape = propagate_shape_through_region(body_graph->outputs[i], body_context);
+                        save_shapes_to_context(context, outputs[i], simplified(shape), simplified(size));
                     }
                 }
                 
@@ -1008,46 +1025,34 @@ namespace sknd
             return std::make_tuple(std::vector(inputs.begin(), inputs.end()), std::move(outputs));
         }
         
-        void propagate_shape_through_region( TensorRef& output, const TensorRef& body_output, GraphContext& context, GraphContext& body_context,
-                                             const ValueExpr& known_size = nullptr )
+        Shape propagate_shape_through_region( const TensorRef& output, const GraphContext& context )
         {
             Shape shape(output.shape().size());
             for ( size_t i = 0; i < output.shape().size(); ++i )
             {
-                if ( output.shape()[i] == nullptr )
+                shape[i] = context.shapes.at(output)[i];
+                trace_accesses_within_graph(shape[i], context);
+                if ( has_placeholders(shape[i]) )
                 {
-                    shape[i] = output.shape()[i] = new_placeholder_expr(output.max_shape()[i]);
-                }
-                else
-                {
-                    shape[i] = body_context.shapes.at(body_output)[i];
-                    trace_accesses_within_graph(shape[i], body_context);
-                    if ( has_placeholders(shape[i]) )
-                    {
-                        shape[i] = new_placeholder_expr(output.max_shape()[i]);
-                    }
+                    shape[i] = new_placeholder_expr(eval_shape_expr_max(shape[i]));
                 }
             }
-            
-            ValueExpr size = known_size;
-            if ( output.packed() && size == nullptr )
+            return shape;
+        }
+        
+        ValueExpr propagate_size_through_region( const TensorRef& output, GraphContext& context )
+        {
+            ValueExpr size = nullptr;
+            if ( output.packed() )
             {
-                if ( output.size() == nullptr )
+                size = context.sizes.at(output);
+                trace_accesses_within_graph(size, context);
+                if ( has_placeholders(size) )
                 {
-                    size = output.size() = new_placeholder_expr((int_t)output.max_size());
-                }
-                else
-                {
-                    size = body_context.sizes.at(body_output);
-                    trace_accesses_within_graph(size, body_context);
-                    if ( has_placeholders(size) )
-                    {
-                        size = new_placeholder_expr((int_t)output.max_size());
-                    }
+                    size = new_placeholder_expr(eval_shape_expr_max(size));
                 }
             }
-            
-            save_shapes_to_context(context, output, simplified(shape), size != nullptr ? simplified(size) : size);
+            return size;
         }
         
         Graph* find_graph_instance( const std::string& name, const Dict<Typename>& types, const Dict<ValueExpr>& attribs )
@@ -1099,75 +1104,6 @@ namespace sknd
             }
             assert(false);
             return 0;
-        }
-        
-        void collect_local_placeholder_mapping( const std::vector<TensorRef>& local_tensors, const std::vector<TensorRef>& context_tensors,
-                                               Dict<ValueExpr>& mapping )
-        {
-            for ( size_t i = 0; i < local_tensors.size(); ++i )
-            {
-                auto& local_tensor = local_tensors[i];
-                auto& context_tensor = context_tensors[i];
-                for ( size_t k = 0; k < local_tensor.rank(); ++k )
-                {
-                    auto& expr = local_tensor.shape()[k];
-                    if ( expr.kind() == ValueExpr::Placeholder )
-                    {
-                        auto& placeholder = expr.as_placeholder();
-                        mapping.insert(std::make_pair(placeholder.id, ValueExpr(ShapeAccess{ context_tensor, (int_t)k })));
-                    }
-                }
-                if ( local_tensor.packed() && local_tensor.size().kind() == ValueExpr::Placeholder )
-                {
-                    auto& placeholder = local_tensor.size().as_placeholder();
-                    mapping.insert(std::make_pair(placeholder.id, ValueExpr(ValueExpr::SizeAccessExpr{ context_tensor })));
-                }
-            }
-        }
-        
-        void resolve_local_placeholders( TensorRef& tensor, const Dict<ValueExpr>& mapping )
-        {
-            resolve_local_placeholders(tensor.shape(), tensor.max_shape(), mapping);
-            canonify(tensor.shape());
-            
-            if ( tensor.packed() )
-            {
-                resolve_local_placeholders(tensor.size(), (int_t)tensor.max_size(), mapping);
-                canonify(tensor.size());
-            }
-        }
-        
-        void resolve_local_placeholders( Shape& shape, const std::vector<int_t>& max_shape, const Dict<ValueExpr>& mapping )
-        {
-            for ( size_t i = 0; i < shape.size(); ++i )
-            {
-                resolve_local_placeholders(shape[i], max_shape[i], mapping);
-            }
-        }
-        
-        void resolve_local_placeholders( ValueExpr& expr, const int_t& max_value, const Dict<ValueExpr>& mapping )
-        {
-            bool has_placeholders_left = false;
-            preorder_traverse(expr, [&]( ValueExpr& x )
-            {
-                if ( x.is_placeholder() )
-                {
-                    auto& placeholder = x.as_placeholder();
-                    auto it = mapping.find(placeholder.id);
-                    if ( it != mapping.end() )
-                    {
-                        x = it->second;
-                    }
-                    else
-                    {
-                        has_placeholders_left = true;
-                    }
-                }
-            });
-            if ( has_placeholders_left )
-            {
-                expr = new_placeholder_expr(max_value);
-            }
         }
         
         bool has_placeholders( const ValueExpr& expr )
@@ -1897,20 +1833,25 @@ namespace sknd
             }
         }
         
-        TensorRef make_branch_output( Graph& graph, const TensorRef& output1, const TensorRef& output2 )
+        TensorRef make_common_output( Graph& graph, const TensorRef& output1, const TensorRef& output2 )
         {
+            auto& shape1 = output1.shape();
+            auto& shape2 = output2.shape();
             auto dtype = output1.dtype();
-            auto shape = common_shape(output1.shape(), output2.shape());
-            std::vector<int_t> max_shape(output1.max_shape().size());
-            for ( size_t i = 0; i < max_shape.size(); ++i )
+            
+            Shape shape(shape1.size());
+            std::vector<int_t> max_shape(shape1.size());
+            for ( size_t i = 0; i < shape.size(); ++i )
             {
                 max_shape[i] = std::max(output1.max_shape()[i], output2.max_shape()[i]);
+                shape[i] = shape1[i] == shape2[i] ? shape1[i] : new_placeholder_expr(max_shape[i]);
             }
             
             if ( output1.packed() )
             {
-                auto size = common_size(output1.size(), output2.size());
                 const size_t max_size = std::max(output1.max_size(), output2.max_size());
+                const ValueExpr size = output1.size() == output2.size() ? output1.size() : new_placeholder_expr(max_size);
+                
                 auto pack = make_tensor_pack(graph, dtype, max_size, size, shape, max_shape);
                 for ( size_t i = 0; i < max_size; ++i )
                 {
@@ -1923,21 +1864,6 @@ namespace sknd
             {
                 return make_tensor(graph, dtype, shape, max_shape);
             }
-        }
-        
-        Shape common_shape( const Shape& shape1, const Shape& shape2 ) const
-        {
-            Shape shape(shape1.size());
-            for ( size_t i = 0; i < shape.size(); ++i )
-            {
-                shape[i] = shape1[i] == shape2[i] ? shape1[i] : ValueExpr(nullptr);
-            }
-            return shape;
-        }
-        
-        ValueExpr common_size( const ValueExpr& size1, const ValueExpr& size2 )
-        {
-            return size1 == size2 ? size1 : ValueExpr(nullptr);
         }
         
         Result<void> check_loop_variable_shapes( const std::vector<TensorRef>& inputs, const std::vector<TensorRef>& outputs,
