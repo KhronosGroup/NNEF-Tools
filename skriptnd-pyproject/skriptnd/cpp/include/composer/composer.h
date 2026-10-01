@@ -1106,7 +1106,7 @@ namespace sknd
             return 0;
         }
         
-        bool has_placeholders( const ValueExpr& expr )
+        static bool has_placeholders( const ValueExpr& expr )
         {
             return any_of(expr, []( const ValueExpr& x ){ return x.is_placeholder(); });
         }
@@ -1120,10 +1120,19 @@ namespace sknd
                     case ValueExpr::ShapeAccess:
                     {
                         auto& access = x.as_shape_access();
-                        auto it = context.shapes.find(access.tensor);
+                        assert(access.dim.is_literal());
+                        assert(access.item == nullptr || access.item.is_literal());
+                        
+                        auto tensor = access.item == nullptr ? access.tensor : access.tensor.at(access.item.as_int());
+                        auto it = context.shapes.find(tensor);
                         if ( it != context.shapes.end() )
                         {
+                            bool packed = x.packed();
                             x = it->second[access.dim.as_int()];
+                            if ( packed && !x.packed() )
+                            {
+                                x = ValueExpr::uniform(x, access.tensor.size(), access.tensor.max_size());
+                            }
                             trace_accesses_within_graph(x, context);
                         }
                         break;
