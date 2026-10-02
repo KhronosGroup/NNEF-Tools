@@ -93,6 +93,7 @@ namespace sknd
             return expr;
         }
         
+        template<bool Recursive = true>
         static void resolve( ValueExpr& expr, const unsigned flags = ResolveAll )
         {
             postorder_traverse(expr, [flags]( ValueExpr& x )
@@ -105,7 +106,10 @@ namespace sknd
                         {
                             auto& access = x.as_size_access();
                             x = access.pack.size();
-                            resolve(x, flags);
+                            if ( Recursive )
+                            {
+                                resolve(x, flags);
+                            }
                         }
                         break;
                     }
@@ -114,24 +118,19 @@ namespace sknd
                         if ( flags & ResolveShapeAccess )
                         {
                             auto& access = x.as_shape_access();
-                            if ( access.dim.is_literal() )
+                            assert(access.dim.is_literal());
+                            assert(access.item == nullptr || access.item.is_literal());
+                            
+                            auto tensor = access.item == nullptr ? access.tensor : access.tensor.at(access.item.as_int());
+                            bool packed = x.packed();
+                            x = tensor.shape()[access.dim.as_int()];
+                            if ( packed && !x.packed() )
                             {
-                                auto tensor = access.tensor;
-                                if ( access.item == nullptr )
-                                {
-                                    bool packed = x.packed();
-                                    x = tensor.shape()[access.dim.as_int()];
-                                    if ( packed && !x.packed() )
-                                    {
-                                        x = ValueExpr::uniform(x, tensor.size(), tensor.max_size());
-                                    }
-                                    resolve(x, flags);
-                                }
-                                else if ( access.item.is_literal() )
-                                {
-                                    x = tensor[access.item.as_int()].shape[access.dim.as_int()];
-                                    resolve(x, flags);
-                                }
+                                x = ValueExpr::uniform(x, tensor.size(), tensor.max_size());
+                            }
+                            if ( Recursive )
+                            {
+                                resolve(x, flags);
                             }
                         }
                         break;
@@ -142,7 +141,10 @@ namespace sknd
                         {
                             auto& reference = x.as_reference();
                             x = *reference.target;
-                            resolve(x, flags);
+                            if ( Recursive )
+                            {
+                                resolve(x, flags);
+                            }
                         }
                         break;
                     }
@@ -154,16 +156,18 @@ namespace sknd
             });
         }
         
+        template<bool Recursive = true>
         static ValueExpr resolved( const ValueExpr& expr, const unsigned flags = ResolveAll )
         {
             auto resolved = expr;
-            resolve(resolved, flags);
+            resolve<Recursive>(resolved, flags);
             return resolved;
         }
         
+        template<bool Recursive = true>
         static ValueExpr resolved( ValueExpr&& expr, const unsigned flags = ResolveAll )
         {
-            resolve(expr, flags);
+            resolve<Recursive>(expr, flags);
             return expr;
         }
         

@@ -185,7 +185,7 @@ namespace sknd
                 }
             }
             
-            TRY_CALL(add_placeholder_symbols(op.inputs, symbols, false))
+            TRY_CALL(add_placeholder_symbols(op.inputs, symbols))
             
             const std::string scope = graph.name + ".";
             
@@ -228,13 +228,13 @@ namespace sknd
                 TRY_CALL(compose(component, operators, symbols, model, graph, scope))
             }
             
-            TRY_CALL(add_placeholder_symbols(op.outputs, symbols, true))
+            TRY_CALL(add_placeholder_symbols(op.outputs, symbols))
             
             graph.inputs = list_tensors(op.inputs, symbols);
             graph.outputs = list_tensors(op.outputs, symbols);
             graph.asserts = std::move(dynamic_asserts);
             
-            TRY_CALL(check_outputs(op.outputs, graph.outputs, symbols))
+            TRY_CALL(check_outputs(op.outputs, graph.outputs, symbols, _contexts.at(graph.name)))
             
             if ( !op.quantizations.empty() )
             {
@@ -250,7 +250,7 @@ namespace sknd
             return *model.graphs.back();
         }
         
-        Result<void> add_placeholder_symbols( const std::vector<Param>& params, Dict<Symbol>& symbols, bool composed )
+        Result<void> add_placeholder_symbols( const std::vector<Param>& params, Dict<Symbol>& symbols )
         {
             for ( auto& param : params )
             {
@@ -260,20 +260,20 @@ namespace sknd
                     {
                         if ( extent.bound )
                         {
-                            TRY_CALL(add_placeholder_symbol(*extent.value, *extent.bound, symbols, composed,
+                            TRY_CALL(add_placeholder_symbol(*extent.value, *extent.bound, symbols,
                                                             extent.spread ? param.repeats.value : nullptr))
                         }
                     }
                 }
                 if ( param.repeats.value && param.repeats.bound )
                 {
-                    TRY_CALL(add_placeholder_symbol(*param.repeats.value, *param.repeats.bound, symbols, composed))
+                    TRY_CALL(add_placeholder_symbol(*param.repeats.value, *param.repeats.bound, symbols))
                 }
             }
             return {};
         }
         
-        Result<void> add_placeholder_symbol( const Expr& extent, const Expr& bound, Dict<Symbol>& symbols, bool composed,
+        Result<void> add_placeholder_symbol( const Expr& extent, const Expr& bound, Dict<Symbol>& symbols,
                                             const Shared<Expr>& repeats = nullptr )
         {
             auto count = extent.kind == Expr::Expand ? as_expand(extent).count : repeats;
@@ -288,14 +288,14 @@ namespace sknd
                     
                     for ( size_t i = 0; i < items.size(); ++i )
                     {
-                        items[i] = ValueExpr::placeholder(composed ? "" : next_placeholder_name(), items[i]);
+                        items[i] = ValueExpr::placeholder(next_placeholder_name(), items[i]);
                     }
                     symbols.emplace(iden, Symbol(ValueExpr::list(std::move(items), Typename::Int), Typename::Int, Symbol::Extent));
                 }
                 else
                 {
                     TRY_DECL(max_value, eval(bound, symbols))
-                    auto value = ValueExpr::placeholder(composed ? "" : next_placeholder_name(), max_value);
+                    auto value = ValueExpr::placeholder(next_placeholder_name(), max_value);
                     symbols.emplace(iden, Symbol(value, Typename::Int, Symbol::Extent));
                 }
             }
@@ -647,6 +647,7 @@ namespace sknd
                      Model& model, Graph& graph, const std::optional<std::string>& scope )
         {
             Dict<Symbol> symbols = context_symbols;
+            auto& context = _contexts.at(graph.name);
             
             if ( !loop.unroll )
             {
@@ -678,10 +679,12 @@ namespace sknd
                         }
                         TRY_DECL(shape, eval_shape(*iden.shape, symbols))
                         var = make_tensor(graph, tensor.dtype(), shape, "");
+                        save_shapes_to_context(context, var, simplified(shape), nullptr);
                     }
                     else
                     {
                         var = make_tensor(graph, tensor.dtype(), tensor.shape(), tensor.max_shape(), {}, {});
+                        save_shapes_to_context(context, var, make_shape_access(tensor), nullptr);
                     }
                     
                     symbols.insert_or_assign(iden.name, Symbol(var, var.dtype(), Symbol::Carried));
@@ -695,6 +698,7 @@ namespace sknd
                     if ( tensor != nullptr )
                     {
                         auto var = TensorRef(make_tensor(graph, tensor.dtype(), tensor.shape(), tensor.max_shape(), {}, {}));
+                        save_shapes_to_context(context, var, make_shape_access(tensor), nullptr);
                         symbols.insert_or_assign(iden, Symbol(var, tensor.dtype(), Symbol::Scan));
                         internals.push_back(var);
                     }
@@ -747,13 +751,12 @@ namespace sknd
                 
                 for ( auto& input : body_graph->inputs )
                 {
-                    if ( std::find(internals.begin(), internals.end(), input) != internals.end() )
+                    if ( std::find(internals.begin(), internals.end(), input) == internals.end() )
                     {
                         inputs.push_back(input);
                     }
                 }
                 
-                auto& context = _contexts.at(graph.name);
                 auto& body_context = _contexts.at(body_graph->name);
                 
                 std::vector<TensorRef> outputs(body_graph->outputs.size());
@@ -769,6 +772,7 @@ namespace sknd
                     }
                     
                     auto shape = propagate_shape_through_region(body_graph->outputs[i], body_context);
+                    resolve_access_to_tensors(shape, internals, context);
                     save_shapes_to_context(context, outputs[i], simplified(shape), nullptr);
                 }
                 
@@ -797,6 +801,7 @@ namespace sknd
                         outputs[i] = TensorRef(pack);
                         
                         auto shape = propagate_shape_through_region(body_graph->outputs[i], body_context);
+                        resolve_access_to_tensors(shape, internals, context);
                         save_shapes_to_context(context, outputs[i], simplified(shape), simplified(size));
                     }
                 }
@@ -868,9 +873,10 @@ namespace sknd
                     }
                 }
                 
+                auto& context = _contexts.at(graph.name);
                 for ( size_t i = 0; i < repeats.as_int(); ++i )
                 {
-                    std::vector<TensorRef> locals;
+                    std::vector<TensorRef> internals;
                     
                     if ( loop.index )
                     {
@@ -886,7 +892,7 @@ namespace sknd
                         
                         if ( i == 0 )
                         {
-                            locals.push_back(tensor);
+                            internals.push_back(tensor);
                         }
                     }
                     for ( auto& [iden, expr] : loop.scans )
@@ -896,7 +902,7 @@ namespace sknd
                         
                         if ( i == 0 )
                         {
-                            locals.push_back(tensor);
+                            internals.push_back(tensor);
                         }
                     }
                     
@@ -904,14 +910,19 @@ namespace sknd
                     
                     if ( i == 0 )
                     {
-                        const size_t nlocals = locals.size();
-                        add_all(locals, item_inputs);
-                        inputs.insert(inputs.end(), locals.begin() + nlocals, locals.end());
+                        for ( auto& input : item_inputs )
+                        {
+                            if ( std::find(internals.begin(), internals.end(), input) == internals.end() )
+                            {
+                                inputs.push_back(input);
+                            }
+                        }
                         
                         for ( size_t k = loop.carries.size(); k < item_outputs.size(); ++k )
                         {
                             auto& output = *item_outputs[k];
                             outputs[k] = make_tensor_pack(graph, output.dtype, repeats.as_int(), repeats, output.shape, output.max_shape);
+                            save_shapes_to_context(context, outputs[k], context.shapes.at(&output), repeats);
                         }
                     }
                     for ( size_t k = 0; k < loop.carries.size(); ++k )
@@ -1026,10 +1037,9 @@ namespace sknd
         
         Shape propagate_shape_through_region( const TensorRef& output, const GraphContext& context )
         {
-            Shape shape(output.shape().size());
+            Shape shape = context.shapes.at(output);
             for ( size_t i = 0; i < output.shape().size(); ++i )
             {
-                shape[i] = context.shapes.at(output)[i];
                 trace_accesses_within_graph(shape[i], context);
                 if ( has_placeholders(shape[i]) )
                 {
@@ -1039,7 +1049,7 @@ namespace sknd
             return shape;
         }
         
-        ValueExpr propagate_size_through_region( const TensorRef& output, GraphContext& context )
+        ValueExpr propagate_size_through_region( const TensorRef& output, const GraphContext& context )
         {
             ValueExpr size = nullptr;
             if ( output.packed() )
@@ -1052,6 +1062,35 @@ namespace sknd
                 }
             }
             return size;
+        }
+        
+        void resolve_access_to_tensors( ValueExpr& expr, const std::vector<TensorRef>& tensors, const GraphContext& context )
+        {
+            if ( expr.is_shape_access() )
+            {
+                auto& access = expr.as_shape_access();
+                auto tensor = access.item == nullptr ? access.tensor : access.tensor.at(access.item.as_int());
+                if ( std::find(tensors.begin(), tensors.end(), access.tensor) != tensors.end() )
+                {
+                    expr = context.shapes.at(tensor)[access.dim.as_int()];
+                }
+            }
+            else if ( expr.is_size_access() )
+            {
+                auto& access = expr.as_size_access();
+                if ( std::find(tensors.begin(), tensors.end(), access.pack) != tensors.end() )
+                {
+                    expr = context.sizes.at(access.pack);
+                }
+            }
+        }
+        
+        void resolve_access_to_tensors( Shape& shape, const std::vector<TensorRef>& tensors, const GraphContext& context )
+        {
+            for ( auto& item : shape )
+            {
+                resolve_access_to_tensors(item, tensors, context);
+            }
         }
         
         Graph* find_graph_instance( const std::string& name, const Dict<Typename>& types, const Dict<ValueExpr>& attribs )
@@ -1174,7 +1213,11 @@ namespace sknd
                 context.sizes[tensor] = size;
                 for ( size_t i = 0; i < tensor.max_size(); ++i )
                 {
-                    context.shapes[TensorRef((Tensor*)&tensor[i])] = item_shape(shape, i);
+                    auto item = tensor.at(i);
+                    if ( item != nullptr )
+                    {
+                        context.shapes[item] = item_shape(shape, i);
+                    }
                 }
             }
         }
@@ -1350,7 +1393,7 @@ namespace sknd
                 }
             }
             
-            TRY_CALL(add_placeholder_symbols(op.outputs, locals, !op.components.empty()))
+            TRY_CALL(add_placeholder_symbols(op.outputs, locals))
             
             std::vector<Shape> output_shapes(op.outputs.size());
             std::vector<ValueExpr> output_sizes(op.outputs.size());
@@ -1375,7 +1418,6 @@ namespace sknd
                 TRY_CALL(compose(op.components.front(), operators, locals, model, graph, std::nullopt))
                 
                 outputs = list_tensors(op.outputs, locals);
-                TRY_CALL(check_outputs(op.outputs, outputs, locals))
                 
                 auto& operation = graph.operations.back();
                 operation.name = invocation.target;
@@ -1404,7 +1446,7 @@ namespace sknd
                     subgraph->outputs = list_tensors(op.outputs, locals);
                     subgraph->asserts = graph.operations.back().asserts;
                     
-                    TRY_CALL(check_outputs(op.outputs, subgraph->outputs, locals))
+                    TRY_CALL(check_outputs(op.outputs, subgraph->outputs, locals, _contexts.at(subgraph->name)))
                 }
             }
             else
@@ -2081,55 +2123,60 @@ namespace sknd
         }
         
         Result<void> check_outputs( const std::vector<Param>& params, const std::vector<TensorRef>& outputs,
-                                   const Dict<Symbol>& symbols )
+                                   const Dict<Symbol>& symbols, const GraphContext& context )
         {
             for ( size_t i = 0; i < params.size(); ++i )
             {
                 auto& param = params[i];
                 auto& output = outputs[i];
-                if ( !param.shape || output == nullptr )
-                {
-                    continue;
-                }
+                
+                auto composed_shape = propagate_shape_through_region(output, context);
+                resolve(composed_shape, ResolveReference);
+                simplify(composed_shape);
+                
+                auto composed_size = propagate_size_through_region(output, context);
+                resolve(composed_size, ResolveReference);
+                simplify(composed_size);
+                
+                TRY_DECL(declared_shape, eval_shape(*param.shape, symbols))
+                resolve(declared_shape, ResolveReference);
+                simplify(declared_shape);
                 
                 if ( param.type.packed )
                 {
                     if ( param.repeats.value )
                     {
-                        TRY_DECL(repeats, eval(*param.repeats.value, symbols))
-                        auto canonic_repeats = canonical(repeats);
-                        const size_t count = eval_shape_expr_max(canonic_repeats);
+                        TRY_DECL(declared_size, eval(*param.repeats.value, symbols))
+                        resolve(declared_size, ResolveReference);
+                        simplify(declared_size);
+                        
+                        const size_t count = eval_shape_expr_max(declared_size);
                         TRY_CALL(check_shape_repeats(*param.shape, symbols, count))
                         
-                        if ( !compare_shapes(canonic_repeats, output.size(), output.max_size()) )
+                        if ( !compare_shapes(declared_size, composed_size, output.max_size()) )
                         {
                             return Error(param.repeats.value->position, "output pack length (%s) does not match declared output count (%s)",
-                                         str(output.size()).c_str(), str(repeats).c_str());
+                                         str(composed_size).c_str(), str(declared_size).c_str());
                         }
                     }
-                    
-                    TRY_DECL(declared_shape, eval_shape(*param.shape, symbols))
-                    auto canonic_shape = canonical(declared_shape);
                     
                     for ( size_t j = 0; j < output.max_size(); ++j )
                     {
                         auto declared_shape_j = item_shape(declared_shape, j);
-                        auto canonic_shape_j = item_shape(canonic_shape, j);
-                        if ( !compare_shapes(canonic_shape_j, output[j].shape, output[j].max_shape) )
+                        auto composed_shape_j = item_shape(composed_shape, j);
+                        if ( !compare_shapes(declared_shape_j, composed_shape_j, output[j].max_shape) )
                         {
                             return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of item %d of output '%s'",
-                                         str(output[j].shape).c_str(), str(canonic_shape_j).c_str(), (int)j, param.name.c_str());
+                                         str(composed_shape_j).c_str(), str(declared_shape_j).c_str(), (int)j, param.name.c_str());
                         }
                     }
                 }
                 else
                 {
-                    TRY_DECL(declared_shape, eval_shape(*param.shape, symbols))
-                    auto canonic_shape = canonical(declared_shape);
-                    if ( !compare_shapes(canonic_shape, output->shape, output->max_shape) )
+                    if ( !compare_shapes(declared_shape, composed_shape, output->max_shape) )
                     {
                         return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of output '%s'",
-                                     str(output->shape).c_str(), str(canonic_shape).c_str(), param.name.c_str());
+                                     str(composed_shape).c_str(), str(declared_shape).c_str(), param.name.c_str());
                     }
                 }
             }
@@ -2154,11 +2201,11 @@ namespace sknd
         
         bool compare_shapes( const ValueExpr& declared_shape, const ValueExpr& composed_shape, const int_t& max_shape )
         {
-            if ( declared_shape.is_placeholder() && declared_shape.as_placeholder().id.empty() )
+            if ( declared_shape.is_placeholder() )
             {
                 return declared_shape.as_placeholder().max_value == max_shape;
             }
-            return composed_shape == declared_shape;
+            return resolved<false>(composed_shape) == resolved<false>(declared_shape);
         }
         
         bool has_reference( const ValueExpr& shape )
