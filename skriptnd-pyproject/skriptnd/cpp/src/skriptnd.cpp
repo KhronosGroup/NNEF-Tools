@@ -166,7 +166,7 @@ namespace sknd
             }
         }
         
-        Typing typing(counted_error);
+        Typing typing(operators, counted_error);
         
         auto& main_module = modules.front();
         auto main_op = typing.find_main_op(main_module, entry_point);
@@ -187,15 +187,15 @@ namespace sknd
         
         for ( auto& mod : modules )
         {
-            typing.check_module(mod, operators, main_op);
+            typing.check_module(mod, main_op);
         }
         if ( error_count )
         {
             return std::nullopt;
         }
         
-        Composer composer(counted_error, flags);
-        auto model = composer(operators, main_name, attribs);
+        Composer composer(operators, counted_error, flags);
+        auto model = composer(main_name, attribs);
         if ( !model )
         {
             error(model.error().position, model.error().message, model.error().trace, false);

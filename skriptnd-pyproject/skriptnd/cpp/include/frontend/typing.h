@@ -79,8 +79,8 @@ namespace sknd
         
     public:
         
-        Typing( const ErrorCallback error )
-        : _error(error)
+        Typing( const Dict<const Operator*>& operators, const ErrorCallback error )
+        : _operators(operators), _error(error)
         {
         }
         
@@ -98,25 +98,25 @@ namespace sknd
             }
         }
         
-        void check_module( const Module& module, const Dict<const Operator*>& operators, const Operator* main ) const
+        void check_module( const Module& module, const Operator* main ) const
         {
             for ( auto& op : module.operators )
             {
                 auto key = module.name + "." + op.name;
-                auto& defined = operators.at(key);
+                auto& defined = _operators.at(key);
                 if ( defined != &op )
                 {
                     report_error(op.position, "%s '%s' is already defined at [%d:%d]",
                                  defined->graph ? "graph" : "operator", key.c_str(),
                                  (int)defined->position.line, (int)defined->position.column);
                 }
-                check_operator(module, op, operators, &op == main);
+                check_operator(module, op, &op == main);
             }
         }
         
     private:
         
-        void check_operator( const Module& module, const Operator& op, const Dict<const Operator*>& operators, const bool main ) const
+        void check_operator( const Module& module, const Operator& op, const bool main ) const
         {
             Dict<Declaration> decls;
             std::vector<bool> checked(op.asserts.size(), false);
@@ -309,19 +309,19 @@ namespace sknd
             bool is_private = op.name.front() == '_';
             for ( auto& component : op.components )
             {
-                check_component(component, operators, decls, defs, false);
-                check_invocation_access(module, component.expression, operators, decls, !is_private && !op.graph && op.components.size() == 1);
+                check_component(component, decls, defs, false);
+                check_invocation_access(module, component.expression, decls, !is_private && !op.graph && op.components.size() == 1);
             }
             
             for ( auto& component : op.updates )
             {
-                check_component(component, operators, decls, defs, true);
-                check_invocation_access(module, component.expression, operators, decls, !is_private && !op.graph && op.updates.size() == 1);
+                check_component(component, decls, defs, true);
+                check_invocation_access(module, component.expression, decls, !is_private && !op.graph && op.updates.size() == 1);
             }
             
             for ( auto& quantization : op.quantizations )
             {
-                check_quantization(quantization, operators, decls);
+                check_quantization(quantization, decls);
             }
             
             for ( size_t i = 0; i < op.lowerings.size(); ++i )
@@ -347,7 +347,7 @@ namespace sknd
                 }
             }
             
-            check_labels(op.components, operators);
+            check_labels(op.components);
         }
         
         void declare_symbol( Dict<Declaration>& decls, const Position& position, const std::string& name, const Type& type,
@@ -1026,10 +1026,10 @@ namespace sknd
             }
         }
         
-        void check_component( const Component& component, const Dict<const Operator*>& operators, Dict<Declaration>& decls, Dict<Definition>& defs,
+        void check_component( const Component& component, Dict<Declaration>& decls, Dict<Definition>& defs,
                              const bool updates ) const
         {
-            auto types = check_control_flow(component.expression, decls, operators);
+            auto types = check_control_flow(component.expression, decls);
             if ( !types.empty() )
             {
                 std::vector<Shared<Expr>> repeats(component.results.size());
@@ -1058,28 +1058,28 @@ namespace sknd
             check_updates(decls, component.results, updates);
         }
         
-        std::vector<Type> check_control_flow( const ControlFlow& ctrl, const Dict<Declaration>& decls, const Dict<const Operator*>& operators,
+        std::vector<Type> check_control_flow( const ControlFlow& ctrl, const Dict<Declaration>& decls,
                                              const bool repeated = false, const size_t nvars = 0 ) const
         {
             if ( ctrl.is<Invocation>() )
             {
-                return check_invocation(ctrl.as<Invocation>(), decls, operators, false, repeated, nvars);
+                return check_invocation(ctrl.as<Invocation>(), decls, false, repeated, nvars);
             }
             else if ( ctrl.is<Region>() )
             {
-                return check_region(ctrl.as<Region>(), decls, operators, repeated, nvars);
+                return check_region(ctrl.as<Region>(), decls, repeated, nvars);
             }
             else if ( ctrl.is<Branch>() )
             {
-                return check_branch(ctrl.as<Branch>(), decls, operators);
+                return check_branch(ctrl.as<Branch>(), decls);
             }
             else if ( ctrl.is<Switch>() )
             {
-                return check_switch(ctrl.as<Switch>(), decls, operators);
+                return check_switch(ctrl.as<Switch>(), decls);
             }
             else if ( ctrl.is<Loop>() )
             {
-                return check_loop(ctrl.as<Loop>(), decls, operators);
+                return check_loop(ctrl.as<Loop>(), decls);
             }
             return {};
         }
@@ -1177,12 +1177,12 @@ namespace sknd
             }
         }
         
-        void check_quantization( const Quantization& quantization, const Dict<const Operator*>& operators, const Dict<Declaration>& decls ) const
+        void check_quantization( const Quantization& quantization, const Dict<Declaration>& decls ) const
         {
-            auto types = check_invocation(quantization.invocation, decls, operators, true);
+            auto types = check_invocation(quantization.invocation, decls, true);
             if ( !types.empty() )
             {
-                auto& op = *operators.at(quantization.invocation.target);
+                auto& op = *_operators.at(quantization.invocation.target);
                 if ( op.inputs.size() != 1 || op.inputs.front().type.packed )
                 {
                     report_error(quantization.invocation.position, "quantization operator must have exactly 1 non-packed input; found %d%s",
@@ -1545,24 +1545,24 @@ namespace sknd
             }
         }
         
-        void check_labels( const std::vector<Component>& components, const Dict<const Operator*>& operators ) const
+        void check_labels( const std::vector<Component>& components ) const
         {
             Dict<Position> labels;
             for ( auto& component : components )
             {
-                check_label(component.expression, operators, labels);
+                check_label(component.expression, labels);
             }
         }
         
-        void check_label( const ControlFlow& ctrl, const Dict<const Operator*>& operators, Dict<Position>& labels ) const
+        void check_label( const ControlFlow& ctrl, Dict<Position>& labels ) const
         {
             if ( ctrl.is<Invocation>() )
             {
                 auto& invocation = ctrl.as<Invocation>();
                 if ( invocation.label.empty() )
                 {
-                    auto it = operators.find(invocation.target);
-                    if ( it != operators.end() && !it->second->graph && has_variables(invocation, operators) )
+                    auto it = _operators.find(invocation.target);
+                    if ( it != _operators.end() && !it->second->graph && has_variables(invocation) )
                     {
                         report_error(invocation.position, "invoked operator '%s' must be labelled because it defines internal variables",
                                      invocation.target.c_str());
@@ -1581,37 +1581,37 @@ namespace sknd
             else if ( ctrl.is<Region>() )
             {
                 auto& region = ctrl.as<Region>();
-                check_labels(region.components, operators);
+                check_labels(region.components);
             }
             else if ( ctrl.is<Branch>() )
             {
                 auto& branch = ctrl.as<Branch>();
-                check_label(branch.consequent, operators, labels);
-                check_label(branch.alternate, operators, labels);
+                check_label(branch.consequent, labels);
+                check_label(branch.alternate, labels);
             }
             else if ( ctrl.is<Switch>() )
             {
                 auto& swtch = ctrl.as<Switch>();
                 for ( auto& [condition, consequent ] : swtch.cases )
                 {
-                    check_label(consequent, operators, labels);
+                    check_label(consequent, labels);
                 }
             }
             else if ( ctrl.is<Loop>() )
             {
                 auto& loop = ctrl.as<Loop>();
-                check_label(loop.body, operators, labels);
+                check_label(loop.body, labels);
             }
         }
         
-        bool has_variables( const Invocation& invocation, const Dict<const Operator*>& operators ) const
+        bool has_variables( const Invocation& invocation ) const
         {
             if ( invocation.target.empty() )
             {
                 return false;
             }
-            auto it = operators.find(invocation.target);
-            if ( it == operators.end() )
+            auto it = _operators.find(invocation.target);
+            if ( it == _operators.end() )
             {
                 return false;
             }
@@ -1626,11 +1626,11 @@ namespace sknd
                 if ( expr.is<Branch>() )
                 {
                     auto& branch = expr.as<Branch>();
-                    if ( branch.consequent.is<Invocation>() && has_variables(branch.consequent.as<Invocation>(), operators) )
+                    if ( branch.consequent.is<Invocation>() && has_variables(branch.consequent.as<Invocation>()) )
                     {
                         return true;
                     }
-                    if ( branch.alternate.is<Invocation>() && has_variables(branch.alternate.as<Invocation>(), operators) )
+                    if ( branch.alternate.is<Invocation>() && has_variables(branch.alternate.as<Invocation>()) )
                     {
                         return true;
                     }
@@ -1639,7 +1639,7 @@ namespace sknd
                 {
                     for ( auto& [condition, consequent] : expr.as<Switch>().cases )
                     {
-                        if ( consequent.is<Invocation>() && has_variables(consequent.as<Invocation>(), operators) )
+                        if ( consequent.is<Invocation>() && has_variables(consequent.as<Invocation>()) )
                         {
                             return true;
                         }
@@ -1648,14 +1648,14 @@ namespace sknd
                 else if ( expr.is<Loop>() )
                 {
                     auto& loop = expr.as<Loop>();
-                    if ( loop.body.is<Invocation>() && has_variables(loop.body.as<Invocation>(), operators) )
+                    if ( loop.body.is<Invocation>() && has_variables(loop.body.as<Invocation>()) )
                     {
                         return true;
                     }
                 }
                 else if ( expr.is<Invocation>() )
                 {
-                    if ( has_variables(expr.as<Invocation>(), operators) )
+                    if ( has_variables(expr.as<Invocation>()) )
                     {
                         return true;
                     }
@@ -1779,11 +1779,11 @@ namespace sknd
             return std::make_pair(type, rank);
         }
         
-        std::vector<Type> check_invocation( const Invocation& invocation, const Dict<Declaration>& decls, const Dict<const Operator*>& operators,
+        std::vector<Type> check_invocation( const Invocation& invocation, const Dict<Declaration>& decls,
                                            const bool quantization, const bool repeated = false, const size_t nvars = 0 ) const
         {
-            auto it = operators.find(invocation.target);
-            if ( it == operators.end() )
+            auto it = _operators.find(invocation.target);
+            if ( it == _operators.end() )
             {
                 report_error(invocation.position, "undefined operator '%s'", invocation.target.c_str());
                 
@@ -1905,7 +1905,7 @@ namespace sknd
             return types;
         }
         
-        std::vector<Type> check_region( const Region& region, const Dict<Declaration>& decls, const Dict<const Operator*>& operators,
+        std::vector<Type> check_region( const Region& region, const Dict<Declaration>& decls,
                                        const bool repeated = false, const size_t nvars = 0 ) const
         {
             Dict<Declaration> _decls = decls;
@@ -1917,7 +1917,7 @@ namespace sknd
             Dict<Definition> defs = {};
             for ( auto& component : region.components )
             {
-                check_component(component, operators, _decls, defs, false);
+                check_component(component, _decls, defs, false);
             }
             
             std::vector<Type> types;
@@ -1950,7 +1950,7 @@ namespace sknd
             return types;
         }
         
-        std::vector<Type> check_branch( const Branch& branch, const Dict<Declaration>& decls, const Dict<const Operator*>& operators ) const
+        std::vector<Type> check_branch( const Branch& branch, const Dict<Declaration>& decls ) const
         {
             check_condition(*branch.condition, decls);
             
@@ -1967,8 +1967,8 @@ namespace sknd
                 }
             }
             
-            auto then_type = check_control_flow(branch.consequent, !promoted.empty() ? _decls : decls, operators);
-            auto else_type = check_control_flow(branch.alternate, !promoted.empty() ? _decls : decls, operators);
+            auto then_type = check_control_flow(branch.consequent, !promoted.empty() ? _decls : decls);
+            auto else_type = check_control_flow(branch.alternate, !promoted.empty() ? _decls : decls);
             if ( then_type.empty() || else_type.empty() )
             {
                 return {};
@@ -1999,7 +1999,7 @@ namespace sknd
             return then_type;
         }
         
-        std::vector<Type> check_switch( const Switch& swtch, const Dict<Declaration>& decls, const Dict<const Operator*>& operators ) const
+        std::vector<Type> check_switch( const Switch& swtch, const Dict<Declaration>& decls ) const
         {
             Type expr_type;
             if ( swtch.expr )
@@ -2067,7 +2067,7 @@ namespace sknd
             for ( size_t i = 0; i < cases.size(); ++i )
             {
                 auto& [condition, consequent] = cases[i];
-                auto item_type = check_control_flow(consequent, decls, operators);
+                auto item_type = check_control_flow(consequent, decls);
                 if ( item_type.empty() )
                 {
                     return {};
@@ -2106,7 +2106,7 @@ namespace sknd
             return common_type;
         }
         
-        std::vector<Type> check_loop( const Loop& loop, const Dict<Declaration>& context_decls, const Dict<const Operator*>& operators ) const
+        std::vector<Type> check_loop( const Loop& loop, const Dict<Declaration>& context_decls ) const
         {
             auto decls = context_decls;
             for ( auto& [iden, expr] : loop.carries )
@@ -2198,7 +2198,7 @@ namespace sknd
                 }
             }
             
-            auto types = check_control_flow(loop.body, decls, operators, true, loop.carries.size());
+            auto types = check_control_flow(loop.body, decls, true, loop.carries.size());
             
             if ( types.size() < loop.carries.size() )
             {
@@ -2324,7 +2324,7 @@ namespace sknd
             }
         }
         
-        void check_invocation_access( const Module& module, const ControlFlow& ctrl, const Dict<const Operator*>& operators,
+        void check_invocation_access( const Module& module, const ControlFlow& ctrl,
                                      const Dict<Declaration>& decls, bool allow_private_primitives ) const
         {
             if ( ctrl.is<Branch>() )
@@ -2333,28 +2333,28 @@ namespace sknd
                 
                 allow_private_primitives &= is_static_expr(*branch.condition, decls);
                 
-                check_invocation_access(module, branch.consequent, operators, decls, allow_private_primitives);
-                check_invocation_access(module, branch.alternate, operators, decls, allow_private_primitives);
+                check_invocation_access(module, branch.consequent, decls, allow_private_primitives);
+                check_invocation_access(module, branch.alternate, decls, allow_private_primitives);
             }
             else if ( ctrl.is<Switch>() )
             {
                 auto& swtch = ctrl.as<Switch>();
                 for ( auto& [condition, consequent] : swtch.cases )
                 {
-                    check_invocation_access(module, consequent, operators, decls, allow_private_primitives);
+                    check_invocation_access(module, consequent, decls, allow_private_primitives);
                 }
             }
             else if ( ctrl.is<Loop>() )
             {
                 auto& loop = ctrl.as<Loop>();
-                check_invocation_access(module, loop.body, operators, decls, allow_private_primitives);
+                check_invocation_access(module, loop.body, decls, allow_private_primitives);
             }
             else if ( ctrl.is<Region>() )
             {
                 auto& region = ctrl.as<Region>();
                 for ( auto& component : region.components )
                 {
-                    check_invocation_access(module, component.expression, operators, decls, false);
+                    check_invocation_access(module, component.expression, decls, false);
                 }
             }
             else if ( ctrl.is<Invocation>() )
@@ -2384,8 +2384,8 @@ namespace sknd
                         report_error(invocation.position, "cannot invoke operator '%s' from module '%s' because it is private in module '%s'",
                                      invocation.target.c_str(), module.name.c_str(), target_module.c_str());
                     }
-                    auto it = operators.find(invocation.target);
-                    if ( it != operators.end() )
+                    auto it = _operators.find(invocation.target);
+                    if ( it != _operators.end() )
                     {
                         auto& op = *it->second;
                         if ( op.components.empty() && !allow_private_primitives )
@@ -4018,6 +4018,7 @@ namespace sknd
         
     private:
         
+        const Dict<const Operator*>& _operators;
         const ErrorCallback _error;
     };
     

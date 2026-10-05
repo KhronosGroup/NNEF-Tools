@@ -84,19 +84,19 @@ namespace sknd
         
     public:
         
-        Composer( const ErrorCallback error, const unsigned flags )
-        : _error(error), _flags(flags) {}
+        Composer( const Dict<const Operator*>& operators, const ErrorCallback error, const unsigned flags )
+        : _operators(operators), _error(error), _flags(flags) {}
         
-        Result<Model> operator()( const Dict<const Operator*>& operators, const std::string& graph_name,
+        Result<Model> operator()( const std::string& graph_name,
                                  const Dict<ValueExpr>& attribs = {}, const Dict<Typename>& dtypes = {} )
         {
             reset();
             
-            const Operator& op = *operators.at(graph_name);
+            const Operator& op = *_operators.at(graph_name);
             Model model = { op.name };
             Graph& graph = new_graph(model, nullptr, graph_name);
             
-            TRY_CALL(compose_graph(model, graph, op, operators, dtypes, attribs))
+            TRY_CALL(compose_graph(model, graph, op, dtypes, attribs))
             
             override_output_shapes(model);
             
@@ -143,7 +143,7 @@ namespace sknd
         
     private:
         
-        Result<void> compose_graph( Model& model, Graph& graph, const Operator& op, const Dict<const Operator*>& operators,
+        Result<void> compose_graph( Model& model, Graph& graph, const Operator& op,
                                    const Dict<Typename>& dtypes, const Dict<ValueExpr>& attribs )
         {
             Dict<Symbol> symbols;
@@ -225,7 +225,7 @@ namespace sknd
             
             for ( auto& component : op.components )
             {
-                TRY_CALL(compose(component, operators, symbols, model, graph, scope))
+                TRY_CALL(compose(component, symbols, model, graph, scope))
             }
             
             TRY_CALL(add_placeholder_symbols(op.outputs, symbols))
@@ -238,7 +238,7 @@ namespace sknd
             
             if ( !op.quantizations.empty() )
             {
-                TRY_CALL(eval_quantization(graph, op.quantizations, symbols, operators))
+                TRY_CALL(eval_quantization(graph, op.quantizations, symbols))
             }
             return {};
         }
@@ -483,10 +483,10 @@ namespace sknd
         }
         
         Result<std::tuple<std::vector<TensorRef>,std::vector<TensorRef>>>
-        compose( const Component& component, const Dict<const Operator*>& operators, Dict<Symbol>& symbols, Model& model, Graph& graph,
+        compose( const Component& component, Dict<Symbol>& symbols, Model& model, Graph& graph,
                 const std::optional<std::string>& scope )
         {
-            TRY_DECL(inputs, outputs, compose_expression(component.expression, operators, symbols, model, graph, scope))
+            TRY_DECL(inputs, outputs, compose_expression(component.expression, symbols, model, graph, scope))
             
             rename_results(component.results, outputs, scope);
             TRY_CALL(add_results_to_symbols(component.results, outputs, graph, symbols, scope, component.position))
@@ -495,12 +495,12 @@ namespace sknd
         }
         
         Result<Graph*>
-        compose_subgraph( const ControlFlow& expr, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
+        compose_subgraph( const ControlFlow& expr, const Dict<Symbol>& symbols,
                          Model& model, Graph& parent, const std::optional<std::string>& scope )
         {
             auto& graph = new_graph(model, &parent, next_graph_name());
             
-            TRY_DECL(inputs, outputs, compose_expression(expr, operators, symbols, model, graph, scope))
+            TRY_DECL(inputs, outputs, compose_expression(expr, symbols, model, graph, scope))
             
             graph.inputs = std::move(inputs);
             graph.outputs = std::move(outputs);
@@ -509,43 +509,43 @@ namespace sknd
         }
         
         Result<std::tuple<std::vector<TensorRef>,std::vector<TensorRef>>>
-        compose_expression( const ControlFlow& ctrl, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols, Model& model, Graph& graph,
+        compose_expression( const ControlFlow& ctrl, const Dict<Symbol>& symbols, Model& model, Graph& graph,
                              const std::optional<std::string>& scope )
         {
             if ( ctrl.is<Branch>() )
             {
                 auto& branch = ctrl.as<Branch>();
-                return compose_branch(branch, operators, symbols, model, graph, scope);
+                return compose_branch(branch, symbols, model, graph, scope);
             }
             else if ( ctrl.is<Switch>() )
             {
                 auto& swtch = ctrl.as<Switch>();
-                return compose_switch(swtch, operators, symbols, model, graph, scope);
+                return compose_switch(swtch, symbols, model, graph, scope);
             }
             else if ( ctrl.is<Loop>() )
             {
                 auto& loop = ctrl.as<Loop>();
-                return compose_loop(loop, operators, symbols, model, graph, scope);
+                return compose_loop(loop, symbols, model, graph, scope);
             }
             else if ( ctrl.is<Region>() )
             {
                 auto& region = ctrl.as<Region>();
                 auto nested_scope = scope && !region.label.empty() ? *scope + region.label + "." : std::optional<std::string>();
-                return compose_region(region, operators, symbols, model, graph, nested_scope);
+                return compose_region(region, symbols, model, graph, nested_scope);
             }
             else
             {
                 auto& invocation = ctrl.as<Invocation>();
                 auto nested_scope = scope && !invocation.label.empty() ? *scope + invocation.label + "." : std::optional<std::string>();
                 _trace.emplace_back(invocation.target, invocation.position);
-                auto result = invoke(invocation, operators, symbols, model, graph, nested_scope);
+                auto result = invoke(invocation, symbols, model, graph, nested_scope);
                 _trace.pop_back();
                 return result;
             }
         }
         
         Result<std::tuple<std::vector<TensorRef>,std::vector<TensorRef>>>
-        compose_branch( const Branch& branch, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
+        compose_branch( const Branch& branch, const Dict<Symbol>& symbols,
                        Model& model, Graph& graph, const std::optional<std::string>& scope )
         {
             TensorRef cond_tensor;
@@ -557,7 +557,7 @@ namespace sknd
                 if ( cond_value.is_literal() )
                 {
                     auto& expr = cond_value.as_bool() ? branch.consequent : branch.alternate;
-                    return compose_expression(expr, operators, symbols, model, graph, scope);
+                    return compose_expression(expr, symbols, model, graph, scope);
                 }
             }
             else
@@ -570,8 +570,8 @@ namespace sknd
                 }
             }
             
-            TRY_DECL(then_graph, compose_subgraph(branch.consequent, operators, symbols, model, graph, scope))
-            TRY_DECL(else_graph, compose_subgraph(branch.alternate, operators, symbols, model, graph, scope))
+            TRY_DECL(then_graph, compose_subgraph(branch.consequent, symbols, model, graph, scope))
+            TRY_DECL(else_graph, compose_subgraph(branch.alternate, symbols, model, graph, scope))
             
             std::vector<TensorRef> inputs = { cond_tensor };
             add_all(inputs, then_graph->inputs);
@@ -623,7 +623,7 @@ namespace sknd
         }
         
         Result<std::tuple<std::vector<TensorRef>,std::vector<TensorRef>>>
-        compose_switch( const Switch& swtch, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
+        compose_switch( const Switch& swtch, const Dict<Symbol>& symbols,
                        Model& model, Graph& graph, const std::optional<std::string>& scope )
         {
             TRY_DECL(expr_value, swtch.expr ? eval(*swtch.expr, symbols) : ValueExpr(nullptr))
@@ -636,14 +636,14 @@ namespace sknd
                 }
                 if ( cond_value.as_bool() )
                 {
-                    return compose_expression(operation, operators, symbols, model, graph, scope);
+                    return compose_expression(operation, symbols, model, graph, scope);
                 }
             }
             return Error(swtch.position, "none of the cases evaluated to true in switch statement");
         }
         
         Result<std::tuple<std::vector<TensorRef>,std::vector<TensorRef>>>
-        compose_loop( const Loop& loop, const Dict<const Operator*>& operators, const Dict<Symbol>& context_symbols,
+        compose_loop( const Loop& loop, const Dict<Symbol>& context_symbols,
                      Model& model, Graph& graph, const std::optional<std::string>& scope )
         {
             Dict<Symbol> symbols = context_symbols;
@@ -747,7 +747,7 @@ namespace sknd
                     inputs.push_back(TensorRef(nullptr));
                 }
                 
-                TRY_DECL(body_graph, compose_subgraph(loop.body, operators, symbols, model, graph, scope))
+                TRY_DECL(body_graph, compose_subgraph(loop.body, symbols, model, graph, scope))
                 
                 for ( auto& input : body_graph->inputs )
                 {
@@ -856,7 +856,7 @@ namespace sknd
                 }
                 
                 std::vector<TensorRef> inputs;
-                std::vector<TensorRef> outputs(output_count(loop.body, operators));
+                std::vector<TensorRef> outputs(output_count(loop.body));
                 
                 for ( auto& [iden, expr] : loop.carries )
                 {
@@ -906,7 +906,7 @@ namespace sknd
                         }
                     }
                     
-                    TRY_DECL(item_inputs, item_outputs, compose_expression(loop.body, operators, symbols, model, graph, scope))
+                    TRY_DECL(item_inputs, item_outputs, compose_expression(loop.body, symbols, model, graph, scope))
                     
                     if ( i == 0 )
                     {
@@ -945,7 +945,7 @@ namespace sknd
         }
         
         Result<std::tuple<std::vector<TensorRef>,std::vector<TensorRef>>>
-        compose_region( const Region& region, const Dict<const Operator*>& operators, const Dict<Symbol>& context_symbols,
+        compose_region( const Region& region, const Dict<Symbol>& context_symbols,
                        Model& model, Graph& graph, const std::optional<std::string>& scope )
         {
             Dict<Symbol> symbols = context_symbols;
@@ -954,7 +954,7 @@ namespace sknd
             std::unordered_set<TensorRef> internals;
             for ( auto& component : region.components )
             {
-                TRY_DECL(_inputs, _outputs, compose(component, operators, symbols, model, graph, scope))
+                TRY_DECL(_inputs, _outputs, compose(component, symbols, model, graph, scope))
                 
                 for ( auto& output : _outputs )
                 {
@@ -1112,22 +1112,22 @@ namespace sknd
             _instances.emplace(name, GraphInstance{ graph, std::move(types), std::move(attribs) });
         }
         
-        size_t output_count( const ControlFlow& ctrl, const Dict<const Operator*>& operators )
+        size_t output_count( const ControlFlow& ctrl )
         {
             if ( ctrl.is<Branch>() )
             {
                 auto& branch = ctrl.as<Branch>();
-                return output_count(branch.consequent, operators);
+                return output_count(branch.consequent);
             }
             else if ( ctrl.is<Switch>() )
             {
                 auto& swtch = ctrl.as<Switch>();
-                return output_count(swtch.cases.front().second, operators);
+                return output_count(swtch.cases.front().second);
             }
             else if ( ctrl.is<Loop>() )
             {
                 auto& loop = ctrl.as<Loop>();
-                return output_count(loop.body, operators);
+                return output_count(loop.body);
             }
             else if ( ctrl.is<Region>() )
             {
@@ -1137,7 +1137,7 @@ namespace sknd
             else if ( ctrl.is<Invocation>() )
             {
                 auto& invocation = ctrl.as<Invocation>();
-                auto& op = *operators.at(invocation.target);
+                auto& op = *_operators.at(invocation.target);
                 return op.outputs.size();
             }
             assert(false);
@@ -1253,10 +1253,10 @@ namespace sknd
         }
         
         Result<std::tuple<std::vector<TensorRef>,std::vector<TensorRef>>>
-        invoke( const Invocation& invocation, const Dict<const Operator*>& operators, const Dict<Symbol>& symbols,
+        invoke( const Invocation& invocation, const Dict<Symbol>& symbols,
                Model& model, Graph& graph, const std::optional<std::string>& scope )
         {
-            const Operator& op = *operators.at(invocation.target);
+            const Operator& op = *_operators.at(invocation.target);
             
             TRY_DECL(types, eval_generic_types(op, invocation.dtypes, invocation.attribs, invocation.args, symbols, invocation.position))
             Dict<Symbol> locals = types_as_symbols(types);
@@ -1362,7 +1362,7 @@ namespace sknd
                 {
                     auto graph_name = scope ? scope->substr(0, scope->length() - 1) : invocation.target + next_graph_name();
                     subgraph = &new_graph(model, nullptr, graph_name);
-                    TRY_CALL(compose_graph(model, *subgraph, op, operators, types, attribs))
+                    TRY_CALL(compose_graph(model, *subgraph, op, types, attribs))
                     
                     make_graph_instance(invocation.target, types, attribs, subgraph);
                 }
@@ -1415,7 +1415,7 @@ namespace sknd
             
             if ( inlined )
             {
-                TRY_CALL(compose(op.components.front(), operators, locals, model, graph, std::nullopt))
+                TRY_CALL(compose(op.components.front(), locals, model, graph, std::nullopt))
                 
                 outputs = list_tensors(op.outputs, locals);
                 
@@ -1439,7 +1439,7 @@ namespace sknd
                 {
                     for ( auto& component : op.components )
                     {
-                        TRY_CALL(compose(component, operators, locals, model, *subgraph, scope))
+                        TRY_CALL(compose(component, locals, model, *subgraph, scope))
                     }
                     
                     subgraph->inputs = list_tensors(op.inputs, locals);
@@ -4157,8 +4157,7 @@ namespace sknd
             }
         }
         
-        Result<void> eval_quantization( Graph& graph, const std::vector<Quantization>& quantization, const Dict<Symbol>& symbols,
-                                       const Dict<const Operator*>& operators )
+        Result<void> eval_quantization( Graph& graph, const std::vector<Quantization>& quantization, const Dict<Symbol>& symbols )
         {
             Dict<Tensor*> tensors;
             for ( auto& tensor : graph.tensors )
@@ -4176,7 +4175,7 @@ namespace sknd
                 }
                 auto& tensor = *it->second;
                 
-                auto& op = *operators.at(quant.invocation.target);
+                auto& op = *_operators.at(quant.invocation.target);
                 auto dtypes = eval_dtypes(op, quant.invocation);
                 
                 auto& param = op.inputs.front();
@@ -4589,6 +4588,7 @@ namespace sknd
         
     private:
         
+        const Dict<const Operator*>& _operators;
         unsigned _flags;
         const ErrorCallback _error;
         Dict<GraphContext> _contexts;
