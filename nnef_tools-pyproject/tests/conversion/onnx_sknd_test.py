@@ -53,7 +53,8 @@ class TestEnv(sknd_test.TestEnv):
     _output_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/onnx/ops/') if UNITTEST_FOLDER else None
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs, optimize=True, execute=True, keep_generated_code=False)
+        super().__init__(*args, **kwargs, optimize=True, execute=True,
+                         keep_generated_code=False, target='torch')
 
     def setUp(self) -> None:
         self._onnx_reader = onnx_io.Reader(simplify=False, enforce_output_shapes=True)

@@ -19,11 +19,12 @@ import skriptnd as sknd
 
 class TestEnv(unittest.TestCase):
 
-    def __init__(self, *args, optimize=True, execute=True, keep_generated_code=False, **kwargs):
+    def __init__(self, *args, optimize=True, execute=True, keep_generated_code=False, target='cpp', **kwargs):
         super().__init__(*args, **kwargs)
         self._optimize = optimize
         self._execute = execute
         self._keep_generated_code = keep_generated_code
+        self._target = target
 
     def _convert_to_sknd(self, filename, input_shape=None):
         raise NotImplementedError()
@@ -48,8 +49,6 @@ class TestEnv(unittest.TestCase):
         if not model:
             return None
 
-        compiled_model = sknd.compile_model(model, keep_generated_code=self._keep_generated_code)
-
         if not isinstance(input_shape, list):
             input_shape = [input_shape] * len(model.graphs[0].inputs)
         if not isinstance(input_range, list):
@@ -60,7 +59,13 @@ class TestEnv(unittest.TestCase):
                                        input_range[idx])
                   for idx, input in enumerate(model.graphs[0].inputs)]
 
-        return compiled_model(*inputs)
+        if self._target == 'cpp':
+            compiled_model = sknd.compile_model(model, keep_generated_code=self._keep_generated_code)
+            return compiled_model(*inputs)
+        elif self._target == 'torch':
+            from nnef_tools.execution.pytorch import SKNDInterpreter
+            interpreter = SKNDInterpreter(model)
+            return list(interpreter(inputs).values())
 
     @staticmethod
     def _compile_sknd_model(path):
@@ -88,10 +93,12 @@ class TestEnv(unittest.TestCase):
     def _test_conversion_from_file(self, filename, epsilon=1e-5, input_shape=None, input_range=None, execute=True, compile=True):
         self._convert_to_sknd(filename, input_shape=input_shape)
 
-        if not self._execute or not execute:
-            if compile:
-                assert self._compile_sknd_model(filename + '.nnef2') is not None
-            return
+        if self._execute and execute:
+            self._test_execution_from_file(filename, epsilon=epsilon, input_shape=input_shape, input_range=input_range)
+        elif compile:
+            assert self._compile_sknd_model(filename + '.nnef2') is not None
+
+    def _test_execution_from_file(self, filename, epsilon=1e-5, input_shape=None, input_range=None):
 
         original_outputs = self._exec_orig_model(filename, input_shape=input_shape, input_range=input_range)
         converted_outputs = self._exec_sknd_model(filename + '.nnef2', input_shape=input_shape, input_range=input_range)
