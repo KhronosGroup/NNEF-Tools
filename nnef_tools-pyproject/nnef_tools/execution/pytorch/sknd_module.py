@@ -31,6 +31,10 @@ class SKNDModule(torch.nn.Module):
     A torch.nn.Module that interprets the given NNEF model
     """
 
+    _Atomics = {
+        'nn.softmax',
+    }
+
     def __init__(self,
                  model,  # type: str
                  decomposed=None,           # type: typing.Optional[typing.List[str]]
@@ -42,13 +46,14 @@ class SKNDModule(torch.nn.Module):
             nnef_graph might be modified by this class if training and write_nnef is used
         """
         super(SKNDModule, self).__init__()
-        inline = (lambda op: op.name in decomposed) if decomposed else None
+
+        inline_filter = (lambda op: op.name not in self._Atomics or op.name in decomposed) \
+            if decomposed else (lambda op: op.name not in self._Atomics)
         if isinstance(model, sknd.Model):
-            if decomposed:
-                sknd.inline_compounds(model, filter=inline)
+            sknd.inline_compounds(model, filter=inline_filter)
             self._sknd_model = _build_model(model)
         else:
-            reader = sknd_io.Reader(inline=inline)
+            reader = sknd_io.Reader(inline=inline_filter)
             self._sknd_model = reader(model)
 
         for graph in self._sknd_model.graphs:

@@ -35,7 +35,7 @@ def _expand_to_rank(input, rank, align=None):
 
 
 def _binary(f):
-    def func(lhs, rhs, lhs_align, rhs_align):
+    def func(lhs, rhs, lhs_align=None, rhs_align=None):
         rank = max(len(lhs.shape), len(rhs.shape))
         return f(_expand_to_rank(lhs, rank, lhs_align), _expand_to_rank(rhs, rank, rhs_align))
     return func
@@ -56,6 +56,13 @@ def _reduce(input, f, axes, squeeze=False):
         result = f(input=input, dim=axis, keepdim=not squeeze)
         input = result[0] if isinstance(result, tuple) else result
     return input
+
+
+def _apply_n(inputs, binary):
+    if len(inputs) == 1:
+        return inputs[0]
+    else:
+        return binary(inputs[0], _apply_n(inputs[1:], binary))
 
 
 def nn_softmax(x, axes=None):
@@ -81,13 +88,14 @@ def layout_tile(input, axes, repeats):
 
 
 """
-The supported operators
+Supported primitive and atomic operators (all other compounds are inlined)
 """
 Operators = {
     'math.add': _binary(lambda x, y: x + y),
     'math.sub': _binary(lambda x, y: x - y),
     'math.mul': _binary(lambda x, y: x * y),
     'math.div': _binary(lambda x, y: x / y),
+    'math.mod': _binary(torch.remainder),
     'math.pow': _binary(torch.pow),
     'math.min': _binary(torch.min),
     'math.max': _binary(torch.max),
@@ -135,6 +143,12 @@ Operators = {
     'math.max_reduce': lambda input, axes, squeeze: _reduce(input, torch.max, axes=axes, squeeze=squeeze),
     'math.any_reduce': lambda input, axes, squeeze: _reduce(input, torch.any, axes=axes, squeeze=squeeze),
     'math.all_reduce': lambda input, axes, squeeze: _reduce(input, torch.all, axes=axes, squeeze=squeeze),
+    'math.sum_n': lambda inputs: _apply_n(inputs, torch.add),
+    'math.prod_n': lambda inputs: _apply_n(inputs, torch.mul),
+    'math.min_n': lambda inputs: _apply_n(inputs, torch.minimum),
+    'math.max_n': lambda inputs: _apply_n(inputs, torch.maximum),
+    'math.any_n': lambda inputs: _apply_n(inputs, torch.logical_or),
+    'math.all_n': lambda inputs: _apply_n(inputs, torch.logical_and),
     'nn.relu': F.relu,
     'nn.sigmoid': torch.sigmoid,
     'nn.softabs': lambda x, epsilon: torch.sqrt(torch.pow(x, 2.0) + epsilon),
