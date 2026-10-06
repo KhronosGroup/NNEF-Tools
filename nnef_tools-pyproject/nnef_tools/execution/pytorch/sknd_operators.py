@@ -87,6 +87,119 @@ def layout_tile(input, axes, repeats):
     return input.repeat(*reps)
 
 
+def _axes_to_ncx(rank, layout):
+    if layout == 'NCX':
+        return list(range(rank))
+    elif layout == 'NXC':
+        return [0, rank - 1] + list(range(1, rank - 1))
+    elif layout == 'XCN':
+        return [rank - 1, rank - 2] + list(range(rank - 2))
+    elif layout == 'CXN':
+        return [rank - 1, 0] + list(range(1, rank - 1))
+    else:
+        raise ValueError("layout '{}' is unsupported".format(layout))
+
+
+def _inverse_axes(axes):
+    inverse = [0] * len(axes)
+    for index, axis in enumerate(axes):
+        inverse[axis] = index
+    return inverse
+
+
+def _permute(tensor, axes):
+    if axes == list(range(len(axes))):
+        return tensor
+    return tensor.permute(axes).contiguous()
+
+
+def _conv_pads(input_size, kernel, stride, dilation, padding, padding_align, ceil_mode, transposed):
+    spatial = len(input_size)
+    if padding is None:
+        before = []
+        after = []
+        for size, width, step, rate in zip(input_size, kernel, stride, dilation):
+            span = (width - 1) * rate + 1
+            if transposed:
+                total = span - step
+            else:
+                divided = -(size // -step) if ceil_mode else size // step
+                total = (divided - 1) * step + span - size
+            lead = total // 2 if padding_align == 'UPPER' else -(total // -2)
+            before.append(lead)
+            after.append(total - lead)
+    else:
+        before = padding[:spatial]
+        after = padding[spatial:]
+    return before, after
+
+
+def _pad_input(tensor, before, after):
+    pad = []
+    for left, right in zip(reversed(before), reversed(after)):
+        pad.extend((left, right))
+    if any(pad):
+        tensor = F.pad(tensor, pad)
+    return tensor
+
+
+def _crop_spatial(tensor, before, after):
+    slices = [slice(None), slice(None)]
+    for lead, trail, size in zip(before, after, tensor.shape[2:]):
+        stop = None if trail == 0 else size - trail
+        start = None if lead == 0 else lead
+        slices.append(slice(start, stop))
+    return tensor[tuple(slices)]
+
+
+def _as_ncx(tensor, layout):
+    axes = _axes_to_ncx(len(tensor.shape), layout)
+    return _permute(tensor, axes), axes
+
+
+def nn_conv(input, filter, bias, stride, dilation, padding, padding_align, ceil_mode, groups, data_format, filter_format):
+    spatial = len(input.shape) - 2
+    assert spatial in (1, 2, 3), "nn.conv is only implemented for 1D, 2D and 3D, given: {}D.".format(spatial)
+
+    input, data_axes = _as_ncx(input, data_format)
+    filter, _ = _as_ncx(filter, filter_format)
+    if groups == 0:
+        groups = input.shape[1]
+
+    before, after = _conv_pads(input.shape[2:], filter.shape[2:], stride, dilation, padding, padding_align, ceil_mode,
+                               False)
+    if before == after:
+        conv_padding = tuple(before)
+    else:
+        input = _pad_input(input, before, after)
+        conv_padding = 0
+    conv = {1: F.conv1d, 2: F.conv2d, 3: F.conv3d}[spatial]
+    output = conv(input, filter, bias, stride=tuple(stride), padding=conv_padding, dilation=tuple(dilation),
+                  groups=groups)
+    return _permute(output, _inverse_axes(data_axes))
+
+
+def nn_deconv(input, filter, bias, stride, dilation, padding, padding_align, output_size, groups, data_format,
+              filter_format):
+    spatial = len(input.shape) - 2
+    assert spatial in (1, 2, 3), "nn.deconv is only implemented for 1D, 2D and 3D, given: {}D.".format(spatial)
+
+    input, data_axes = _as_ncx(input, data_format)
+    filter, _ = _as_ncx(filter, filter_format)
+    if groups == 0:
+        groups = input.shape[1]
+
+    before, after = _conv_pads(input.shape[2:], filter.shape[2:], stride, dilation, padding, padding_align, False, True)
+    deconv = {1: F.conv_transpose1d, 2: F.conv_transpose2d, 3: F.conv_transpose3d}[spatial]
+    if before == after:
+        output = deconv(input, filter, bias, stride=tuple(stride), padding=tuple(before), dilation=tuple(dilation),
+                        groups=groups)
+    else:
+        output = deconv(input, filter, bias, stride=tuple(stride), padding=0, dilation=tuple(dilation), groups=groups)
+        output = _crop_spatial(output, before, after)
+    return _permute(output, _inverse_axes(data_axes))
+
+
 """
 Supported primitive and atomic operators (all other compounds are inlined)
 """
@@ -160,5 +273,7 @@ Operators = {
     'nn.silu': lambda x: x * torch.sigmoid(x),
     'nn.prelu': lambda x, alpha: F.prelu(x, alpha),
     'nn.leaky_relu': lambda x, alpha: F.leaky_relu(x, alpha),
+    'nn.conv': nn_conv,
+    'nn.deconv': nn_deconv,
     'layout.tile': layout_tile,
 }
