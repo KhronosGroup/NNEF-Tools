@@ -87,12 +87,16 @@ class SKNDModule(torch.nn.Module):
                 return activations[name]
 
         def get_tensors(query):
+            if query is None:
+                return None
             return [get_tensor(item.name) for item in query] if isinstance(query, list) else get_tensor(query.name)
 
         def has_tensor(name):
             return hasattr(self, self._registered_name(name)) or name in activations
 
         def has_tensors(query):
+            if query is None:
+                return True
             return all(has_tensor(item.name) for item in query) if isinstance(query, list) else has_tensor(query.name)
 
         for op in graph.operations:
@@ -124,7 +128,7 @@ class SKNDModule(torch.nn.Module):
 
             # optimization: remove activations that are not needed any more
             for sknd_tensor in recursive_itemize(op.inputs):
-                if sknd_tensor.name in activations and op is sknd_tensor.consumers[-1] and sknd_tensor not in graph.outputs:
+                if sknd_tensor is not None and sknd_tensor.name in activations and op is sknd_tensor.consumers[-1] and sknd_tensor not in graph.outputs:
                     del activations[sknd_tensor.name]
 
         return tuple(get_tensors(output) for output in graph.outputs)
