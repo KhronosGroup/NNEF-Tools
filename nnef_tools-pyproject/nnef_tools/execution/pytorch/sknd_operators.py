@@ -15,12 +15,29 @@
 from __future__ import division, print_function, absolute_import
 
 from typing import Optional, List, Tuple, Callable, Any
-from functools import reduce
 import numpy as np
-import functools
+import builtins
 import torch
 import torch.nn.functional as F
 import math
+
+
+_numpy_dtype_to_torch = {
+    np.int8: torch.int8,
+    np.int16: torch.int16,
+    np.int32: torch.int32,
+    np.int64: torch.int64,
+    np.uint8: torch.uint8,
+    np.double: torch.double,
+    np.float16: torch.float16,
+    np.float32: torch.float32,
+    np.float64: torch.float64,
+    np.short: torch.short,
+    np.longlong: torch.long,
+    int: torch.int,
+    bool: torch.bool,
+    float: torch.float,
+}
 
 
 def _expand_to_rank(input, rank, align=None):
@@ -46,6 +63,13 @@ def math_select(cond, lhs, rhs, cond_align, lhs_align, rhs_align):
     return torch.where(_expand_to_rank(cond, rank, cond_align),
                        _expand_to_rank(lhs, rank, lhs_align),
                        _expand_to_rank(rhs, rank, rhs_align))
+
+
+def math_clamp(val, min, max, val_align, min_align, max_align):
+    rank = builtins.max(len(val.shape), len(min.shape), len(max.shape))
+    return torch.clamp(_expand_to_rank(val, rank, val_align),
+                       _expand_to_rank(min, rank, min_align),
+                       _expand_to_rank(max, rank, max_align))
 
 
 def _reduce(input, f, axes, squeeze=False):
@@ -413,6 +437,7 @@ Operators = {
     'math.ne': _binary(torch.ne),
     'math.and': _binary(lambda x, y: x & y),
     'math.or': _binary(lambda x, y: x | y),
+    'math.xor': _binary(lambda x, y: x ^ y),
     'math.exp': torch.exp,
     'math.log': torch.log,
     'math.abs': torch.abs,
@@ -455,6 +480,7 @@ Operators = {
     'math.max_n': lambda inputs: _apply_n(inputs, torch.maximum),
     'math.any_n': lambda inputs: _apply_n(inputs, torch.logical_or),
     'math.all_n': lambda inputs: _apply_n(inputs, torch.logical_and),
+    'math.clamp': math_clamp,
     'nn.relu': nn_relu,
     'nn.sigmoid': torch.sigmoid,
     'nn.softabs': lambda x, epsilon: torch.sqrt(torch.pow(x, 2.0) + epsilon),
@@ -466,6 +492,7 @@ Operators = {
     'nn.silu': lambda x: x * torch.sigmoid(x),
     'nn.prelu': nn_prelu,
     'nn.leaky_relu': lambda x, alpha: F.leaky_relu(x, alpha),
+    'nn.erf': torch.erf,
     'nn.linear': F.linear,
     'nn.conv': nn_conv,
     'nn.deconv': nn_deconv,
@@ -488,5 +515,6 @@ Operators = {
     'layout.unsqueeze': layout_unsqueeze,
     'layout.concat': layout_concat,
     'layout.split': layout_split,
+    'layout.cast': lambda x, R: x.to(_numpy_dtype_to_torch[R]),
     '=': torch.clone,
 }
