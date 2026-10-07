@@ -167,6 +167,37 @@ def layout_tile(input, axes, repeats):
     return input.repeat(*reps)
 
 
+def layout_broadcast(input, axes, shape):
+    rank = len(input.shape)
+    out_shape = list(input.shape)
+    for axis, extent in zip(axes, shape):
+        if axis < 0:
+            axis += rank
+        if extent != 1:
+            out_shape[axis] = extent
+    return input.broadcast_to(out_shape)
+
+
+def layout_slice(input, axes, begin, end, stride):
+    rank = len(input.shape)
+    slices = [slice(None)] * rank
+    reverse = []
+    for axis, start, stop, step in zip(axes, begin, end, stride):
+        if axis < 0:
+            axis += rank
+        stop = min(max(stop, -1), input.shape[axis])
+        if step < 0:
+            reverse.append(axis)
+            step = -step
+            start, stop = stop + 1, start + 1
+            start += (stop - start - 1) % step
+        slices[axis] = slice(start, None if stop == -1 else stop, step)
+    input = input[tuple(slices)]
+    if reverse:
+        input = input.flip(reverse)
+    return input
+
+
 def layout_squeeze(input, axes):
     return input.squeeze(tuple(axes))
 
@@ -184,6 +215,34 @@ def layout_concat(inputs, axis):
 
 def layout_split(input, axis, count, sizes):
     return torch.split(input, tuple(sizes), dim=axis)
+
+
+def layout_gather(data, index, axis):
+    selector = [slice(None)] * data.dim()
+    selector[axis] = index
+    return data[tuple(selector)]
+
+
+def layout_scatter(data, indices, updates, axis):
+    return data.scatter(axis, indices.to(torch.int64), updates)
+
+
+def _nd_indices(data, indices, batch_dims):
+    indices = indices.to(torch.int64)
+    batch_idx = []
+    for axis, size in enumerate(data.shape[:batch_dims]):
+        view = [1] * (indices.dim() - 1)
+        view[axis] = size
+        batch_idx.append(torch.arange(size, device=indices.device).view(view))
+    return tuple(batch_idx) + tuple(indices.unbind(-1))
+
+
+def layout_gather_nd(data, indices, batch_dims):
+    return data[_nd_indices(data, indices, batch_dims)]
+
+
+def layout_scatter_nd(data, indices, updates, batch_dims):
+    return data.index_put(_nd_indices(data, indices, batch_dims), updates)
 
 
 def _axes_to_ncx(rank, layout):
@@ -511,10 +570,16 @@ Operators = {
     'layout.unflatten': layout_unflatten,
     'layout.transpose': layout_transpose,
     'layout.tile': layout_tile,
+    'layout.broadcast': layout_broadcast,
+    'layout.slice': layout_slice,
     'layout.squeeze': layout_squeeze,
     'layout.unsqueeze': layout_unsqueeze,
     'layout.concat': layout_concat,
     'layout.split': layout_split,
+    'layout.gather': layout_gather,
+    'layout.gather_nd': layout_gather_nd,
+    'layout.scatter': layout_scatter,
+    'layout.scatter_nd': layout_scatter_nd,
     'layout.cast': lambda x, R: x.to(_numpy_dtype_to_torch[R]),
     '=': torch.clone,
 }
