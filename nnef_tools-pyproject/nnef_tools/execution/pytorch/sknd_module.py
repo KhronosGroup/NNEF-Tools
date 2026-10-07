@@ -33,6 +33,7 @@ class SKNDModule(torch.nn.Module):
 
     _Atomics = {
         'nn.softmax',
+        'nn.avg_pool',
     }
 
     def __init__(self,

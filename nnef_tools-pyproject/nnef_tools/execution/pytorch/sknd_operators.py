@@ -113,7 +113,7 @@ def _permute(tensor, axes):
     return tensor.permute(axes).contiguous()
 
 
-def _conv_pads(input_size, kernel, stride, dilation, padding, padding_align, ceil_mode, transposed):
+def _paddings(input_size, kernel, stride, dilation, padding, padding_align, ceil_mode, transposed):
     spatial = len(input_size)
     if padding is None:
         before = []
@@ -134,12 +134,12 @@ def _conv_pads(input_size, kernel, stride, dilation, padding, padding_align, cei
     return before, after
 
 
-def _pad_input(tensor, before, after):
+def _pad_input(tensor, before, after, value=0):
     pad = []
     for left, right in zip(reversed(before), reversed(after)):
         pad.extend((left, right))
     if any(pad):
-        tensor = F.pad(tensor, pad)
+        tensor = F.pad(tensor, pad, value=value)
     return tensor
 
 
@@ -166,7 +166,7 @@ def nn_conv(input, filter, bias, stride, dilation, padding, padding_align, ceil_
     if groups == 0:
         groups = input.shape[1]
 
-    before, after = _conv_pads(input.shape[2:], filter.shape[2:], stride, dilation, padding, padding_align, ceil_mode,
+    before, after = _paddings(input.shape[2:], filter.shape[2:], stride, dilation, padding, padding_align, ceil_mode,
                                False)
     if before == after:
         conv_padding = tuple(before)
@@ -189,7 +189,7 @@ def nn_deconv(input, filter, bias, stride, dilation, padding, padding_align, out
     if groups == 0:
         groups = input.shape[1]
 
-    before, after = _conv_pads(input.shape[2:], filter.shape[2:], stride, dilation, padding, padding_align, False, True)
+    before, after = _paddings(input.shape[2:], filter.shape[2:], stride, dilation, padding, padding_align, False, True)
     deconv = {1: F.conv_transpose1d, 2: F.conv_transpose2d, 3: F.conv_transpose3d}[spatial]
     if before == after:
         output = deconv(input, filter, bias, stride=tuple(stride), padding=tuple(before), dilation=tuple(dilation),
@@ -198,6 +198,59 @@ def nn_deconv(input, filter, bias, stride, dilation, padding, padding_align, out
         output = deconv(input, filter, bias, stride=tuple(stride), padding=0, dilation=tuple(dilation), groups=groups)
         output = _crop_spatial(output, before, after)
     return _permute(output, _inverse_axes(data_axes))
+
+
+def _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode, pools, pad_value=0,
+          count_include_pad=None, with_dilation=False):
+    rank = len(input.shape)
+    axes = [axis + rank if axis < 0 else axis for axis in axes]
+    spatial = len(axes)
+    assert spatial in (1, 2, 3), "pooling is only implemented for 1D, 2D and 3D windows, given: {}D.".format(spatial)
+
+    rest = [axis for axis in range(rank) if axis not in axes]
+    order = rest + axes
+    input = _permute(input, order)
+    before, after = _paddings(input.shape[-spatial:], size, stride, dilation, padding, padding_align, ceil_mode, False)
+    if before == after:
+        pool_padding = tuple(before)
+    else:
+        input = _pad_input(input, before, after, pad_value)
+        pool_padding = 0
+    kwargs = {}
+    if with_dilation:
+        kwargs['dilation'] = tuple(dilation)
+    if count_include_pad is not None:
+        kwargs['count_include_pad'] = count_include_pad
+    output = pools[spatial](input, tuple(size), stride=tuple(stride), padding=pool_padding, **kwargs)
+    return _permute(output, _inverse_axes(order))
+
+
+def nn_max_pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode):
+    pools = {1: F.max_pool1d, 2: F.max_pool2d, 3: F.max_pool3d}
+    return _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode, pools,
+                 pad_value=float('-inf'), with_dilation=True)
+
+
+def nn_sum_pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode):
+    assert all(rate == 1 for rate in dilation), "nn.sum_pool is only implemented for dilation 1, given: {}.".format(dilation)
+    pools = {1: F.avg_pool1d, 2: F.avg_pool2d, 3: F.avg_pool3d}
+    averaged = _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode, pools,
+                     count_include_pad=True)
+    return averaged * math.prod(size)
+
+
+def nn_avg_pool(input, axes, size, stride, dilation, padding, padding_align, ignore_border, ceil_mode):
+    assert all(rate == 1 for rate in dilation), "nn.avg_pool is only implemented for dilation 1, given: {}.".format(dilation)
+    rank = len(input.shape)
+    spatial_size = [input.shape[axis + rank if axis < 0 else axis] for axis in axes]
+    before, after = _paddings(spatial_size, size, stride, dilation, padding, padding_align, ceil_mode, False)
+    if ignore_border and before != after:
+        summed = nn_sum_pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode)
+        counts = nn_sum_pool(torch.ones_like(input), axes, size, stride, dilation, padding, padding_align, ceil_mode)
+        return summed / counts
+    pools = {1: F.avg_pool1d, 2: F.avg_pool2d, 3: F.avg_pool3d}
+    return _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode, pools,
+                 count_include_pad=not ignore_border)
 
 
 """
@@ -275,5 +328,8 @@ Operators = {
     'nn.leaky_relu': lambda x, alpha: F.leaky_relu(x, alpha),
     'nn.conv': nn_conv,
     'nn.deconv': nn_deconv,
+    'nn.max_pool': nn_max_pool,
+    'nn.sum_pool': nn_sum_pool,
+    'nn.avg_pool': nn_avg_pool,
     'layout.tile': layout_tile,
 }
