@@ -82,6 +82,26 @@ def _reduce(input, f, axes, squeeze=False):
     return input
 
 
+def _arg_nd(input, axes, squeeze, fn):
+    rank = input.dim()
+    axes = [axis + rank if axis < 0 else axis for axis in axes]
+    kept = [axis for axis in range(rank) if axis not in axes]
+    order = sorted(axes)
+    reduced = _permute(input, kept + order).reshape(*[input.shape[axis] for axis in kept], -1)
+    flat = fn(reduced, dim=-1)
+    coords = []
+    for size in reversed([input.shape[axis] for axis in order]):
+        coords.append(flat % size)
+        flat = flat // size
+    coords.reverse()
+    index = dict(zip(order, coords))
+    result = torch.stack([index[axis] for axis in axes], dim=-1)
+    if not squeeze:
+        for axis in order:
+            result = result.unsqueeze(axis)
+    return result
+
+
 def _apply_n(inputs, binary):
     if len(inputs) == 1:
         return inputs[0]
@@ -533,6 +553,10 @@ Operators = {
     'math.max_reduce': lambda input, axes, squeeze: _reduce(input, torch.max, axes=axes, squeeze=squeeze),
     'math.any_reduce': lambda input, axes, squeeze: _reduce(input, torch.any, axes=axes, squeeze=squeeze),
     'math.all_reduce': lambda input, axes, squeeze: _reduce(input, torch.all, axes=axes, squeeze=squeeze),
+    'math.argmin': lambda input, axis, squeeze: torch.argmin(input, dim=axis, keepdim=not squeeze),
+    'math.argmax': lambda input, axis, squeeze: torch.argmax(input, dim=axis, keepdim=not squeeze),
+    'math.argmin_nd': lambda input, axes, squeeze: _arg_nd(input, axes, squeeze, torch.argmin),
+    'math.argmax_nd': lambda input, axes, squeeze: _arg_nd(input, axes, squeeze, torch.argmax),
     'math.sum_n': lambda inputs: _apply_n(inputs, torch.add),
     'math.prod_n': lambda inputs: _apply_n(inputs, torch.mul),
     'math.min_n': lambda inputs: _apply_n(inputs, torch.minimum),
