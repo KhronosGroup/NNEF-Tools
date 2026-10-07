@@ -80,6 +80,10 @@ def nn_softmax(x, axes=None):
         return e / _reduce(x, torch.sum, axes=axes)
 
 
+def layout_tensor(shape, value, T):
+    return torch.tensor(np.array(value, dtype=T).reshape(shape))
+
+
 def layout_tile(input, axes, repeats):
     reps = [1] * len(input.shape)
     for axis, repeat in zip(axes, repeats):
@@ -324,7 +328,7 @@ Operators = {
     'nn.softplus': lambda x: torch.log(torch.exp(x) + 1.0),
     'nn.elu': F.elu,
     'nn.selu': lambda x, alpha, _lambda_: F.selu(x),
-    'nn.gelu': F.gelu,
+    'nn.gelu': lambda x, approximate: F.gelu(x, approximate=(approximate or 'none').lower()),
     'nn.silu': lambda x: x * torch.sigmoid(x),
     'nn.prelu': lambda x, alpha: F.prelu(x, alpha),
     'nn.leaky_relu': lambda x, alpha: F.leaky_relu(x, alpha),
@@ -333,5 +337,7 @@ Operators = {
     'nn.max_pool': nn_max_pool,
     'nn.sum_pool': nn_sum_pool,
     'nn.avg_pool': nn_avg_pool,
+    'layout.tensor': layout_tensor,
     'layout.tile': layout_tile,
+    '=': torch.clone,
 }

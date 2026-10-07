@@ -17,6 +17,7 @@ from __future__ import division, print_function, absolute_import
 import skriptnd as sknd
 import torch
 import keyword
+import inspect
 
 from . import sknd_operators
 from ...io import sknd as sknd_io
@@ -103,14 +104,16 @@ class SKNDModule(torch.nn.Module):
         for op in graph.operations:
             assert op.type in self._operators, "Unsupported operation: {}".format(op.type)
             func = self._operators[op.type]
+            params = inspect.signature(func).parameters if inspect.isfunction(func) else {}
 
             assert all(has_tensors(input) for input in op.inputs),\
                 "could not fetch input tensor(s) {} for operation {}"\
                     .format({[item.name for item in input] if isinstance(input, list) else input.name
                              for input in op.inputs}, op.type)
 
+            dtype_attribs = {name: type for name, type in op.dtypes.items() if name in params}
             training_attribs = self._training_attributes.get(op.type, {})
-            attribs = {**op.attribs, **training_attribs}
+            attribs = {**op.attribs, **dtype_attribs, **training_attribs}
             attribs = {self._escape_keyword(name): value for name, value in six.iteritems(attribs)}
 
             inputs = [get_tensors(input) for input in op.inputs]
