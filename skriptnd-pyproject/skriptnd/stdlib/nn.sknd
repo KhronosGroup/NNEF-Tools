@@ -95,6 +95,7 @@ operator conv {
         stride > 0: "'stride' must be positive", stride;
         dilation > 0: "'dilation' must be positive", dilation;
         groups >= 0: "'groups' must not be negative", groups;
+        padding >= 0: "'padding' must not be negative", padding;
         ix + paddings >= fd:
             "padded input-size must be greater than (dilated) filter-size",
             'input.size': ix, 'filter.size': fx, dilation, 'total-padding': paddings;
@@ -175,7 +176,7 @@ operator deconv {
              filter_format == 'XCN' ? fs[:-2] :
                                       fs[1:-1];
         fd = (fx - 1) * dilation + 1;
-        paddings = padding[:d] + padding[d:] ?? (ix - 1) * stride + fd - ix * stride;
+        paddings = padding[:d] + padding[d:] ?? fd - stride;
         offset = padding[:d] ?? padding_align == 'UPPER' ? paddings / 2 : paddings \ 2;
         ox = output_size ?? (ix - 1) * stride + fd - paddings;
         g = groups == 0 ? ic : groups;
@@ -192,6 +193,7 @@ operator deconv {
         stride > 0: "'stride' must be positive", stride;
         dilation > 0: "'dilation' must be positive", dilation;
         groups >= 0: "'groups' must not be negative", groups;
+        padding >= 0: "'padding' must not be negative", padding;
         (output_size + paddings - fd) / stride + 1 == ix:
             "'output_size' must be compatible with what would be calculated from "
             "input-size, filter-size, 'stride', 'dilation' and 'padding'",
@@ -267,6 +269,7 @@ operator max_pool {
         size > 0: "'size' must be positive", size;
         stride > 0: "'stride' must be positive", stride;
         dilation > 0: "'dilation' must be positive", dilation;
+        padding >= 0: "'padding' must not be negative", padding;
         sa + paddings >= fd:
             "padded input-size must be greater than (dilated) filter-size",
             'input-size': sa, 'filter-size': size, dilation, 'total-padding': paddings;
@@ -314,6 +317,7 @@ operator sum_pool {
         size > 0: "'size' must be positive", size;
         stride > 0: "'stride' must be positive", stride;
         dilation > 0: "'dilation' must be positive", dilation;
+        padding >= 0: "'padding' must not be negative", padding;
         sa + paddings >= fd:
             "padded input-size must be greater than (dilated) filter-size",
             'input-size': sa, 'filter-size': size, dilation, 'total-padding': paddings;
@@ -361,6 +365,7 @@ operator avg_pool {
         size > 0: "'size' must be positive", size;
         stride > 0: "'stride' must be positive", stride;
         dilation > 0: "'dilation' must be positive", dilation;
+        padding >= 0: "'padding' must not be negative", padding;
         sa + paddings >= fd:
             "padded input-size must be greater than (dilated) filter-size",
             'input-size': sa, 'filter-size': size, dilation, 'total-padding': paddings;
@@ -416,6 +421,7 @@ operator rms_pool {
         size > 0: "'size' must be positive", size;
         stride > 0: "'stride' must be positive", stride;
         dilation > 0: "'dilation' must be positive", dilation;
+        padding >= 0: "'padding' must not be negative", padding;
         sa + paddings >= fd:
             "padded input-size must be greater than (dilated) filter-size",
             'input-size': sa, 'filter-size': size, dilation, 'total-padding': paddings;
@@ -466,6 +472,7 @@ operator lp_pool {
         size > 0: "'size' must be positive", size;
         stride > 0: "'stride' must be positive", stride;
         dilation > 0: "'dilation' must be positive", dilation;
+        padding >= 0: "'padding' must not be negative", padding;
         sa + paddings >= fd:
             "padded input-size must be greater than (dilated) filter-size",
             'input-size': sa, 'filter-size': size, dilation, 'total-padding': paddings;
