@@ -131,7 +131,14 @@ class SKNDModule(torch.nn.Module):
             if not isinstance(outputs, tuple):
                 outputs = (outputs,)
 
-            for sknd_tensor, output in zip(recursive_itemize(op.outputs), recursive_itemize(outputs)):
+            def itemize(query):
+                if isinstance(query, (list, tuple)):
+                    for item in query:
+                        yield from itemize(item)
+                else:
+                    yield query
+
+            for sknd_tensor, output in zip(itemize(op.outputs), itemize(outputs)):
                 if sknd_tensor.quant and not sknd_tensor._is_variable:
                     output = self._fake_quantize(output, sknd_tensor.quant)
 

@@ -143,6 +143,25 @@ def layout_tile(input, axes, repeats):
     return input.repeat(*reps)
 
 
+def layout_squeeze(input, axes):
+    return input.squeeze(tuple(axes))
+
+
+def layout_unsqueeze(input, axes):
+    rank = len(input.shape) + len(axes)
+    for axis in sorted(axis + rank if axis < 0 else axis for axis in axes):
+        input = input.unsqueeze(axis)
+    return input
+
+
+def layout_concat(inputs, axis):
+    return torch.cat(inputs, dim=axis)
+
+
+def layout_split(input, axis, count, sizes):
+    return torch.split(input, tuple(sizes), dim=axis)
+
+
 def _axes_to_ncx(rank, layout):
     if layout == 'NCX':
         return list(range(rank))
@@ -465,5 +484,9 @@ Operators = {
     'layout.unflatten': layout_unflatten,
     'layout.transpose': layout_transpose,
     'layout.tile': layout_tile,
+    'layout.squeeze': layout_squeeze,
+    'layout.unsqueeze': layout_unsqueeze,
+    'layout.concat': layout_concat,
+    'layout.split': layout_split,
     '=': torch.clone,
 }
