@@ -103,6 +103,39 @@ def layout_tensor(shape, value, T):
     return torch.tensor(np.array(value, dtype=T).reshape(shape))
 
 
+def layout_reshape(input, axis, rank, shape):
+    if axis < 0:
+        axis += len(input.shape)
+    shape = tuple(shape)
+    if rank != len(input.shape):
+        shape = input.shape[:axis] + shape + input.shape[axis + rank:]
+    return torch.reshape(input, shape)
+
+
+def layout_flatten(input, axis, rank):
+    if axis < 0:
+        axis += len(input.shape)
+    if rank == 0:
+        return input
+    return torch.flatten(input, start_dim=axis, end_dim=axis + rank - 1)
+
+
+def layout_unflatten(input, axis, shape):
+    if axis < 0:
+        axis += len(input.shape)
+    shape = input.shape[:axis] + tuple(shape) + input.shape[axis + 1:]
+    return torch.reshape(input, shape)
+
+
+def layout_transpose(input, axis, perm):
+    if axis < 0:
+        axis += len(input.shape)
+    perm = tuple(perm)
+    if axis != 0:
+        perm = tuple(range(0, axis)) + perm
+    return input.permute(perm)
+
+
 def layout_tile(input, axes, repeats):
     reps = [1] * len(input.shape)
     for axis, repeat in zip(axes, repeats):
@@ -427,6 +460,10 @@ Operators = {
     'linalg.matmul': linalg_matmul,
     'linalg.outer': linalg_outer,
     'layout.tensor': layout_tensor,
+    'layout.reshape': layout_reshape,
+    'layout.flatten': layout_flatten,
+    'layout.unflatten': layout_unflatten,
+    'layout.transpose': layout_transpose,
     'layout.tile': layout_tile,
     '=': torch.clone,
 }

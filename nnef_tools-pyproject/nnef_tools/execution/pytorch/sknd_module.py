@@ -33,6 +33,7 @@ class SKNDModule(torch.nn.Module):
     """
 
     _Atomics = {
+        'layout.reshape': lambda op: True,
         'nn.softmax': lambda op: True,
         'nn.avg_pool': lambda op: True,
         'nn.local_response_norm': lambda op: len(op.attribs['axes']) == 1,
