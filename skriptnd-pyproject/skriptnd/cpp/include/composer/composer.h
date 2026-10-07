@@ -234,6 +234,8 @@ namespace sknd
             graph.outputs = list_tensors(op.outputs, symbols);
             graph.asserts = std::move(dynamic_asserts);
             
+            insert_copy_operations(graph, graph.inputs, graph.outputs);
+            
             TRY_CALL(check_outputs(op.outputs, graph.outputs, symbols, _contexts.at(graph.name)))
             
             if ( !op.quantizations.empty() )
@@ -501,6 +503,8 @@ namespace sknd
             auto& graph = new_graph(model, &parent, next_graph_name());
             
             TRY_DECL(inputs, outputs, compose_expression(expr, symbols, model, graph, scope))
+            
+            insert_copy_operations(graph, inputs, outputs);
             
             graph.inputs = std::move(inputs);
             graph.outputs = std::move(outputs);
@@ -993,7 +997,6 @@ namespace sknd
                 }
             }
             
-            auto& context = _contexts.at(graph.name);
             std::vector<TensorRef> outputs(region.yields.size());
             for ( size_t i = 0; i < region.yields.size(); ++i )
             {
@@ -1016,17 +1019,6 @@ namespace sknd
                     {
                         inputs.insert(tensor);
                     }
-                }
-                
-                bool is_duplicate_output = std::find(outputs.begin(), outputs.begin() + i, tensor) != outputs.begin() + i;
-                if ( inputs.count(tensor) || is_duplicate_output )
-                {
-                    TensorRef output = make_tensor_like(graph, tensor, {}, {});
-                    Shape shape = make_shape_access(tensor);
-                    ValueExpr size = tensor.packed() ? make_size_access_expr(tensor.size(), tensor) : nullptr;
-                    graph.operations.push_back(Operation{ "=", {}, {}, { tensor }, { output }, {}, {}, {}, {}, {}, true });
-                    save_shapes_to_context(context, output, shape, size);
-                    tensor = output;
                 }
                 
                 outputs[i] = tensor;
@@ -1478,6 +1470,26 @@ namespace sknd
             }
             
             return std::make_tuple(std::move(inputs), std::move(outputs));
+        }
+        
+        void insert_copy_operations( Graph& graph, const std::vector<TensorRef>& inputs, std::vector<TensorRef>& outputs )
+        {
+            auto& context = _contexts.at(graph.name);
+            for ( size_t i = 0; i < outputs.size(); ++i )
+            {
+                auto& output = outputs[i];
+                auto is_input = std::find(inputs.begin(), inputs.end(), output) != inputs.end();
+                auto is_duplicate_output = std::find(outputs.begin(), outputs.begin() + i, output) != outputs.begin() + i;
+                if ( is_input || is_duplicate_output || output.is_constant() )
+                {
+                    TensorRef tensor = make_tensor_like(graph, output, {}, {});
+                    Shape shape = make_shape_access(output);
+                    ValueExpr size = output.packed() ? make_size_access_expr(output.size(), output) : nullptr;
+                    graph.operations.push_back(Operation{ "=", {}, {}, { output }, { tensor }, {}, {}, {}, {}, {}, true });
+                    save_shapes_to_context(context, tensor, shape, size);
+                    outputs[i] = tensor;
+                }
+            }
         }
         
         static bool has_tensor_packs( const Operator& op )
