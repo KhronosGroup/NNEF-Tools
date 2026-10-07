@@ -33,8 +33,10 @@ class SKNDModule(torch.nn.Module):
     """
 
     _Atomics = {
-        'nn.softmax',
-        'nn.avg_pool',
+        'nn.softmax': lambda op: True,
+        'nn.avg_pool': lambda op: True,
+        'nn.local_response_norm': lambda op: len(op.attribs['axes']) == 1,
+        'nn.batch_norm': lambda op: True,
     }
 
     def __init__(self,
@@ -49,8 +51,14 @@ class SKNDModule(torch.nn.Module):
         """
         super(SKNDModule, self).__init__()
 
-        inline_filter = (lambda op: op.name not in self._Atomics or op.name in decomposed) \
-            if decomposed else (lambda op: op.name not in self._Atomics)
+        def inline_filter(op):
+            if decomposed and op.name in decomposed:
+                return True
+            func = self._Atomics.get(op.name)
+            if not func:
+                return True
+            return not func(op)
+
         if isinstance(model, sknd.Model):
             sknd.inline_compounds(model, filter=inline_filter)
             self._sknd_model = _build_model(model)

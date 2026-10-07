@@ -65,6 +65,25 @@ def _apply_n(inputs, binary):
         return binary(inputs[0], _apply_n(inputs[1:], binary))
 
 
+def nn_relu(x, alpha, max):
+    x = F.leaky_relu(x, alpha) if alpha is not None else F.relu(x)
+    return x if max is None else torch.minimum(x, max)
+
+
+def nn_prelu(x, alpha, axis):
+    rank = len(x.shape)
+    if axis != 1:
+        order = [index for index in range(rank) if index != axis]
+        order.insert(1, axis)
+        x = _permute(x, order)
+
+    y = F.prelu(x, alpha)
+
+    if axis != 1:
+        y = _permute(y, _inverse_axes(order))
+    return y
+
+
 def nn_softmax(x, axes=None):
     # type: (torch.Tensor, Optional[List[int]])->torch.Tensor
 
@@ -284,6 +303,44 @@ def linalg_outer(x, y):
     return x.reshape(x.shape + (1,) * len(y.shape)) * y
 
 
+def nn_local_response_norm(input, axes, size, alpha, beta, bias):
+    rank = len(input.shape)
+    axis = axes[0] + rank if axes[0] < 0 else axes[0]
+
+    if axis != 1:
+        order = [index for index in range(rank) if index != axis]
+        order.insert(1, axis)
+        input = _permute(input, order)
+
+    new_axes = 3 - len(input.shape)
+    if new_axes > 0:
+        input = input.reshape(input.shape + (1,) * new_axes)
+
+    output = F.local_response_norm(input, size[0], alpha=alpha, beta=beta, k=bias)
+
+    if new_axes > 0:
+        output = output.reshape(output.shape[:-new_axes])
+    if axis != 1:
+        output = _permute(output, _inverse_axes(order))
+    return output
+
+
+def nn_batch_norm(input, mean, variance, bias, scale, epsilon, channel_axis):
+    rank = len(input.shape)
+    axis = channel_axis + rank if channel_axis < 0 else channel_axis
+
+    if axis != 1:
+        order = [index for index in range(rank) if index != axis]
+        order.insert(1, axis)
+        input = _permute(input, order)
+
+    output = F.batch_norm(input, mean, variance, scale, bias, training=False, eps=epsilon)
+
+    if axis != 1:
+        output = _permute(output, _inverse_axes(order))
+    return output
+
+
 """
 Supported primitive and atomic operators (all other compounds are inlined)
 """
@@ -346,7 +403,7 @@ Operators = {
     'math.max_n': lambda inputs: _apply_n(inputs, torch.maximum),
     'math.any_n': lambda inputs: _apply_n(inputs, torch.logical_or),
     'math.all_n': lambda inputs: _apply_n(inputs, torch.logical_and),
-    'nn.relu': F.relu,
+    'nn.relu': nn_relu,
     'nn.sigmoid': torch.sigmoid,
     'nn.softabs': lambda x, epsilon: torch.sqrt(torch.pow(x, 2.0) + epsilon),
     'nn.softmax': nn_softmax,
@@ -355,7 +412,7 @@ Operators = {
     'nn.selu': lambda x, alpha, _lambda_: F.selu(x),
     'nn.gelu': lambda x, approximate: F.gelu(x, approximate=(approximate or 'none').lower()),
     'nn.silu': lambda x: x * torch.sigmoid(x),
-    'nn.prelu': lambda x, alpha: F.prelu(x, alpha),
+    'nn.prelu': nn_prelu,
     'nn.leaky_relu': lambda x, alpha: F.leaky_relu(x, alpha),
     'nn.linear': F.linear,
     'nn.conv': nn_conv,
@@ -363,6 +420,8 @@ Operators = {
     'nn.max_pool': nn_max_pool,
     'nn.sum_pool': nn_sum_pool,
     'nn.avg_pool': nn_avg_pool,
+    'nn.local_response_norm': nn_local_response_norm,
+    'nn.batch_norm': nn_batch_norm,
     'linalg.dot': linalg_dot,
     'linalg.matvec': linalg_matvec,
     'linalg.matmul': linalg_matmul,
