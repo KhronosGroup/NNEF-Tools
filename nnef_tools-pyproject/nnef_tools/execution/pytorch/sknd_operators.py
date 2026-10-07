@@ -259,6 +259,31 @@ def nn_avg_pool(input, axes, size, stride, dilation, padding, padding_align, ign
                  count_include_pad=not ignore_border)
 
 
+def linalg_dot(x, y, b):
+    z = torch.dot(x, y)
+    return z if b is None else z + b
+
+
+def linalg_matvec(A, x, b, transA):
+    y = torch.mv(A.transpose(0, 1) if transA else A, x)
+    return y if b is None else y + b
+
+
+def linalg_matmul(A, B, C, transA, transB):
+    if transA:
+        A = A.transpose(-2, -1)
+    if transB:
+        B = B.transpose(-2, -1)
+    Z = torch.matmul(A, B)
+    return Z if C is None else Z + C
+
+
+def linalg_outer(x, y):
+    if len(x.shape) == 1 and len(y.shape) == 1:
+        return torch.outer(x, y)
+    return x.reshape(x.shape + (1,) * len(y.shape)) * y
+
+
 """
 Supported primitive and atomic operators (all other compounds are inlined)
 """
@@ -332,11 +357,16 @@ Operators = {
     'nn.silu': lambda x: x * torch.sigmoid(x),
     'nn.prelu': lambda x, alpha: F.prelu(x, alpha),
     'nn.leaky_relu': lambda x, alpha: F.leaky_relu(x, alpha),
+    'nn.linear': F.linear,
     'nn.conv': nn_conv,
     'nn.deconv': nn_deconv,
     'nn.max_pool': nn_max_pool,
     'nn.sum_pool': nn_sum_pool,
     'nn.avg_pool': nn_avg_pool,
+    'linalg.dot': linalg_dot,
+    'linalg.matvec': linalg_matvec,
+    'linalg.matmul': linalg_matmul,
+    'linalg.outer': linalg_outer,
     'layout.tensor': layout_tensor,
     'layout.tile': layout_tile,
     '=': torch.clone,
