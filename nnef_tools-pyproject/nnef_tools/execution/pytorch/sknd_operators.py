@@ -113,15 +113,16 @@ def _permute(tensor, axes):
     return tensor.permute(axes).contiguous()
 
 
-def _paddings(input_size, kernel, stride, dilation, padding, padding_align, ceil_mode, transposed):
+def _paddings(input_size, kernel, stride, dilation, padding, padding_align, ceil_mode, transposed, output_size=None):
     spatial = len(input_size)
     if padding is None:
         before = []
         after = []
-        for size, width, step, rate in zip(input_size, kernel, stride, dilation):
+        for index, (size, width, step, rate) in enumerate(zip(input_size, kernel, stride, dilation)):
             span = (width - 1) * rate + 1
             if transposed:
-                total = span - step
+                out = size * step if output_size is None else output_size[index]
+                total = (size - 1) * step + span - out
             else:
                 divided = -(size // -step) if ceil_mode else size // step
                 total = (divided - 1) * step + span - size
@@ -189,7 +190,8 @@ def nn_deconv(input, filter, bias, stride, dilation, padding, padding_align, out
     if groups == 0:
         groups = input.shape[1]
 
-    before, after = _paddings(input.shape[2:], filter.shape[2:], stride, dilation, padding, padding_align, False, True)
+    before, after = _paddings(input.shape[2:], filter.shape[2:], stride, dilation, padding, padding_align, False, True,
+                               output_size)
     deconv = {1: F.conv_transpose1d, 2: F.conv_transpose2d, 3: F.conv_transpose3d}[spatial]
     if before == after:
         output = deconv(input, filter, bias, stride=tuple(stride), padding=tuple(before), dilation=tuple(dilation),
@@ -200,8 +202,8 @@ def nn_deconv(input, filter, bias, stride, dilation, padding, padding_align, out
     return _permute(output, _inverse_axes(data_axes))
 
 
-def _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode, pools, pad_value=0,
-          count_include_pad=None, with_dilation=False):
+def _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode, pools,
+          pad_value=0, count_include_pad=None):
     rank = len(input.shape)
     axes = [axis + rank if axis < 0 else axis for axis in axes]
     spatial = len(axes)
@@ -217,7 +219,7 @@ def _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode
         input = _pad_input(input, before, after, pad_value)
         pool_padding = 0
     kwargs = {}
-    if with_dilation:
+    if not all(rate == 1 for rate in dilation):
         kwargs['dilation'] = tuple(dilation)
     if count_include_pad is not None:
         kwargs['count_include_pad'] = count_include_pad
@@ -228,7 +230,7 @@ def _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode
 def nn_max_pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode):
     pools = {1: F.max_pool1d, 2: F.max_pool2d, 3: F.max_pool3d}
     return _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode, pools,
-                 pad_value=float('-inf'), with_dilation=True)
+                 pad_value=float('-inf'))
 
 
 def nn_sum_pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode):
