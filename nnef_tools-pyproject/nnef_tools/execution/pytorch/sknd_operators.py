@@ -198,6 +198,19 @@ def layout_broadcast(input, axes, shape):
     return input.broadcast_to(out_shape)
 
 
+def layout_pad(input, value, axes, padding, method):
+    rank = input.dim()
+    before = [0] * rank
+    after = [0] * rank
+    count = len(axes)
+    for axis, lead, trail in zip(axes, padding[:count], padding[count:]):
+        if axis < 0:
+            axis += rank
+        before[axis] = lead
+        after[axis] = trail
+    return _pad(input, before, after, method, 0 if value is None else value.item())
+
+
 def layout_slice(input, axes, begin, end, stride):
     rank = len(input.shape)
     slices = [slice(None)] * rank
@@ -313,13 +326,57 @@ def _paddings(input_size, kernel, stride, dilation, padding, padding_align, ceil
     return before, after
 
 
-def _pad_input(tensor, before, after, value=0):
+def _pad_constant(tensor, before, after, value=0):
     pad = []
     for left, right in zip(reversed(before), reversed(after)):
         pad.extend((left, right))
     if any(pad):
         tensor = F.pad(tensor, pad, value=value)
     return tensor
+
+
+def _pad_symmetric(tensor, before, after):
+    for axis, (lead, trail) in enumerate(zip(before, after)):
+        if lead == 0 and trail == 0:
+            continue
+        size = tensor.shape[axis]
+        parts = []
+        if lead:
+            parts.append(tensor.narrow(axis, 0, lead).flip(axis))
+        parts.append(tensor)
+        if trail:
+            parts.append(tensor.narrow(axis, size - trail, trail).flip(axis))
+        tensor = torch.cat(parts, dim=axis)
+    return tensor
+
+
+def _pad(tensor, before, after, method, value=0):
+    if method == 'CONSTANT':
+        return _pad_constant(tensor, before, after, value)
+    if method == 'SYMMETRIC':
+        return _pad_symmetric(tensor, before, after)
+
+    rank = tensor.dim()
+    axes = [axis for axis in range(rank) if before[axis] or after[axis]]
+    if not axes:
+        return tensor
+    order = [axis for axis in range(rank) if axis not in axes] + axes
+    tensor = _permute(tensor, order)
+    leading = rank - len(axes)
+    shape = tensor.shape[:leading]
+    if leading == 0:
+        tensor = tensor.unsqueeze(0)
+    elif leading > 2:
+        tensor = tensor.reshape(-1, *tensor.shape[leading:])
+    pad = []
+    for axis in reversed(axes):
+        pad.extend((before[axis], after[axis]))
+    tensor = F.pad(tensor, tuple(pad), mode=method.lower())
+    if leading == 0:
+        tensor = tensor.squeeze(0)
+    elif leading > 2:
+        tensor = tensor.reshape(*shape, *tensor.shape[-len(axes):])
+    return _permute(tensor, _inverse_axes(order))
 
 
 def _crop_spatial(tensor, before, after):
@@ -350,7 +407,7 @@ def nn_conv(input, filter, bias, stride, dilation, padding, padding_align, ceil_
     if before == after:
         conv_padding = tuple(before)
     else:
-        input = _pad_input(input, before, after)
+        input = _pad_constant(input, before, after)
         conv_padding = 0
     conv = {1: F.conv1d, 2: F.conv2d, 3: F.conv3d}[spatial]
     output = conv(input, filter, bias, stride=tuple(stride), padding=conv_padding, dilation=tuple(dilation),
@@ -394,7 +451,7 @@ def _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode
     if before == after:
         pool_padding = tuple(before)
     else:
-        input = _pad_input(input, before, after, pad_value)
+        input = _pad_constant(input, before, after, pad_value)
         pool_padding = 0
     kwargs = {}
     if not all(rate == 1 for rate in dilation):
@@ -595,6 +652,7 @@ Operators = {
     'layout.transpose': layout_transpose,
     'layout.tile': layout_tile,
     'layout.broadcast': layout_broadcast,
+    'layout.pad': layout_pad,
     'layout.slice': layout_slice,
     'layout.squeeze': layout_squeeze,
     'layout.unsqueeze': layout_unsqueeze,
