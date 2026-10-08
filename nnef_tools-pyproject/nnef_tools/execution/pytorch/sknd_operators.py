@@ -15,6 +15,7 @@
 from __future__ import division, print_function, absolute_import
 
 from typing import Optional, List, Tuple, Callable, Any
+from functools import reduce
 import numpy as np
 import builtins
 import torch
@@ -278,6 +279,146 @@ def layout_scatter_nd(data, indices, updates, batch_dims):
     return data.index_put(_nd_indices(data, indices, batch_dims), updates)
 
 
+def image_resize(input, axes, size, mode, coordinate_transform, rounding_method, antialias, cubic_coeff_a):
+    rank = input.dim()
+    axes = [axis + rank if axis < 0 else axis for axis in axes]
+    resized = [(axis, extent) for axis, extent in zip(axes, size) if extent != input.shape[axis]]
+    assert len(resized) <= 3, "image.resize supports at most 3 resized axes, got {}".format(len(resized))
+    axes = [axis for axis, extent in resized]
+    size = [extent for axis, extent in resized]
+    if not axes:
+        return input
+
+    spatial = len(axes)
+    if mode == 'NEAREST':
+        assert coordinate_transform == 'ASYMMETRIC', \
+            "image.resize nearest only supports coordinate_transform 'ASYMMETRIC', got '{}''".format(
+                coordinate_transform)
+        assert rounding_method == 'FLOOR', \
+            "image.resize nearest only supports rounding_method 'FLOOR', got '{}'".format(rounding_method)
+        mode = 'nearest'
+        align_corners = None
+    elif mode == 'LINEAR':
+        assert coordinate_transform in ('SYMMETRIC', 'ALIGNED'), \
+            "image.resize linear only supports coordinate_transform 'SYMMETRIC' and 'ALIGNED', got '{}'".format(
+                coordinate_transform)
+        mode = {1: 'linear', 2: 'bilinear', 3: 'trilinear'}[spatial]
+        align_corners = coordinate_transform == 'ALIGNED'
+    elif mode == 'CUBIC':
+        assert spatial == 2, "image.resize cubic only supports 2 resized axes, got {}".format(spatial)
+        assert cubic_coeff_a == -0.75, \
+            "image.resize cubic only supports cubic_coeff_a -0.75, got {}".format(cubic_coeff_a)
+        assert coordinate_transform in ('SYMMETRIC', 'ALIGNED'), \
+            "image.resize cubic only supports coordinate_transform 'SYMMETRIC' and 'ALIGNED', got '{}'".format(
+                coordinate_transform)
+        mode = 'bicubic'
+        align_corners = coordinate_transform == 'ALIGNED'
+    else:
+        assert False, "image.resize mode '{}' is unsupported".format(mode)
+
+    kwargs = {'antialias': False, 'align_corners': align_corners}
+
+    kept = [axis for axis in range(rank) if axis not in axes]
+    tensor = _permute(input, kept + axes)
+    leading = len(kept)
+    lead_shape = tensor.shape[:leading]
+    if leading < 2:
+        tensor = tensor.reshape((1,) * (2 - leading) + tuple(tensor.shape))
+    elif leading > 2:
+        tensor = tensor.reshape(-1, lead_shape[-1], *tensor.shape[leading:])
+    tensor = F.interpolate(tensor, size=tuple(size), mode=mode, **kwargs)
+    if leading < 2:
+        tensor = tensor.reshape(tensor.shape[2 - leading:])
+    elif leading > 2:
+        tensor = tensor.reshape(*lead_shape[:-1], tensor.shape[1], *tensor.shape[2:])
+    return _permute(tensor, _inverse_axes(kept + axes))
+
+
+def image_rescale(input, axes, factor, mode, coordinate_transform, rounding_method=None, antialias=None, cubic_coeff_a=None):
+    is_integer_upscale = all(int(f) == f for f in factor)
+    is_integer_downsample = all(f <= 1 and (1 / round(1 / f) == f) for f in factor)
+    if is_integer_upscale and mode == 'LINEAR' and coordinate_transform == 'ASYMMETRIC':
+        axes = [axis for axis, f in zip(axes, factor) if f != 1]
+        factor = [int(f) for f in factor if f != 1]
+        return image_linear_upsample(input, axes, factor, symmetric=False, replicate_border=True)
+    elif is_integer_downsample and mode == 'NEAREST' and coordinate_transform == 'SYMMETRIC' and rounding_method == 'ROUND_PREFER_FLOOR':
+        axes = [axis for axis, f in zip(axes, factor) if f != 1]
+        factor = [int(round(1 / f))for f in factor if f != 1]
+        return image_nearest_downsample(input, axes, factor)
+    else:
+        size = [int(round(input.shape[axis] * scale)) for axis, scale in zip(axes, factor)]
+        return image_resize(input, axes, size, mode, coordinate_transform, rounding_method, antialias, cubic_coeff_a)
+
+
+def image_nearest_downsample(input, axes, factor):
+    rank = len(axes)
+    return nn_sum_pool(input, axes, size=[1] * rank, stride=factor,
+                       dilation=[1] * rank, padding=[0] * (rank * 2))
+
+
+def image_nearest_upsample(input, axes, factor):
+    return image_rescale(input, axes, factor, mode='NEAREST', coordinate_transform='ASYMMETRIC',
+                         rounding_method='FLOOR')
+
+
+def image_area_downsample(input, axes, factor):
+    rank = len(axes)
+    return nn_avg_pool(input, axes, size=factor, stride=factor, dilation=[1] * rank, padding=[0] * (rank * 2))
+
+
+def _upsample_weights_1d(factor, symmetric):
+    size = 2 * factor - factor % 2 if symmetric else 2 * factor - 1
+    offset = 0.5 if symmetric and factor % 2 == 0 else 1.0
+    weights = [1.0 - abs(i - factor + offset) / factor for i in range(size)]
+    return np.array(weights)
+
+
+def _upsample_weights_2d(factor, symmetric):
+    w0 = _upsample_weights_1d(factor[0], symmetric)
+    w1 = _upsample_weights_1d(factor[1], symmetric)
+    return np.outer(w0, w1)
+
+
+def _upsample_weights_nd(factor, symmetric):
+    ws = [_upsample_weights_1d(f, symmetric) for f in factor]
+    return reduce(np.multiply, np.ix_(*ws))
+
+
+def _upsample_filter_and_bias(factor, symmetric, channels, dtype, device):
+    rank = len(factor)
+    weights = _upsample_weights_nd(factor, symmetric)
+    weights = np.tile(np.reshape(weights, newshape=(1, 1) + weights.shape), reps=(channels, 1) + (1,) * rank)
+    filter = torch.from_numpy(weights).to(device=device, dtype=dtype)
+    bias = torch.zeros(size=(channels,), device=device, dtype=dtype)
+    return filter, bias
+
+
+def image_linear_upsample(input, axes, factor, symmetric, replicate_border):
+    axes = [axis for axis, f in zip(axes, factor) if f != 1]
+    factor = [f for f in factor if f != 1]
+
+    kept = [axis for axis in range(len(input.shape)) if axis not in axes]
+    input = _permute(input, kept + axes)
+
+    rank = len(axes)
+    channels = input.shape[1]
+    output_size = [f * s for f, s in zip(factor, input.shape[2:])]
+
+    if replicate_border:
+        input = _pad(input, before=[0, 0] + [1] * rank, after=[0, 0] + [1] * rank, method='REPLICATE')
+
+    filter, bias = _upsample_filter_and_bias(factor, symmetric, channels, input.dtype, input.device)
+    deconv = {1: F.conv_transpose1d, 2: F.conv_transpose2d, 3: F.conv_transpose3d}[rank]
+    output = deconv(input, filter, bias, stride=factor, padding=0, dilation=1, groups=channels)
+
+    size = output.shape[2:]
+    before = [(f // 2 if symmetric else f - 1) + int(replicate_border) * f for f in factor]
+    after = [size[i] - before[i] - output_size[i] for i in range(rank)]
+
+    output = _crop_spatial(output, before=before, after=after)
+    return _permute(output, _inverse_axes(kept + axes))
+
+
 def _axes_to_ncx(rank, layout):
     if layout == 'NCX':
         return list(range(rank))
@@ -393,7 +534,8 @@ def _as_ncx(tensor, layout):
     return _permute(tensor, axes), axes
 
 
-def nn_conv(input, filter, bias, stride, dilation, padding, padding_align, ceil_mode, groups, data_format, filter_format):
+def nn_conv(input, filter, bias, stride, dilation, padding, padding_align, ceil_mode, groups,
+            data_format, filter_format):
     spatial = len(input.shape) - 2
     assert spatial in (1, 2, 3), "nn.conv is only implemented for 1D, 2D and 3D, given: {}D.".format(spatial)
 
@@ -415,8 +557,8 @@ def nn_conv(input, filter, bias, stride, dilation, padding, padding_align, ceil_
     return _permute(output, _inverse_axes(data_axes))
 
 
-def nn_deconv(input, filter, bias, stride, dilation, padding, padding_align, output_size, groups, data_format,
-              filter_format):
+def nn_deconv(input, filter, bias, stride, dilation, padding, padding_align, output_size, groups,
+              data_format, filter_format):
     spatial = len(input.shape) - 2
     assert spatial in (1, 2, 3), "nn.deconv is only implemented for 1D, 2D and 3D, given: {}D.".format(spatial)
 
@@ -468,7 +610,7 @@ def nn_max_pool(input, axes, size, stride, dilation, padding, padding_align, cei
                  pad_value=float('-inf'))
 
 
-def nn_sum_pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode):
+def nn_sum_pool(input, axes, size, stride, dilation, padding, padding_align=None, ceil_mode=None):
     assert all(rate == 1 for rate in dilation), "nn.sum_pool is only implemented for dilation 1, given: {}.".format(dilation)
     pools = {1: F.avg_pool1d, 2: F.avg_pool2d, 3: F.avg_pool3d}
     averaged = _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode, pools,
@@ -476,7 +618,7 @@ def nn_sum_pool(input, axes, size, stride, dilation, padding, padding_align, cei
     return averaged * math.prod(size)
 
 
-def nn_avg_pool(input, axes, size, stride, dilation, padding, padding_align, ignore_border, ceil_mode):
+def nn_avg_pool(input, axes, size, stride, dilation, padding, padding_align=None, ignore_border=True, ceil_mode=None):
     assert all(rate == 1 for rate in dilation), "nn.avg_pool is only implemented for dilation 1, given: {}.".format(dilation)
     rank = len(input.shape)
     spatial_size = [input.shape[axis + rank if axis < 0 else axis] for axis in axes]
@@ -663,5 +805,11 @@ Operators = {
     'layout.scatter': layout_scatter,
     'layout.scatter_nd': layout_scatter_nd,
     'layout.cast': lambda x, R: x.to(_numpy_dtype_to_torch[R]),
+    'image.resize': image_resize,
+    'image.rescale': image_rescale,
+    'image.nearest_downsample': image_nearest_downsample,
+    'image.nearest_upsample': image_nearest_upsample,
+    'image.area_downsample': image_area_downsample,
+    'image.linear_upsample': image_linear_upsample,
     '=': torch.clone,
 }
