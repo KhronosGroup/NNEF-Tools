@@ -26,6 +26,10 @@ class TestEnv(unittest.TestCase):
         self._keep_generated_code = keep_generated_code
         self._target = target
 
+    @property
+    def target(self):
+        return self._target
+
     def _convert_to_sknd(self, filename, input_shape=None):
         raise NotImplementedError()
 

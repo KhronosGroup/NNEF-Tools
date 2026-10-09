@@ -1143,6 +1143,9 @@ class TestCases(TestEnv):
         self._test_conversion('linear_upsample5x', [node], [input], [output], opset_version=8)
 
     def test_resize_nearest_upsample(self):
+        if self.target == 'torch':
+            self.skipTest('No torch execution available')
+
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
         scales = helper.make_tensor_value_info('scales', TensorProto.FLOAT, [4])
         output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 64, 64])
@@ -1227,6 +1230,9 @@ class TestCases(TestEnv):
                               values={'scales': [1.0, 1.0, 0.5, 0.5]})
 
     def test_resize_nearest_symmetric(self):
+        if self.target == 'torch':
+            self.skipTest('No torch execution available')
+
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
         sizes = helper.make_tensor_value_info('sizes', TensorProto.INT64, [4])
         output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 25, 25])
@@ -1242,6 +1248,9 @@ class TestCases(TestEnv):
                               values={'sizes': [1, 3, 25, 25]})
 
     def test_resize_nearest_asymmetric(self):
+        if self.target == 'torch':
+            self.skipTest('No torch execution available')
+
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
         sizes = helper.make_tensor_value_info('sizes', TensorProto.INT64, [4])
         output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 25, 25])
@@ -1257,6 +1266,9 @@ class TestCases(TestEnv):
                               values={'sizes': [1, 3, 25, 25]})
 
     def test_resize_nearest_aligned(self):
+        if self.target == 'torch':
+            self.skipTest('No torch execution available')
+
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
         sizes = helper.make_tensor_value_info('sizes', TensorProto.INT64, [4])
         output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 25, 25])
@@ -1272,6 +1284,9 @@ class TestCases(TestEnv):
                               values={'sizes': [1, 3, 25, 25]})
 
     def test_resize_nearest_ceil(self):
+        if self.target == 'torch':
+            self.skipTest('No torch execution available')
+
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
         sizes = helper.make_tensor_value_info('sizes', TensorProto.INT64, [4])
         output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 25, 25])
@@ -1318,6 +1333,9 @@ class TestCases(TestEnv):
                               values={'sizes': [1, 3, 25, 25]})
 
     def test_resize_linear_asymmetric(self):
+        if self.target == 'torch':
+            self.skipTest('No torch execution available')
+
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
         sizes = helper.make_tensor_value_info('sizes', TensorProto.INT64, [4])
         output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 25, 25])
