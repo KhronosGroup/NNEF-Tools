@@ -709,6 +709,26 @@ def nn_batch_norm(input, mean, variance, bias, scale, epsilon, channel_axis):
     return output
 
 
+def nn_lstm(X, W, R, B, h0, c0, steps):
+    lstm = torch.nn.LSTM(X.shape[-1], W.shape[0] // 4, batch_first=False)
+    lstm = lstm.to(device=X.device, dtype=X.dtype)
+    with torch.no_grad():
+        lstm.weight_ih_l0.copy_(W)
+        lstm.weight_hh_l0.copy_(R)
+        lstm.bias_ih_l0.copy_(B)
+        lstm.bias_hh_l0.zero_()
+
+    state = (h0.unsqueeze(0), c0.unsqueeze(0))
+    if steps is None:
+        Y, (hN, cN) = lstm(X, state)
+    else:
+        packed = torch.nn.utils.rnn.pack_padded_sequence(
+            X, steps.to(device='cpu', dtype=torch.int64), batch_first=False, enforce_sorted=False)
+        packed_y, (hN, cN) = lstm(packed, state)
+        Y, _ = torch.nn.utils.rnn.pad_packed_sequence(packed_y, batch_first=False, total_length=X.shape[0])
+    return Y, hN.squeeze(0), cN.squeeze(0)
+
+
 def algo_nonmax_suppress(boxes, scores, box_format, max_outputs_per_class, iou_threshold, score_threshold):
     if box_format == 'CORNERS':
         x1 = torch.minimum(boxes[..., 1], boxes[..., 3])
@@ -836,6 +856,7 @@ Operators = {
     'nn.avg_pool': nn_avg_pool,
     'nn.local_response_norm': nn_local_response_norm,
     'nn.batch_norm': nn_batch_norm,
+    'nn.lstm': nn_lstm,
     'linalg.dot': linalg_dot,
     'linalg.matvec': linalg_matvec,
     'linalg.matmul': linalg_matmul,
