@@ -16,6 +16,7 @@ from __future__ import division, print_function, absolute_import
 
 from typing import Optional, List, Tuple, Callable, Any
 from functools import reduce
+from skriptnd import Dtype, DtypeToNumpy as _sknd_dtype_to_numpy
 import numpy as np
 import builtins
 import torch
@@ -35,10 +36,16 @@ _numpy_dtype_to_torch = {
     np.float64: torch.float64,
     np.short: torch.short,
     np.longlong: torch.long,
+    np.bool: torch.bool,
     int: torch.int,
     bool: torch.bool,
     float: torch.float,
 }
+
+
+IntType = _numpy_dtype_to_torch[_sknd_dtype_to_numpy[Dtype.Int]]
+BoolType = _numpy_dtype_to_torch[_sknd_dtype_to_numpy[Dtype.Bool]]
+RealType = _numpy_dtype_to_torch[_sknd_dtype_to_numpy[Dtype.Real]]
 
 
 def _expand_to_rank(input, rank, align=None):
@@ -774,6 +781,8 @@ Operators = {
     'nn.silu': lambda x: x * torch.sigmoid(x),
     'nn.prelu': nn_prelu,
     'nn.leaky_relu': lambda x, alpha: F.leaky_relu(x, alpha),
+    'nn.thresholded_relu': lambda x, theta: torch.where(torch.gt(x, theta), x, 0.0),
+    'nn.hard_sigmoid': lambda x, alpha, beta: torch.clamp(alpha * x + beta, 0.0, 1.0),
     'nn.erf': torch.erf,
     'nn.linear': F.linear,
     'nn.conv': nn_conv,
@@ -805,11 +814,16 @@ Operators = {
     'layout.scatter': layout_scatter,
     'layout.scatter_nd': layout_scatter_nd,
     'layout.cast': lambda x, R: x.to(_numpy_dtype_to_torch[R]),
+    'layout.shape': lambda x: torch.tensor(x.shape, dtype=IntType),
+    'layout.range': lambda first, last, stride: torch.range(first, last, stride, dtype=IntType),
+    'layout.uniform': lambda value, shape: torch.full(shape, value),
+    'layout.nonzero': lambda x: torch.nonzero(x).transpose(0,1),
     'image.resize': image_resize,
     'image.rescale': image_rescale,
     'image.nearest_downsample': image_nearest_downsample,
     'image.nearest_upsample': image_nearest_upsample,
     'image.area_downsample': image_area_downsample,
     'image.linear_upsample': image_linear_upsample,
+    'algo.top_k': lambda x, k, axis, largest, sorted: torch.topk(x, k, dim=axis, largest=largest, sorted=sorted),
     '=': torch.clone,
 }
