@@ -14,6 +14,8 @@
 
 from __future__ import division, print_function, absolute_import
 
+import numpy as np
+
 import skriptnd as sknd
 import torch
 import keyword
@@ -24,6 +26,7 @@ from ...io import sknd as sknd_io
 from ...io.sknd.reader import _build_model
 from ...model import *
 from ...model.utils import recursive_itemize
+from collections.abc import Iterable
 
 
 class SKNDModule(torch.nn.Module):
@@ -77,7 +80,9 @@ class SKNDModule(torch.nn.Module):
                     self.register_parameter(name, torch.nn.Parameter(torch.tensor(data), requires_grad=data.dtype == np.float32))
                 elif tensor.is_constant:
                     name = self._registered_name(tensor.name)
-                    data = tensor.data if isinstance(tensor.data, np.ndarray) else np.array(tensor.data)
+                    data = tensor.data if isinstance(tensor.data, np.ndarray) \
+                        else np.array(tensor.data, dtype=tensor.dtype).reshape(tensor.shape) if isinstance(tensor.data, Iterable) \
+                        else np.full(tensor.shape, tensor.data, dtype=tensor.dtype)
                     data = self.normalize_dtype(data)
                     self.register_buffer(name, torch.tensor(data))
 
