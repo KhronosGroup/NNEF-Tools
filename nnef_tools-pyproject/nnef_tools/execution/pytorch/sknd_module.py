@@ -14,6 +14,8 @@
 
 from __future__ import division, print_function, absolute_import
 
+import sys
+
 import numpy as np
 
 import skriptnd as sknd
@@ -95,8 +97,7 @@ class SKNDModule(torch.nn.Module):
     def forward(self, *inputs):
         graph = self._sknd_model.main
         assert len(inputs) == len(graph.inputs)
-        activations = {nnef_tensor.name: torch_tensor for torch_tensor, nnef_tensor
-                       in zip(inputs, graph.inputs)}
+        activations = {nnef_tensor.name: torch_tensor for torch_tensor, nnef_tensor in zip(inputs, graph.inputs)}
 
         def get_tensor(name):
             if hasattr(self, self._registered_name(name)):
@@ -117,48 +118,108 @@ class SKNDModule(torch.nn.Module):
                 return True
             return all(has_tensor(item.name) for item in query) if isinstance(query, list) else has_tensor(query.name)
 
-        for op in graph.operations:
-            assert op.type in self._operators, "Unsupported operation: {}".format(op.type)
-            func = self._operators[op.type]
-            params = inspect.signature(func).parameters if inspect.isfunction(func) else {}
+        def itemize(query):
+            if isinstance(query, (list, tuple)):
+                for item in query:
+                    yield from itemize(item)
+            else:
+                yield query
 
-            assert all(has_tensors(input) for input in op.inputs),\
-                "could not fetch input tensor(s) {} for operation {}"\
-                    .format({[item.name for item in input] if isinstance(input, list) else input.name
-                             for input in op.inputs}, op.type)
+        def store_activation(sknd_tensor, torch_tensor):
+            if sknd_tensor.quant and not sknd_tensor.is_variable:
+                torch_tensor = self._fake_quantize(torch_tensor, sknd_tensor.quant)
 
-            dtype_attribs = {name: type for name, type in op.dtypes.items() if name in params}
-            training_attribs = self._training_attributes.get(op.type, {})
-            attribs = {**op.attribs, **dtype_attribs, **training_attribs}
-            attribs = {self._escape_keyword(name): value for name, value in six.iteritems(attribs)}
+            activations[sknd_tensor.name] = torch_tensor
+            if self._activation_callback:
+                self._activation_callback(sknd_tensor.name, torch_tensor)
 
-            inputs = [get_tensors(input) for input in op.inputs]
-            outputs = func(*inputs, **attribs)
+        def store_activations(sknd_tensors, torch_tensors):
+            for sknd_tensor, torch_tensor in zip(itemize(sknd_tensors), itemize(torch_tensors)):
+                store_activation(sknd_tensor, torch_tensor)
 
-            if not isinstance(outputs, tuple):
-                outputs = (outputs,)
+        def eval_expr(expr):
+            return torch.tensor(0)
 
-            def itemize(query):
-                if isinstance(query, (list, tuple)):
-                    for item in query:
-                        yield from itemize(item)
+        def forward_subgraph(subgraph):
+            for op in subgraph.operations:
+                if op.type == 'if':
+                    cond = op.inputs[0] or op.attribs['cond']
+                    if isinstance(cond, sknd.Tensor):
+                        cond = get_tensor(cond.name).item()
+                    elif isinstance(cond, sknd.Expr):
+                        cond = eval_expr(cond)
+
+                    outputs = forward_subgraph(op.subgraphs[0 if cond else 1])
+                elif op.type == 'do':
+                    cond = op.attribs.get('cond')
+                    nvars = op.attribs['nvars']
+                    nscans = op.attribs['nscans']
+                    index = op.internals[nvars + nscans] if len(op.internals) > nvars + nscans else None
+                    condition = op.internals[cond] if cond is not None else None
+
+                    iters = op.inputs[nvars + nscans] or op.attribs.get('iters')
+                    if iters is None:
+                        iters = sys.maxsize
+                    elif isinstance(iters, sknd.Tensor):
+                        iters = get_tensor(iters.name).item()
+                    elif isinstance(iters, sknd.Expr):
+                        iters = eval_expr(iters)
+
+                    scan_inputs = [get_tensors(input) for input in op.inputs[nvars:nvars+nscans]]
+                    var_outputs = [get_tensors(input) for input in op.inputs[:nvars]]
+                    for i in range(len(var_outputs)):
+                        if len(var_outputs[i].shape) == 0 and len(op.internals[i].shape) != 0:
+                            var_outputs[i] = torch.full(op.internals[i].shape, var_outputs[i].item())
+
+                    scan_outputs = [[]] * (len(op.outputs) - nvars)
+                    for i in range(iters):
+                        store_activations(op.internals[:nvars], var_outputs)
+                        if condition:
+                            if not get_tensor(condition.name).item():
+                                break
+                        if index is not None:
+                            activations[index.name] = torch.tensor(i)
+                        for idx, item in enumerate(scan_inputs):
+                            store_activation(op.internals[nvars + idx], scan_inputs[idx][i])
+                        body_outputs = forward_subgraph(op.subgraphs[0])
+                        var_outputs = list(body_outputs[:nvars])
+                        store_activations(op.outputs[:nvars], var_outputs)
+                        for k in range(len(scan_outputs)):
+                            scan_outputs[k].append(body_outputs[nvars + k])
+
+                    outputs = tuple(var_outputs + scan_outputs)
                 else:
-                    yield query
+                    assert op.type in self._operators, "Unsupported operation: {}".format(op.type)
+                    func = self._operators[op.type]
+                    params = inspect.signature(func).parameters if inspect.isfunction(func) else {}
 
-            for sknd_tensor, output in zip(itemize(op.outputs), itemize(outputs)):
-                if sknd_tensor.quant and not sknd_tensor._is_variable:
-                    output = self._fake_quantize(output, sknd_tensor.quant)
+                    assert all(has_tensors(input) for input in op.inputs),\
+                        "could not fetch input tensor(s) {} for operation {}"\
+                            .format([[item.name for item in input] if isinstance(input, list) else input.name
+                                     for input in op.inputs], op.type)
 
-                activations[sknd_tensor.name] = output
-                if self._activation_callback:
-                    self._activation_callback(sknd_tensor.name, output)
+                    dtype_attribs = {name: type for name, type in op.dtypes.items() if name in params}
+                    training_attribs = self._training_attributes.get(op.type, {})
+                    attribs = {**op.attribs, **dtype_attribs, **training_attribs}
+                    attribs = {self._escape_keyword(name): value for name, value in six.iteritems(attribs)}
 
-            # optimization: remove activations that are not needed any more
-            for sknd_tensor in recursive_itemize(op.inputs):
-                if sknd_tensor is not None and sknd_tensor.name in activations and op is sknd_tensor.consumers[-1] and sknd_tensor not in graph.outputs:
-                    del activations[sknd_tensor.name]
+                    inputs = [get_tensors(input) for input in op.inputs]
+                    outputs = func(*inputs, **attribs)
 
-        return tuple(get_tensors(output) for output in graph.outputs)
+                    if not isinstance(outputs, tuple):
+                        outputs = (outputs,)
+
+                store_activations(op.outputs, outputs)
+
+                # optimization: remove activations that are not needed any more
+                for sknd_tensor in recursive_itemize(op.inputs):
+                    if (sknd_tensor is not None and sknd_tensor.name in activations
+                            and op is sknd_tensor.consumers[-1] and sknd_tensor not in subgraph.outputs):
+                        del activations[sknd_tensor.name]
+
+            return tuple(get_tensors(output) for output in subgraph.outputs)
+
+        return forward_subgraph(graph)
 
     def save_sknd(self, path):
         for graph in self._sknd_model.graphs:
