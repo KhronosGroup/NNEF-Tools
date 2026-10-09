@@ -259,6 +259,19 @@ def layout_split(input, axis, count, sizes):
     return torch.split(input, tuple(sizes), dim=axis)
 
 
+def layout_stack(tensors, axis, squeeze):
+    if squeeze:
+        tensors = [tensor.squeeze(axis) for tensor in tensors]
+    return torch.stack(tensors, dim=axis)
+
+
+def layout_unstack(tensor, axis, squeeze):
+    tensors = torch.unbind(tensor, dim=axis)
+    if not squeeze:
+        tensors = [tensor.unsqueeze(axis) for tensor in tensors]
+    return tensors
+
+
 def layout_gather(data, index, axis):
     selector = [slice(None)] * data.dim()
     selector[axis] = index
@@ -874,6 +887,8 @@ Operators = {
     'layout.unsqueeze': layout_unsqueeze,
     'layout.concat': layout_concat,
     'layout.split': layout_split,
+    'layout.stack': layout_stack,
+    'layout.unstack': layout_unstack,
     'layout.gather': layout_gather,
     'layout.gather_nd': layout_gather_nd,
     'layout.scatter': layout_scatter,
