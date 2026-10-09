@@ -1649,8 +1649,82 @@ class TestCases(TestEnv):
         self._test_conversion('top_k', [node], [input, k], [values, indices], constants=[k], values={'k': [5]})
 
     def test_nms(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 1, 1024])
+        max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
+        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
+        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
+        node = helper.make_node(
+            op_type='NonMaxSuppression',
+            inputs=['boxes', 'scores', 'max_boxes', 'iou_threshold', ''],
+            outputs=['indices'],
+        )
+
+        self._test_conversion('nms', [node], [boxes, scores], [indices],
+                              constants=[max_boxes, iou_threshold], values={'iou_threshold': 0.25, 'max_boxes': 1024})
+
+    def test_nms_batch(self):
         boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [16, 1024, 4])
-        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [16, 10, 1024])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [16, 1, 1024])
+        max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
+        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
+        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
+        node = helper.make_node(
+            op_type='NonMaxSuppression',
+            inputs=['boxes', 'scores', 'max_boxes', 'iou_threshold', ''],
+            outputs=['indices'],
+        )
+
+        self._test_conversion('nms_batch', [node], [boxes, scores], [indices],
+                              constants=[max_boxes, iou_threshold], values={'iou_threshold': 0.25, 'max_boxes': 1024})
+
+    def test_nms_classes(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 16, 1024])
+        max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
+        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
+        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
+        node = helper.make_node(
+            op_type='NonMaxSuppression',
+            inputs=['boxes', 'scores', 'max_boxes', 'iou_threshold', ''],
+            outputs=['indices'],
+        )
+
+        self._test_conversion('nms_classes', [node], [boxes, scores], [indices],
+                              constants=[max_boxes, iou_threshold], values={'iou_threshold': 0.25, 'max_boxes': 1024})
+
+    def test_nms_max(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 1, 1024])
+        max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
+        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
+        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
+        node = helper.make_node(
+            op_type='NonMaxSuppression',
+            inputs=['boxes', 'scores', 'max_boxes', 'iou_threshold', ''],
+            outputs=['indices'],
+        )
+
+        self._test_conversion('nms_max', [node], [boxes, scores], [indices],
+                              constants=[max_boxes, iou_threshold], values={'iou_threshold': 0.25, 'max_boxes': 10})
+
+    def test_nms_nomax(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 1, 1024])
+        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
+        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
+        node = helper.make_node(
+            op_type='NonMaxSuppression',
+            inputs=['boxes', 'scores', '', 'iou_threshold', ''],
+            outputs=['indices'],
+        )
+
+        self._test_conversion('nms_nomax', [node], [boxes, scores], [indices],
+                              constants=[iou_threshold], values={'iou_threshold': 0.25})
+
+    def test_nms_thr(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 1, 1024])
         max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
         iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
         score_threshold = helper.make_tensor_value_info('score_threshold', TensorProto.FLOAT, [])
@@ -1661,13 +1735,13 @@ class TestCases(TestEnv):
             outputs=['indices'],
         )
 
-        self._test_conversion('nms', [node], [boxes, scores], [indices],
+        self._test_conversion('nms_thr', [node], [boxes, scores], [indices],
                               constants=[max_boxes, iou_threshold, score_threshold],
-                              values={'max_boxes': 5, 'iou_threshold': 0.25, 'score_threshold': 0.1})
+                              values={'max_boxes': 1024, 'iou_threshold': 0.25, 'score_threshold': 0.1})
 
-    def test_nms_nomax(self):
-        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [16, 1024, 4])
-        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [16, 10, 1024])
+    def test_nms_centered(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 1, 1024])
         iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
         score_threshold = helper.make_tensor_value_info('score_threshold', TensorProto.FLOAT, [])
         indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
@@ -1675,29 +1749,12 @@ class TestCases(TestEnv):
             op_type='NonMaxSuppression',
             inputs=['boxes', 'scores', '', 'iou_threshold', 'score_threshold'],
             outputs=['indices'],
-        )
-
-        self._test_conversion('nms_nomax', [node], [boxes, scores], [indices],
-                              constants=[iou_threshold, score_threshold],
-                              values={'iou_threshold': 0.25, 'score_threshold': 0.1})
-
-    def test_nms_centered(self):
-        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [16, 1024, 4])
-        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [16, 10, 1024])
-        max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
-        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
-        score_threshold = helper.make_tensor_value_info('score_threshold', TensorProto.FLOAT, [])
-        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
-        node = helper.make_node(
-            op_type='NonMaxSuppression',
-            inputs=['boxes', 'scores', 'max_boxes', 'iou_threshold', 'score_threshold'],
-            outputs=['indices'],
             center_point_box=1,
         )
 
         self._test_conversion('nms_centered', [node], [boxes, scores], [indices],
-                              constants=[max_boxes, iou_threshold, score_threshold],
-                              values={'max_boxes': 5, 'iou_threshold': 0.25, 'score_threshold': 0.1})
+                              constants=[iou_threshold, score_threshold],
+                              values={'iou_threshold': 0.25, 'score_threshold': 0.1})
 
     def test_min_reduce(self):
         self._test_reduce('ReduceMin', keepdims=False)

@@ -710,26 +710,39 @@ def nn_batch_norm(input, mean, variance, bias, scale, epsilon, channel_axis):
 
 
 def algo_nonmax_suppress(boxes, scores, box_format, max_outputs_per_class, iou_threshold, score_threshold):
-    assert boxes.shape[0] == 1 and scores.shape[0] == 1, \
-        f"algo.nonmax_suppress does not support batching, got batch {boxes.shape[0]}"
-    assert scores.shape[1] == 1, \
-        f"algo.nonmax_suppress does not support multiple classes, got classes {scores.shape[1]}"
-    assert box_format == 'CORNERS', \
-        f"algo.nonmax_suppress only supports box_format 'CORNERS', got '{box_format}'"
-    assert score_threshold is None, \
-        f"algo.nonmax_suppress does not support score_threshold, got '{score_threshold}'"
-    assert max_outputs_per_class == boxes.shape[1], \
-        f"algo.nonmax_suppress does not support max_outputs_per_class, got '{max_outputs_per_class}'"
+    if box_format == 'CORNERS':
+        x1 = torch.minimum(boxes[..., 1], boxes[..., 3])
+        y1 = torch.minimum(boxes[..., 0], boxes[..., 2])
+        x2 = torch.maximum(boxes[..., 1], boxes[..., 3])
+        y2 = torch.maximum(boxes[..., 0], boxes[..., 2])
+    elif box_format == 'CENTER':
+        half_width = boxes[..., 2] / 2
+        half_height = boxes[..., 3] / 2
+        x1 = boxes[..., 0] - half_width
+        y1 = boxes[..., 1] - half_height
+        x2 = boxes[..., 0] + half_width
+        y2 = boxes[..., 1] + half_height
+    else:
+        assert False, f"algo.nonmax_suppress only supports box_format 'CORNERS' and 'CENTER', got '{box_format}'"
+    boxes = torch.stack([x1, y1, x2, y2], dim=-1)
 
-    boxes = boxes.squeeze(0)
-    boxes = boxes[:, [1, 0, 3, 2]]
-    scores = scores.squeeze(0).squeeze(0)
+    selected = []
+    for batch in range(scores.shape[0]):
+        for cls in range(scores.shape[1]):
+            class_scores = scores[batch, cls]
+            indices = torchvision.ops.nms(boxes[batch], class_scores, iou_threshold)
+            if score_threshold is not None:
+                indices = indices[class_scores[indices] > score_threshold]
+            if max_outputs_per_class is not None:
+                indices = indices[:max_outputs_per_class]
+            if indices.numel() != 0:
+                selected.append(torch.stack([
+                    torch.full_like(indices, batch),
+                    torch.full_like(indices, cls),
+                    indices,
+                ], dim=1))
 
-    indices = torchvision.ops.nms(boxes, scores, iou_threshold)
-
-    batch = torch.ones_like(indices)
-    classes = torch.ones_like(indices)
-    return torch.stack([batch, classes, indices], dim=1)
+    return torch.cat(selected, dim=0) if selected else torch.empty((0, 3), dtype=IntType, device=boxes.device)
 
 
 """
