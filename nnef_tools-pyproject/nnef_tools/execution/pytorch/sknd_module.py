@@ -41,6 +41,7 @@ class SKNDModule(torch.nn.Module):
         'nn.avg_pool': lambda op: True,
         'nn.local_response_norm': lambda op: len(op.attribs['axes']) == 1,
         'nn.batch_norm': lambda op: True,
+        'math.cumsum': lambda op: not op.attribs['exclusive'] and not op.attribs['reverse'],
     }
 
     def __init__(self,

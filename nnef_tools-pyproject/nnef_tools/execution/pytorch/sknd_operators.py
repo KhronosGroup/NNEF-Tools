@@ -20,6 +20,7 @@ from skriptnd import Dtype, DtypeToNumpy as _sknd_dtype_to_numpy
 import numpy as np
 import builtins
 import torch
+import torchvision
 import torch.nn.functional as F
 import math
 
@@ -439,6 +440,12 @@ def _axes_to_ncx(rank, layout):
         raise ValueError("layout '{}' is unsupported".format(layout))
 
 
+def image_grid_sample(input, grid, mode, padding, aligned):
+    mode = 'bilinear' if mode == 'LINEAR' else 'bicubic' if mode == 'CUBIC' else 'nearest'
+    padding = 'reflection' if padding == 'REFLECT' else 'border' if padding == 'REPLICATE' else 'zeros'
+    return F.grid_sample(input, grid, mode=mode, padding_mode=padding, align_corners=aligned)
+
+
 def _inverse_axes(axes):
     inverse = [0] * len(axes)
     for index, axis in enumerate(axes):
@@ -702,6 +709,29 @@ def nn_batch_norm(input, mean, variance, bias, scale, epsilon, channel_axis):
     return output
 
 
+def algo_nonmax_suppress(boxes, scores, box_format, max_outputs_per_class, iou_threshold, score_threshold):
+    assert boxes.shape[0] == 1 and scores.shape[0] == 1, \
+        f"algo.nonmax_suppress does not support batching, got batch {boxes.shape[0]}"
+    assert scores.shape[1] == 1, \
+        f"algo.nonmax_suppress does not support multiple classes, got classes {scores.shape[1]}"
+    assert box_format == 'CORNERS', \
+        f"algo.nonmax_suppress only supports box_format 'CORNERS', got '{box_format}'"
+    assert score_threshold is None, \
+        f"algo.nonmax_suppress does not support score_threshold, got '{score_threshold}'"
+    assert max_outputs_per_class == boxes.shape[1], \
+        f"algo.nonmax_suppress does not support max_outputs_per_class, got '{max_outputs_per_class}'"
+
+    boxes = boxes.squeeze(0)
+    boxes = boxes[:, [1, 0, 3, 2]]
+    scores = scores.squeeze(0).squeeze(0)
+
+    indices = torchvision.ops.nms(boxes, scores, iou_threshold)
+
+    batch = torch.ones_like(indices)
+    classes = torch.ones_like(indices)
+    return torch.stack([batch, classes, indices], dim=1)
+
+
 """
 Supported primitive and atomic operators (all other compounds are inlined)
 """
@@ -769,6 +799,7 @@ Operators = {
     'math.max_n': lambda inputs: _apply_n(inputs, torch.maximum),
     'math.any_n': lambda inputs: _apply_n(inputs, torch.logical_or),
     'math.all_n': lambda inputs: _apply_n(inputs, torch.logical_and),
+    'math.cumsum': lambda input, axis, exclusive, reverse: torch.cumsum(input, dim=axis),
     'math.clamp': math_clamp,
     'nn.relu': nn_relu,
     'nn.sigmoid': torch.sigmoid,
@@ -824,6 +855,8 @@ Operators = {
     'image.nearest_upsample': image_nearest_upsample,
     'image.area_downsample': image_area_downsample,
     'image.linear_upsample': image_linear_upsample,
+    'image.grid_sample': image_grid_sample,
     'algo.top_k': lambda x, k, axis, largest, sorted: torch.topk(x, k, dim=axis, largest=largest, sorted=sorted),
+    'algo.nonmax_suppress': algo_nonmax_suppress,
     '=': torch.clone,
 }
