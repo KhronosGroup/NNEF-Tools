@@ -256,7 +256,7 @@ def layout_concat(inputs, axis):
 
 
 def layout_split(input, axis, count, sizes):
-    return torch.split(input, tuple(sizes), dim=axis)
+    return list(torch.split(input, tuple(sizes), dim=axis))
 
 
 def layout_stack(tensors, axis, squeeze):
@@ -266,7 +266,7 @@ def layout_stack(tensors, axis, squeeze):
 
 
 def layout_unstack(tensor, axis, squeeze):
-    tensors = torch.unbind(tensor, dim=axis)
+    tensors = list(torch.unbind(tensor, dim=axis))
     if not squeeze:
         tensors = [tensor.unsqueeze(axis) for tensor in tensors]
     return tensors
