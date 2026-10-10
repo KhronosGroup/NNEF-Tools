@@ -182,6 +182,20 @@ class TestEnv(unittest.TestCase):
         self._test_conversion(op_type.lower(), [node], [input1, input2], [output],
                               opset_version=opset_version, ir_version=ir_version)
 
+    def _test_reduce_axes_input(self, op_type, keepdims, opset_version, ir_version=8):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 16, 32, 32])
+        axes = helper.make_tensor_value_info('axes', TensorProto.INT64, [1])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 1, 32, 32] if keepdims else [1, 32, 32])
+        node = helper.make_node(
+            op_type=op_type,
+            inputs=['input', 'axes'],
+            outputs=['output'],
+            keepdims=keepdims,
+        )
+
+        self._test_conversion(op_type.lower() + '_axes_input', [node], [input, axes], [output],
+                              constants=[axes], values={'axes': [1]}, opset_version=opset_version, ir_version=ir_version)
+
     def _test_reduce(self, op_type, keepdims, dtype=TensorProto.FLOAT, p=None,
                      opset_version=DEFAULT_OPSET_VERSION, ir_version=DEFAULT_IR_VERSION):
         input = helper.make_tensor_value_info('input', dtype, [1, 16, 32, 32])
@@ -622,6 +636,20 @@ class TestCases(TestEnv):
 
         self._test_conversion('split', [node], [input], [output1, output2])
 
+    def test_split_num_outputs(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 6, 32, 32])
+        output1 = helper.make_tensor_value_info('output1', TensorProto.FLOAT, [1, 3, 32, 32])
+        output2 = helper.make_tensor_value_info('output2', TensorProto.FLOAT, [1, 3, 32, 32])
+        node = helper.make_node(
+            op_type='Split',
+            inputs=['input'],
+            outputs=['output1', 'output2'],
+            axis=1,
+            num_outputs=2,
+        )
+
+        self._test_conversion('split_num_outputs', [node], [input], [output1, output2], opset_version=18, ir_version=8)
+
     def test_split_dynamic(self):
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 6, 32, 32])
         split = helper.make_tensor_value_info('split', TensorProto.INT64, [2])
@@ -1053,6 +1081,26 @@ class TestCases(TestEnv):
     def test_max_recude_keepdims(self):
         self._test_reduce('ReduceMax', keepdims=True)
 
+    def test_mean_reduce_axes_input(self):
+        self._test_reduce_axes_input('ReduceMean', keepdims=False, opset_version=18)
+
+    def test_mean_reduce_axes_input_keepdims(self):
+        self._test_reduce_axes_input('ReduceMean', keepdims=True, opset_version=18)
+
+    def test_sum_reduce_axes_input(self):
+        self._test_reduce_axes_input('ReduceSum', keepdims=False, opset_version=13, ir_version=7)
+
+    def test_mean_reduce_all_axes(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 16, 32, 32])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 1, 1, 1])
+        node = helper.make_node(
+            op_type='ReduceMean',
+            inputs=['input'],
+            outputs=['output'],
+        )
+
+        self._test_conversion('mean_reduce_all_axes', [node], [input], [output])
+
     def test_relu(self):
         self._test_unary('Relu')
 
@@ -1121,6 +1169,9 @@ class TestCases(TestEnv):
 
     def test_sqrt(self):
         self._test_unary('Sqrt')
+
+    def test_reciprocal(self):
+        self._test_unary('Reciprocal')
 
     def test_ceil(self):
         self._test_unary('Ceil')
