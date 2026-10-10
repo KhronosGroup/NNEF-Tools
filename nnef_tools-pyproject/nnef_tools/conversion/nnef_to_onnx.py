@@ -228,11 +228,11 @@ _Transforms = Converter.unpack_transforms({
         ),
     ('relu', 'sigmoid', 'tanh', 'softplus', 'selu', 'not', 'copy', 'elu', 'erf', 'mish', 'abs', 'sign',
      'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
-     'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round'):
+     'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round', 'rcp'):
         Transform(
             type=('Relu', 'Sigmoid', 'Tanh', 'Softplus', 'Selu', 'Not', 'Identity', 'Elu', 'Erf', 'Mish', 'Abs', 'Sign',
                   'Sin', 'Cos', 'Tan', 'Asin', 'Acos', 'Atan', 'Sinh', 'Cosh', 'Tanh', 'Asinh', 'Acosh', 'Atanh',
-                  'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round'),
+                  'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round', 'Reciprocal'),
             inputs='!I[0]',
             outputs='!O[0]',
         ),
