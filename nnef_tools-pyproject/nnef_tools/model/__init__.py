@@ -156,6 +156,9 @@ class Tensor:
             dtype=self.dtype.__name__ if self.dtype is not None else 'void',
             shape=', '.join(str(s) for s in self.shape) if self.shape is not None else '...')
 
+    def __hash__(self):
+        return hash(self.name)
+
 
 class TensorPack(list):
 
@@ -237,6 +240,9 @@ class TensorPack(list):
             name=self.name if self.name is not None else _hex_id(self),
             dtype=self.dtype.__name__ if self.dtype is not None else 'void',
             shape=', '.join(str(s) for s in self.shape) if self.shape is not None else '...')
+
+    def __hash__(self):
+        return hash(self.name)
 
 
 # noinspection PyProtectedMember
