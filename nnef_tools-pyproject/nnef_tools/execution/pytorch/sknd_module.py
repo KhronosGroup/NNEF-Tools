@@ -258,7 +258,8 @@ class SKNDModule(torch.nn.Module):
 
     def _collect_last_referencing_ops(self):
         references = {}
-        for graph in self._sknd_model.graphs:
+
+        def visit(graph):
             for op in graph.operations:
                 for input in op.inputs:
                     references[input] = op
@@ -269,6 +270,13 @@ class SKNDModule(torch.nn.Module):
                     if isinstance(value, sknd.Expr):
                         for tensor in self._referenced_tensors(value):
                             references[tensor] = op
+                for subgraph in op.subgraphs:
+                    visit(subgraph)
+
+        for graph in self._sknd_model.graphs:
+            if not graph.parent:
+                visit(graph)
+
         return references
 
     @staticmethod
