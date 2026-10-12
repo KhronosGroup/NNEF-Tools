@@ -209,12 +209,14 @@ class SKNDModule(torch.nn.Module):
                     if input is not None:
                         if isinstance(input, sknd.TensorPack):
                             for item in input:
-                                if item not in self._registered and item not in subgraph.outputs and op is last_references.get(item):
+                                if item in activations and item not in self._registered and item not in subgraph.outputs \
+                                        and op is last_references.get(item):
                                     del activations[item]
                             if all(item not in activations for item in input) and input in activations:
                                 del activations[input]
                         else:
-                            if input not in self._registered and input not in subgraph.outputs and op is last_references.get(input):
+                            if input in activations and input not in self._registered and input not in subgraph.outputs \
+                                    and op is last_references.get(input):
                                 del activations[input]
 
             return tuple(get_tensor(output) for output in subgraph.outputs)
