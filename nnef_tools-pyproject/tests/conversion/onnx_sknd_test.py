@@ -1318,9 +1318,6 @@ class TestCases(TestEnv):
                               values={'sizes': [1, 3, 25, 25]})
 
     def test_resize_linear_asymmetric(self):
-        if self.target == 'torch':
-            self.skipTest('No torch execution available')
-
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
         sizes = helper.make_tensor_value_info('sizes', TensorProto.INT64, [4])
         output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 25, 25])

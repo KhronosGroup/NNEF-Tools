@@ -325,6 +325,24 @@ def _nearest_resize(tensor, size, coordinate_transform, rounding_method):
     return tensor
 
 
+def _linear_asymmetric_resize(tensor, size):
+    axis = tensor.dim() - len(size)
+    for out_size in size:
+        in_size = tensor.shape[axis]
+        i = torch.arange(out_size, device=tensor.device, dtype=tensor.dtype)
+        x = i * (in_size / out_size)
+        low = x.floor()
+        high = x.ceil().clamp(max=in_size - 1)
+        left = tensor.index_select(axis, low.to(IntType))
+        right = tensor.index_select(axis, high.to(IntType))
+        shape = [1] * left.dim()
+        shape[axis] = out_size
+        weight = (x - low).reshape(shape)
+        tensor = left * (1 - weight) + right * weight
+        axis += 1
+    return tensor
+
+
 def image_resize(input, axes, size, mode, coordinate_transform, rounding_method, antialias, cubic_coeff_a):
     rank = input.dim()
     axes = [axis + rank if axis < 0 else axis for axis in axes]
@@ -346,12 +364,12 @@ def image_resize(input, axes, size, mode, coordinate_transform, rounding_method,
             interp = None
         align_corners = None
     elif mode == 'LINEAR':
-        assert coordinate_transform in ('SYMMETRIC', 'ALIGNED'), \
-            "image.resize linear only supports coordinate_transform 'SYMMETRIC' and 'ALIGNED', got '{}'".format(
-                coordinate_transform)
-        mode = {1: 'linear', 2: 'bilinear', 3: 'trilinear'}[spatial]
-        align_corners = coordinate_transform == 'ALIGNED'
-        interp = mode
+        if coordinate_transform == 'ASYMMETRIC':
+            interp = None
+            align_corners = None
+        else:
+            interp = {1: 'linear', 2: 'bilinear', 3: 'trilinear'}[spatial]
+            align_corners = coordinate_transform == 'ALIGNED'
     elif mode == 'CUBIC':
         assert spatial == 2, "image.resize cubic only supports 2 resized axes, got {}".format(spatial)
         assert cubic_coeff_a == -0.75, \
@@ -359,9 +377,8 @@ def image_resize(input, axes, size, mode, coordinate_transform, rounding_method,
         assert coordinate_transform in ('SYMMETRIC', 'ALIGNED'), \
             "image.resize cubic only supports coordinate_transform 'SYMMETRIC' and 'ALIGNED', got '{}'".format(
                 coordinate_transform)
-        mode = 'bicubic'
+        interp = 'bicubic'
         align_corners = coordinate_transform == 'ALIGNED'
-        interp = mode
     else:
         assert False, "image.resize mode '{}' is unsupported".format(mode)
 
@@ -374,7 +391,10 @@ def image_resize(input, axes, size, mode, coordinate_transform, rounding_method,
     elif leading > 2:
         tensor = tensor.reshape(-1, lead_shape[-1], *tensor.shape[leading:])
     if interp is None:
-        tensor = _nearest_resize(tensor, size, coordinate_transform, rounding_method)
+        if mode == 'LINEAR':
+            tensor = _linear_asymmetric_resize(tensor, size)
+        else:
+            tensor = _nearest_resize(tensor, size, coordinate_transform, rounding_method)
     else:
         kwargs = {'antialias': False, 'align_corners': align_corners}
         tensor = F.interpolate(tensor, size=tuple(size), mode=interp, **kwargs)
