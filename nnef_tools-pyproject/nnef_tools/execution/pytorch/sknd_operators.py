@@ -54,6 +54,12 @@ def _binary(f):
     return func
 
 
+def _div(x, y):
+    if x.is_floating_point() or y.is_floating_point():
+        return x / y
+    return torch.div(x, y, rounding_mode='floor')
+
+
 def math_select(cond, lhs, rhs, cond_align, lhs_align, rhs_align):
     rank = max(len(cond.shape), len(lhs.shape), len(rhs.shape))
     return torch.where(_expand_to_rank(cond, rank, cond_align),
@@ -772,7 +778,7 @@ Operators = {
     'math.add': _binary(lambda x, y: x + y),
     'math.sub': _binary(lambda x, y: x - y),
     'math.mul': _binary(lambda x, y: x * y),
-    'math.div': _binary(lambda x, y: x / y),
+    'math.div': _binary(_div),
     'math.mod': _binary(torch.remainder),
     'math.pow': _binary(torch.pow),
     'math.min': _binary(torch.min),

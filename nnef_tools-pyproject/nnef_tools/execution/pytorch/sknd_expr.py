@@ -27,7 +27,7 @@ _Binaries = {
     '+': lambda x, y: x + y,
     '-': lambda x, y: x - y,
     '*': lambda x, y: x * y,
-    '/': lambda x, y: x // y if isinstance(x, int) else x / y,
+    '/': lambda x, y: x // y if isinstance(x, int) and isinstance(y, int) else x / y,
     '\\': lambda x, y: -(x // -y),
     '%': lambda x, y: x % y,
     '<?': builtins.min,
