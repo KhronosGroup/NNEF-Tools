@@ -163,7 +163,7 @@ class SKNDModule(torch.nn.Module):
                         if len(var_outputs[i].shape) == 0 and len(op.internals[i].shape) != 0:
                             var_outputs[i] = torch.full(op.internals[i].shape, var_outputs[i].item())
 
-                    scan_outputs = [[]] * (len(op.outputs) - nvars)
+                    scan_outputs = [[] for _ in range(len(op.outputs) - nvars)]
                     for i in range(iters):
                         store_activations(op.internals[:nvars], var_outputs)
                         if condition:
