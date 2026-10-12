@@ -293,6 +293,38 @@ def layout_scatter_nd(data, indices, updates, batch_dims):
     return data.index_put(_nd_indices(data, indices, batch_dims), updates)
 
 
+def _nearest_index(in_size, out_size, coordinate_transform, rounding_method, device):
+    i = torch.arange(out_size, device=device, dtype=RealType)
+    if coordinate_transform == 'ASYMMETRIC':
+        x = i * (in_size / out_size)
+    elif coordinate_transform == 'SYMMETRIC':
+        x = (i + 0.5) * (in_size / out_size) - 0.5
+    elif coordinate_transform == 'ALIGNED':
+        x = torch.zeros_like(i) if out_size == 1 else i * ((in_size - 1) / (out_size - 1))
+    else:
+        assert False, "image.resize nearest coordinate_transform '{}' is unsupported".format(coordinate_transform)
+    if rounding_method == 'FLOOR':
+        index = torch.floor(x)
+    elif rounding_method == 'CEIL':
+        index = torch.ceil(x)
+    elif rounding_method == 'ROUND_PREFER_FLOOR':
+        index = torch.ceil(x - 0.5)
+    elif rounding_method == 'ROUND_PREFER_CEIL':
+        index = torch.floor(x + 0.5)
+    else:
+        assert False, "image.resize nearest rounding_method '{}' is unsupported".format(rounding_method)
+    return index.to(IntType).clamp(0, in_size - 1)
+
+
+def _nearest_resize(tensor, size, coordinate_transform, rounding_method):
+    axis = tensor.dim() - len(size)
+    for out_size in size:
+        index = _nearest_index(tensor.shape[axis], out_size, coordinate_transform, rounding_method, tensor.device)
+        tensor = tensor.index_select(axis, index)
+        axis += 1
+    return tensor
+
+
 def image_resize(input, axes, size, mode, coordinate_transform, rounding_method, antialias, cubic_coeff_a):
     rank = input.dim()
     axes = [axis + rank if axis < 0 else axis for axis in axes]
@@ -307,14 +339,11 @@ def image_resize(input, axes, size, mode, coordinate_transform, rounding_method,
     if mode == 'NEAREST':
         integer_upscale = all(extent % input.shape[axis] == 0 for axis, extent in zip(axes, size))
         if coordinate_transform == 'ASYMMETRIC' and rounding_method == 'FLOOR':
-            mode = 'nearest'
+            interp = 'nearest'
         elif coordinate_transform == 'SYMMETRIC' and rounding_method == 'ROUND_PREFER_FLOOR' and integer_upscale:
-            mode = 'nearest-exact'
+            interp = 'nearest-exact'
         else:
-            assert False, \
-                "image.resize nearest only supports coordinate_transform 'ASYMMETRIC' with rounding_method 'FLOOR', " \
-                "or 'SYMMETRIC' with 'ROUND_PREFER_FLOOR' for an integer upscale, got '{}' and '{}'".format(
-                    coordinate_transform, rounding_method)
+            interp = None
         align_corners = None
     elif mode == 'LINEAR':
         assert coordinate_transform in ('SYMMETRIC', 'ALIGNED'), \
@@ -322,6 +351,7 @@ def image_resize(input, axes, size, mode, coordinate_transform, rounding_method,
                 coordinate_transform)
         mode = {1: 'linear', 2: 'bilinear', 3: 'trilinear'}[spatial]
         align_corners = coordinate_transform == 'ALIGNED'
+        interp = mode
     elif mode == 'CUBIC':
         assert spatial == 2, "image.resize cubic only supports 2 resized axes, got {}".format(spatial)
         assert cubic_coeff_a == -0.75, \
@@ -331,10 +361,9 @@ def image_resize(input, axes, size, mode, coordinate_transform, rounding_method,
                 coordinate_transform)
         mode = 'bicubic'
         align_corners = coordinate_transform == 'ALIGNED'
+        interp = mode
     else:
         assert False, "image.resize mode '{}' is unsupported".format(mode)
-
-    kwargs = {'antialias': False, 'align_corners': align_corners}
 
     kept = [axis for axis in range(rank) if axis not in axes]
     tensor = _permute(input, kept + axes)
@@ -344,7 +373,11 @@ def image_resize(input, axes, size, mode, coordinate_transform, rounding_method,
         tensor = tensor.reshape((1,) * (2 - leading) + tuple(tensor.shape))
     elif leading > 2:
         tensor = tensor.reshape(-1, lead_shape[-1], *tensor.shape[leading:])
-    tensor = F.interpolate(tensor, size=tuple(size), mode=mode, **kwargs)
+    if interp is None:
+        tensor = _nearest_resize(tensor, size, coordinate_transform, rounding_method)
+    else:
+        kwargs = {'antialias': False, 'align_corners': align_corners}
+        tensor = F.interpolate(tensor, size=tuple(size), mode=interp, **kwargs)
     if leading < 2:
         tensor = tensor.reshape(tensor.shape[2 - leading:])
     elif leading > 2:
