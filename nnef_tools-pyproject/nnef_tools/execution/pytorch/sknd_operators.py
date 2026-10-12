@@ -305,12 +305,16 @@ def image_resize(input, axes, size, mode, coordinate_transform, rounding_method,
 
     spatial = len(axes)
     if mode == 'NEAREST':
-        assert coordinate_transform == 'ASYMMETRIC', \
-            "image.resize nearest only supports coordinate_transform 'ASYMMETRIC', got '{}''".format(
-                coordinate_transform)
-        assert rounding_method == 'FLOOR', \
-            "image.resize nearest only supports rounding_method 'FLOOR', got '{}'".format(rounding_method)
-        mode = 'nearest'
+        integer_upscale = all(extent % input.shape[axis] == 0 for axis, extent in zip(axes, size))
+        if coordinate_transform == 'ASYMMETRIC' and rounding_method == 'FLOOR':
+            mode = 'nearest'
+        elif coordinate_transform == 'SYMMETRIC' and rounding_method == 'ROUND_PREFER_FLOOR' and integer_upscale:
+            mode = 'nearest-exact'
+        else:
+            assert False, \
+                "image.resize nearest only supports coordinate_transform 'ASYMMETRIC' with rounding_method 'FLOOR', " \
+                "or 'SYMMETRIC' with 'ROUND_PREFER_FLOOR' for an integer upscale, got '{}' and '{}'".format(
+                    coordinate_transform, rounding_method)
         align_corners = None
     elif mode == 'LINEAR':
         assert coordinate_transform in ('SYMMETRIC', 'ALIGNED'), \

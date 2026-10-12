@@ -1143,9 +1143,6 @@ class TestCases(TestEnv):
         self._test_conversion('linear_upsample5x', [node], [input], [output], opset_version=8)
 
     def test_resize_nearest_upsample(self):
-        if self.target == 'torch':
-            self.skipTest('No torch execution available')
-
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
         scales = helper.make_tensor_value_info('scales', TensorProto.FLOAT, [4])
         output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 64, 64])
