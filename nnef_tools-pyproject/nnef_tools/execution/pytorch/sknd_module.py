@@ -101,6 +101,7 @@ class SKNDModule(torch.nn.Module):
         graph = self._sknd_model.main
         assert len(inputs) == len(graph.inputs)
         activations = dict(self._registered)
+        last_references = self._collect_last_referencing_ops()
 
         def get_tensor(tensor):
             if tensor is None:
@@ -212,12 +213,12 @@ class SKNDModule(torch.nn.Module):
                     if input is not None:
                         if isinstance(input, TensorPack):
                             for item in input:
-                                if item not in self._registered and op is item.consumers[-1] and item not in subgraph.outputs:
+                                if item not in self._registered and item not in subgraph.outputs and op is last_references.get(item):
                                     del activations[item]
                             if all(item not in activations for item in input) and input in activations:
                                 del activations[input]
                         else:
-                            if input not in self._registered and op is input.consumers[-1] and input not in subgraph.outputs:
+                            if input not in self._registered and input not in subgraph.outputs and op is last_references.get(input):
                                 del activations[input]
 
             return tuple(get_tensor(output) for output in subgraph.outputs)
@@ -250,6 +251,29 @@ class SKNDModule(torch.nn.Module):
     @staticmethod
     def _escape_keyword(name):
         return name if not keyword.iskeyword(name) else '_' + name + '_'
+
+    @staticmethod
+    def _referenced_tensors(value):
+        for expr in sknd.recursive_enumerate_expr(value):
+            if isinstance(expr, sknd.ShapeAccess):
+                yield expr.tensor
+            if isinstance(expr, sknd.SizeAccess):
+                yield expr.pack
+
+    def _collect_last_referencing_ops(self):
+        references = {}
+        for graph in self._sknd_model.graphs:
+            for op in graph.operations:
+                for input in op.inputs:
+                    references[input] = op
+                    if isinstance(input, TensorPack):
+                        for item in input:
+                            references[item] = op
+                for key, value in op.attribs.items():
+                    if isinstance(value, sknd.Expr):
+                        for tensor in self._referenced_tensors(value):
+                            references[tensor] = op
+        return references
 
     @staticmethod
     def _dequantize(data, quant):
