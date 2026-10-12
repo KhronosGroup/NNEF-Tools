@@ -26,7 +26,6 @@ import inspect
 from . import sknd_operators
 from .sknd_expr import eval_expr
 from ...io import sknd as sknd_io
-from ...io.sknd.reader import _build_model
 from ...model import *
 from collections.abc import Iterable
 
@@ -67,29 +66,26 @@ class SKNDModule(torch.nn.Module):
                 return True
             return not func(op)
 
-        if isinstance(model, sknd.Model):
-            sknd.inline_compounds(model, filter=inline_filter)
-            self._sknd_model = _build_model(model)
-        else:
-            reader = sknd_io.Reader(inline=inline_filter)
-            self._sknd_model = reader(model)
+        self._sknd_model = model if isinstance(model, sknd.Model) else sknd.read_model(model)
+        sknd.inline_compounds(self._sknd_model, filter=inline_filter)
 
         self._registered = {}
         for graph in self._sknd_model.graphs:
             for tensor in graph.tensors:
                 if tensor.is_variable:
                     name = self._registered_name(tensor.name)
-                    data = self._dequantize(tensor.data, tensor.quant) \
-                        if tensor.quant else tensor.data
-                    data = self.normalize_dtype(data)
-                    self.register_parameter(name, torch.nn.Parameter(torch.tensor(data), requires_grad=data.dtype == np.float32))
+                    dtype = sknd.DtypeToNumpy[tensor.dtype]
+                    data = self._dequantize(tensor.value, tensor.quant) \
+                        if tensor.quant else tensor.value
+                    data = data.astype(dtype)
+                    self.register_parameter(name, torch.nn.Parameter(torch.tensor(data), requires_grad=tensor.dtype == sknd.Dtype.Real))
                     self._registered[tensor] = getattr(self, name)
                 elif tensor.is_constant:
                     name = self._registered_name(tensor.name)
-                    data = tensor.data if isinstance(tensor.data, np.ndarray) \
-                        else np.array(tensor.data, dtype=tensor.dtype).reshape(tensor.shape) if isinstance(tensor.data, Iterable) \
-                        else np.full(tensor.shape, tensor.data, dtype=tensor.dtype)
-                    data = self.normalize_dtype(data)
+                    dtype = sknd.DtypeToNumpy[tensor.dtype]
+                    data = tensor.value.astype(dtype) if isinstance(tensor.value, np.ndarray) \
+                        else np.array(tensor.value, dtype=dtype).reshape(tensor.shape) if isinstance(tensor.value, Iterable) \
+                        else np.full(tensor.shape, tensor.value, dtype=dtype)
                     self.register_buffer(name, torch.tensor(data))
                     self._registered[tensor] = getattr(self, name)
 
@@ -98,7 +94,7 @@ class SKNDModule(torch.nn.Module):
         self._training_attributes = training_attributes or {}
 
     def forward(self, *inputs):
-        graph = self._sknd_model.main
+        graph = self._sknd_model.graphs[0]
         assert len(inputs) == len(graph.inputs)
         activations = dict(self._registered)
         last_references = self._collect_last_referencing_ops()
@@ -106,7 +102,7 @@ class SKNDModule(torch.nn.Module):
         def get_tensor(tensor):
             if tensor is None:
                 return None
-            elif isinstance(tensor, TensorPack):
+            elif isinstance(tensor, sknd.TensorPack):
                 pack = activations.get(tensor)
                 if pack is None:
                     pack = [activations.get(item) for item in tensor]
@@ -117,7 +113,7 @@ class SKNDModule(torch.nn.Module):
                 return activations.get(tensor)
 
         def store_activation(sknd_tensor, torch_tensor):
-            if isinstance(sknd_tensor, TensorPack):
+            if isinstance(sknd_tensor, sknd.TensorPack):
                 for sknd_item, torch_item in zip(sknd_tensor, torch_tensor):
                     store_activation(sknd_item, torch_item)
             else:
@@ -138,15 +134,15 @@ class SKNDModule(torch.nn.Module):
 
         def forward_subgraph(subgraph):
             for op in subgraph.operations:
-                if op.type == 'if':
+                if op.name == 'if':
                     cond = op.inputs[0] or op.attribs['cond']
-                    if isinstance(cond, Tensor):
+                    if isinstance(cond, sknd.Tensor):
                         cond = get_tensor(cond).item()
                     elif isinstance(cond, sknd.Expr):
                         cond = eval_shape_expr(cond)
 
                     outputs = forward_subgraph(op.subgraphs[0 if cond else 1])
-                elif op.type == 'do':
+                elif op.name == 'do':
                     cond = op.attribs.get('cond')
                     nvars = op.attribs['nvars']
                     nscans = op.attribs['nscans']
@@ -156,7 +152,7 @@ class SKNDModule(torch.nn.Module):
                     iters = op.inputs[nvars + nscans] or op.attribs.get('iters')
                     if iters is None:
                         iters = sys.maxsize
-                    elif isinstance(iters, Tensor):
+                    elif isinstance(iters, sknd.Tensor):
                         iters = get_tensor(iters.name).item()
                     elif isinstance(iters, sknd.Expr):
                         iters = eval_shape_expr(iters)
@@ -185,21 +181,21 @@ class SKNDModule(torch.nn.Module):
 
                     outputs = tuple(var_outputs + scan_outputs)
                 else:
-                    assert op.type in self._operators, f"Unsupported operation: {op.type}"
+                    assert op.name in self._operators, f"Unsupported operation: {op.name}"
 
-                    func = self._operators[op.type]
+                    func = self._operators[op.name]
                     params = inspect.signature(func).parameters if inspect.isfunction(func) else {}
 
                     attribs = {name: eval_shape_expr(value) for name, value in six.iteritems(op.attribs)}
                     dtypes = {name: type for name, type in op.dtypes.items() if name in params}
-                    training_attribs = self._training_attributes.get(op.type, {})
+                    training_attribs = self._training_attributes.get(op.name, {})
                     attribs = {**attribs, **dtypes, **training_attribs}
                     attribs = {self._escape_keyword(name): value for name, value in six.iteritems(attribs)}
 
                     inputs = [get_tensor(input) for input in op.inputs]
                     for input, tensor in zip(op.inputs, inputs):
                         assert tensor is not None or input is None, \
-                            f"could not fetch input tensor(s) {input.name} for operation {op.type}"
+                            f"could not fetch input tensor(s) {input.name} for operation {op.name}"
 
                     outputs = func(*inputs, **attribs)
 
@@ -211,7 +207,7 @@ class SKNDModule(torch.nn.Module):
                 # optimization: remove activations that are not needed any more
                 for input in op.inputs:
                     if input is not None:
-                        if isinstance(input, TensorPack):
+                        if isinstance(input, sknd.TensorPack):
                             for item in input:
                                 if item not in self._registered and item not in subgraph.outputs and op is last_references.get(item):
                                     del activations[item]
@@ -231,7 +227,7 @@ class SKNDModule(torch.nn.Module):
             for sknd_tensor in graph.tensors:
                 if sknd_tensor.is_variable:
                     torch_tensor = getattr(self, self._registered_name(sknd_tensor.name))
-                    sknd_tensor.data = torch_tensor.detach().cpu().numpy().astype(sknd_tensor.dtype)
+                    sknd_tensor.value = torch_tensor.detach().cpu().numpy().astype(sknd.DtypeToNumpy[sknd_tensor.dtype])
 
         writer = sknd_io.Writer()
         writer(self._sknd_model, path)
@@ -266,7 +262,7 @@ class SKNDModule(torch.nn.Module):
             for op in graph.operations:
                 for input in op.inputs:
                     references[input] = op
-                    if isinstance(input, TensorPack):
+                    if isinstance(input, sknd.TensorPack):
                         for item in input:
                             references[item] = op
                 for key, value in op.attribs.items():
@@ -318,20 +314,3 @@ class SKNDModule(torch.nn.Module):
     def _as_array(value, rank, axis):
         array = np.array(value)
         return np.reshape(array, newshape=(1,) * axis + array.shape + (1,) * (rank - axis - len(array.shape)))
-
-    @staticmethod
-    def normalize_dtype(data):
-        dtype = SKNDModule._dtypeRemap.get(data.dtype.type)
-        return data.astype(dtype) if dtype is not None else data
-
-    _dtypeRemap = {
-        np.float16: np.float32,
-        np.float64: np.float32,
-        np.int8: np.int64,
-        np.uint8: np.int64,
-        np.int16: np.int64,
-        np.uint16: np.int64,
-        np.int32: np.int64,
-        np.uint32: np.int64,
-        np.uint64: np.int64,
-    }

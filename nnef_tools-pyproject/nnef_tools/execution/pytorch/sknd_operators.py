@@ -16,7 +16,7 @@ from __future__ import division, print_function, absolute_import
 
 from typing import Optional, List, Tuple, Callable, Any
 from functools import reduce
-from skriptnd import Dtype, DtypeToNumpy as _sknd_dtype_to_numpy
+from skriptnd import Dtype, DtypeToNumpy
 import numpy as np
 import builtins
 import torch
@@ -25,28 +25,15 @@ import torch.nn.functional as F
 import math
 
 
-_numpy_dtype_to_torch = {
-    np.int8: torch.int8,
-    np.int16: torch.int16,
-    np.int32: torch.int32,
-    np.int64: torch.int64,
-    np.uint8: torch.uint8,
-    np.double: torch.double,
-    np.float16: torch.float16,
-    np.float32: torch.float32,
-    np.float64: torch.float64,
-    np.short: torch.short,
-    np.longlong: torch.long,
-    np.bool: torch.bool,
-    int: torch.int,
-    bool: torch.bool,
-    float: torch.float,
+DtypeToTorch = {
+    Dtype.Real: torch.float32,
+    Dtype.Int: torch.int32,
+    Dtype.Bool: torch.bool,
 }
 
-
-IntType = _numpy_dtype_to_torch[_sknd_dtype_to_numpy[Dtype.Int]]
-BoolType = _numpy_dtype_to_torch[_sknd_dtype_to_numpy[Dtype.Bool]]
-RealType = _numpy_dtype_to_torch[_sknd_dtype_to_numpy[Dtype.Real]]
+IntType = DtypeToTorch[Dtype.Int]
+BoolType = DtypeToTorch[Dtype.Bool]
+RealType = DtypeToTorch[Dtype.Real]
 
 
 def _expand_to_rank(input, rank, align=None):
@@ -153,7 +140,7 @@ def nn_softmax(x, axes=None):
 
 
 def layout_tensor(shape, value, T):
-    return torch.tensor(np.array(value, dtype=T).reshape(shape))
+    return torch.tensor(np.array(value, dtype=DtypeToNumpy[T]).reshape(shape))
 
 
 def layout_reshape(input, axis, rank, shape):
@@ -736,7 +723,7 @@ def nn_lstm(X, W, R, B, h0, c0, steps):
         Y, (hN, cN) = lstm(X, state)
     else:
         packed = torch.nn.utils.rnn.pack_padded_sequence(
-            X, steps.to(device='cpu', dtype=torch.int64), batch_first=False, enforce_sorted=False)
+            X, steps.to(device=X.device, dtype=IntType), batch_first=False, enforce_sorted=False)
         packed_y, (hN, cN) = lstm(packed, state)
         Y, _ = torch.nn.utils.rnn.pad_packed_sequence(packed_y, batch_first=False, total_length=X.shape[0])
     return Y, hN.squeeze(0), cN.squeeze(0)
@@ -893,7 +880,7 @@ Operators = {
     'layout.gather_nd': layout_gather_nd,
     'layout.scatter': layout_scatter,
     'layout.scatter_nd': layout_scatter_nd,
-    'layout.cast': lambda x, R: x.to(_numpy_dtype_to_torch[R]),
+    'layout.cast': lambda x, R: x.to(DtypeToTorch[R]),
     'layout.shape': lambda x: torch.tensor(x.shape, dtype=IntType, device=x.device),
     'layout.range': lambda first, last, stride: torch.arange(first, last, stride, dtype=IntType),
     'layout.uniform': lambda value, shape: torch.full(shape, value),
