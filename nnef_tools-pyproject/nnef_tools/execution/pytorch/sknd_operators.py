@@ -957,5 +957,9 @@ Operators = {
     'image.grid_sample': image_grid_sample,
     'algo.top_k': lambda x, k, axis, largest, sorted: torch.topk(x, k, dim=axis, largest=largest, sorted=sorted),
     'algo.nonmax_suppress': algo_nonmax_suppress,
+    'rand.normal': lambda mean, std, shape: torch.randn(shape) * std + mean,
+    'rand.uniform': lambda min, max, shape, T: torch.randint(low=min, high=max-1, size=shape) if T == Dtype.Int else \
+                                               torch.rand(shape) * (max - min) + min,
+    'rand.bernoulli': lambda prob, shape: torch.rand() < prob,
     '=': torch.clone,
 }
