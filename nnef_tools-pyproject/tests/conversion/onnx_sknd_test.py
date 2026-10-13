@@ -2133,6 +2133,69 @@ class TestCases(TestEnv):
         self._test_conversion('cumsum-reverse', [node], [input], [output],
                               constants=[axis], values={'axis': 1})
 
+    def test_quantize_linear_uint8(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
+        scale = helper.make_tensor_value_info('scale', TensorProto.FLOAT, [])
+        zero_point = helper.make_tensor_value_info('zero_point', TensorProto.UINT8, [])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 32, 32])
+        quantize = helper.make_node(
+            op_type='QuantizeLinear',
+            inputs=['input', 'scale', 'zero_point'],
+            outputs=['quantized'],
+        )
+        dequantize = helper.make_node(
+            op_type='DequantizeLinear',
+            inputs=['quantized', 'scale', 'zero_point'],
+            outputs=['output'],
+        )
+
+        self._test_conversion('quantize_linear_uint8', [quantize, dequantize], [input], [output],
+                              constants=[scale, zero_point], values={'scale': 0.02, 'zero_point': 128},
+                              input_range=(-4.0, 4.0))
+
+    def test_quantize_linear_int8(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
+        scale = helper.make_tensor_value_info('scale', TensorProto.FLOAT, [])
+        zero_point = helper.make_tensor_value_info('zero_point', TensorProto.INT8, [])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 32, 32])
+        quantize = helper.make_node(
+            op_type='QuantizeLinear',
+            inputs=['input', 'scale', 'zero_point'],
+            outputs=['quantized'],
+        )
+        dequantize = helper.make_node(
+            op_type='DequantizeLinear',
+            inputs=['quantized', 'scale', 'zero_point'],
+            outputs=['output'],
+        )
+
+        self._test_conversion('quantize_linear_int8', [quantize, dequantize], [input], [output],
+                              constants=[scale, zero_point], values={'scale': 0.1, 'zero_point': -10},
+                              input_range=(-20.0, 20.0))
+
+    def test_quantize_linear_per_channel(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
+        scale = helper.make_tensor_value_info('scale', TensorProto.FLOAT, [3])
+        zero_point = helper.make_tensor_value_info('zero_point', TensorProto.INT8, [3])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 32, 32])
+        quantize = helper.make_node(
+            op_type='QuantizeLinear',
+            inputs=['input', 'scale', 'zero_point'],
+            outputs=['quantized'],
+            axis=1,
+        )
+        dequantize = helper.make_node(
+            op_type='DequantizeLinear',
+            inputs=['quantized', 'scale', 'zero_point'],
+            outputs=['output'],
+            axis=1,
+        )
+
+        self._test_conversion('quantize_linear_per_channel', [quantize, dequantize], [input], [output],
+                              constants=[scale, zero_point],
+                              values={'scale': [0.1, 0.2, 0.05], 'zero_point': [0, -20, 10]},
+                              input_range=(-5.0, 5.0))
+
 
 @unittest.skipIf(TestEnv._network_folder is None or not os.path.isdir(TestEnv._network_folder),
                  "no network test folder provided")
