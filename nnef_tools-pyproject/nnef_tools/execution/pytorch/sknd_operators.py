@@ -343,6 +343,34 @@ def _linear_asymmetric_resize(tensor, size):
     return tensor
 
 
+def _quant_vector(value, channels, dtype, device):
+    tensor = torch.as_tensor(value, dtype=dtype, device=device).reshape(-1)
+    return tensor.repeat(channels) if tensor.numel() == 1 else tensor
+
+
+def quant_zero_point_linear_quantize(input, zero_point, scale, bits, signed, symmetric, channel_axis):
+    channels = input.shape[channel_axis]
+    scale = _quant_vector(scale, channels, input.dtype, input.device)
+    zero_point = _quant_vector(zero_point, channels, torch.int32, input.device)
+    quant_max = 2 ** (bits - 1) - 1 if signed else 2 ** bits - 1
+    quant_min = 0 if not signed else -quant_max if symmetric else -quant_max - 1
+    return torch.fake_quantize_per_channel_affine(input, scale, zero_point, channel_axis, quant_min, quant_max)
+
+
+def quant_min_max_linear_quantize(input, min, max, bits, signed, symmetric, channel_axis):
+    channels = input.shape[channel_axis]
+    min = _quant_vector(min, channels, input.dtype, input.device)
+    max = _quant_vector(max, channels, input.dtype, input.device)
+    levels = 2 ** bits - 1 - int(signed and symmetric)
+    scale = (max - min) / levels
+    zero_point = torch.zeros(channels, dtype=torch.int32, device=input.device)
+    shape = [1] * input.dim()
+    shape[channel_axis] = channels
+    min = min.reshape(shape)
+    quantized = torch.fake_quantize_per_channel_affine(input - min, scale, zero_point, channel_axis, 0, levels)
+    return quantized + min
+
+
 def image_resize(input, axes, size, mode, coordinate_transform, rounding_method, antialias, cubic_coeff_a):
     rank = input.dim()
     axes = [axis + rank if axis < 0 else axis for axis in axes]
@@ -957,6 +985,8 @@ Operators = {
     'image.grid_sample': image_grid_sample,
     'algo.top_k': lambda x, k, axis, largest, sorted: torch.topk(x, k, dim=axis, largest=largest, sorted=sorted),
     'algo.nonmax_suppress': algo_nonmax_suppress,
+    'quant.zero_point_linear_quantize': quant_zero_point_linear_quantize,
+    'quant.min_max_linear_quantize': quant_min_max_linear_quantize,
     'rand.normal': lambda mean, std, shape: torch.randn(shape) * std + mean,
     'rand.uniform': lambda min, max, shape, T: torch.randint(low=min, high=max-1, size=shape) if T == Dtype.Int else \
                                                torch.rand(shape) * (max - min) + min,
