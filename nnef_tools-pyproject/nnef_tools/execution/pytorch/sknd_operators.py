@@ -75,13 +75,15 @@ def math_clamp(val, min, max, val_align, min_align, max_align):
 
 
 def _reduce(input, f, axes, squeeze=False):
-    # type:(torch.Tensor, Callable, List[int], bool)->torch.Tensor
     if not axes:
         return input
     for axis in reversed(sorted(axes)):
-        result = f(input=input, dim=axis, keepdim=not squeeze)
-        input = result[0] if isinstance(result, tuple) else result
+        input = f(input=input, dim=axis, keepdim=not squeeze)
     return input
+
+
+def _reduce_n(inputs, reduction):
+    return reduction(torch.stack(inputs), dim=0)
 
 
 def _arg_nd(input, axes, squeeze, fn):
@@ -102,13 +104,6 @@ def _arg_nd(input, axes, squeeze, fn):
         for axis in order:
             result = result.unsqueeze(axis)
     return result
-
-
-def _apply_n(inputs, binary):
-    if len(inputs) == 1:
-        return inputs[0]
-    else:
-        return binary(inputs[0], _apply_n(inputs[1:], binary))
 
 
 def nn_relu(x, alpha, max):
@@ -909,20 +904,22 @@ Operators = {
     'math.sum_reduce': lambda input, axes, squeeze: _reduce(input, torch.sum, axes=axes, squeeze=squeeze),
     'math.mean_reduce': lambda input, axes, squeeze: _reduce(input, torch.mean, axes=axes, squeeze=squeeze),
     'math.prod_reduce': lambda input, axes, squeeze: _reduce(input, torch.prod, axes=axes, squeeze=squeeze),
-    'math.min_reduce': lambda input, axes, squeeze: _reduce(input, torch.min, axes=axes, squeeze=squeeze),
-    'math.max_reduce': lambda input, axes, squeeze: _reduce(input, torch.max, axes=axes, squeeze=squeeze),
+    'math.min_reduce': lambda input, axes, squeeze: _reduce(input, torch.amin, axes=axes, squeeze=squeeze),
+    'math.max_reduce': lambda input, axes, squeeze: _reduce(input, torch.amax, axes=axes, squeeze=squeeze),
     'math.any_reduce': lambda input, axes, squeeze: _reduce(input, torch.any, axes=axes, squeeze=squeeze),
     'math.all_reduce': lambda input, axes, squeeze: _reduce(input, torch.all, axes=axes, squeeze=squeeze),
     'math.argmin': lambda input, axis, squeeze: torch.argmin(input, dim=axis, keepdim=not squeeze),
     'math.argmax': lambda input, axis, squeeze: torch.argmax(input, dim=axis, keepdim=not squeeze),
     'math.argmin_nd': lambda input, axes, squeeze: _arg_nd(input, axes, squeeze, torch.argmin),
     'math.argmax_nd': lambda input, axes, squeeze: _arg_nd(input, axes, squeeze, torch.argmax),
-    'math.sum_n': lambda inputs: _apply_n(inputs, torch.add),
-    'math.prod_n': lambda inputs: _apply_n(inputs, torch.mul),
-    'math.min_n': lambda inputs: _apply_n(inputs, torch.minimum),
-    'math.max_n': lambda inputs: _apply_n(inputs, torch.maximum),
-    'math.any_n': lambda inputs: _apply_n(inputs, torch.logical_or),
-    'math.all_n': lambda inputs: _apply_n(inputs, torch.logical_and),
+    'math.sum_n': lambda inputs: _reduce_n(inputs, lambda x, dim: torch.sum(x, dim=dim, dtype=x.dtype)),
+    'math.prod_n': lambda inputs: _reduce_n(inputs, lambda x, dim: torch.prod(x, dim=dim, dtype=x.dtype)),
+    'math.min_n': lambda inputs: _reduce_n(inputs, torch.amin),
+    'math.max_n': lambda inputs: _reduce_n(inputs, torch.amax),
+    'math.argmin_n': lambda inputs: _reduce_n(inputs, torch.argmin).to(IntType),
+    'math.argmax_n': lambda inputs: _reduce_n(inputs, torch.argmax).to(IntType),
+    'math.any_n': lambda inputs: _reduce_n(inputs, torch.any),
+    'math.all_n': lambda inputs: _reduce_n(inputs, torch.all),
     'math.cumsum': lambda input, axis, exclusive, reverse: torch.cumsum(input, dim=axis),
     'math.clamp': math_clamp,
     'nn.relu': nn_relu,
