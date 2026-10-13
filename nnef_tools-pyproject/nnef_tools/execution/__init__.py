@@ -44,3 +44,18 @@ class Statistics:
 
     def std(self, unbiased=True):
         return math.sqrt(max(self.variance(unbiased), 0))
+
+
+def compute_statistics(torch_tensor):
+    import torch
+    num = torch_tensor.numel()
+    if num == 0:
+        return Statistics(num=0, min=0.0, max=0.0, sum=0.0, ssum=0.0)
+    else:
+        return Statistics(
+            num=num,
+            min=float(torch.min(torch_tensor)),
+            max=float(torch.max(torch_tensor)),
+            sum=float(torch.sum(torch_tensor)),
+            ssum=float(torch.sum(torch_tensor * torch_tensor)),
+        )

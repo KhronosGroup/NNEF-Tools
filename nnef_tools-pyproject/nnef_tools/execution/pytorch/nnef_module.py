@@ -131,6 +131,7 @@ class NNEFModule(torch.nn.Module):
                     if self._activation_callback:
                         self._activation_callback(nnef_tensor.name, output)
 
+                # optimization: remove activations that are not needed any more
                 for nnef_tensor in recursive_itemize(op.inputs):
                     if nnef_tensor.name in activations and op is nnef_tensor.consumers[-1] and \
                             nnef_tensor not in graph.outputs:

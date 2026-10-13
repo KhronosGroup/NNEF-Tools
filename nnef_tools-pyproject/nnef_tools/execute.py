@@ -373,8 +373,8 @@ class ONNXExecutor(Executor):
 class NNEFExecutor(Executor):
 
     def __init__(self, model_path, custom_operators, decomposed):
-        from .execution.pytorch import Interpreter
-        self.interpreter = Interpreter(model_path, custom_operators=custom_operators, decomposed=decomposed)
+        from .execution.pytorch import NNEFInterpreter
+        self.interpreter = NNEFInterpreter(model_path, custom_operators=custom_operators, decomposed=decomposed)
 
     def input_info(self):
         return [TensorInfo(tensor.name, tensor.shape, _nnef_dtype_to_numpy[tensor.dtype])
@@ -389,11 +389,10 @@ class NNEFExecutor(Executor):
                 for tensor in self.interpreter.tensor_details()]
 
     def __call__(self, inputs, output_names=None, collect_statistics=False):
+        stats = {} if collect_statistics else None
         inputs = [inputs[tensor.name] for tensor in self.interpreter.input_details()]
-        if collect_statistics:
-            return self.interpreter(inputs, output_names, collect_statistics)
-        else:
-            return self.interpreter(inputs, output_names, collect_statistics), None
+        outputs = self.interpreter(inputs, output_names, stats)
+        return outputs, stats
 
 
 class SkriptNDExecutor(Executor):
@@ -419,11 +418,12 @@ class SkriptNDExecutor(Executor):
                 self.model.graphs[0].outputs = self.outputs + tuple(fetch_tensors)
 
             self.runner = sknd.compile_model(self.model, True)
-        else:
-            from .execution.tvm import VirtualMachine, is_atomic
-            if atomic is None:
-                sknd.flatten_model(self.model, is_atomic=is_atomic)
+        elif self.target == 'tvm':
+            from .execution.tvm import VirtualMachine
             self.runner = VirtualMachine(self.model, target=target, device=device)
+        elif self.target == 'torch':
+            from .execution.pytorch import SKNDInterpreter
+            self.runner = SKNDInterpreter(model_path, device=device, decomposed=decomposed)
 
     def input_info(self):
         return [TensorInfo(tensor.name, tensor.shape, _sknd_dtype_to_numpy[tensor.dtype])
@@ -438,16 +438,18 @@ class SkriptNDExecutor(Executor):
                 for graph in self.model.graphs for tensor in graph.tensors]
 
     def __call__(self, inputs, output_names=None, collect_statistics=False):
+        stats = {} if collect_statistics else None
         inputs = [inputs[tensor.name] for tensor in self.inputs]
-        outputs = self.runner(*inputs)
 
-        stats = None
-        if collect_statistics and self.target == 'cpp':
-            stats = {}
-            for tensor, output in zip(self.model.graphs[0].outputs, outputs):
-                stats[tensor.name] = compute_statistics(output)
-
-        return {tensor.name: output for tensor, output in zip(self.outputs, outputs)}, stats
+        if self.target == 'cpp' or self.target == 'tvm':
+            outputs = self.runner(*inputs)
+            if collect_statistics:
+                for tensor, output in zip(self.model.graphs[0].outputs, outputs):
+                    stats[tensor.name] = compute_statistics(output)
+            return {tensor.name: output for tensor, output in zip(self.outputs, outputs)}, stats
+        elif self.target == 'torch':
+            outputs = self.runner(inputs, output_names, stats)
+            return outputs, stats
 
 
 def get_executor(format, model_path, require_intermediates, custom_operators, decomposed, atomic, target, device):

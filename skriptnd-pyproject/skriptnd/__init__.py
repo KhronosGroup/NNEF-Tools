@@ -654,7 +654,7 @@ def _inline_name(name, scope):
     return scope + '_' + name[pos+1:] if name[:pos] == scope else name
 
 
-def inline_compounds(model, filter, inline_names=True):
+def inline_compounds(model, filter=lambda op: True, inline_names=True):
     removed_subgraphs = set()
     for graph in reversed(model.graphs):
         tensor_remap = {}
@@ -693,7 +693,7 @@ def inline_compounds(model, filter, inline_names=True):
     model.graphs = [graph for graph in model.graphs if graph not in removed_subgraphs]
 
 
-def atomize_compounds(model, filter):
+def atomize_compounds(model, filter=lambda op: True):
     removed_subgraphs = set()
     for graph in model.graphs:
         for op in graph.operations:

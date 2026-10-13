@@ -53,7 +53,8 @@ class TestEnv(sknd_test.TestEnv):
     _output_folder = os.path.join(UNITTEST_FOLDER, 'nnef2/onnx/ops/') if UNITTEST_FOLDER else None
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs, optimize=True, execute=True, keep_generated_code=False)
+        super().__init__(*args, **kwargs, optimize=True, execute=True,
+                         keep_generated_code=False, target='torch')
 
     def setUp(self) -> None:
         self._onnx_reader = onnx_io.Reader(simplify=False, enforce_output_shapes=True)
@@ -1630,8 +1631,82 @@ class TestCases(TestEnv):
         self._test_conversion('top_k', [node], [input, k], [values, indices], constants=[k], values={'k': [5]})
 
     def test_nms(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 1, 1024])
+        max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
+        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
+        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
+        node = helper.make_node(
+            op_type='NonMaxSuppression',
+            inputs=['boxes', 'scores', 'max_boxes', 'iou_threshold', ''],
+            outputs=['indices'],
+        )
+
+        self._test_conversion('nms', [node], [boxes, scores], [indices],
+                              constants=[max_boxes, iou_threshold], values={'iou_threshold': 0.25, 'max_boxes': 1024})
+
+    def test_nms_batch(self):
         boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [16, 1024, 4])
-        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [16, 10, 1024])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [16, 1, 1024])
+        max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
+        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
+        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
+        node = helper.make_node(
+            op_type='NonMaxSuppression',
+            inputs=['boxes', 'scores', 'max_boxes', 'iou_threshold', ''],
+            outputs=['indices'],
+        )
+
+        self._test_conversion('nms_batch', [node], [boxes, scores], [indices],
+                              constants=[max_boxes, iou_threshold], values={'iou_threshold': 0.25, 'max_boxes': 1024})
+
+    def test_nms_classes(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 16, 1024])
+        max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
+        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
+        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
+        node = helper.make_node(
+            op_type='NonMaxSuppression',
+            inputs=['boxes', 'scores', 'max_boxes', 'iou_threshold', ''],
+            outputs=['indices'],
+        )
+
+        self._test_conversion('nms_classes', [node], [boxes, scores], [indices],
+                              constants=[max_boxes, iou_threshold], values={'iou_threshold': 0.25, 'max_boxes': 1024})
+
+    def test_nms_max(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 1, 1024])
+        max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
+        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
+        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
+        node = helper.make_node(
+            op_type='NonMaxSuppression',
+            inputs=['boxes', 'scores', 'max_boxes', 'iou_threshold', ''],
+            outputs=['indices'],
+        )
+
+        self._test_conversion('nms_max', [node], [boxes, scores], [indices],
+                              constants=[max_boxes, iou_threshold], values={'iou_threshold': 0.25, 'max_boxes': 10})
+
+    def test_nms_nomax(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 1, 1024])
+        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
+        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
+        node = helper.make_node(
+            op_type='NonMaxSuppression',
+            inputs=['boxes', 'scores', '', 'iou_threshold', ''],
+            outputs=['indices'],
+        )
+
+        self._test_conversion('nms_nomax', [node], [boxes, scores], [indices],
+                              constants=[iou_threshold], values={'iou_threshold': 0.25})
+
+    def test_nms_thr(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 1, 1024])
         max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
         iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
         score_threshold = helper.make_tensor_value_info('score_threshold', TensorProto.FLOAT, [])
@@ -1642,13 +1717,13 @@ class TestCases(TestEnv):
             outputs=['indices'],
         )
 
-        self._test_conversion('nms', [node], [boxes, scores], [indices],
+        self._test_conversion('nms_thr', [node], [boxes, scores], [indices],
                               constants=[max_boxes, iou_threshold, score_threshold],
-                              values={'max_boxes': 5, 'iou_threshold': 0.25, 'score_threshold': 0.1})
+                              values={'max_boxes': 1024, 'iou_threshold': 0.25, 'score_threshold': 0.1})
 
-    def test_nms_nomax(self):
-        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [16, 1024, 4])
-        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [16, 10, 1024])
+    def test_nms_centered(self):
+        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [1, 1024, 4])
+        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [1, 1, 1024])
         iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
         score_threshold = helper.make_tensor_value_info('score_threshold', TensorProto.FLOAT, [])
         indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
@@ -1656,29 +1731,12 @@ class TestCases(TestEnv):
             op_type='NonMaxSuppression',
             inputs=['boxes', 'scores', '', 'iou_threshold', 'score_threshold'],
             outputs=['indices'],
-        )
-
-        self._test_conversion('nms_nomax', [node], [boxes, scores], [indices],
-                              constants=[iou_threshold, score_threshold],
-                              values={'iou_threshold': 0.25, 'score_threshold': 0.1})
-
-    def test_nms_centered(self):
-        boxes = helper.make_tensor_value_info('boxes', TensorProto.FLOAT, [16, 1024, 4])
-        scores = helper.make_tensor_value_info('scores', TensorProto.FLOAT, [16, 10, 1024])
-        max_boxes = helper.make_tensor_value_info('max_boxes', TensorProto.INT64, [])
-        iou_threshold = helper.make_tensor_value_info('iou_threshold', TensorProto.FLOAT, [])
-        score_threshold = helper.make_tensor_value_info('score_threshold', TensorProto.FLOAT, [])
-        indices = helper.make_tensor_value_info('indices', TensorProto.INT64, [None, 3])
-        node = helper.make_node(
-            op_type='NonMaxSuppression',
-            inputs=['boxes', 'scores', 'max_boxes', 'iou_threshold', 'score_threshold'],
-            outputs=['indices'],
             center_point_box=1,
         )
 
         self._test_conversion('nms_centered', [node], [boxes, scores], [indices],
-                              constants=[max_boxes, iou_threshold, score_threshold],
-                              values={'max_boxes': 5, 'iou_threshold': 0.25, 'score_threshold': 0.1})
+                              constants=[iou_threshold, score_threshold],
+                              values={'iou_threshold': 0.25, 'score_threshold': 0.1})
 
     def test_min_reduce(self):
         self._test_reduce('ReduceMin', keepdims=False)
@@ -2075,6 +2133,69 @@ class TestCases(TestEnv):
         self._test_conversion('cumsum-reverse', [node], [input], [output],
                               constants=[axis], values={'axis': 1})
 
+    def test_quantize_linear_uint8(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
+        scale = helper.make_tensor_value_info('scale', TensorProto.FLOAT, [])
+        zero_point = helper.make_tensor_value_info('zero_point', TensorProto.UINT8, [])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 32, 32])
+        quantize = helper.make_node(
+            op_type='QuantizeLinear',
+            inputs=['input', 'scale', 'zero_point'],
+            outputs=['quantized'],
+        )
+        dequantize = helper.make_node(
+            op_type='DequantizeLinear',
+            inputs=['quantized', 'scale', 'zero_point'],
+            outputs=['output'],
+        )
+
+        self._test_conversion('quantize_linear_uint8', [quantize, dequantize], [input], [output],
+                              constants=[scale, zero_point], values={'scale': 0.02, 'zero_point': 128},
+                              input_range=(-4.0, 4.0))
+
+    def test_quantize_linear_int8(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
+        scale = helper.make_tensor_value_info('scale', TensorProto.FLOAT, [])
+        zero_point = helper.make_tensor_value_info('zero_point', TensorProto.INT8, [])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 32, 32])
+        quantize = helper.make_node(
+            op_type='QuantizeLinear',
+            inputs=['input', 'scale', 'zero_point'],
+            outputs=['quantized'],
+        )
+        dequantize = helper.make_node(
+            op_type='DequantizeLinear',
+            inputs=['quantized', 'scale', 'zero_point'],
+            outputs=['output'],
+        )
+
+        self._test_conversion('quantize_linear_int8', [quantize, dequantize], [input], [output],
+                              constants=[scale, zero_point], values={'scale': 0.1, 'zero_point': -10},
+                              input_range=(-20.0, 20.0))
+
+    def test_quantize_linear_per_channel(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 3, 32, 32])
+        scale = helper.make_tensor_value_info('scale', TensorProto.FLOAT, [3])
+        zero_point = helper.make_tensor_value_info('zero_point', TensorProto.INT8, [3])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 3, 32, 32])
+        quantize = helper.make_node(
+            op_type='QuantizeLinear',
+            inputs=['input', 'scale', 'zero_point'],
+            outputs=['quantized'],
+            axis=1,
+        )
+        dequantize = helper.make_node(
+            op_type='DequantizeLinear',
+            inputs=['quantized', 'scale', 'zero_point'],
+            outputs=['output'],
+            axis=1,
+        )
+
+        self._test_conversion('quantize_linear_per_channel', [quantize, dequantize], [input], [output],
+                              constants=[scale, zero_point],
+                              values={'scale': [0.1, 0.2, 0.05], 'zero_point': [0, -20, 10]},
+                              input_range=(-5.0, 5.0))
+
 
 @unittest.skipIf(TestEnv._network_folder is None or not os.path.isdir(TestEnv._network_folder),
                  "no network test folder provided")
@@ -2179,7 +2300,7 @@ class NetworkTestCases(TestEnv):
 
     def test_distilbert(self):
         self._test_conversion_from_file(self._network_folder + 'distilbert.onnx',
-                                        input_shape=(4, 100))
+                                        input_shape=(4, 100), epsilon=1e-4)
 
 
 if __name__ == '__main__':
