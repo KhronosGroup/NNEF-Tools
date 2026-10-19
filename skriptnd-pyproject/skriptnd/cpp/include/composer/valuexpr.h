@@ -80,10 +80,10 @@ namespace sknd
                             UniformExpr,RangeExpr> variant_data;
         
         typedef uint8_t index_type;
-        typedef uint32_t size_type;
+        typedef int32_t size_type;
         
         static constexpr index_type NullIndex = -1;
-        static constexpr size_type UnpackedSize = -1;
+        static constexpr size_type UnboundedSize = -1;
         
     public:
         
@@ -114,32 +114,32 @@ namespace sknd
         
         static ValueExpr placeholder( const std::string& id, const ValueExpr& max_value );
         static ValueExpr identifier( const std::string& name, const IdentifierKind& kind,
-                                    const Typename type, const std::optional<size_t> size = std::nullopt );
+                                    const Typename type, const std::optional<size_type> size = std::nullopt );
         
         static ValueExpr unary( const std::string& op, const ValueExpr& arg, const Typename type,
-                               const std::optional<size_t> size = std::nullopt );
+                               const std::optional<size_type> size = std::nullopt );
         static ValueExpr binary( const std::string& op, const ValueExpr& left, const ValueExpr& right, const Typename type,
-                                const std::optional<size_t> size = std::nullopt );
+                                const std::optional<size_type> size = std::nullopt );
         static ValueExpr select( const ValueExpr& cond, const ValueExpr& left, const ValueExpr& right,
-                                const std::optional<size_t> size = std::nullopt );
+                                const std::optional<size_type> size = std::nullopt );
         static ValueExpr fold( const std::string& op, const ValueExpr& pack,
-                              const std::optional<size_t> size = std::nullopt );
+                              const std::optional<size_type> size = std::nullopt );
         static ValueExpr list( const std::vector<ValueExpr>& items, const Typename type );
         static ValueExpr list( const ValueExpr& item, const size_t count );
         static ValueExpr bounded( const ValueExpr& arg, const ValueExpr& lower, const ValueExpr& upper );
-        static ValueExpr uniform( const ValueExpr& value, const ValueExpr& size, const size_t max_size );
+        static ValueExpr uniform( const ValueExpr& value, const ValueExpr& size, const size_type max_size );
         
         static ValueExpr unary( const std::string& op, ValueExpr&& arg, const Typename type,
-                               const std::optional<size_t> size = std::nullopt );
+                               const std::optional<size_type> size = std::nullopt );
         static ValueExpr binary( const std::string& op, ValueExpr&& left, ValueExpr&& right, const Typename type,
-                                const std::optional<size_t> size = std::nullopt );
+                                const std::optional<size_type> size = std::nullopt );
         static ValueExpr select( ValueExpr&& cond, ValueExpr&& left, ValueExpr&& right,
-                                const std::optional<size_t> size = std::nullopt );
+                                const std::optional<size_type> size = std::nullopt );
         static ValueExpr fold( const std::string& op, ValueExpr&& pack,
-                              const std::optional<size_t> size = std::nullopt );
+                              const std::optional<size_type> size = std::nullopt );
         static ValueExpr list( std::vector<ValueExpr>&& items, const Typename type );
         static ValueExpr bounded( ValueExpr&& arg, ValueExpr&& lower, ValueExpr&& upper );
-        static ValueExpr uniform( ValueExpr&& value, ValueExpr&& size, const size_t max_size );
+        static ValueExpr uniform( ValueExpr&& value, ValueExpr&& size, const size_type max_size );
         
         static ValueExpr unary( const std::string& op, const ValueExpr& arg )
         {
@@ -149,7 +149,7 @@ namespace sknd
         static ValueExpr binary( const std::string& op, const ValueExpr& left, const ValueExpr& right )
         {
             auto type = left.dtype();
-            auto size = left.packed() ? left.max_size() : right.packed() ? right.max_size() : (std::optional<size_t>)std::nullopt;
+            auto size = left.packed() ? left.max_size() : right.packed() ? right.max_size() : (std::optional<size_type>)std::nullopt;
             return binary(op, left, right, type, size);
         }
         
@@ -163,65 +163,65 @@ namespace sknd
         static ValueExpr binary( const std::string& op, ValueExpr&& left, ValueExpr&& right )
         {
             auto type = left.dtype();
-            auto size = left.packed() ? left.max_size() : right.packed() ? right.max_size() : (std::optional<size_t>)std::nullopt;
+            auto size = left.packed() ? left.max_size() : right.packed() ? right.max_size() : (std::optional<size_type>)std::nullopt;
             return binary(op, std::forward<ValueExpr>(left), std::forward<ValueExpr>(right), type, size);
         }
         
     public:
         
         ValueExpr( std::nullptr_t = nullptr )
-        : _kind(Null), _dtype(Typename::Type), _index(NullIndex), _size(UnpackedSize)
+        : _kind(Null), _dtype(Typename::Type), _index(NullIndex), _packed(false), _size(UnboundedSize)
         {
         }
         
         ValueExpr( const int& value )
         : _kind(Literal), _dtype(Typename::Int), _index(variant_data::index_of<int_t>()),
-          _size(UnpackedSize), _data((int_t)value)
+          _packed(false), _size(UnboundedSize), _data((int_t)value)
         {
         }
         
         ValueExpr( const bool& value )
         : _kind(Literal), _dtype(Typename::Bool), _index(variant_data::index_of<bool_t>()),
-          _size(UnpackedSize), _data((bool_t)value)
+          _packed(false), _size(UnboundedSize), _data((bool_t)value)
         {
         }
         
         ValueExpr( const float& value )
         : _kind(Literal), _dtype(Typename::Real), _index(variant_data::index_of<real_t>()),
-          _size(UnpackedSize), _data((real_t)value)
+          _packed(false), _size(UnboundedSize), _data((real_t)value)
         {
         }
         
         ValueExpr( const double& value )
         : _kind(Literal), _dtype(Typename::Real), _index(variant_data::index_of<real_t>()),
-          _size(UnpackedSize), _data((real_t)value)
+          _packed(false), _size(UnboundedSize), _data((real_t)value)
         {
         }
         
         ValueExpr( const char* value )
         : _kind(Literal), _dtype(Typename::Str), _index(variant_data::index_of<str_t>()),
-          _size(UnpackedSize), _data((str_t)value)
+          _packed(false), _size(UnboundedSize), _data((str_t)value)
         {
         }
         
         template<typename T, typename = std::enable_if_t<is_typename<T>>>
         ValueExpr( const T& value )
         : _kind(Literal), _dtype(typename_of<T>::value), _index(variant_data::index_of<T>()),
-          _size(UnpackedSize), _data(value)
+          _packed(false), _size(UnboundedSize), _data(value)
         {
         }
         
         template<typename T, typename = std::enable_if_t<variant_data::contains<T>() && !is_typename<T>>>
-        ValueExpr( const T& value, const Typename type, const std::optional<size_t> size = std::nullopt )
-        : _kind(kind_of<T>()), _dtype(type), _index(variant_data::index_of<T>()), 
-          _size(size ? (size_type)*size : UnpackedSize), _data(value)
+        ValueExpr( const T& value, const Typename type, const std::optional<size_type> size = std::nullopt )
+        : _kind(kind_of<T>()), _dtype(type), _index(variant_data::index_of<T>()),
+          _packed(size.has_value()), _size(size ? *size : UnboundedSize), _data(value)
         {
         }
         
         template<typename T, typename = std::enable_if_t<variant_data::contains<T>() && !is_typename<T>>>
-        ValueExpr( T&& value, const Typename type, const std::optional<size_t> size = std::nullopt )
-        : _kind(kind_of<T>()), _dtype(type), _index(variant_data::index_of<T>()), 
-          _size(size ? (size_type)*size : UnpackedSize), _data(std::forward<T>(value))
+        ValueExpr( T&& value, const Typename type, const std::optional<size_type> size = std::nullopt )
+        : _kind(kind_of<T>()), _dtype(type), _index(variant_data::index_of<T>()),
+          _packed(size.has_value()), _size(size ? *size : UnboundedSize), _data(std::forward<T>(value))
         {
         }
         
@@ -230,7 +230,7 @@ namespace sknd
         ValueExpr( const TensorAccessExpr& access );
         
         ValueExpr( const ValueExpr& other )
-        : _kind(other._kind), _dtype(other._dtype), _index(other._index), _size(other._size)
+        : _kind(other._kind), _dtype(other._dtype), _index(other._index), _packed(other._packed), _size(other._size)
         {
             if ( other != nullptr )
             {
@@ -286,17 +286,17 @@ namespace sknd
         
         bool packed() const
         {
-            return _size != UnpackedSize;
+            return _packed;
         }
         
-        size_t max_size() const
+        size_type max_size() const
         {
             return _size;
         }
         
-        std::optional<size_t> max_size_or_null() const
+        std::optional<size_type> max_size_or_null() const
         {
-            return packed() ? _size : (std::optional<size_t>)std::nullopt;
+            return packed() ? _size : (std::optional<size_type>)std::nullopt;
         }
         
         template<typename T, typename = std::enable_if_t<variant_data::contains<T>()>>
@@ -875,6 +875,7 @@ namespace sknd
             std::swap(_kind, other._kind);
             std::swap(_dtype, other._dtype);
             std::swap(_index, other._index);
+            std::swap(_packed, other._packed);
             std::swap(_size, other._size);
             _data.swap(other._data);
         }
@@ -912,9 +913,9 @@ namespace sknd
             return is_real() && std::isinf(_data.as<real_t>());
         }
         
-        void resize( const size_t size )
+        void resize( const size_type size )
         {
-            _size = (size_type)size;
+            _size = size;
         }
         
     private:
@@ -950,6 +951,7 @@ namespace sknd
         Kind _kind;
         Typename _dtype;
         index_type _index;
+        bool _packed;
         size_type _size;
         variant_data _data;
     };
@@ -1123,13 +1125,13 @@ namespace sknd
 
 
     inline ValueExpr::ValueExpr( const ValueExpr* values, const size_t size, const Typename type )
-    : _kind(List), _dtype(type), _index(variant_data::index_of<ListExpr>()), _size((size_type)size)
+    : _kind(List), _dtype(type), _index(variant_data::index_of<ListExpr>()), _packed(true), _size((size_type)size)
     {
         _data = ListExpr{ std::vector<ValueExpr>(values, values + size) };
     }
 
     inline ValueExpr::ValueExpr( const ValueExpr* values, const size_t size, const size_t stride, const Typename type )
-    : _kind(List), _dtype(type), _index(variant_data::index_of<ListExpr>()), _size((size_type)size)
+    : _kind(List), _dtype(type), _index(variant_data::index_of<ListExpr>()), _packed(true), _size((size_type)size)
     {
         std::vector<ValueExpr> items(size);
         for ( size_t i = 0; i < size; ++i, values += stride )
@@ -1141,19 +1143,19 @@ namespace sknd
 
     inline ValueExpr::ValueExpr( const SizeAccessExpr& access )
     : _kind(SizeAccess), _dtype(Typename::Int), _index(variant_data::index_of<SizeAccessExpr>()),
-      _size(UnpackedSize), _data(access)
+      _packed(false), _size(UnboundedSize), _data(access)
     {
     }
 
     inline ValueExpr::ValueExpr( const ShapeAccessExpr& access )
     : _kind(ShapeAccess), _dtype(Typename::Int), _index(variant_data::index_of<ShapeAccessExpr>()),
-      _size(UnpackedSize), _data(access)
+      _packed(false), _size(UnboundedSize), _data(access)
     {
     }
     
     inline ValueExpr::ValueExpr( const TensorAccessExpr& access )
     : _kind(TensorAccess), _dtype(access.tensor.dtype()), _index(variant_data::index_of<TensorAccessExpr>()), 
-      _size(UnpackedSize), _data(access)
+      _packed(false), _size(UnboundedSize), _data(access)
     {
     }
 
@@ -1164,30 +1166,30 @@ namespace sknd
     }
 
     inline ValueExpr ValueExpr::identifier( const std::string& name, const IdentifierKind& kind,
-                                           const Typename type, const std::optional<size_t> size )
+                                           const Typename type, const std::optional<size_type> size )
     {
         return ValueExpr(IdentifierExpr{ name, kind }, type, size);
     }
 
-    inline ValueExpr ValueExpr::unary( const std::string& op, const ValueExpr& arg,  const Typename type, const std::optional<size_t> size )
+    inline ValueExpr ValueExpr::unary( const std::string& op, const ValueExpr& arg,  const Typename type, const std::optional<size_type> size )
     {
         return ValueExpr(UnaryExpr{ op, arg }, type, size);
     }
 
     inline ValueExpr ValueExpr::binary( const std::string& op, const ValueExpr& left, const ValueExpr& right,
-                                       const Typename type, const std::optional<size_t> size )
+                                       const Typename type, const std::optional<size_type> size )
     {
         return ValueExpr(BinaryExpr{ op, left, right }, type, size);
     }
 
     inline ValueExpr ValueExpr::select( const ValueExpr& cond, const ValueExpr& left, const ValueExpr& right, 
-                                       const std::optional<size_t> size )
+                                       const std::optional<size_type> size )
     {
         return ValueExpr(SelectExpr{ cond, left, right }, left.dtype(), size);
     }
 
     inline ValueExpr ValueExpr::fold( const std::string& op, const ValueExpr& pack,
-                                     const std::optional<size_t> size )
+                                     const std::optional<size_type> size )
     {
         return ValueExpr(FoldExpr{ op, pack, (bool)size }, pack.dtype(), size);
     }
@@ -1207,33 +1209,33 @@ namespace sknd
         return ValueExpr(BoundedExpr{ arg, lower, upper }, arg.dtype());
     }
 
-    inline ValueExpr ValueExpr::uniform( const ValueExpr& value, const ValueExpr& size, const size_t max_size )
+    inline ValueExpr ValueExpr::uniform( const ValueExpr& value, const ValueExpr& size, const size_type max_size )
     {
         return ValueExpr(UniformExpr{ value, size }, value.dtype(), max_size);
     }
 
 
     inline ValueExpr ValueExpr::unary( const std::string& op, ValueExpr&& arg,
-                                      const Typename type, const std::optional<size_t> size )
+                                      const Typename type, const std::optional<size_type> size )
     {
         return ValueExpr(UnaryExpr{ op, std::forward<ValueExpr>(arg) }, type, size);
     }
 
     inline ValueExpr ValueExpr::binary( const std::string& op, ValueExpr&& left, ValueExpr&& right,
-                                       const Typename type, const std::optional<size_t> size )
+                                       const Typename type, const std::optional<size_type> size )
     {
         return ValueExpr(BinaryExpr{ op, std::forward<ValueExpr>(left), std::forward<ValueExpr>(right) }, type, size);
     }
 
     inline ValueExpr ValueExpr::select( ValueExpr&& cond, ValueExpr&& left, ValueExpr&& right, 
-                                       const std::optional<size_t> size )
+                                       const std::optional<size_type> size )
     {
         auto type = left.dtype();
         return ValueExpr(SelectExpr{ std::forward<ValueExpr>(cond), std::forward<ValueExpr>(left), std::forward<ValueExpr>(right) }, type, size);
     }
 
     inline ValueExpr ValueExpr::fold( const std::string& op, ValueExpr&& pack,
-                                     const std::optional<size_t> size )
+                                     const std::optional<size_type> size )
     {
         auto type = pack.dtype();
         return ValueExpr(FoldExpr{ op, std::forward<ValueExpr>(pack), (bool)size }, type, size);
@@ -1251,7 +1253,7 @@ namespace sknd
         return ValueExpr(BoundedExpr{ std::forward<ValueExpr>(arg), std::forward<ValueExpr>(lower), std::forward<ValueExpr>(upper) }, type);
     }
 
-    inline ValueExpr ValueExpr::uniform( ValueExpr&& value, ValueExpr&& size, const size_t max_size )
+    inline ValueExpr ValueExpr::uniform( ValueExpr&& value, ValueExpr&& size, const size_type max_size )
     {
         auto type = value.dtype();
         return ValueExpr(UniformExpr{ std::forward<ValueExpr>(value), std::forward<ValueExpr>(size) }, type, max_size);
@@ -1585,9 +1587,13 @@ namespace sknd
                 {
                     return ValueExpr(ShapeAccessExpr{ access.tensor, (int_t)idx, access.item }, dtype());
                 }
-                else
+                else if ( access.tensor.listed() )
                 {
                     return ValueExpr(ShapeAccessExpr{ (Tensor*)&access.tensor[idx], access.dim }, dtype());
+                }
+                else
+                {
+                    return ValueExpr(ShapeAccessExpr{ access.tensor, access.dim, (int_t)idx }, dtype());
                 }
             }
             case Unary:
@@ -1924,7 +1930,10 @@ namespace sknd
         {
             os << '~';
         }
-        os << '|' << placeholder.max_value;
+        if ( placeholder.max_value != nullptr )
+        {
+            os << '|' << placeholder.max_value;
+        }
         return os;
     }
 

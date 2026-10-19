@@ -77,7 +77,8 @@ def _build_tensor_pack(pack, tensor_map):
                            max_shape=pack.shape,
                            dtype=sknd.DtypeFromNumpy[pack.dtype] if pack.dtype else None,
                            size=pack.size,
-                           items=[remap_tensor(item, tensor_map) for item in pack])
+                           max_size=pack.size,
+                           items=[remap_tensor(item, tensor_map) for item in pack] if pack.items is not None else None)
 
 
 def _build_graph(graph, graph_map, tensor_map):

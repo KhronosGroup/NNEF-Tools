@@ -25,6 +25,8 @@
 #include "typing.h"
 #include "print.h"
 
+#define DECL_BOUNDS(var1, var2, expr) auto var1##var2 = (expr); auto[var1, var2] = var1##var2 ? *var1##var2 : std::make_pair(std::optional<int_t>(),std::optional<int_t>());
+
 
 template<typename T>
 struct std::hash<std::vector<T>>
@@ -63,8 +65,7 @@ namespace sknd
         
         AsTensorPack as_tensor_pack( Graph& graph )
         {
-            return [&graph,this]( const Tensors& tensors, const Typename& dtype, const Shape& shape,
-                                 const ValueExpr& size ) -> TensorRef
+            return [&graph,this]( const Tensors& tensors, const Typename& dtype, const Shape& shape ) -> TensorRef
             {
                 auto& packs = _contexts.at(graph.name).packs;
                 auto it = packs.find(tensors);
@@ -72,7 +73,10 @@ namespace sknd
                 {
                     return TensorRef(it->second);
                 }
-                auto pack = make_tensor_pack(graph, dtype, tensors.size(), size, shape);
+                auto size = (int_t)tensors.size();
+                auto canonic_shape = canonical(shape);
+                auto max_shape = eval_shape_max(canonic_shape);
+                auto pack = make_tensor_pack(graph, dtype, size, size, canonic_shape, max_shape, true);
                 for ( size_t i = 0; i < tensors.size(); ++i )
                 {
                     pack->items[i] = tensors[i];
@@ -128,12 +132,15 @@ namespace sknd
                     for ( auto& output : op.outputs )
                     {
                         output.shape() = context.shapes.at(output);
-                        if ( output .packed() )
+                        if ( output.packed() )
                         {
                             output.size() = context.sizes.at(output);
-                            for ( auto& item : output )
+                            if ( output.listed() )
                             {
-                                item->shape = context.shapes.at(item);
+                                for ( auto& item : output )
+                                {
+                                    item->shape = context.shapes.at(item);
+                                }
                             }
                         }
                     }
@@ -260,22 +267,30 @@ namespace sknd
                 {
                     for ( auto& extent : param.shape->extents )
                     {
-                        if ( extent.bound )
+                        if ( extent.value )
                         {
-                            TRY_CALL(add_placeholder_symbol(*extent.value, *extent.bound, symbols,
-                                                            extent.spread ? param.repeats.value : nullptr))
+                            auto& iden = Typing::find_affine_id(expanded(*extent.value));
+                            if ( !iden.empty() )
+                            {
+                                TRY_CALL(add_placeholder_symbol(*extent.value, extent.bound, symbols,
+                                                                extent.spread ? param.repeats.value : nullptr))
+                            }
                         }
                     }
                 }
-                if ( param.repeats.value && param.repeats.bound )
+                if ( param.repeats.value )
                 {
-                    TRY_CALL(add_placeholder_symbol(*param.repeats.value, *param.repeats.bound, symbols))
+                    auto& iden = Typing::find_affine_id(expanded(*param.repeats.value));
+                    if ( !iden.empty() )
+                    {
+                        TRY_CALL(add_placeholder_symbol(*param.repeats.value, param.repeats.bound, symbols))
+                    }
                 }
             }
             return {};
         }
         
-        Result<void> add_placeholder_symbol( const Expr& extent, const Expr& bound, Dict<Symbol>& symbols,
+        Result<void> add_placeholder_symbol( const Expr& extent, const Shared<Expr>& bound, Dict<Symbol>& symbols,
                                             const Shared<Expr>& repeats = nullptr )
         {
             auto count = extent.kind == Expr::Expand ? as_expand(extent).count : repeats;
@@ -286,7 +301,8 @@ namespace sknd
                 if ( count )
                 {
                     TRY_DECL(size, eval(*count, symbols))
-                    TRY_DECL(items, eval_items(bound, symbols, size.is_bool() ? size.as_bool() ? 1 : 0 : size.as_int()))
+                    auto rank = size.is_bool() ? int_t(size.as_bool()) : size.as_int();
+                    TRY_DECL(items, bound ? eval_items(*bound, symbols, rank) : std::vector<ValueExpr>(rank))
                     
                     for ( size_t i = 0; i < items.size(); ++i )
                     {
@@ -296,19 +312,19 @@ namespace sknd
                 }
                 else
                 {
-                    TRY_DECL(max_value, eval(bound, symbols))
+                    TRY_DECL(max_value, bound ? eval(*bound, symbols) : ValueExpr(nullptr))
                     auto value = ValueExpr::placeholder(next_placeholder_name(), max_value);
                     symbols.emplace(iden, Symbol(value, Typename::Int, Symbol::Extent));
                 }
             }
-            else
+            else if ( bound )
             {
                 auto& symbol = it->second;
                 assert(symbol.is<ValueExpr>());
                 auto& value = symbol.as<ValueExpr>();
                 if ( count )
                 {
-                    TRY_DECL(new_max_value, eval(bound, symbols))
+                    TRY_DECL(new_max_value, eval(*bound, symbols))
                     if ( !match_max_value(value.as_list(), new_max_value) )
                     {
                         auto old_max_value = get_max_value(value.as_list());
@@ -319,7 +335,7 @@ namespace sknd
                 else
                 {
                     auto& old_max_value = value.as_placeholder().max_value;
-                    TRY_DECL(new_max_value, eval(bound, symbols))
+                    TRY_DECL(new_max_value, eval(*bound, symbols))
                     if ( new_max_value != old_max_value )
                     {
                         return Error(extent.position, "symbol '%s' was previously defined with a different upper bound (%s vs %s)",
@@ -377,7 +393,8 @@ namespace sknd
                     for ( auto& extent : param.shape->extents )
                     {
                         auto& item = extent.value;
-                        if ( extent.bound )
+                        auto& iden = Typing::find_affine_id(expanded(*item));
+                        if ( !iden.empty() )
                         {
                             replace_placeholder_symbol(*item, tensor, dim, symbols, extent.spread);
                         }
@@ -393,9 +410,13 @@ namespace sknd
                         }
                     }
                 }
-                if ( param.repeats.value && param.repeats.bound )
+                if ( param.repeats.value )
                 {
-                    replace_placeholder_symbol(*param.repeats.value, tensor, std::nullopt, symbols);
+                    auto& iden = Typing::find_affine_id(expanded(*param.repeats.value));
+                    if ( !iden.empty() )
+                    {
+                        replace_placeholder_symbol(*param.repeats.value, tensor, std::nullopt, symbols);
+                    }
                 }
             }
             return {};
@@ -796,12 +817,12 @@ namespace sknd
                     {
                         auto& output = *body_graph->outputs[i];
                         
-                        auto pack = make_tensor_pack(graph, output.dtype, max_repeats, canonic_size, output.shape, output.max_shape);
-                        for ( size_t k = 0; k < (size_t)max_repeats; ++k )
+                        auto pack = make_tensor_pack(graph, output.dtype, canonic_size, max_repeats, output.shape, output.max_shape);
+                        /*for ( size_t k = 0; k < pack->items.size(); ++k )
                         {
                             pack->items[k] = make_tensor(graph, output.dtype, output.shape, output.max_shape);
-                        }
-                        cache_tensor_pack(graph, pack);
+                        }*/
+                        //cache_tensor_pack(graph, pack);
                         outputs[i] = TensorRef(pack);
                         
                         auto shape = propagate_shape_through_region(body_graph->outputs[i], body_context);
@@ -925,7 +946,7 @@ namespace sknd
                         for ( size_t k = loop.carries.size(); k < item_outputs.size(); ++k )
                         {
                             auto& output = *item_outputs[k];
-                            outputs[k] = make_tensor_pack(graph, output.dtype, repeats.as_int(), repeats, output.shape, output.max_shape);
+                            outputs[k] = make_tensor_pack(graph, output.dtype, repeats, repeats.as_int(), output.shape, output.max_shape, true);
                             save_shapes_to_context(context, outputs[k], context.shapes.at(&output), repeats);
                         }
                     }
@@ -1203,12 +1224,15 @@ namespace sknd
             if ( tensor.packed() )
             {
                 context.sizes[tensor] = size;
-                for ( size_t i = 0; i < tensor.max_size(); ++i )
+                if ( tensor.listed() )
                 {
-                    auto item = tensor.at(i);
-                    if ( item != nullptr )
+                    for ( size_t i = 0; i < tensor.max_size(); ++i )
                     {
-                        context.shapes[item] = item_shape(shape, i);
+                        auto item = tensor.at(i);
+                        if ( item != nullptr )
+                        {
+                            context.shapes[item] = item_shape(shape, i);
+                        }
                     }
                 }
             }
@@ -1597,6 +1621,7 @@ namespace sknd
                                             Graph& graph, Dict<Symbol>& symbols, const std::optional<std::string>& scope,
                                             const Position& position )
         {
+            auto& context = _contexts.at(graph.name);
             for ( size_t i = 0; i < results.size(); ++i )
             {
                 auto& result = results[i];
@@ -1639,12 +1664,12 @@ namespace sknd
                                 
                                 auto size = output.size() - ValueExpr((int_t)result.size() - 1);
                                 auto name = item.name.empty() ? std::string() : scoped_name(scope, item.name);
-                                auto pack = make_tensor_pack(graph, result_type, n, canonical(size), output.shape(), output.max_shape(), name);
-                                for ( size_t i = 0; i < n; ++i )
+                                auto pack = make_tensor_pack(graph, result_type, canonical(size), n, output.shape(), output.max_shape(), false, name);
+                                /*for ( size_t i = 0; i < n; ++i )
                                 {
                                     pack->items[i] = (Tensor*)&output[k+i];
                                 }
-                                cache_tensor_pack(graph, pack);
+                                cache_tensor_pack(graph, pack);*/
                                 
                                 if ( !item.name.empty() )
                                 {
@@ -1655,7 +1680,18 @@ namespace sknd
                             {
                                 if ( !item.name.empty() )
                                 {
-                                    symbols.insert_or_assign(item.name, Symbol(TensorRef((Tensor*)&output[k]), result_type, Symbol::Result));
+                                    if ( output.listed() )
+                                    {
+                                        symbols.insert_or_assign(item.name, Symbol(TensorRef((Tensor*)&output[k]), result_type, Symbol::Result));
+                                    }
+                                    else
+                                    {
+                                        auto shape = item_shape(context.shapes.at(output), k);
+                                        auto canonic_shape = item_shape(output_shape, k);
+                                        auto tensor = make_tensor(graph, output_type, canonic_shape, eval_shape_max(canonic_shape), item.name);
+                                        symbols.insert_or_assign(item.name, Symbol(TensorRef(tensor), result_type, Symbol::Result));
+                                        save_shapes_to_context(context, tensor, shape, nullptr);
+                                    }
                                 }
                             }
                             
@@ -1676,7 +1712,14 @@ namespace sknd
                             {
                                 if ( !item.name.empty() )
                                 {
-                                    add_shape_symbols(item.name, output_shape, output_size, symbols);
+                                    if ( item.type.packed )
+                                    {
+                                        add_shape_symbols(item.name, item_shape(output_shape, k, k + n), output_size, symbols);
+                                    }
+                                    else
+                                    {
+                                        add_shape_symbols(item.name, item_shape(output_shape, k), output_size, symbols);
+                                    }
                                 }
                             }
                         }
@@ -1828,28 +1871,31 @@ namespace sknd
                 {
                     if ( result.packed() )
                     {
-                        for ( size_t j = 0, k = 0; j < result.size(); ++j )
+                        if ( output.listed() )
                         {
-                            auto& item = result[j];
-                            if ( item.type.packed )
+                            for ( size_t j = 0, k = 0; j < result.size(); ++j )
                             {
-                                const size_t count = output.max_size() - result.size() + 1;
-                                if ( !item.name.empty() )
+                                auto& item = result[j];
+                                if ( item.type.packed )
                                 {
-                                    for ( size_t c = 0; c < count; ++c )
+                                    const size_t count = output.max_size() - result.size() + 1;
+                                    if ( !item.name.empty() )
                                     {
-                                        rename_tensor(output[k+c], scoped_name(scope, item.name, c+1));
+                                        for ( size_t c = 0; c < count; ++c )
+                                        {
+                                            rename_tensor(output[k+c], scoped_name(scope, item.name, c+1));
+                                        }
                                     }
+                                    k += count;
                                 }
-                                k += count;
-                            }
-                            else
-                            {
-                                if ( !item.name.empty() )
+                                else
                                 {
-                                    rename_tensor(output[k], scoped_name(scope, item.name));
+                                    if ( !item.name.empty() )
+                                    {
+                                        rename_tensor(output[k], scoped_name(scope, item.name));
+                                    }
+                                    k += 1;
                                 }
-                                k += 1;
                             }
                         }
                     }
@@ -1860,9 +1906,12 @@ namespace sknd
                         if ( !item.name.empty() )
                         {
                             rename_tensor_pack((TensorPack&)output, scoped_name(scope, item.name));
-                            for ( size_t j = 0; j < output.max_size(); ++j )
+                            if ( output.listed() )
                             {
-                                rename_tensor(output[j], scoped_name(scope, item.name, j+1));
+                                for ( size_t j = 0; j < output.max_size(); ++j )
+                                {
+                                    rename_tensor(output[j], scoped_name(scope, item.name, j+1));
+                                }
                             }
                         }
                     }
@@ -1906,15 +1955,15 @@ namespace sknd
             
             if ( output1.packed() )
             {
-                const size_t max_size = std::max(output1.max_size(), output2.max_size());
+                const int_t max_size = std::max(output1.max_size(), output2.max_size());
                 const ValueExpr size = output1.size() == output2.size() ? output1.size() : new_placeholder_expr(max_size);
                 
-                auto pack = make_tensor_pack(graph, dtype, max_size, size, shape, max_shape);
-                for ( size_t i = 0; i < max_size; ++i )
+                auto pack = make_tensor_pack(graph, dtype, size, max_size, shape, max_shape);
+                /*for ( size_t i = 0; i < pack->items.size(); ++i )
                 {
                     pack->items[i] = make_tensor(graph, dtype, item_shape(shape, i), max_shape);
-                }
-                cache_tensor_pack(graph, pack);
+                }*/
+                //cache_tensor_pack(graph, pack);
                 return pack;
             }
             else
@@ -2162,7 +2211,7 @@ namespace sknd
                         resolve(declared_size, ResolveReference);
                         simplify(declared_size);
                         
-                        const size_t count = eval_shape_expr_max(declared_size);
+                        const int_t count = eval_shape_expr_max(declared_size);
                         TRY_CALL(check_shape_repeats(*param.shape, symbols, count))
                         
                         if ( !compare_shapes(declared_size, composed_size, output.max_size()) )
@@ -2172,24 +2221,24 @@ namespace sknd
                         }
                     }
                     
-                    for ( size_t j = 0; j < output.max_size(); ++j )
+                    if ( output.listed() )
                     {
-                        auto declared_shape_j = item_shape(declared_shape, j);
-                        auto composed_shape_j = item_shape(composed_shape, j);
-                        if ( !compare_shapes(declared_shape_j, composed_shape_j, output[j].max_shape) )
+                        for ( size_t j = 0; j < output.max_size(); ++j )
                         {
-                            return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of item %d of output '%s'",
-                                         str(composed_shape_j).c_str(), str(declared_shape_j).c_str(), (int)j, param.name.c_str());
+                            auto declared_shape_j = item_shape(declared_shape, j);
+                            auto composed_shape_j = item_shape(composed_shape, j);
+                            if ( !compare_shapes(declared_shape_j, composed_shape_j, output[j].max_shape) )
+                            {
+                                return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of item %d of output '%s'",
+                                             str(composed_shape_j).c_str(), str(declared_shape_j).c_str(), (int)j, param.name.c_str());
+                            }
                         }
                     }
                 }
-                else
+                if ( !compare_shapes(declared_shape, composed_shape, output.max_shape()) )
                 {
-                    if ( !compare_shapes(declared_shape, composed_shape, output->max_shape) )
-                    {
-                        return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of output '%s'",
-                                     str(composed_shape).c_str(), str(declared_shape).c_str(), param.name.c_str());
-                    }
+                    return Error(param.position, "mismatch between composed and declared shapes (%s vs %s) of output '%s'",
+                                 str(composed_shape).c_str(), str(declared_shape).c_str(), param.name.c_str());
                 }
             }
             return Result<void>();
@@ -2213,9 +2262,13 @@ namespace sknd
         
         bool compare_shapes( const ValueExpr& declared_shape, const ValueExpr& composed_shape, const int_t& max_shape )
         {
-            if ( declared_shape.is_placeholder() )
+            if ( declared_shape.is_placeholder() && declared_shape.as_placeholder().max_value != nullptr )
             {
                 return declared_shape.as_placeholder().max_value == max_shape;
+            }
+            if ( composed_shape.is_uniform() && !declared_shape.packed() )
+            {
+                return composed_shape.as_uniform().value == declared_shape;
             }
             return resolved<false>(composed_shape) == resolved<false>(declared_shape);
         }
@@ -2247,7 +2300,7 @@ namespace sknd
             return ValueExpr(ValueExpr::ReferenceExpr{ next_local_name(), std::make_shared<ValueExpr>(value) }, value.dtype(), value.max_size_or_null());
         }
         
-        Result<void> check_shape_repeats( const Shapedef& shape, const Dict<Symbol>& symbols, const size_t repeats )
+        Result<void> check_shape_repeats( const Shapedef& shape, const Dict<Symbol>& symbols, const int_t repeats )
         {
             for ( auto& extent : shape.extents )
             {
@@ -3329,26 +3382,29 @@ namespace sknd
             {
                 TRY_DECL(size, eval_shape_expr(*param.repeats.value, symbols))
                 auto canonic_size = canonical(size);
-                const size_t max_size = eval_shape_expr_max_checked(canonic_size, param.repeats.value->position);
+                const int_t max_size = eval_shape_expr_max_checked(canonic_size, param.repeats.value->position);
                 TRY_CALL(check_shape_repeats(*param.shape, symbols, max_size))
-                
-                TRY_DECL(value, param.default_value ? eval(*param.default_value, symbols) : ValueExpr(nullptr))
                 
                 TRY_DECL(shape, eval_shape(*param.shape, symbols))
                 auto canonic_shape = canonical(shape);
                 auto max_shape = eval_shape_max_checked(canonic_shape, param.shape->position);
                 auto name = scoped_name(scope, param.name);
-                auto pack = make_tensor_pack(graph, type, max_size, canonic_size, canonic_shape, max_shape, name);
+                bool listed = is_static_expr(*param.repeats.value, symbols);
+                auto pack = make_tensor_pack(graph, type, canonic_size, max_size, canonic_shape, max_shape, listed, name);
                 
-                for ( size_t i = 0; i < max_size; ++i )
+                if ( listed )
                 {
-                    auto shape_i = item_shape(shape, i);
-                    auto canonic_shape_i = item_shape(canonic_shape, i);
-                    auto max_shape = eval_shape_max_checked(canonic_shape_i, param.shape->position);
-                    auto name = scoped_name(scope, param.name, i+1);
-                    pack->items[i] = make_tensor(graph, type, canonic_shape_i, max_shape, name, value.packed() ? value[i] : value, variable);
+                    TRY_DECL(value, param.default_value ? eval(*param.default_value, symbols) : ValueExpr(nullptr))
+                    for ( size_t i = 0; i < (size_t)max_size; ++i )
+                    {
+                        auto shape_i = item_shape(shape, i);
+                        auto canonic_shape_i = item_shape(canonic_shape, i);
+                        auto max_shape = eval_shape_max_checked(canonic_shape_i, param.shape->position);
+                        auto name = scoped_name(scope, param.name, i+1);
+                        pack->items[i] = make_tensor(graph, type, canonic_shape_i, max_shape, name, value.packed() ? value[i] : value, variable);
+                    }
+                    cache_tensor_pack(graph, pack);
                 }
-                cache_tensor_pack(graph, pack);
                 return TensorRef(pack);
             }
             else
@@ -3380,29 +3436,25 @@ namespace sknd
             return graph.tensors.back().get();
         }
         
-        TensorPack* make_tensor_pack( Graph& graph, const Typename dtype, const size_t max_size, const ValueExpr& size, const Shape& shape,
-                                     const std::string& name = {} )
-        {
-            auto canonic_shape = canonical(shape);
-            auto canonic_size = canonical(size);
-            auto max_shape = eval_shape_max(canonic_shape);
-            return make_tensor_pack(graph, dtype, max_size, canonic_size, canonic_shape, max_shape, name);
-        }
-        
         TensorPack* make_tensor_pack( Graph& graph, const Typename dtype,
-                                     const size_t max_size, const ValueExpr& canonic_size,
-                                     const Shape& canonic_shape, const std::vector<int_t>& max_shape,
-                                     const std::string& name = {} )
+                                     const ValueExpr& size, const int_t max_size,
+                                     const Shape& shape, const std::vector<int_t>& max_shape,
+                                     const bool listed = false, const std::string& name = {} )
         {
             auto _name = !name.empty() ? name : next_pack_name();
-            auto pack = std::make_unique<TensorPack>(TensorPack{ std::vector<Tensor*>(max_size, nullptr), _name, dtype, canonic_shape, max_shape, canonic_size });
+            auto pack = std::make_unique<TensorPack>(TensorPack{ _name, dtype, shape, max_shape, size, max_size });
+            if ( listed )
+            {
+                pack->items = std::make_unique<Tensor*[]>(max_size);
+            }
             graph.packs.push_back(std::move(pack));
             return graph.packs.back().get();
         }
         
         void cache_tensor_pack( const Graph& graph, TensorPack* pack )
         {
-            _contexts.at(graph.name).packs.emplace(pack->items, pack);
+            std::vector<Tensor*> items(pack->items.get(), pack->items.get() + pack->max_size);
+            _contexts.at(graph.name).packs.emplace(std::move(items), pack);
         }
         
         TensorRef make_tensor_like( Graph& graph, const TensorRef& tensor, const std::optional<std::string>& scope = {},
@@ -3415,12 +3467,15 @@ namespace sknd
             else if ( tensor.packed() )
             {
                 auto name = !iden.empty() ? scoped_name(scope, iden) : iden;
-                auto pack = make_tensor_pack(graph, tensor.dtype(), tensor.max_size(), tensor.size(),
-                                             tensor.shape(), tensor.max_shape(), name);
-                for ( size_t i = 0; i < tensor.max_size(); ++i )
+                auto pack = make_tensor_pack(graph, tensor.dtype(), tensor.size(), tensor.max_size(),
+                                             tensor.shape(), tensor.max_shape(), tensor.listed(), name);
+                if ( pack->items )
                 {
-                    auto name = !iden.empty() ? scoped_name(scope, iden, i+1) : iden;
-                    pack->items[i] = make_tensor(graph, tensor[i].dtype, tensor[i].shape, tensor[i].max_shape, name);
+                    for ( size_t i = 0; i < tensor.max_size(); ++i )
+                    {
+                        auto name = !iden.empty() ? scoped_name(scope, iden, i+1) : iden;
+                        pack->items[i] = make_tensor(graph, tensor[i].dtype, tensor[i].shape, tensor[i].max_shape, name);
+                    }
                 }
                 cache_tensor_pack(graph, pack);
                 return pack;
@@ -3458,7 +3513,9 @@ namespace sknd
             {
                 if ( value.packed() && shape.empty() )
                 {
-                    auto pack = make_tensor_pack(graph, type, value.max_size(), (int_t)value.max_size(), shape);
+                    auto canonic_shape = canonical(shape);
+                    auto max_shape = eval_shape_max(canonic_shape);
+                    auto pack = make_tensor_pack(graph, type, value.max_size(), value.max_size(), canonic_shape, max_shape, true);
                     for ( size_t i = 0; i < value.max_size(); ++i )
                     {
                         pack->items[i] = make_tensor(graph, type, shape, {}, value[i]);
@@ -3524,7 +3581,7 @@ namespace sknd
         
         Result<void> check_same_ranks( const TensorRef& tensor, const Position& position, const Typed& param )
         {
-            if ( tensor.max_size() )
+            if ( tensor.listed() && tensor.max_size() > 1 )
             {
                 for ( size_t i = 1; i < tensor.max_size(); ++i )
                 {
@@ -3760,7 +3817,6 @@ namespace sknd
         
         ValueExpr make_shape_access_expr( const ValueExpr& value, const TensorRef tensor, const size_t dim )
         {
-            assert(tensor.max_shape()[dim] != -1);
             return value.is_literal() ? value : ShapeAccess{ tensor, (int_t)dim };
         }
         
@@ -4275,6 +4331,16 @@ namespace sknd
             return shape;
         }
         
+        Shape item_shape( const Shape& pack_shape, const size_t first, const size_t last )
+        {
+            Shape shape(pack_shape.size());
+            for ( size_t i = 0; i < shape.size(); ++i )
+            {
+                shape[i] = pack_shape[i].packed() ? pack_shape[i].slice(first, last) : pack_shape[i];
+            }
+            return shape;
+        }
+        
         Result<ValueExpr> eval_shape_expr( const Expr& expr, const Dict<Symbol>& symbols )
         {
             TRY_CALL(check_shape_expr(expr, symbols))
@@ -4300,11 +4366,11 @@ namespace sknd
                     TRY_DECL(arg, eval(*builtin.arg, symbols))
                     if ( !is_literal(arg) )
                     {
-                        auto [min, max] = eval_shape_expr_bounds<real_t>(arg);
-                        if ( min < 0 )
+                        DECL_BOUNDS(min, max, eval_shape_expr_bounds<real_t>(arg))
+                        if ( min && min < 0 )
                         {
                             report_warning(expr.position, "argument to function '%s' may become negative (min = %d)",
-                                           builtin.func.c_str(), (int)min);
+                                           builtin.func.c_str(), (int)*min);
                         }
                     }
                 }
@@ -4319,28 +4385,28 @@ namespace sknd
                     
                     if ( left.dtype() == Typename::Real )
                     {
-                        auto [left_min, left_max] = eval_shape_expr_bounds<real_t>(left);
-                        auto [right_min, right_max] = eval_shape_expr_bounds<real_t>(right);
+                        DECL_BOUNDS(left_min, left_max, eval_shape_expr_bounds<real_t>(left))
+                        DECL_BOUNDS(right_min, right_max, eval_shape_expr_bounds<real_t>(right))
                         
-                        if ( left_min < 0 )
+                        if ( left_min && left_min < 0 )
                         {
                             report_warning(expr.position, "base may become negative");
                         }
-                        if ( right_min < 0 )
+                        if ( right_min && right_min < 0 )
                         {
                             report_warning(expr.position, "power may become negative");
                         }
                     }
                     else
                     {
-                        auto [left_min, left_max] = eval_shape_expr_bounds<int_t>(left);
-                        auto [right_min, right_max] = eval_shape_expr_bounds<int_t>(right);
+                        DECL_BOUNDS(left_min, left_max, eval_shape_expr_bounds<int_t>(left))
+                        DECL_BOUNDS(right_min, right_max, eval_shape_expr_bounds<int_t>(right))
                         
-                        if ( left_min < 0 )
+                        if ( left_min && left_min < 0 )
                         {
                             report_warning(expr.position, "base may become negative");
                         }
-                        if ( right_min < 0 )
+                        if ( right_min && right_min < 0 )
                         {
                             report_warning(expr.position, "power may become negative");
                         }
@@ -4352,16 +4418,16 @@ namespace sknd
                     
                     if ( right.dtype() == Typename::Real )
                     {
-                        auto [right_min, right_max] = eval_shape_expr_bounds<real_t>(right);
-                        if ( right_min <= 0 && right_max >= 0 )
+                        DECL_BOUNDS(right_min, right_max, eval_shape_expr_bounds<real_t>(right))
+                        if ( right_min && right_max && right_min <= 0 && right_max >= 0 )
                         {
                             report_warning(expr.position, "divisor may become zero");
                         }
                     }
                     else
                     {
-                        auto [right_min, right_max] = eval_shape_expr_bounds<int_t>(right);
-                        if ( right_min <= 0 && right_max >= 0 )
+                        DECL_BOUNDS(right_min, right_max, eval_shape_expr_bounds<int_t>(right))
+                        if ( right_min && right_max && right_min <= 0 && right_max >= 0 )
                         {
                             report_warning(expr.position, "divisor may become zero");
                         }
@@ -4373,16 +4439,16 @@ namespace sknd
         
         int_t eval_shape_expr_max_checked( const ValueExpr& expr, const Position& position )
         {
-            auto [min, max] = eval_shape_expr_bounds<int_t>(expr);
-            if ( max < 0 )
+            DECL_BOUNDS(min, max, eval_shape_expr_bounds<int_t>(expr))
+            if ( max && max < 0 )
             {
-                report_error(position, "shape expression is always negative (max = %d)", (int)max);
+                report_error(position, "shape expression is always negative (max = %d)", (int)*max);
             }
-            if ( min < 0 )
+            if ( max && min < 0 )
             {
-                report_warning(position, "shape expression may become negative (min = %d)", (int)min);
+                report_warning(position, "shape expression may become negative (min = %d)", (int)*min);
             }
-            return max;
+            return max ? *max : -1;
         }
         
         std::vector<int_t> eval_shape_max_checked( const Shape& shape, const Position& position )
@@ -4391,7 +4457,7 @@ namespace sknd
             for ( size_t i = 0; i < shape.size(); ++i )
             {
                 auto& extent = shape[i];
-                int_t max_extent, min_extent;
+                std::optional<std::pair<int_t,int_t>> bounds;
                 
                 if ( extent.packed() )
                 {
@@ -4401,32 +4467,38 @@ namespace sknd
                         continue;
                     }
                     
-                    std::tie(min_extent, max_extent) = eval_shape_expr_bounds(extent, 0);
-                    max_shape[i] = max_extent;
-                    
+                    bounds = eval_shape_expr_bounds(extent, 0);
                     for ( size_t k = 1; k < extent.max_size(); ++k )
                     {
-                        auto [item_min, item_max] = eval_shape_expr_bounds(extent, k);
-                        if ( min_extent != item_min || max_extent != item_max )
+                        auto item_bounds = eval_shape_expr_bounds(extent, k);
+                        if ( item_bounds != bounds )
                         {
-                            max_shape[i] = -1;
+                            bounds = std::nullopt;
                             break;
                         }
                     }
                 }
                 else
                 {
-                    std::tie(min_extent, max_extent) = eval_shape_expr_bounds(extent);
-                    max_shape[i] = max_extent;
+                    bounds = eval_shape_expr_bounds(extent);
                 }
                 
-                if ( max_extent < 0 )
+                if ( bounds )
                 {
-                    report_error(position, "shape expression at dimension %d is always negative (max = %d)", (int)i, (int)max_extent);
+                    auto [min, max] = *bounds;
+                    if ( max < 0 )
+                    {
+                        report_error(position, "shape expression at dimension %d is always negative (max = %d)", (int)i, (int)max);
+                    }
+                    if ( min < 0 )
+                    {
+                        report_warning(position, "shape expression at dimension %d may become negative (min = %d)", (int)i, (int)min);
+                    }
+                    max_shape[i] = max;
                 }
-                if ( min_extent < 0 )
+                else
                 {
-                    report_warning(position, "shape expression at dimension %d may become negative (min = %d)", (int)i, (int)min_extent);
+                    max_shape[i] = -1;
                 }
             }
             return max_shape;
@@ -4484,7 +4556,7 @@ namespace sknd
         
         ValueExpr new_placeholder_expr( const int_t& max_value )
         {
-            return ValueExpr::placeholder(next_placeholder_name(), max_value);
+            return ValueExpr::placeholder(next_placeholder_name(), max_value != -1 ? ValueExpr(max_value) : ValueExpr(nullptr));
         }
         
         const ValueExpr& placeholder_for( const ValueExpr& expr, const int_t& max_value )
@@ -4616,5 +4688,7 @@ namespace sknd
     
 }   // namespace sknd
 
+
+#undef DECL_BOUNDS
 
 #endif

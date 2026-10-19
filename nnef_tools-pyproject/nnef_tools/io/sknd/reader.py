@@ -33,7 +33,7 @@ def _build_tensor_pack(graph, sknd_pack, tensor_map):
                       shape=sknd_pack.shape,
                       dtype=sknd.DtypeToNumpy[sknd_pack.dtype],
                       size=sknd_pack.size,
-                      items=[remap_tensor(item, tensor_map) for item in sknd_pack])
+                      items=[remap_tensor(item, tensor_map) for item in sknd_pack] if sknd_pack.items is not None else None)
 
 
 def _build_operation(graph, sknd_operation, tensor_map, graph_map):

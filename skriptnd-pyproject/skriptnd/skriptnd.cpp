@@ -721,16 +721,25 @@ static PyObject* buildPyTensorPack( const sknd::TensorPack& pack, const BuildCon
     PyObject* shape = Py_None;  // deferred due to references to other tensors
     PyObject* max_shape = buildPyShape(pack.max_shape);
     PyObject* size = Py_None;   // deferred due to references to other tensors
+    PyObject* max_size = buildPyInt(pack.max_size);
 
-    PyObject* items = PyList_New(pack.items.size());
-    for ( size_t i = 0; i < pack.items.size(); ++i )
+    PyObject* items;
+    if ( pack.items )
     {
-        PyObject* item = context.tensors.at(pack.items[i]);
-        Py_INCREF(item);
-        PyList_SetItem(items, i, item);
+        items = PyList_New(pack.max_size);
+        for ( size_t i = 0; i < pack.max_size; ++i )
+        {
+            PyObject* item = context.tensors.at(pack.items[i]);
+            Py_INCREF(item);
+            PyList_SetItem(items, i, item);
+        }
+    }
+    else
+    {
+        items = buildPyNone();
     }
 
-    return makePyObject(TensorPack, name, dtype, shape, max_shape, size, items);
+    return makePyObject(TensorPack, name, dtype, shape, max_shape, size, max_size, items);
 }
 
 static PyObject* buildPyContraction( const sknd::Contraction& contraction, const BuildContext& context )
@@ -1172,8 +1181,8 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
 
     Tensor = makeDataClass(module, "Tensor", { "name", "dtype", "shape", "max_shape", "quant", "value", "variable" },
                            { buildPyNone(), buildPyNone(), buildPyBoolean(false) });
-    TensorPack = makeDataClass(module, "TensorPack", { "name", "dtype", "shape", "max_shape", "size", "items" },
-                               { buildPyInt(0), EmptyListDefault });
+    TensorPack = makeDataClass(module, "TensorPack", { "name", "dtype", "shape", "max_shape", "size", "max_size", "items" },
+                               { buildPyInt(0), buildPyInt(0), buildPyNone() });
     Assertion = makeDataClass(module, "Assertion", { "condition", "message", "args" });
 
     Operation = makeDataClass(module, "Operation", { "name", "dtypes", "attribs", "inputs", "outputs", "internals", "contractions", "subgraphs", "asserts", "subexprs", "is_intrinsic" },

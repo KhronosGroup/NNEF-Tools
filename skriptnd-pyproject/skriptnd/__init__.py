@@ -58,7 +58,8 @@ TensorPack = _sknd.TensorPack   # dataclass('TensorPack', {
                                 #   'dtype': Dtype,
                                 #   'shape': Tuple[Expr],
                                 #   'max_shape': typing.Tuple[int],
-                                #   'length': Expr,
+                                #   'size': Expr,
+                                #   'max_size': int,
                                 #   'items': List[Tensor],
                                 # })
 Operation = _sknd.Operation     # dataclass('Operation', {
@@ -120,13 +121,13 @@ TensorAccess.dtype = property(lambda access: access.tensor.dtype)
 PlaceholderExpr.dtype = property(lambda access: Dtype.Int)
 
 SizeAccess.size = property(lambda access: None)
-TensorAccess.size = property(lambda access: access.tensor.length if isinstance(access.tensor, TensorPack) and access.item is None else
+TensorAccess.size = property(lambda access: access.tensor.size if isinstance(access.tensor, TensorPack) and access.item is None else
                              next(index.size for index in access.indices if isinstance(index, Expr) and index.packed))
 PlaceholderExpr.size = property(lambda expr: None)
 IdentifierExpr.size = property(lambda expr: None)
 BoundedExpr.size = property(lambda expr: None)
 ReferenceExpr.size = property(lambda expr: expr.target.size)
-ShapeAccess.size = property(lambda access: access.tensor.length if isinstance(access.tensor, TensorPack) else None)
+ShapeAccess.size = property(lambda access: access.tensor.size if isinstance(access.tensor, TensorPack) else None)
 CastExpr.size = property(lambda expr: expr.arg.size)
 UnaryExpr.size = property(lambda expr: expr.arg.size)
 BinaryExpr.size = property(lambda expr: expr.left.size or expr.right.size)
@@ -136,7 +137,7 @@ ListExpr.size = property(lambda expr: len(expr.items))
 SubscriptExpr.size = property(lambda expr: expr.index.size)
 
 SizeAccess.max_size = property(lambda access: None)
-TensorAccess.max_size = property(lambda access: len(access.tensor.items) if isinstance(access.tensor, TensorPack) and access.item is None else
+TensorAccess.max_size = property(lambda access: access.tensor.max_size if isinstance(access.tensor, TensorPack) and access.item is None else
                                  next(index.max_size for index in access.indices if isinstance(index, Expr) and index.packed))
 PlaceholderExpr.max_size = property(lambda expr: None)
 IdentifierExpr.max_size = property(lambda expr: None)
@@ -222,10 +223,9 @@ Tensor.is_variable = property(lambda tensor: tensor.variable)
 Tensor.is_constant = property(lambda tensor: tensor.value is not None and not tensor.variable)
 
 TensorPack.__hash__ = lambda pack: hash(pack.name)
-TensorPack.__len__ = lambda pack: len(pack.items)
+TensorPack.__len__ = lambda pack: pack.max_size
 TensorPack.__getitem__ = lambda pack, i: pack.items[i]
-TensorPack.__iter__ = lambda pack: iter(pack.items)
-TensorPack.max_size = property(lambda pack: len(pack.items))
+TensorPack.__iter__ = lambda pack: iter(pack.items) if pack.items is not None else iter([])
 TensorPack.packed = property(lambda expr: True)
 
 Operation.constants = property(lambda op: (tensor for tensor in op.internals if tensor.is_constant))

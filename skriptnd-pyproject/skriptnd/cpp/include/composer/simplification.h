@@ -1035,7 +1035,7 @@ namespace sknd
                 case ValueExpr::TensorAccess:
                 {
                     auto& access = expr.as_tensor_access();
-                    if ( access.item.is_literal() )
+                    if ( access.item.is_literal() && access.tensor.listed() )
                     {
                         access.tensor = &access.tensor[access.item.as_int()];
                         access.item = nullptr;

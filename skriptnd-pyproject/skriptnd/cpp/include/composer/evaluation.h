@@ -30,6 +30,8 @@
 #include <variant>
 #include <cmath>
 
+#define DECL_BOUNDS(var1, var2, expr) auto var1##var2 = (expr); if ( !var1##var2 ) return std::nullopt; auto[var1, var2] = *var1##var2;
+
 
 inline bool endswith( const std::string& str, const std::string& suffix )
 {
@@ -53,7 +55,7 @@ namespace sknd
         
         typedef std::vector<Tensor*> Tensors;
         typedef std::function<TensorRef(const ValueExpr&, const Typename&)> AsTensor;
-        typedef std::function<TensorRef(const Tensors&, const Typename&, const Shape&, const ValueExpr&)> AsTensorPack;
+        typedef std::function<TensorRef(const Tensors&, const Typename&, const Shape&)> AsTensorPack;
         
         using Simplification::resolve;
         using Simplification::resolved;
@@ -161,24 +163,11 @@ namespace sknd
                 }
                 return astensor(value, type);
             }
-            else if ( expr.kind == Expr::Identifier && !idx )    // shortcut to avoid duplicating an existing pack
-            {
-                auto& iden = as_identifier(expr);
-                auto& symbol = symbols.at(iden.name);
-                if ( symbol.is<TensorRef>() )
-                {
-                    return symbol.as<TensorRef>();
-                }
-            }
             
             TRY_DECL(size, eval_rank(expr, symbols))
             if ( size != nullptr && !idx )
             {
-                size_t rank = eval_shape_expr_max(canonical(size));
-                TRY_DECL(tensors, eval_items<Tensor*>(expr, symbols, rank))
-                auto type = eval_type(expr, symbols);
-                TRY_DECL(shape, eval_shape_from_expr(expr, symbols))
-                return aspack(tensors, type, shape, size);
+                return eval_tensor_pack(expr, symbols, size, aspack);
             }
             else
             {
@@ -691,6 +680,40 @@ namespace sknd
             TRY_DECL(items, eval_items(expr, symbols, rank.as_int()))
             auto type = eval_type(expr, symbols);
             return ValueExpr::list(std::move(items), type);
+        }
+        
+        static Result<TensorRef> eval_tensor_pack( const Expr& expr, const Dict<Symbol>& symbols, const ValueExpr& rank, const AsTensorPack aspack )
+        {
+            switch ( expr.kind )
+            {
+                case Expr::Identifier:
+                {
+                    auto& iden = as_identifier(expr);
+                    auto& symbol = symbols.at(iden.name);
+                    assert( symbol.is<TensorRef>());
+                    return symbol.as<TensorRef>();
+                }
+                case Expr::Select:
+                {
+                    auto& select = as_select(expr);
+                    TRY_DECL(cond, eval(*select.cond, symbols))
+                    assert(is_literal(cond));
+                    assert(!cond.packed());
+                    return eval_tensor_pack(cond.as_bool() ? *select.left : *select.right, symbols, rank, aspack);
+                }
+                case Expr::List:
+                {
+                    auto& list = as_list(expr);
+                    TRY_DECL(tensors, eval_items<Tensor*>(expr, symbols, list.items.size()))
+                    TRY_DECL(shape, eval_shape_from_expr(expr, symbols))
+                    auto type = eval_type(expr, symbols);
+                    return aspack(tensors, type, shape);
+                }
+                default:
+                {
+                    return Error(expr.position, "invalid tensor pack expr");
+                }
+            }
         }
         
         static bool can_eval_itemwise( const Expr& expr, const Dict<Symbol>& symbols )
@@ -2110,10 +2133,10 @@ namespace sknd
         }
         
         template<bool Optional = false>
-        static Result<std::optional<size_t>> eval_rank_max( const Expr& expr, const Dict<Symbol>& symbols )
+        static Result<std::optional<int_t>> eval_rank_max( const Expr& expr, const Dict<Symbol>& symbols )
         {
             TRY_DECL(rank, eval_rank<Optional>(expr, symbols))
-            return rank == nullptr ? (std::optional<size_t>)std::nullopt : (std::optional<size_t>)eval_shape_expr_max(canonical(rank));
+            return rank == nullptr ? (std::optional<int_t>)std::nullopt : (std::optional<int_t>)eval_shape_expr_max(canonical(rank));
         }
         
         template<bool Optional = false>
@@ -2732,14 +2755,14 @@ namespace sknd
         }
         
         template<typename T = int_t>
-        static std::pair<T,T> eval_shape_expr_bounds( const ValueExpr& expr, const std::optional<size_t>& idx = std::nullopt )
+        static std::optional<std::pair<T,T>> eval_shape_expr_bounds( const ValueExpr& expr, const std::optional<size_t>& idx = std::nullopt )
         {
             if ( expr.packed() && !idx )
             {
                 T min = 0, max = 0;
                 for ( size_t i = 0; i < expr.max_size(); ++i )
                 {
-                    auto [item_min, item_max] = eval_shape_expr_bounds(expr, i);
+                    DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds(expr, i))
                     if ( i == 0 || item_min < min )
                     {
                         min = item_min;
@@ -2761,7 +2784,11 @@ namespace sknd
                 case ValueExpr::Placeholder:
                 {
                     auto& placeholder = expr.as_placeholder();
-                    auto [min, max] = eval_shape_expr_bounds<T>(placeholder.max_value, idx);
+                    if ( placeholder.max_value == nullptr )
+                    {
+                        return std::nullopt;
+                    }
+                    DECL_BOUNDS(min, max, eval_shape_expr_bounds<T>(placeholder.max_value, idx))
                     return std::make_pair((T)0, max);
                 }
                 case ValueExpr::Reference:
@@ -2792,11 +2819,6 @@ namespace sknd
                     {
                         return duplicate((T)1);
                     }
-                    if ( cast.dtype == Typename::Bool )
-                    {
-                        auto [min, max] = eval_shape_expr_bounds<T>(cast.arg, idx);
-                        return duplicate(min != (T)0 || max != (T)0);
-                    }
                     if ( cast.arg == inf() )
                     {
                         return duplicate(std::numeric_limits<T>::max());
@@ -2805,16 +2827,21 @@ namespace sknd
                     {
                         return duplicate(std::numeric_limits<T>::min());
                     }
+                    if ( cast.dtype == Typename::Bool )
+                    {
+                        DECL_BOUNDS(min, max, eval_shape_expr_bounds<T>(cast.arg, idx))
+                        return duplicate(min != (T)0 || max != (T)0);
+                    }
                     if ( cast.dtype == Typename::Int )
                     {
                         assert(cast.arg.dtype() == Typename::Real);
-                        auto [min, max] = eval_shape_expr_bounds<real_t>(cast.arg, idx);
+                        DECL_BOUNDS(min, max, eval_shape_expr_bounds<real_t>(cast.arg, idx))
                         return std::make_pair((int_t)min, (int_t)max);
                     }
                     else if ( cast.dtype == Typename::Real )
                     {
                         assert(cast.arg.dtype() == Typename::Int);
-                        auto [min, max] = eval_shape_expr_bounds<int_t>(cast.arg, idx);
+                        DECL_BOUNDS(min, max, eval_shape_expr_bounds<int_t>(cast.arg, idx))
                         return std::make_pair((real_t)min, (real_t)max);
                     }
                     else
@@ -2826,7 +2853,7 @@ namespace sknd
                 case ValueExpr::Unary:
                 {
                     auto& unary = expr.as_unary();
-                    auto [min, max] = eval_shape_expr_bounds<T>(unary.arg, idx);
+                    DECL_BOUNDS(min, max, eval_shape_expr_bounds<T>(unary.arg, idx))
                     switch ( Lexer::operator_value(unary.op) )
                     {
                         case Lexer::Operator::Plus:
@@ -2846,8 +2873,8 @@ namespace sknd
                 case ValueExpr::Binary:
                 {
                     auto& binary = expr.as_binary();
-                    auto [left_min, left_max] = eval_shape_expr_bounds<T>(binary.left, idx);
-                    auto [right_min, right_max] = eval_shape_expr_bounds<T>(binary.right, idx);
+                    DECL_BOUNDS(left_min, left_max, eval_shape_expr_bounds<T>(binary.left, idx))
+                    DECL_BOUNDS(right_min, right_max, eval_shape_expr_bounds<T>(binary.right, idx))
                     switch ( Lexer::operator_value(binary.op) )
                     {
                         case Lexer::Operator::Plus:
@@ -2896,8 +2923,8 @@ namespace sknd
                 case ValueExpr::Select:
                 {
                     auto& select = expr.as_select();
-                    auto [left_min, left_max] = eval_shape_expr_bounds<T>(select.left, idx);
-                    auto [right_min, right_max] = eval_shape_expr_bounds<T>(select.right, idx);
+                    DECL_BOUNDS(left_min, left_max, eval_shape_expr_bounds<T>(select.left, idx))
+                    DECL_BOUNDS(right_min, right_max, eval_shape_expr_bounds<T>(select.right, idx))
                     return std::make_pair(std::min(left_min, right_min), std::max(left_max, right_max));
                 }
                 case ValueExpr::List:
@@ -2921,7 +2948,7 @@ namespace sknd
                             T max = 0;
                             for ( size_t i = 0; i < pack.max_size(); ++i )
                             {
-                                auto [item_min, item_max] = eval_shape_expr_bounds<T>(pack, i);
+                                DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds<T>(pack, i))
                                 sum_min += item_min;
                                 sum_max += item_max;
                                 if ( sum_max > max )
@@ -2938,7 +2965,7 @@ namespace sknd
                             T max = 1;
                             for ( size_t i = 0; i < pack.max_size(); ++i )
                             {
-                                auto [item_min, item_max] = eval_shape_expr_bounds<T>(pack, i);
+                                DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds<T>(pack, i))
                                 prod_min *= item_min;
                                 prod_max *= item_max;
                                 if ( prod_max > max )
@@ -2950,10 +2977,10 @@ namespace sknd
                         }
                         case Lexer::Operator::Min:
                         {
-                            auto [min, max] = eval_shape_expr_bounds<T>(pack.at(0));
+                            DECL_BOUNDS(min, max, eval_shape_expr_bounds<T>(pack.at(0)))
                             for ( size_t i = 1; i < pack.max_size(); ++i )
                             {
-                                auto [item_min, item_max] = eval_shape_expr_bounds<T>(pack, i);
+                                DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds<T>(pack, i))
                                 min = std::min(min, item_min);
                                 if ( !dynamic_size )
                                 {
@@ -2964,10 +2991,10 @@ namespace sknd
                         }
                         case Lexer::Operator::Max:
                         {
-                            auto [min, max] = eval_shape_expr_bounds<T>(pack.at(0));
+                            DECL_BOUNDS(min, max, eval_shape_expr_bounds<T>(pack.at(0)))
                             for ( size_t i = 1; i < pack.max_size(); ++i )
                             {
-                                auto [item_min, item_max] = eval_shape_expr_bounds<T>(pack, i);
+                                DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds<T>(pack, i))
                                 max = std::max(max, item_max);
                                 if ( !dynamic_size )
                                 {
@@ -3003,10 +3030,10 @@ namespace sknd
                 case ValueExpr::Concat:
                 {
                     auto& concat = expr.as_concat();
-                    auto [min, max] = eval_shape_expr_bounds<T>(concat.items.front());
+                    DECL_BOUNDS(min, max, eval_shape_expr_bounds<T>(concat.items.front()))
                     for ( size_t i = 1; i < concat.items.size(); ++i )
                     {
-                        auto [item_min, item_max] = eval_shape_expr_bounds(concat.items[i]);
+                        DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds(concat.items[i]))
                         if ( item_min < min )
                         {
                             min = item_min;
@@ -3033,8 +3060,8 @@ namespace sknd
         
         static int_t eval_shape_expr_max( const ValueExpr& expr, const std::optional<size_t>& idx = std::nullopt )
         {
-            auto [min, max] = eval_shape_expr_bounds<int_t>(expr, idx);
-            return max;
+            auto bounds = eval_shape_expr_bounds<int_t>(expr, idx);
+            return bounds ? bounds->second : -1;
         }
         
         static std::vector<int_t> eval_shape_max( const Shape& shape )
@@ -3050,20 +3077,22 @@ namespace sknd
                         max_shape[i] = -1;
                         continue;
                     }
-                    max_shape[i] = eval_shape_expr_max(extent, 0);
+                    auto bounds = eval_shape_expr_bounds(extent, 0);
                     for ( size_t k = 1; k < extent.max_size(); ++k )
                     {
-                        auto item_max = eval_shape_expr_max(extent, k);
-                        if ( max_shape[i] != item_max )
+                        auto item_bounds = eval_shape_expr_bounds(extent, k);
+                        if ( bounds != item_bounds )
                         {
-                            max_shape[i] = -1;
+                            bounds = std::nullopt;
                             break;
                         }
                     }
+                    max_shape[i] = bounds ? bounds->second : -1;
                 }
                 else
                 {
-                    max_shape[i] = eval_shape_expr_max(extent);
+                    auto bounds = eval_shape_expr_bounds(extent);
+                    max_shape[i] = bounds ? bounds->second : -1;
                 }
             }
             return max_shape;
@@ -3444,5 +3473,7 @@ namespace sknd
 
 }   // namespace sknd
 
+
+#undef DECL_BOUNDS
 
 #endif

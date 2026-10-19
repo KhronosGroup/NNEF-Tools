@@ -62,19 +62,20 @@ namespace sknd
             std::vector<int_t>& max_shape() { return packed() ? as<P*>()->max_shape : as<T*>()->max_shape; }
             size_t rank() const { return packed() ? as<P*>()->shape.size() : as<T*>()->shape.size(); }
             bool packed() const { return is<P*>(); }
-            size_t max_size() const { return as<P*>()->items.size(); }
-            std::optional<size_t> max_size_or_null() const { return packed() ? max_size() : (std::optional<size_t>)std::nullopt; }
+            bool listed() const { return as<P*>()->items != nullptr; }
+            int_t max_size() const { return as<P*>()->max_size; }
+            std::optional<int_t> max_size_or_null() const { return packed() ? max_size() : (std::optional<int_t>)std::nullopt; }
             ValueExpr& size() { return as<P*>()->size; }
             const ValueExpr& size() const { return as<P*>()->size; }
             const ValueExpr& size_or_null() const { return packed() ? size() : V::null(); }
             bool is_constant() const { return !packed() ? as<T*>()->value != nullptr :
-                std::all_of(as<P*>()->items.begin(), as<P*>()->items.end(), []( const T* item ){ return item->value != nullptr; }); }
+                listed() && std::all_of(begin(), end(), []( const T* item ){ return item->value != nullptr; }); }
             TensorRef at( const size_t i ) { return TensorRef(as<P*>()->items[i]); }
             TensorRef at( const size_t i ) const { return TensorRef(as<P*>()->items[i]); }
-            auto begin() { return as<P*>()->items.begin(); }
-            auto begin() const { return as<P*>()->items.begin(); }
-            auto end() { return as<P*>()->items.end(); }
-            auto end() const { return as<P*>()->items.end(); }
+            auto begin() { return as<P*>()->items.get(); }
+            auto begin() const { return as<P*>()->items.get(); }
+            auto end() { return as<P*>()->items.get() + as<P*>()->max_size; }
+            auto end() const { return as<P*>()->items.get() + as<P*>()->max_size; }
             
             T* operator->() { return as<T*>(); }
             T& operator*() { return *as<T*>(); }

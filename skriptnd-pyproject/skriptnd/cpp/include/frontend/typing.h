@@ -174,10 +174,6 @@ namespace sknd
                 declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats.value, Declaration::Input);
                 if ( param.repeats.value )
                 {
-                    if ( op.graph )
-                    {
-                        check_repeat_bound(decls, param.repeats.value, param.repeats.bound);
-                    }
                     declare_repeats(decls, param);
                 }
                 declare_shape_rank(decls, param.rank);
@@ -283,7 +279,7 @@ namespace sknd
                 if ( param.shape )
                 {
                     declare_dynamic_shape_components(decls, *param.shape);
-                    check_shape_components(decls, *param.shape, param.repeats.value, true, false, !op.graph);
+                    check_shape_components(decls, *param.shape, param.repeats.value, true, false);
                 }
                 else
                 {
@@ -536,7 +532,7 @@ namespace sknd
         }
         
         void check_shape_components( const Dict<Declaration>& decls, const Shapedef& shape, const Shared<Expr>& repeats,
-                                    bool enforce_check = true, bool enforce_static = false, bool enforce_bound = false ) const
+                                    bool enforce_check = true, bool enforce_static = false ) const
         {
             for ( auto& extent : shape.extents )
             {
@@ -608,10 +604,6 @@ namespace sknd
                         }
                     }
                 }
-                else if ( !bound && enforce_bound )
-                {
-                    report_error(item->position, "upper bound must be specified for dynamic shape components");
-                }
                 
                 if ( bound )
                 {
@@ -625,11 +617,6 @@ namespace sknd
             for ( auto& extent : shape.extents )
             {
                 auto& item = extent.value;
-                auto& iden = find_affine_id(expanded(*item));
-                if ( !iden.empty() && !decls.count(iden) && !extent.bound )
-                {
-                    report_error(item->position, "upper bound must be specified in graph for dynamic shape");
-                }
                 if ( item->kind == Expr::Expand )
                 {
                     auto count = as_expand(*item).count;
@@ -637,18 +624,6 @@ namespace sknd
                     {
                         report_error(count->position, "shape components of graph inputs must have fixed length");
                     }
-                }
-            }
-        }
-        
-        void check_repeat_bound( const Dict<Declaration>& decls, const Shared<Expr>& repeats, const Shared<Expr>& bound ) const
-        {
-            if ( repeats )
-            {
-                auto& iden = find_affine_id(*repeats);
-                if ( !iden.empty() && !decls.count(iden) && !bound )
-                {
-                    report_error(repeats->position, "upper bound must be specified in graph for dynamic pack size");
                 }
             }
         }
