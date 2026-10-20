@@ -136,30 +136,16 @@ FoldExpr.size = property(lambda expr: expr.pack.size if expr.packed else None)
 ListExpr.size = property(lambda expr: len(expr.items))
 SubscriptExpr.size = property(lambda expr: expr.index.size)
 
-SizeAccess.max_size = property(lambda access: None)
-TensorAccess.max_size = property(lambda access: access.tensor.max_size if isinstance(access.tensor, TensorPack) and access.item is None else
-                                 next(index.max_size for index in access.indices if isinstance(index, Expr) and index.packed))
-PlaceholderExpr.max_size = property(lambda expr: None)
-IdentifierExpr.max_size = property(lambda expr: None)
-BoundedExpr.max_size = property(lambda expr: None)
-ReferenceExpr.max_size = property(lambda expr: expr.target.max_size)
-ListExpr.max_size = property(lambda expr: len(expr.items))
-
 SizeAccess.packed = property(lambda access: False)
-ShapeAccess.packed = property(lambda access: access.max_size is not None)
 TensorAccess.packed = property(lambda access: (isinstance(access.tensor, TensorPack) and access.item is None) or
                                               any(isinstance(index, Expr) and index.packed for index in access.indices))
 PlaceholderExpr.packed = property(lambda expr: False)
 IdentifierExpr.packed = property(lambda expr: False)
 BoundedExpr.packed = property(lambda expr: False)
-ReferenceExpr.packed = property(lambda expr: expr.max_size is not None)
-CastExpr.packed = property(lambda expr: expr.max_size is not None)
-UnaryExpr.packed = property(lambda expr: expr.max_size is not None)
-BinaryExpr.packed = property(lambda expr: expr.max_size is not None)
-SelectExpr.packed = property(lambda expr: expr.max_size is not None)
-FoldExpr.packed = property(lambda expr: expr.max_size is not None)
+ReferenceExpr.packed = property(lambda expr: expr.target.packed)
 ListExpr.packed = property(lambda expr: True)
-SubscriptExpr.packed = property(lambda expr: expr.max_size is not None)
+FoldExpr.packed = property(lambda expr: expr.cumulative)
+SubscriptExpr.packed = property(lambda expr: expr.index.packed)
 ConcatExpr.packed = property(lambda expr: True)
 SliceExpr.packed = property(lambda expr: True)
 UniformExpr.packed = property(lambda expr: True)
@@ -254,15 +240,15 @@ ListExpr.__iter__ = lambda expr: iter(expr.items)
 ListExpr.__contains__ = lambda expr, value: value in expr.items
 ListExpr.__reversed__ = lambda expr: ListExpr(reversed(expr.items), expr.dtype)
 
-UniformExpr.__len__ = lambda expr: expr.max_size
+UniformExpr.__len__ = lambda expr: expr.size
 UniformExpr.__getitem__ = lambda expr, i: expr.value
-UniformExpr.__iter__ = lambda expr: (expr.value for _ in range(expr.max_size))
+UniformExpr.__iter__ = lambda expr: (expr.value for _ in range(expr.size))
 UniformExpr.__contains__ = lambda expr, value: expr.value == value
 UniformExpr.__reversed__ = lambda expr: expr
 
-RangeExpr.__len__ = lambda expr: expr.max_size
+RangeExpr.__len__ = lambda expr: expr.size
 RangeExpr.__getitem__ = lambda expr, i: expr.first + i * expr.stride
-RangeExpr.__iter__ = lambda expr: (expr.first + i * expr.stride for i in range(expr.max_size))
+RangeExpr.__iter__ = lambda expr: (expr.first + i * expr.stride for i in range(expr.size))
 
 collections.abc.Sequence.register(TensorPack)
 collections.abc.Sequence.register(ListExpr)
@@ -287,10 +273,6 @@ def expr_dtype(expr):
 
 def expr_size(expr):
     return expr.size if isinstance(expr, Expr) else None
-
-
-def expr_max_size(expr):
-    return expr.max_size if isinstance(expr, Expr) else None
 
 
 def expr_is_packed(expr):
@@ -514,19 +496,19 @@ def transform_expr(expr, func, preorder=True):
         expr = ReferenceExpr(expr.name, expr.target, expr.dtype)
     elif isinstance(expr, CastExpr):
         arg = transform_expr(expr.arg, func)
-        expr = CastExpr(arg, expr.dtype, expr.max_size)
+        expr = CastExpr(arg, expr.dtype, expr.packed)
     elif isinstance(expr, UnaryExpr):
         arg = transform_expr(expr.arg, func)
-        expr = UnaryExpr(expr.op, arg, expr.dtype, expr.max_size)
+        expr = UnaryExpr(expr.op, arg, expr.dtype, expr.packed)
     elif isinstance(expr, BinaryExpr):
         left = transform_expr(expr.left, func)
         right = transform_expr(expr.right, func)
-        expr = BinaryExpr(expr.op, left, right, expr.dtype, expr.max_size)
+        expr = BinaryExpr(expr.op, left, right, expr.dtype, expr.packed)
     elif isinstance(expr, SelectExpr):
         cond = transform_expr(expr.cond, func)
         left = transform_expr(expr.left, func)
         right = transform_expr(expr.right, func)
-        expr = SelectExpr(cond, left, right, expr.dtype, expr.max_size)
+        expr = SelectExpr(cond, left, right, expr.dtype, expr.packed)
     elif isinstance(expr, BoundedExpr):
         arg = transform_expr(expr.arg, func)
         lower = transform_expr(expr.lower, func)
@@ -534,40 +516,40 @@ def transform_expr(expr, func, preorder=True):
         expr = BoundedExpr(arg, lower, upper, expr.dtype)
     elif isinstance(expr, FoldExpr):
         pack = transform_expr(expr.pack, func)
-        expr = FoldExpr(expr.op, pack, expr.dtype, expr.max_size)
+        expr = FoldExpr(expr.op, pack, expr.dtype, expr.cumulative)
     elif isinstance(expr, ListExpr):
         items = [transform_expr(item, func) for item in expr]
         expr = ListExpr(items, expr.dtype)
     elif isinstance(expr, ConcatExpr):
         items = [transform_expr(item, func) for item in expr.items]
         size = transform_expr(expr.size, func)
-        return ConcatExpr(items, expr.dtype, size, expr.max_size)
+        return ConcatExpr(items, expr.dtype, size)
     elif isinstance(expr, SliceExpr):
         pack = transform_expr(expr.pack, func)
         first = transform_expr(expr.first, func)
         last = transform_expr(expr.last, func)
         stride = transform_expr(expr.stride, func)
         size = transform_expr(expr.size, func)
-        expr = SliceExpr(pack, first, last, stride, expr.dtype, size, expr.max_size)
+        expr = SliceExpr(pack, first, last, stride, expr.dtype, size)
     elif isinstance(expr, SubscriptExpr):
         pack = transform_expr(expr.pack, func)
         index = transform_expr(expr.index, func)
-        expr = SubscriptExpr(pack, index, expr.dtype, expr.max_size)
+        expr = SubscriptExpr(pack, index, expr.dtype)
     elif isinstance(expr, UniformExpr):
         value = transform_expr(expr.value, func)
         size = transform_expr(expr.size, func)
-        expr = UniformExpr(value, size, expr.dtype, expr.max_size)
+        expr = UniformExpr(value, size, expr.dtype)
     elif isinstance(expr, RangeExpr):
         first = transform_expr(expr.first, func)
         last = transform_expr(expr.last, func)
         stride = transform_expr(expr.stride, func)
         size = transform_expr(expr.size, func)
-        expr = RangeExpr(first, last, stride, expr.dtype, size, expr.max_size)
+        expr = RangeExpr(first, last, stride, expr.dtype, size)
     elif isinstance(expr, SizeAccess):
         expr = SizeAccess(expr.pack)
     elif isinstance(expr, ShapeAccess):
         item = transform_expr(expr.item, func)
-        expr = ShapeAccess(expr.tensor, expr.dim, item, expr.max_size)
+        expr = ShapeAccess(expr.tensor, expr.dim, item, expr.packed)
     elif isinstance(expr, TensorAccess):
         item = transform_expr(expr.item, func)
         indices = [transform_expr(item, func) for item in expr.indices]

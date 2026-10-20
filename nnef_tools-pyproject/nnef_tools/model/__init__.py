@@ -160,15 +160,15 @@ class Tensor:
         return hash(self.name)
 
 
-class TensorPack(list):
+class TensorPack:
 
     def __init__(self, graph, name, shape, dtype, size, items):
-        super().__init__(items)
         self._graph = graph
         self.name = name
         self.shape = shape
         self.dtype = dtype
         self.size = size
+        self.items = items
 
         assert isinstance(graph, Graph)
         graph._packs.append(self)
@@ -243,6 +243,18 @@ class TensorPack(list):
 
     def __hash__(self):
         return hash(self.name)
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, idx):
+        return self.items[idx]
+
+    def __iter__(self):
+        return iter(self.items)
+
+    def __contains__(self, item):
+        return item in self.items
 
 
 # noinspection PyProtectedMember
@@ -319,40 +331,25 @@ class Operation:
     @inputs.setter
     def inputs(self, tensors):
         # type: (typing.Union[Tensor, typing.List[Tensor], typing.Tuple[Tensor]])->None
-        if isinstance(tensors, (Tensor, list)):
+        if isinstance(tensors, (Tensor, TensorPack, list)):
             tensors = (tensors,)
 
         assert isinstance(tensors, tuple)
-        for tensor in tensors:
-            if isinstance(tensor, list):
-                assert all(isinstance(t, Tensor) or t is None for t in tensor)
-            else:
-                assert isinstance(tensor, Tensor) or tensor is None
+        for tensor in _recursive_itemize(tensors):
+            assert tensor is None or isinstance(tensor, Tensor)
 
-        for tensor in self._inputs:
-            if isinstance(tensor, list):
-                assert all(t is None or self in t._consumers for t in tensor)
-            else:
-                assert tensor is None or self in tensor._consumers
+        # use two passes to take care of duplicate inputs
+        for tensor in _recursive_itemize(self._inputs):
+            assert tensor is None or self in tensor._consumers
 
-        for tensor in self._inputs:
-            if isinstance(tensor, list):
-                for t in tensor:
-                    if t is not None and self in t._consumers:
-                        t._consumers.remove(self)
-            else:
-                if tensor is not None and self in tensor._consumers:
-                    tensor._consumers.remove(self)
+        for tensor in _recursive_itemize(self._inputs):
+            if tensor is not None and self in tensor._consumers:
+                tensor._consumers.remove(self)
 
         self._inputs = tensors
-        for tensor in tensors:
-            if isinstance(tensor, list):
-                for t in tensor:
-                    if t is not None and self not in t._consumers:
-                        t._consumers.append(self)
-            else:
-                if tensor is not None and self not in tensor._consumers:
-                    tensor._consumers.append(self)
+        for tensor in _recursive_itemize(tensors):
+            if tensor is not None and self not in tensor._consumers:
+                tensor._consumers.append(self)
 
     @property
     def outputs(self):
@@ -369,42 +366,23 @@ class Operation:
     def outputs(self, tensors):
         # type: (typing.Union[Tensor, typing.List[Tensor], typing.Tuple[Tensor]])->None
 
-        if isinstance(tensors, (Tensor, list)):
+        if isinstance(tensors, (Tensor, TensorPack, list)):
             tensors = (tensors,)
 
         assert isinstance(tensors, tuple)
-        for tensor in tensors:
-            if isinstance(tensor, list):
-                assert all(isinstance(t, Tensor) for t in tensor)
-                assert all(t.graph is self.graph for t in tensor)
-            else:
-                assert isinstance(tensor, Tensor)
-                assert tensor.graph is self.graph
+        for tensor in _recursive_itemize(tensors):
+            assert isinstance(tensor, Tensor)
+            assert tensor.graph is self.graph
 
-        for tensor in self._outputs:
-            if isinstance(tensor, list):
-                assert all(self is t._producer for t in tensor)
-            else:
-                assert self is tensor._producer
-
-        for tensor in self._outputs:
-            if isinstance(tensor, list):
-                for t in tensor:
-                    t._producer = None
-            else:
-                tensor._producer = None
+        for tensor in _recursive_itemize(self._outputs):
+            assert self is tensor._producer
+            tensor._producer = None
 
         self._outputs = tensors
-        for tensor in tensors:
-            if isinstance(tensor, list):
-                for t in tensor:
-                    if not t.is_null:
-                        assert self is not t._producer
-                        t._producer = self
-            else:
-                if not tensor.is_null:
-                    assert self is not tensor._producer
-                    tensor._producer = self
+        for tensor in _recursive_itemize(tensors):
+            if not tensor.is_null:
+                assert self is not tensor._producer
+                tensor._producer = self
 
     def detach_output(self):
         output = self.output
@@ -515,11 +493,8 @@ class Graph:
         # type: (typing.Tuple[Tensor])->None
         assert isinstance(tensors, tuple)
 
-        for tensor in self._inputs:
-            if isinstance(tensor, list):
-                assert all(isinstance(t, Tensor) for t in tensor)
-            else:
-                assert tensor is None or isinstance(tensor, Tensor)
+        for tensor in _recursive_itemize(self._inputs):
+            assert tensor is None or isinstance(tensor, Tensor)
 
         self._inputs = tensors
 
@@ -532,13 +507,9 @@ class Graph:
     def outputs(self, tensors):
         # type: (typing.Tuple[Tensor])->None
         assert isinstance(tensors, tuple)
-        for tensor in self._outputs:
-            if isinstance(tensor, list):
-                assert all(isinstance(t, Tensor) for t in tensor)
-                assert all(t.graph is self for t in tensor)
-            else:
-                assert isinstance(tensor, Tensor)
-                assert tensor.graph is self
+        for tensor in _recursive_itemize(self._outputs):
+            assert isinstance(tensor, Tensor)
+            assert tensor.graph is self
 
         self._outputs = tensors
 
@@ -705,12 +676,9 @@ class Model:
         for g in self.graphs:
             for op in g.operations:
                 for key, value in op.attribs.items():
-                    if isinstance(value, Graph):
-                        assert value is not graph
-                    elif isinstance(value, list):
-                        for item in value:
-                            if isinstance(item, Graph):
-                                assert item is not graph
+                    for item in _recursive_itemize(value):
+                        if isinstance(item, Graph):
+                            assert item is not graph
         self._graphs.remove(graph)
         graph._model = None
 
@@ -718,12 +686,9 @@ class Model:
         for g in self.graphs:
             for op in g.operations:
                 for key, value in op.attribs.items():
-                    if isinstance(value, Graph):
-                        assert value not in graphs
-                    elif isinstance(value, list):
-                        for item in value:
-                            if isinstance(item, Graph):
-                                assert item not in graphs
+                    for item in _recursive_itemize(value):
+                        if isinstance(item, Graph):
+                            assert item not in graphs
         self._graphs = [graph for graph in self.graphs if graph not in graphs]
         for graph in graphs:
             graph._model = None
@@ -833,7 +798,11 @@ def _hex_id(obj):
 
 
 def _recursive_itemize(arg):
-    if isinstance(arg, Sequence):
+    if isinstance(arg, TensorPack):
+        if arg.items:
+            for item in arg.items:
+                yield from _recursive_itemize(item)
+    elif isinstance(arg, (list, tuple)):
         for item in arg:
             yield from _recursive_itemize(item)
     else:

@@ -90,18 +90,17 @@ namespace sknd
             typedef std::variant<ValueExpr,TensorRef,Valueless> variant_type;
             
             Typename type;
-            std::optional<size_t> rank;
             ValueExpr size;
             Kind kind;
             
             Symbol( const ValueExpr& value, const Typename type, const Kind kind )
-                : variant_type(value), type(type), rank(value.max_size_or_null()), size(value.size()), kind(kind) {}
-            Symbol( const ValueExpr& value, const Typename type, std::optional<size_t> rank, const ValueExpr& size, const Kind kind )
-                : variant_type(value), type(type), rank(rank), size(size), kind(kind) {}
+                : variant_type(value), type(type), size(value.size()), kind(kind) {}
+            Symbol( const ValueExpr& value, const Typename type, const ValueExpr& size, const Kind kind )
+                : variant_type(value), type(type), size(size), kind(kind) {}
             Symbol( const TensorRef& tensor, const Typename type, const Kind kind )
-                : variant_type(tensor), type(type), rank(tensor.max_size_or_null()), size(tensor.size_or_null()), kind(kind) {}
-            Symbol( const Typename type, std::optional<size_t> rank, const Kind kind )
-                : variant_type(Valueless()), type(type), rank(rank), size(rank ? ValueExpr((int_t)*rank) : nullptr), kind(kind) {}
+                : variant_type(tensor), type(type), size(tensor.size_or_null()), kind(kind) {}
+            Symbol( const Typename type, const ValueExpr& size, const Kind kind )
+                : variant_type(Valueless()), type(type), size(size), kind(kind) {}
             
             template<typename T>
             bool is() const
@@ -123,7 +122,7 @@ namespace sknd
             
             bool packed() const
             {
-                return rank != std::nullopt;
+                return size != nullptr;
             }
             
             bool is_null() const
@@ -227,7 +226,7 @@ namespace sknd
                         TRY_DECL(length, eval_rank_static(*contain.pack, symbols))
                         if ( is_tensor_expr(*contain.item, symbols) )
                         {
-                            TRY_DECL(pack, eval_items<Tensor*>(*contain.pack, symbols, *length))
+                            TRY_DECL(pack, eval_items<Tensor*>(*contain.pack, symbols, length.as_int()))
                             TRY_DECL(items, eval_items<Tensor*>(*contain.item, symbols, rank))
                             
                             std::vector<ValueExpr> values(rank);
@@ -239,7 +238,7 @@ namespace sknd
                         }
                         else
                         {
-                            TRY_DECL(pack, eval_items(*contain.pack, symbols, *length))
+                            TRY_DECL(pack, eval_items(*contain.pack, symbols, length.as_int()))
                             TRY_DECL(values, eval_items(*contain.item, symbols, rank))
                             
                             for ( size_t i = 0; i < rank; ++i )
@@ -261,7 +260,7 @@ namespace sknd
                     }
                     
                     TRY_DECL(length, eval_rank_static(*indexer.index, symbols))
-                    TRY_DECL(mask, eval_items(*indexer.index, symbols, *length))
+                    TRY_DECL(mask, eval_items(*indexer.index, symbols, length.as_int()))
                     if ( !is_literal(mask) )
                     {
                         return Error(expr.position, "index mask must not depend on dynamic shapes");
@@ -312,8 +311,9 @@ namespace sknd
                     auto length = value.size();
                     if ( index.packed() )
                     {
-                        TRY_DECL(items, eval_items<T>(*substitute.value, symbols, index.max_size()))
-                        for ( size_t i = 0; i < index.max_size(); ++i )
+                        auto size = (size_t)index.size().as_int();
+                        TRY_DECL(items, eval_items<T>(*substitute.value, symbols, size))
+                        for ( size_t i = 0; i < size; ++i )
                         {
                             auto idx = index[i].as_int();
                             TRY_CALL(check_index_range(idx, length, substitute.index->position))
@@ -393,7 +393,7 @@ namespace sknd
                                      (int)indices_rank, (int)tensor.rank());
                     }
                     
-                    auto size = tensor.max_size_or_null();
+                    bool packed = tensor.packed();
                     
                     size_t k = 0;
                     std::vector<ValueExpr> indices;
@@ -414,15 +414,12 @@ namespace sknd
                         {
                             TRY_DECL(ix, eval(*index, symbols))
                             indices.push_back(std::move(ix));
-                            if ( ix.packed() )
-                            {
-                                size = ix.max_size();
-                            }
+                            packed |= ix.packed();
                         }
                         k += rank;
                     }
                     
-                    return ValueExpr(TensorAccess{ tensor, std::move(indices) }, tensor.dtype(), size);
+                    return ValueExpr(TensorAccess{ tensor, std::move(indices) }, tensor.dtype(), packed);
                 }
                 case Expr::Fold:
                 {
@@ -443,9 +440,7 @@ namespace sknd
                             return ValueExpr::list(std::move(items), type);
                         }
                     }
-                    assert(pack.packed());
-                    auto size = pack.max_size();
-                    return ValueExpr::fold(Lexer::str(fold.op), pack, size);
+                    return ValueExpr::fold(Lexer::str(fold.op), pack, fold.cumulative);
                 }
                 case Expr::Expand:
                 {
@@ -455,8 +450,7 @@ namespace sknd
                         if ( !rank.is_literal() )
                         {
                             TRY_DECL(item, eval(*expand.item, symbols))
-                            auto size = eval_shape_expr_max(canonical(rank));
-                            return ValueExpr::uniform(item, rank, size);
+                            return ValueExpr::uniform(item, rank);
                         }
                     }
                     else
@@ -470,16 +464,16 @@ namespace sknd
                     auto& cast = as_cast(expr);
                     TRY_DECL(arg, eval(*cast.arg, symbols))
                     const Typename type = is_abstract(cast.base) ? symbols.at(cast.type).type : cast.base;
-                    auto size = arg.max_size_or_null();
-                    return ValueExpr(ValueExpr::CastExpr{ type, std::move(arg) }, type, size);
+                    bool packed = arg.packed();
+                    return ValueExpr(ValueExpr::CastExpr{ type, std::move(arg) }, type, packed);
                 }
                 case Expr::Unary:
                 {
                     auto& unary = as_unary(expr);
                     TRY_DECL(arg, eval(*unary.arg, symbols))
                     auto type = arg.dtype();
-                    auto size = arg.max_size_or_null();
-                    return ValueExpr::unary(Lexer::str(unary.op), std::move(arg), type, size);
+                    bool packed = arg.packed();
+                    return ValueExpr::unary(Lexer::str(unary.op), std::move(arg), type, packed);
                 }
                 case Expr::Binary:
                 {
@@ -487,8 +481,8 @@ namespace sknd
                     TRY_DECL(left, eval(*binary.left, symbols))
                     TRY_DECL(right, eval(*binary.right, symbols))
                     auto type = left.dtype();
-                    auto size = left.packed() ? left.max_size() : right.max_size_or_null();
-                    return ValueExpr::binary(Lexer::str(binary.op), std::move(left), std::move(right), type, size);
+                    auto packed = left.packed() || right.packed();
+                    return ValueExpr::binary(Lexer::str(binary.op), std::move(left), std::move(right), type, packed);
                 }
                 case Expr::Select:
                 {
@@ -496,10 +490,10 @@ namespace sknd
                     TRY_DECL(cond, eval(*select.cond, symbols))
                     if ( is_literal(cond) )
                     {
-                        if ( cond.packed() )
+                        if ( cond.is_list() )
                         {
                             Cache cache;
-                            std::vector<ValueExpr> items(cond.max_size());
+                            std::vector<ValueExpr> items(cond.as_list().size());
                             for ( size_t i = 0; i < items.size(); ++i )
                             {
                                 TRY_DECL(item, eval_item(cond[i].as_bool() ? *select.left : *select.right, symbols, i, &cache))
@@ -508,6 +502,10 @@ namespace sknd
                             auto type = eval_type(expr, symbols);
                             return ValueExpr::list(std::move(items), type);
                         }
+                        else if ( cond.is_uniform() )
+                        {
+                            return eval(cond.as_uniform().value.as_bool() ? *select.left : *select.right, symbols);
+                        }
                         else
                         {
                             return eval(cond.as_bool() ? *select.left : *select.right, symbols);
@@ -515,8 +513,8 @@ namespace sknd
                     }
                     TRY_DECL(left, eval(*select.left, symbols))
                     TRY_DECL(right, eval(*select.right, symbols))
-                    auto size = cond.packed() ? cond.max_size() : left.packed() ? left.max_size() : right.max_size_or_null();
-                    return ValueExpr::select(std::move(cond), std::move(left), std::move(right), size);
+                    auto packed = cond.packed() || left.packed() || right.packed();
+                    return ValueExpr::select(std::move(cond), std::move(left), std::move(right), packed);
                 }
                 case Expr::List:
                 {
@@ -532,18 +530,22 @@ namespace sknd
                         return eval(*list.items.front(), symbols);
                     }
                     
-                    size_t size = 0;
                     std::vector<ValueExpr> items(list.items.size());
                     for ( size_t i = 0; i < items.size(); ++i )
                     {
                         TRY_DECL(item, eval(*list.items[i], symbols))
-                        size += item.packed() ? item.max_size() : 1;
                         items[i] = std::move(item);
                     }
                     
-                    auto can_unroll = []( const ValueExpr& x ){ return !x.packed() || x.is_list() || x.is_uniform(); };
+                    auto can_unroll = []( const ValueExpr& x ){ return !x.packed() || !x.has_dynamic_size(); };
                     if ( std::all_of(items.begin(), items.end(), can_unroll) )
                     {
+                        size_t size = 0;
+                        for ( auto& item : items )
+                        {
+                            size += item.packed() ? item.size().as_int() : 1;
+                        }
+                        
                         std::vector<ValueExpr> values(size);
                         size_t k = 0;
                         for ( auto& item : items )
@@ -562,7 +564,8 @@ namespace sknd
                             }
                             else
                             {
-                                for ( size_t i = 0; i < item.max_size(); ++i )
+                                auto size = (size_t)item.size().as_int();
+                                for ( size_t i = 0; i < size; ++i )
                                 {
                                     values[k++] = item.at(i);
                                 }
@@ -572,7 +575,7 @@ namespace sknd
                     }
                     else
                     {
-                        return ValueExpr(ValueExpr::ConcatExpr{ std::move(items) }, type, size);
+                        return ValueExpr(ValueExpr::ConcatExpr{ std::move(items) }, type, true);
                     }
                     break;
                 }
@@ -1071,12 +1074,13 @@ namespace sknd
                     else
                     {
                         TRY_DECL(rank, eval_rank_static(*expr.index, symbols))
-                        if ( rank )
+                        if ( rank != nullptr )
                         {
-                            TRY_DECL(index_value, eval_items(*expr.index, symbols, *rank))
+                            auto size = (size_t)rank.as_int();
+                            TRY_DECL(index_value, eval_items(*expr.index, symbols, size))
                             
                             std::string result;
-                            for ( size_t i = 0; i < *rank; ++i )
+                            for ( size_t i = 0; i < size; ++i )
                             {
                                 if ( !index_value[i].is_literal() )
                                 {
@@ -1117,7 +1121,8 @@ namespace sknd
                 }
                 
                 size_t k = 0;
-                for ( size_t i = 0; i < mask.max_size(); ++i )
+                auto size = (size_t)mask.size().as_int();
+                for ( size_t i = 0; i < size; ++i )
                 {
                     if ( mask[i].as_bool() )
                     {
@@ -1379,14 +1384,14 @@ namespace sknd
             if ( is_tensor_expr(*expr.item, symbols) )
             {
                 TRY_DECL(lookup, eval_item<Tensor*>(*expr.item, symbols, idx, cache))
-                TRY_DECL(items, eval_items<Tensor*>(*expr.pack, symbols, *length))
+                TRY_DECL(items, eval_items<Tensor*>(*expr.pack, symbols, length.as_int()))
                 
                 return ValueExpr(std::find(items.begin(), items.end(), lookup) != items.end());
             }
             else
             {
                 TRY_DECL(lookup, eval_item(*expr.item, symbols, idx, cache))
-                TRY_DECL(items, eval_items(*expr.pack, symbols, *length))
+                TRY_DECL(items, eval_items(*expr.pack, symbols, length.as_int()))
                 
                 return ValueExpr(std::find(items.begin(), items.end(), lookup) != items.end());
             }
@@ -1626,11 +1631,12 @@ namespace sknd
             }
             
             TRY_DECL(rank, eval_rank_static(*expr.pack, symbols))
-            auto length = *rank;
+            auto length = (size_t)rank.as_int();
             
             if ( index.packed() )
             {
-                for ( size_t k = 0; k < index.max_size(); ++k )
+                auto size = (size_t)index.size().as_int();
+                for ( size_t k = 0; k < size; ++k )
                 {
                     auto i = index[k].as_int();
                     TRY_CALL(check_index_range(i, length, expr.index->position))
@@ -2024,7 +2030,7 @@ namespace sknd
                 case ValueExpr::Fold:
                 {
                     auto& fold = expr.as_fold();
-                    if ( !fold.accumulate )
+                    if ( !fold.cumulative )
                     {
                         return expr;
                     }
@@ -2118,18 +2124,14 @@ namespace sknd
     public:
         
         template<bool Optional = false>
-        static Result<std::optional<size_t>> eval_rank_static( const Expr& expr, const Dict<Symbol>& symbols )
+        static Result<ValueExpr> eval_rank_static( const Expr& expr, const Dict<Symbol>& symbols )
         {
             TRY_DECL(rank, eval_rank<Optional>(expr, symbols))
-            if ( rank == nullptr )
-            {
-                return (std::optional<size_t>)std::nullopt;
-            }
-            if ( !rank.is_literal() )
+            if ( rank != nullptr && !rank.is_literal() )
             {
                 return Error(expr.position, "length of packed expression must not be dynamic in this context");
             }
-            return (std::optional<size_t>)rank.as_int();
+            return rank;
         }
         
         template<bool Optional = false>
@@ -2224,10 +2226,10 @@ namespace sknd
                         if ( index_length != array_length )
                         {
                             return Error(expr.position, "incompatible mask length and pack length (%d vs %d)",
-                                         (int)*index_length, (int)*array_length);
+                                         (int)index_length.as_int(), (int)array_length.as_int());
                         }
                         
-                        TRY_DECL(mask, eval_items(*index.index, symbols, *index_length))
+                        TRY_DECL(mask, eval_items(*index.index, symbols, index_length.as_int()))
                         if ( !is_literal(mask) )
                         {
                             return Error(expr.position, "index mask must not depend on dynamic shapes");
@@ -2687,7 +2689,7 @@ namespace sknd
                 else
                 {
                     TRY_DECL(rank, eval_rank_static(item, symbols))
-                    return *rank;
+                    return rank.as_int();
                 }
             }
             else
@@ -2759,20 +2761,34 @@ namespace sknd
         {
             if ( expr.packed() && !idx )
             {
-                T min = 0, max = 0;
-                for ( size_t i = 0; i < expr.max_size(); ++i )
+                if ( expr.is_list() )
                 {
-                    DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds(expr, i))
-                    if ( i == 0 || item_min < min )
+                    auto& list = expr.as_list();
+                    T min = 0, max = 0;
+                    for ( size_t i = 0; i < list.size(); ++i )
                     {
-                        min = item_min;
+                        DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds(expr, i))
+                        if ( i == 0 || item_min < min )
+                        {
+                            min = item_min;
+                        }
+                        if ( i == 0 || item_max > max )
+                        {
+                            max = item_max;
+                        }
                     }
-                    if ( i == 0 || item_max > max )
-                    {
-                        max = item_max;
-                    }
+                    return std::make_pair(min, max);
                 }
-                return std::make_pair(min, max);
+                else if ( expr.is_uniform() )
+                {
+                    auto& uniform = expr.as_uniform();
+                    return eval_shape_expr_bounds(uniform.value);
+                }
+                else
+                {
+                    assert(false);  // needs to be generalized
+                    return std::nullopt;
+                }
             }
             
             switch ( expr.kind() )
@@ -2937,8 +2953,9 @@ namespace sknd
                 {
                     auto& fold = expr.as_fold();
                     auto& pack = fold.pack.is_reference() ? *fold.pack.as_reference().target : fold.pack;
-                    assert(pack.packed());
+                    assert(pack.is_list()); // needs to be generalized
                     bool dynamic_size = pack.has_dynamic_size();
+                    auto size = pack.as_list().size();
                     switch ( Lexer::operator_value(fold.op) )
                     {
                         case Lexer::Operator::Plus:
@@ -2946,7 +2963,7 @@ namespace sknd
                             T sum_min = 0;
                             T sum_max = 0;
                             T max = 0;
-                            for ( size_t i = 0; i < pack.max_size(); ++i )
+                            for ( size_t i = 0; i < size; ++i )
                             {
                                 DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds<T>(pack, i))
                                 sum_min += item_min;
@@ -2963,7 +2980,7 @@ namespace sknd
                             T prod_min = 1;
                             T prod_max = 1;
                             T max = 1;
-                            for ( size_t i = 0; i < pack.max_size(); ++i )
+                            for ( size_t i = 0; i < size; ++i )
                             {
                                 DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds<T>(pack, i))
                                 prod_min *= item_min;
@@ -2978,7 +2995,7 @@ namespace sknd
                         case Lexer::Operator::Min:
                         {
                             DECL_BOUNDS(min, max, eval_shape_expr_bounds<T>(pack.at(0)))
-                            for ( size_t i = 1; i < pack.max_size(); ++i )
+                            for ( size_t i = 1; i < size; ++i )
                             {
                                 DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds<T>(pack, i))
                                 min = std::min(min, item_min);
@@ -2992,7 +3009,7 @@ namespace sknd
                         case Lexer::Operator::Max:
                         {
                             DECL_BOUNDS(min, max, eval_shape_expr_bounds<T>(pack.at(0)))
-                            for ( size_t i = 1; i < pack.max_size(); ++i )
+                            for ( size_t i = 1; i < size; ++i )
                             {
                                 DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds<T>(pack, i))
                                 max = std::max(max, item_max);
@@ -3070,15 +3087,17 @@ namespace sknd
             for ( size_t i = 0; i < shape.size(); ++i )
             {
                 auto& extent = shape[i];
-                if ( extent.packed() )
+                if ( extent.is_list() )
                 {
-                    if ( extent.max_size() == 0 )
+                    const size_t rank = extent.as_list().size();
+                    
+                    if ( rank == 0 )
                     {
                         max_shape[i] = -1;
                         continue;
                     }
                     auto bounds = eval_shape_expr_bounds(extent, 0);
-                    for ( size_t k = 1; k < extent.max_size(); ++k )
+                    for ( size_t k = 1; k < rank; ++k )
                     {
                         auto item_bounds = eval_shape_expr_bounds(extent, k);
                         if ( bounds != item_bounds )
@@ -3089,8 +3108,14 @@ namespace sknd
                     }
                     max_shape[i] = bounds ? bounds->second : -1;
                 }
+                else if ( extent.is_uniform() )
+                {
+                    auto bounds = eval_shape_expr_bounds(extent.as_uniform().value);
+                    max_shape[i] = bounds ? bounds->second : -1;
+                }
                 else
                 {
+                    assert(!extent.packed());
                     auto bounds = eval_shape_expr_bounds(extent);
                     max_shape[i] = bounds ? bounds->second : -1;
                 }

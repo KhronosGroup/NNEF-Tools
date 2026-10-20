@@ -395,8 +395,8 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
             PyObject* tensor = buildPyTensorRef(access.tensor, context);
             PyObject* dim = buildPyValueExpr(access.dim, context);
             PyObject* item = buildPyValueExpr(access.item, context);
-            PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
-            return makePyObject(ShapeAccess, tensor, dim, item, max_size);
+            PyObject* packed = buildPyBoolean(expr.packed());
+            return makePyObject(ShapeAccess, tensor, dim, item, packed);
         }
         case sknd::ValueExpr::TensorAccess:
         {
@@ -419,8 +419,8 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
             PyObject* op = buildPyStr(unary.op);
             PyObject* arg = buildPyValueExpr(unary.arg, context);
             PyObject* dtype = buildPyDtype(expr.dtype());
-            PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
-            return makePyObject(UnaryExpr, op, arg, dtype, max_size);
+            PyObject* packed = buildPyBoolean(expr.packed());
+            return makePyObject(UnaryExpr, op, arg, dtype, packed);
         }
         case sknd::ValueExpr::Binary:
         {
@@ -429,8 +429,8 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
             PyObject* left = buildPyValueExpr(binary.left, context);
             PyObject* right = buildPyValueExpr(binary.right, context);
             PyObject* dtype = buildPyDtype(expr.dtype());
-            PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
-            return makePyObject(BinaryExpr, op, left, right, dtype, max_size);
+            PyObject* packed = buildPyBoolean(expr.packed());
+            return makePyObject(BinaryExpr, op, left, right, dtype, packed);
         }
         case sknd::ValueExpr::Select:
         {
@@ -439,8 +439,8 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
             PyObject* left = buildPyValueExpr(select.left, context);
             PyObject* right = buildPyValueExpr(select.right, context);
             PyObject* dtype = buildPyDtype(expr.dtype());
-            PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
-            return makePyObject(SelectExpr, cond, left, right, dtype, max_size);
+            PyObject* packed = buildPyBoolean(expr.packed());
+            return makePyObject(SelectExpr, cond, left, right, dtype, packed);
         }
         case sknd::ValueExpr::Fold:
         {
@@ -448,21 +448,22 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
             PyObject* op = buildPyStr(fold.op);
             PyObject* pack = buildPyValueExpr(fold.pack, context);
             PyObject* dtype = buildPyDtype(expr.dtype());
-            PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
-            return makePyObject(FoldExpr, op, pack, dtype, max_size);
+            PyObject* cumulative = buildPyBoolean(fold.cumulative);
+            return makePyObject(FoldExpr, op, pack, dtype, cumulative);
         }
         case sknd::ValueExpr::Cast:
         {
             auto& cast = expr.as_cast();
             PyObject* arg = buildPyValueExpr(cast.arg, context);
             PyObject* dtype = buildPyDtype(expr.dtype());
-            PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
-            return makePyObject(CastExpr, arg, dtype, max_size);
+            PyObject* packed = buildPyBoolean(expr.packed());
+            return makePyObject(CastExpr, arg, dtype, packed);
         }
         case sknd::ValueExpr::List:
         {
-            PyObject* items = PyList_New(expr.max_size());
-            for ( size_t i = 0; i < expr.max_size(); ++i )
+            auto& list = expr.as_list();
+            PyObject* items = PyList_New(list.size());
+            for ( size_t i = 0; i < list.size(); ++i )
             {
                 PyList_SetItem(items, i, buildPyValueExpr(expr[i], context));
             }
@@ -488,8 +489,7 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
             }
             PyObject* dtype = buildPyDtype(expr.dtype());
             PyObject* size = buildPyValueExpr(expr.size(), context);
-            PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
-            return makePyObject(ConcatExpr, items, dtype, size, max_size);
+            return makePyObject(ConcatExpr, items, dtype, size);
         }
         case sknd::ValueExpr::Slice:
         {
@@ -500,8 +500,7 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
             PyObject* stride = buildPyValueExpr(slice.stride, context);
             PyObject* dtype = buildPyDtype(expr.dtype());
             PyObject* size = buildPyValueExpr(expr.size(), context);
-            PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
-            return makePyObject(SliceExpr, pack, first, last, stride, dtype, size, max_size);
+            return makePyObject(SliceExpr, pack, first, last, stride, dtype, size);
         }
         case sknd::ValueExpr::Subscript:
         {
@@ -509,8 +508,7 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
             PyObject* pack = buildPyValueExpr(subscript.pack, context);
             PyObject* index = buildPyValueExpr(subscript.index, context);
             PyObject* dtype = buildPyDtype(expr.dtype());
-            PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
-            return makePyObject(SubscriptExpr, pack, index, dtype, max_size);
+            return makePyObject(SubscriptExpr, pack, index, dtype);
         }
         case sknd::ValueExpr::Uniform:
         {
@@ -518,8 +516,7 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
             PyObject* value = buildPyValueExpr(uniform.value, context);
             PyObject* size = buildPyValueExpr(uniform.size, context);
             PyObject* dtype = buildPyDtype(expr.dtype());
-            PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
-            return makePyObject(UniformExpr, value, size, dtype, max_size);
+            return makePyObject(UniformExpr, value, size, dtype);
         }
         case sknd::ValueExpr::Range:
         {
@@ -529,8 +526,7 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
             PyObject* stride = buildPyValueExpr(range.stride, context);
             PyObject* dtype = buildPyDtype(expr.dtype());
             PyObject* size = buildPyValueExpr(expr.size(), context);
-            PyObject* max_size = expr.packed() ? buildPyInt(expr.max_size()) : buildPyNone();
-            return makePyObject(RangeExpr, first, last, stride, dtype, size, max_size);
+            return makePyObject(RangeExpr, first, last, stride, dtype, size);
         }
     }
     assert(false);
@@ -1158,24 +1154,24 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
 
     Expr = makeDataClass(module, "Expr", {});
     SizeAccess = makeDataClass(module, Expr, "SizeAccess", { "pack" });
-    ShapeAccess = makeDataClass(module, Expr, "ShapeAccess", { "tensor", "dim", "item", "max_size" });
+    ShapeAccess = makeDataClass(module, Expr, "ShapeAccess", { "tensor", "dim", "item", "packed" });
     TensorAccess = makeDataClass(module, Expr, "TensorAccess", { "tensor", "indices", "item" });
     PlaceholderExpr = makeDataClass(module, Expr, "PlaceholderExpr", { "id", "max_value" });
     IdentifierExpr = makeDataClass(module, Expr, "IdentifierExpr", { "name", "kind", "dtype" });
     IdentifierKind = makeEnum(module, "IdentifierKind", { "LoopIndex", "LoopLocal" });
     ReferenceExpr = makeDataClass(module, Expr, "ReferenceExpr", { "name", "target", "dtype" });
-    UnaryExpr = makeDataClass(module, Expr, "UnaryExpr", { "op", "arg", "dtype", "max_size" });
-    BinaryExpr = makeDataClass(module, Expr, "BinaryExpr", { "op", "left", "right", "dtype", "max_size" });
-    SelectExpr = makeDataClass(module, Expr, "SelectExpr", { "cond", "left", "right", "dtype", "max_size" });
+    UnaryExpr = makeDataClass(module, Expr, "UnaryExpr", { "op", "arg", "dtype", "packed" });
+    BinaryExpr = makeDataClass(module, Expr, "BinaryExpr", { "op", "left", "right", "dtype", "packed" });
+    SelectExpr = makeDataClass(module, Expr, "SelectExpr", { "cond", "left", "right", "dtype", "packed" });
     ListExpr = makeDataClass(module, Expr, "ListExpr", { "items", "dtype" });
-    FoldExpr = makeDataClass(module, Expr, "FoldExpr", { "op", "pack", "dtype", "max_size" });
-    CastExpr = makeDataClass(module, Expr, "CastExpr", { "arg", "dtype", "max_size" });
+    FoldExpr = makeDataClass(module, Expr, "FoldExpr", { "op", "pack", "dtype", "cumulative" });
+    CastExpr = makeDataClass(module, Expr, "CastExpr", { "arg", "dtype", "packed" });
     BoundedExpr = makeDataClass(module, Expr, "BoundedExpr", { "arg", "lower", "upper", "dtype" });
-    ConcatExpr = makeDataClass(module, Expr, "ConcatExpr", { "items", "dtype", "size", "max_size" });
-    SliceExpr = makeDataClass(module, Expr, "SliceExpr", { "pack", "first", "last", "stride", "dtype", "size", "max_size" });
-    SubscriptExpr = makeDataClass(module, Expr, "SubscriptExpr", { "pack", "index", "dtype", "max_size" });
-    UniformExpr = makeDataClass(module, Expr, "UniformExpr", { "value", "size", "dtype", "max_size" });
-    RangeExpr = makeDataClass(module, Expr, "RangeExpr", { "first", "last", "stride", "dtype", "size", "max_size" });
+    ConcatExpr = makeDataClass(module, Expr, "ConcatExpr", { "items", "dtype", "size" });
+    SliceExpr = makeDataClass(module, Expr, "SliceExpr", { "pack", "first", "last", "stride", "dtype", "size" });
+    SubscriptExpr = makeDataClass(module, Expr, "SubscriptExpr", { "pack", "index", "dtype" });
+    UniformExpr = makeDataClass(module, Expr, "UniformExpr", { "value", "size", "dtype" });
+    RangeExpr = makeDataClass(module, Expr, "RangeExpr", { "first", "last", "stride", "dtype", "size" });
 
     Contraction = makeDataClass(module, "Contraction", { "left", "right", "condition", "assignment", "locals", "bounds", "subscripts", "axes" });
 

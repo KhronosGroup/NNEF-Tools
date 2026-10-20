@@ -160,16 +160,25 @@ def replace_tensor_in_producers(old_tensor, new_tensor):
 
 
 def replace_tensor_in_tuple(items, old_tensor, new_tensor):
-    return tuple((new_tensor if item is old_tensor else item) if isinstance(item, Tensor) or item is None
-                 else replace_tensor_in_pack(item, old_tensor, new_tensor)
-                 for item in items)
+    return tuple(replace_tensor_in_arg(item, old_tensor, new_tensor) for item in items)
 
 
-def replace_tensor_in_pack(items, old_tensor, new_tensor):
-    for i, item in enumerate(items):
-        if item is old_tensor:
-            items[i] = new_tensor
-    return items
+def replace_tensor_in_arg(arg, old_tensor, new_tensor):
+    if isinstance(arg, TensorPack):
+        if arg.items:
+            for i, item in enumerate(arg.items):
+                if item is old_tensor:
+                    arg.items[i] = new_tensor
+        return arg
+    elif isinstance(arg, list):
+        for i, item in enumerate(arg):
+            if item is old_tensor:
+                arg[i] = new_tensor
+        return arg
+    elif isinstance(arg, Tensor):
+        return new_tensor if arg is old_tensor else arg
+    else:
+        return arg
 
 
 def bypass_and_remove(graph, op, remove_input_not_output=False, input_index=0):
@@ -352,7 +361,11 @@ def remove_unused_tensors(arg):
 
 
 def recursive_itemize(arg):
-    if type(arg) is list or type(arg) is tuple:
+    if isinstance(arg, TensorPack):
+        if arg.items:
+            for item in arg.items:
+                yield from recursive_itemize(item)
+    elif isinstance(arg, (list, tuple)):
         for item in arg:
             yield from recursive_itemize(item)
     else:
