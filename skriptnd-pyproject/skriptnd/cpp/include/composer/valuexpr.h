@@ -72,7 +72,7 @@ namespace sknd
         
     private:
         
-        typedef VariantData<int_t,real_t,bool_t,str_t,
+        typedef VariantData<nullptr_t,int_t,real_t,bool_t,str_t,
                             PlaceholderExpr,IdentifierExpr,ReferenceExpr,
                             SizeAccessExpr,ShapeAccessExpr,TensorAccessExpr,
                             UnaryExpr,BinaryExpr,SelectExpr,FoldExpr,ListExpr,
@@ -80,10 +80,6 @@ namespace sknd
                             UniformExpr,RangeExpr> variant_data;
         
         typedef uint8_t index_type;
-        typedef int32_t size_type;
-        
-        static constexpr index_type NullIndex = -1;
-        static constexpr size_type UnboundedSize = -1;
         
     public:
         
@@ -109,7 +105,7 @@ namespace sknd
         static Kind kind_of()
         {
             auto index = variant_data::index_of<T>();
-            return index < 4 ? Literal : (Kind)(index - 2);
+            return index == 0 ? Null : index < 5 ? Literal : (Kind)(index - 3);
         }
         
         static ValueExpr placeholder( const std::string& id, const ValueExpr& max_value );
@@ -162,7 +158,7 @@ namespace sknd
     public:
         
         ValueExpr( std::nullptr_t = nullptr )
-        : _kind(Null), _dtype(Typename::Type), _index(NullIndex), _packed(false)
+        : _kind(Null), _dtype(Typename::Type), _index(variant_data::index_of<nullptr_t>()), _packed(false)
         {
         }
         
@@ -686,7 +682,7 @@ namespace sknd
         
         bool operator==( const ValueExpr& other ) const
         {
-            return _index == other._index && (_index == NullIndex || _data.equals(other._data, _index));
+            return _index == other._index && _data.equals(other._data, _index);
         }
         
         bool operator!=( const ValueExpr& other ) const
