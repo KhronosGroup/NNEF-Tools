@@ -102,6 +102,7 @@ namespace sknd
             
             TRY_CALL(compose_graph(model, graph, op, dtypes, attribs))
             
+            set_max_shapes(model);
             override_output_shapes(model);
             
             return model;
@@ -144,6 +145,22 @@ namespace sknd
                             }
                         }
                     }
+                }
+            }
+        }
+        
+        void set_max_shapes( Model& model )
+        {
+            for ( auto& graph : model.graphs )
+            {
+                for ( auto& tensor : graph->tensors )
+                {
+                    tensor->max_shape = eval_shape_max(tensor->shape);
+                }
+                for ( auto& pack : graph->packs )
+                {
+                    pack->max_shape = eval_shape_max(pack->shape);
+                    pack->max_size = eval_shape_expr_max(pack->size);
                 }
             }
         }
