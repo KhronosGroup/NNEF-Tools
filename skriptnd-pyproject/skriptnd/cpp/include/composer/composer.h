@@ -67,12 +67,6 @@ namespace sknd
         {
             return [&graph,this]( const Tensors& tensors, const Typename& dtype, const Shape& shape ) -> TensorRef
             {
-                auto& packs = _contexts.at(graph.name).packs;
-                auto it = packs.find(tensors);
-                if ( it != packs.end() )
-                {
-                    return TensorRef(it->second);
-                }
                 auto size = (int_t)tensors.size();
                 auto canonic_shape = canonical(shape);
                 auto max_shape = eval_shape_max(canonic_shape);
@@ -81,7 +75,6 @@ namespace sknd
                 {
                     pack->items[i] = tensors[i];
                 }
-                cache_tensor_pack(graph, pack);
                 return TensorRef(pack);
             };
         }
@@ -835,11 +828,6 @@ namespace sknd
                         auto& output = *body_graph->outputs[i];
                         
                         auto pack = make_tensor_pack(graph, output.dtype, canonic_size, max_repeats, output.shape, output.max_shape);
-                        /*for ( size_t k = 0; k < pack->items.size(); ++k )
-                        {
-                            pack->items[k] = make_tensor(graph, output.dtype, output.shape, output.max_shape);
-                        }*/
-                        //cache_tensor_pack(graph, pack);
                         outputs[i] = TensorRef(pack);
                         
                         auto shape = propagate_shape_through_region(body_graph->outputs[i], body_context);
@@ -975,11 +963,6 @@ namespace sknd
                     {
                         outputs[k].as<TensorPack*>()->items[i] = &*item_outputs[k];
                     }
-                }
-                
-                for ( size_t k = loop.carries.size(); k < outputs.size(); ++k )
-                {
-                    cache_tensor_pack(graph, outputs[k].as<TensorPack*>());
                 }
                 
                 return std::make_tuple(inputs, outputs);
@@ -1682,11 +1665,6 @@ namespace sknd
                                 auto size = output.size() - ValueExpr((int_t)result.size() - 1);
                                 auto name = item.name.empty() ? std::string() : scoped_name(scope, item.name);
                                 auto pack = make_tensor_pack(graph, result_type, canonical(size), n, output.shape(), output.max_shape(), false, name);
-                                /*for ( size_t i = 0; i < n; ++i )
-                                {
-                                    pack->items[i] = (Tensor*)&output[k+i];
-                                }
-                                cache_tensor_pack(graph, pack);*/
                                 
                                 if ( !item.name.empty() )
                                 {
@@ -1974,13 +1952,7 @@ namespace sknd
                 const int_t max_size = std::max(output1.max_size(), output2.max_size());
                 const ValueExpr size = output1.size() == output2.size() ? output1.size() : new_placeholder_expr(max_size);
                 
-                auto pack = make_tensor_pack(graph, dtype, size, max_size, shape, max_shape);
-                /*for ( size_t i = 0; i < pack->items.size(); ++i )
-                {
-                    pack->items[i] = make_tensor(graph, dtype, item_shape(shape, i), max_shape);
-                }*/
-                //cache_tensor_pack(graph, pack);
-                return pack;
+                return make_tensor_pack(graph, dtype, size, max_size, shape, max_shape);
             }
             else
             {
@@ -3427,7 +3399,6 @@ namespace sknd
                         auto name = scoped_name(scope, param.name, i+1);
                         pack->items[i] = make_tensor(graph, type, canonic_shape_i, max_shape, name, value.packed() ? value[i] : value, variable);
                     }
-                    cache_tensor_pack(graph, pack);
                 }
                 return TensorRef(pack);
             }
@@ -3475,12 +3446,6 @@ namespace sknd
             return graph.packs.back().get();
         }
         
-        void cache_tensor_pack( const Graph& graph, TensorPack* pack )
-        {
-            std::vector<Tensor*> items(pack->items.get(), pack->items.get() + pack->max_size);
-            _contexts.at(graph.name).packs.emplace(std::move(items), pack);
-        }
-        
         TensorRef make_tensor_like( Graph& graph, const TensorRef& tensor, const std::optional<std::string>& scope = {},
                                    const std::string& iden = {} )
         {
@@ -3501,7 +3466,6 @@ namespace sknd
                         pack->items[i] = make_tensor(graph, tensor[i].dtype, tensor[i].shape, tensor[i].max_shape, name);
                     }
                 }
-                cache_tensor_pack(graph, pack);
                 return pack;
             }
             else
@@ -3543,7 +3507,6 @@ namespace sknd
                     {
                         pack->items[i] = make_tensor(graph, type, {}, {}, value[i]);
                     }
-                    cache_tensor_pack(graph, pack);
                     it = consts.emplace(str, TensorRef(pack)).first;
                 }
                 else
@@ -4694,7 +4657,6 @@ namespace sknd
         struct GraphContext
         {
             Dict<TensorRef> consts;
-            std::unordered_map<Tensors,TensorPack*> packs;
             std::unordered_map<TensorRef,Shape> shapes;
             std::unordered_map<TensorRef,ValueExpr> sizes;
         };
