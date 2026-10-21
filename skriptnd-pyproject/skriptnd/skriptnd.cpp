@@ -296,7 +296,7 @@ static PyObject* buildPyTensorRef( const sknd::TensorRef& ref, const BuildContex
     }
     else if ( ref.packed() )
     {
-        auto it = context.packs.find(ref.as<sknd::TensorPack*>());
+        auto it = context.packs.find(&ref.as_pack());
         if ( it == context.packs.end() )
         {
             throw std::runtime_error("Could not map tensor pack '" + ref.name() + "' from C++ to Python");
@@ -307,7 +307,7 @@ static PyObject* buildPyTensorRef( const sknd::TensorRef& ref, const BuildContex
     }
     else
     {
-        auto it = context.tensors.find(ref.as<sknd::Tensor*>());
+        auto it = context.tensors.find(&ref.as_tensor());
         if ( it == context.tensors.end() )
         {
             throw std::runtime_error("Could not map tensor '" + ref.name() + "' from C++ to Python");

@@ -128,11 +128,13 @@ namespace sknd
                         output.shape() = context.shapes.at(output);
                         if ( output.packed() )
                         {
-                            output.size() = context.sizes.at(output);
-                            if ( output.listed() )
+                            auto& pack = output.as_pack();
+                            pack.size = context.sizes.at(output);
+                            if ( pack.items )
                             {
-                                for ( auto& item : output )
+                                for ( size_t i = 0; i < pack.max_size; ++i )
                                 {
+                                    auto& item = pack.items[i];
                                     item->shape = context.shapes.at(item);
                                 }
                             }
@@ -502,7 +504,7 @@ namespace sknd
                         else
                         {
                             TRY_DECL(value, eval(*expr, symbols, as_tensor(graph), as_tensor_pack(graph)))
-                            remapped = SizeAccess{ value.as<TensorPack*>() };
+                            remapped = SizeAccess{ value };
                         }
                     }
                     else if ( canonical(repeats) != canonical(arg_repeats) )
@@ -961,7 +963,7 @@ namespace sknd
                     }
                     for ( size_t k = loop.carries.size(); k < item_outputs.size(); ++k )
                     {
-                        outputs[k].as<TensorPack*>()->items[i] = &*item_outputs[k];
+                        outputs[k].as_pack().items[i] = &*item_outputs[k];
                     }
                 }
                 
@@ -986,9 +988,14 @@ namespace sknd
                     internals.insert(output);
                     if ( output.packed() )
                     {
-                        for ( auto& item : output )
+                        auto& items = output.as_pack().items;
+                        if ( items )
                         {
-                            internals.insert(item);
+                            for ( size_t i = 0; i < output.as_pack().max_size; ++i )
+                            {
+                                auto& item = items[i];
+                                internals.insert(item);
+                            }
                         }
                     }
                 }
@@ -997,13 +1004,18 @@ namespace sknd
                 {
                     if ( input != nullptr  )
                     {
-                        if ( is_implicit_pack(input) )
+                        if ( input.packed() )
                         {
-                            for ( auto& item : input )
+                            auto& items = input.as_pack().items;
+                            if ( items )
                             {
-                                if ( !internals.count(item) && !is_implicit_constant(item) )
+                                for ( size_t i = 0; i < input.as_pack().max_size; ++i )
                                 {
-                                    inputs.insert(item);
+                                    auto& item = items[i];
+                                    if ( !internals.count(item) && !is_implicit_constant(item) )
+                                    {
+                                        inputs.insert(item);
+                                    }
                                 }
                             }
                         }
@@ -1024,13 +1036,18 @@ namespace sknd
                 auto& yield = *region.yields[i];
                 TRY_DECL(tensor, eval(yield, symbols, as_tensor(graph), as_tensor_pack(graph)))
                 
-                if ( is_implicit_pack(tensor) )
+                if ( tensor.packed() )
                 {
-                    for ( auto& item : tensor )
+                    auto& items = tensor.as_pack().items;
+                    if ( items )
                     {
-                        if ( !internals.count(item) && !is_implicit_constant(item) )
+                        for ( size_t i = 0; i < tensor.as_pack().max_size; ++i )
                         {
-                            inputs.insert(item);
+                            auto& item = items[i];
+                            if ( !internals.count(item) && !is_implicit_constant(item) )
+                            {
+                                inputs.insert(item);
+                            }
                         }
                     }
                 }
@@ -1221,11 +1238,13 @@ namespace sknd
             if ( tensor.packed() )
             {
                 context.sizes[tensor] = size;
-                if ( tensor.listed() )
+                
+                auto& items = tensor.as_pack().items;
+                if ( items )
                 {
-                    for ( size_t i = 0; i < tensor.max_size(); ++i )
+                    for ( size_t i = 0; i < tensor.as_pack().max_size; ++i )
                     {
-                        auto item = tensor.at(i);
+                        auto& item = items[i];
                         if ( item != nullptr )
                         {
                             context.shapes[item] = item_shape(shape, i);
@@ -1750,7 +1769,7 @@ namespace sknd
                     bool is_empty_pack = output.packed() && output.dtype() == Typename::Type;
                     if ( is_empty_pack && decl_type != Typename::Type )
                     {
-                        output.as<TensorPack*>()->dtype = decl_type;
+                        output.as_pack().dtype = decl_type;
                     }
                     
                     if ( !item.name.empty() )
@@ -1896,7 +1915,7 @@ namespace sknd
                         
                         if ( !item.name.empty() )
                         {
-                            rename_tensor_pack((TensorPack&)output, scoped_name(scope, item.name));
+                            rename_tensor_pack(output.as_pack(), scoped_name(scope, item.name));
                             if ( output.listed() )
                             {
                                 for ( size_t j = 0; j < output.max_size(); ++j )
@@ -3599,14 +3618,13 @@ namespace sknd
                     TRY_DECL(iden, count, eval_affine_id(*param.repeats.value, (int_t)tensor.max_size()))
                     if ( !iden.empty() )
                     {
-                        auto pack = tensor.as<TensorPack*>();
-                        if ( pack->size.is_literal() )
+                        if ( tensor.as_pack().size.is_literal() )
                         {
                             symbols.emplace(iden, Symbol(ValueExpr(count), Typename::Int, Symbol::Extent));
                         }
                         else
                         {
-                            symbols.emplace(iden, Symbol(ValueExpr(SizeAccess{ pack }), Typename::Int, Symbol::Extent));
+                            symbols.emplace(iden, Symbol(ValueExpr(SizeAccess{ tensor }), Typename::Int, Symbol::Extent));
                         }
                     }
                 }

@@ -629,13 +629,13 @@ struct std::hash<sknd::TensorRef>
     {
         if ( r.packed() )
         {
-            std::hash<sknd::TensorPack*> hasher;
-            return hasher(r.as<sknd::TensorPack*>());
+            std::hash<const sknd::TensorPack*> hasher;
+            return hasher(&r.as_pack());
         }
         else
         {
-            std::hash<sknd::Tensor*> hasher;
-            return hasher(r.as<sknd::Tensor*>());
+            std::hash<const sknd::Tensor*> hasher;
+            return hasher(&r.as_tensor());
         }
     }
 };

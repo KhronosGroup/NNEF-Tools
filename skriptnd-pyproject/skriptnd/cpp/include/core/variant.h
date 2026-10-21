@@ -63,6 +63,16 @@ namespace sknd
             return is_unique_t<Ts...>::value;
         }
     
+        template<typename T1, typename... Ts>
+        struct first_of
+        {
+            using type = T1;
+        };
+        
+        template<typename... Ts>
+        using first_of_t = typename first_of<Ts...>::type;
+    
+    
         template<typename T, typename = void>
         struct variant_type_traits
         {
@@ -126,6 +136,8 @@ namespace sknd
         static_assert(sizeof...(Ts) > 0, "variant types must not be empty");
         static_assert(detail::is_unique<Ts...>(), "variant types must be unique");
         
+        using T0 = typename detail::first_of<Ts...>::type;
+        
     public:
         
         template<typename T>
@@ -140,13 +152,11 @@ namespace sknd
             return detail::index_of<T,Ts...>();
         }
         
-        static const size_t invalid_index = -1;
-        
     public:
         
-        Variant( std::nullptr_t = nullptr )
-        : _index(invalid_index)
+        Variant()
         {
+            construct(T0());
         }
         
         template<typename T, typename = std::enable_if_t<contains<T>()>>
@@ -201,21 +211,9 @@ namespace sknd
             return *this;
         }
         
-        Variant& operator=( std::nullptr_t )
-        {
-            destruct();
-            _index = invalid_index;
-            return *this;
-        }
-        
         ~Variant()
         {
             destruct();
-        }
-        
-        bool valid() const
-        {
-            return _index != invalid_index;
         }
         
         size_t index() const
@@ -226,7 +224,7 @@ namespace sknd
         template<typename T, typename = std::enable_if_t<contains<T>()>>
         bool is() const
         {
-            return index() == index_of<T>();
+            return _index == index_of<T>();
         }
         
         template<typename T, typename = std::enable_if_t<contains<T>()>>
@@ -269,16 +267,6 @@ namespace sknd
             return !(*this == other);
         }
         
-        bool operator==( std::nullptr_t ) const
-        {
-            return _index == invalid_index;
-        }
-        
-        bool operator!=( std::nullptr_t ) const
-        {
-            return _index != invalid_index;
-        }
-        
         template<typename C>
         void visit( const C& callback ) const
         {
@@ -309,10 +297,7 @@ namespace sknd
             using Func = void(Variant&);
             static Func* const Destructors[sizeof...(Ts)] = { []( Variant& v ){ detail::variant_type_traits<Ts>::destruct(v._data); }... };
             
-            if ( this->valid() )
-            {
-                Destructors[index()](*this);
-            }
+            Destructors[_index](*this);
         }
         
         void copy( const Variant& other )
@@ -321,10 +306,7 @@ namespace sknd
             static Func* const Constructors[sizeof...(Ts)] = { []( const Variant& v ){ return detail::variant_type_traits<Ts>::construct(v.as<Ts>()); }... };
             
             _index = other.index();
-            if ( other.valid() )
-            {
-                _data = Constructors[other.index()](other);
-            }
+            _data = Constructors[other.index()](other);
         }
         
         bool equals( const Variant& other ) const
@@ -332,7 +314,7 @@ namespace sknd
             using Func = bool(const Variant&,const Variant&);
             static Func* const Comparators[sizeof...(Ts)] = { []( const Variant& a, const Variant& b ){ return a.as<Ts>() == b.as<Ts>(); }... };
             
-            return _index == other._index && (_index == invalid_index || Comparators[_index](*this, other));
+            return _index == other._index && Comparators[_index](*this, other);
         }
         
     private:

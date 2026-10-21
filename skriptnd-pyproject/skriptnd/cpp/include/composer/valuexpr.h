@@ -248,10 +248,7 @@ namespace sknd
         
         ~ValueExpr()
         {
-            if ( *this != nullptr )
-            {
-                _data.destruct(_index);
-            }
+            _data.destruct(_index);
         }
         
         Kind kind() const
