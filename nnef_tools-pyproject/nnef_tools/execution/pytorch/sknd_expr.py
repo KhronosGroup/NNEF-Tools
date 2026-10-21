@@ -73,9 +73,6 @@ def eval_expr(expr, tensors):
         return list(range(first, last, stride))
     elif isinstance(expr, sknd.ShapeAccess):
         tensor = tensors[expr.tensor]
-        if expr.item is not None:
-            item = eval_expr(expr.item, tensors)
-            tensor = tensor[item]
         return tensor.shape if expr.dim is None else tensor.shape[expr.dim]
     elif isinstance(expr, sknd.SizeAccess):
         pack = tensors[expr.pack]

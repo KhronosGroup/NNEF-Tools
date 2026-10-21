@@ -119,14 +119,12 @@ namespace sknd
                         {
                             auto& access = x.as_shape_access();
                             assert(access.dim.is_literal());
-                            assert(access.item == nullptr || access.item.is_literal());
                             
-                            auto tensor = access.item == nullptr ? access.tensor : access.tensor.at(access.item.as_int());
                             bool packed = x.packed();
-                            x = tensor.shape()[access.dim.as_int()];
+                            x = access.tensor.shape()[access.dim.as_int()];
                             if ( packed && !x.packed() )
                             {
-                                x = ValueExpr::uniform(x, tensor.size());
+                                x = ValueExpr::uniform(x, access.tensor.size());
                             }
                             if ( Recursive )
                             {

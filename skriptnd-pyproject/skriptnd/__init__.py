@@ -137,6 +137,7 @@ ListExpr.size = property(lambda expr: len(expr.items))
 SubscriptExpr.size = property(lambda expr: expr.index.size)
 
 SizeAccess.packed = property(lambda access: False)
+ShapeAccess.packed = property(lambda access: access.dim is None)
 TensorAccess.packed = property(lambda access: (isinstance(access.tensor, TensorPack) and access.item is None) or
                                               any(isinstance(index, Expr) and index.packed for index in access.indices))
 PlaceholderExpr.packed = property(lambda expr: False)
@@ -153,10 +154,7 @@ RangeExpr.packed = property(lambda expr: True)
 
 
 def _shape_access_str(x):
-    s = local_name(x.tensor.name)
-    if x.item is not None:
-        s += '[' + str(x.item) + ']'
-    s += '.shape'
+    s = local_name(x.tensor.name) + '.shape'
     if x.dim is not None:
         s += '[' + str(x.dim) + ']'
     return s
@@ -472,7 +470,7 @@ def recursive_enumerate_expr(expr, preorder=True, follow_references=False):
         yield from recursive_enumerate_expr(expr.stride)
         yield from recursive_enumerate_expr(expr.size)
     elif isinstance(expr, ShapeAccess):
-        yield from recursive_enumerate_expr(expr.item)
+        yield from recursive_enumerate_expr(expr.dim)
     elif isinstance(expr, TensorAccess):
         yield from recursive_enumerate_expr(expr.item)
         for item in expr.indices:
@@ -548,8 +546,8 @@ def transform_expr(expr, func, preorder=True):
     elif isinstance(expr, SizeAccess):
         expr = SizeAccess(expr.pack)
     elif isinstance(expr, ShapeAccess):
-        item = transform_expr(expr.item, func)
-        expr = ShapeAccess(expr.tensor, expr.dim, item, expr.packed)
+        dim = transform_expr(expr.dim, func)
+        expr = ShapeAccess(expr.tensor, dim)
     elif isinstance(expr, TensorAccess):
         item = transform_expr(expr.item, func)
         indices = [transform_expr(item, func) for item in expr.indices]

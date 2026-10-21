@@ -960,9 +960,8 @@ namespace sknd
     {
         TensorRef tensor;
         ValueExpr dim;
-        ValueExpr item;
         
-        bool operator==( const ShapeAccessExpr& x ) const { return tensor == x.tensor && dim == x.dim && item == x.item; };
+        bool operator==( const ShapeAccessExpr& x ) const { return tensor == x.tensor && dim == x.dim; };
         bool operator!=( const ShapeAccessExpr& x ) const { return !(*this == x); };
     };
 
@@ -1540,7 +1539,7 @@ namespace sknd
                 auto& access = as_shape_access();
                 if ( access.dim == nullptr )
                 {
-                    return ValueExpr(ShapeAccessExpr{ access.tensor, (int_t)idx, access.item }, dtype());
+                    return ValueExpr(ShapeAccessExpr{ access.tensor, (int_t)idx }, dtype());
                 }
                 else if ( access.tensor.listed() )
                 {
@@ -1548,7 +1547,7 @@ namespace sknd
                 }
                 else
                 {
-                    return ValueExpr(ShapeAccessExpr{ access.tensor, access.dim, (int_t)idx }, dtype());
+                    return ValueExpr(SubscriptExpr{ *this, ValueExpr((int_t)idx) }, dtype());
                 }
             }
             case Unary:
@@ -1660,11 +1659,11 @@ namespace sknd
                 auto& access = as_shape_access();
                 if ( access.dim == nullptr )
                 {
-                    return ValueExpr(ShapeAccessExpr{ access.tensor, idx, access.item }, dtype());
+                    return ValueExpr(ShapeAccessExpr{ access.tensor, idx }, dtype());
                 }
                 else
                 {
-                    return ValueExpr(ShapeAccessExpr{ access.tensor, access.dim, idx }, dtype());
+                    return ValueExpr(SubscriptExpr{ *this, idx }, dtype());
                 }
             }
             case Unary:
@@ -1920,12 +1919,7 @@ namespace sknd
 
     inline std::ostream& operator<<( std::ostream& os, const ValueExpr::ShapeAccessExpr& access )
     {
-        os << access.tensor.name();
-        if ( access.item != nullptr )
-        {
-            os << '[' << access.item << ']';
-        }
-        os << ".shape";
+        os << access.tensor.name() << ".shape";
         if ( access.dim != nullptr )
         {
             os << '[' << access.dim << ']';
@@ -2150,7 +2144,7 @@ namespace sknd
             case ValueExpr::Kind::ShapeAccess:
             {
                 auto& access = expr.as_shape_access();
-                callback(access.item);
+                callback(access.dim);
                 break;
             }
             case ValueExpr::Kind::TensorAccess:
@@ -2285,7 +2279,7 @@ namespace sknd
             case ValueExpr::Kind::ShapeAccess:
             {
                 auto& access = expr.as_shape_access();
-                callback(access.item);
+                callback(access.dim);
                 break;
             }
             case ValueExpr::Kind::TensorAccess:

@@ -1082,10 +1082,9 @@ namespace sknd
             if ( expr.is_shape_access() )
             {
                 auto& access = expr.as_shape_access();
-                auto tensor = access.item == nullptr ? access.tensor : access.tensor.at(access.item.as_int());
                 if ( std::find(tensors.begin(), tensors.end(), access.tensor) != tensors.end() )
                 {
-                    expr = context.shapes.at(tensor)[access.dim.as_int()];
+                    expr = context.shapes.at(access.tensor)[access.dim.as_int()];
                 }
             }
             else if ( expr.is_size_access() )
@@ -1172,10 +1171,8 @@ namespace sknd
                     {
                         auto& access = x.as_shape_access();
                         assert(access.dim.is_literal());
-                        assert(access.item == nullptr || access.item.is_literal());
                         
-                        auto tensor = access.item == nullptr ? access.tensor : access.tensor.at(access.item.as_int());
-                        auto it = context.shapes.find(tensor);
+                        auto it = context.shapes.find(access.tensor);
                         if ( it != context.shapes.end() )
                         {
                             bool packed = x.packed();
