@@ -1903,21 +1903,21 @@ operator cumsum {
         reverse: bool = false;
     }
     @input {
-        input: real[s..];
+        input: real[s..(axis),n,t..];
     }
     @output {
-        output: real[s..];
+        output: real[s..(axis),n,t..];
     }
-    @using {
-        n = s[axis];
-        z = s[axis] <- 1;
-    }
-    @compose {
-        items..(n) = layout.unstack{axis=axis, squeeze=false}(input);
-        ~, sums = with sum: real[z..] = 0.0 for item : (reverse ? items[::-1] : items) do {
-            next = add(sum, item);
-            yield next, exclusive ? sum : next;
-        };
-        output = layout.stack{axis=axis, squeeze=true}(reverse ? sums[::-1] : sums);
+    @lower {
+        with
+            i = reverse ? n - 1 : 0:
+        output[si..,i,ti..] = exclusive ? 0.0 : input[si..,i,t..],
+            si < s, ti < t | n > 0;
+            
+        with
+            i = reverse ? n - ni - 1 : ni,
+            ii = reverse ? i - 1 : i + 1:
+        output[si..,ii,ti..] := output[si..,i,ti..] + input[si..,(exclusive ? i : ii),ti..],
+            si < s, ni < n - 1, ti < t;
     }
 }
