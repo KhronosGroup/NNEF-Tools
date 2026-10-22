@@ -2896,7 +2896,7 @@ namespace sknd
             
             if ( _flags & CompilerFlags::EliminateTrivialLoops )
             {
-                if ( std::any_of(bounds.begin(), bounds.end(), []( const auto& x ){ return x.second == 0; }) )
+                if ( std::any_of(bounds.begin(), bounds.end(), []( const auto& x ){ return x.second.is_literal() && x.second <= 0; }) )
                 {
                     return {};
                 }
@@ -2970,6 +2970,15 @@ namespace sknd
             simplify(left);
             simplify(right);
             simplify(cond);
+            
+            if ( cond.is_literal() )
+            {
+                if ( !cond.as_bool() )
+                {
+                    return {};
+                }
+                cond = nullptr;
+            }
             
             std::vector<size_t> subscripts;
             for ( size_t i = 0; i < bounds.size(); ++i )
