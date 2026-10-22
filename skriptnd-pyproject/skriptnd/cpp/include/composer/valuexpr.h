@@ -1538,9 +1538,9 @@ namespace sknd
                 {
                     return ValueExpr(ShapeAccessExpr{ access.tensor, (int_t)idx }, dtype());
                 }
-                else if ( access.tensor.listed() )
+                else if ( access.tensor.itemized() )
                 {
-                    return ValueExpr(ShapeAccessExpr{ (Tensor*)&access.tensor[idx], access.dim }, dtype());
+                    return ValueExpr(ShapeAccessExpr{ access.tensor[idx], access.dim }, dtype());
                 }
                 else
                 {

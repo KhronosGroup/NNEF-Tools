@@ -278,35 +278,32 @@ namespace sknd
 
     inline std::ostream& operator<<( std::ostream& os, const TensorPack& pack )
     {
-        if ( pack.items )
-        {
-            os << '[';
-            for ( size_t i = 0; i < pack.max_size; ++i )
-            {
-                if ( i )
-                {
-                    os << ", ";
-                }
-                os << *pack.items[i];
-            }
-            os << ']';
-        }
-        else
-        {
-            os << pack.name << ": " << str(pack.dtype) << pack.shape << "..(" << pack.size << ")";
-        }
+        os << pack.name << ": " << str(pack.dtype) << pack.shape << "..(" << pack.size << ")";
         return os;
     }
 
     inline std::ostream& operator<<( std::ostream& os, const TensorRef& ref )
     {
-        if ( ref.packed() )
+        if ( ref.itemized() )
         {
-            os << (const TensorPack&)ref;
+            os << '[';
+            for ( size_t i = 0; i < ref.item_count(); ++i )
+            {
+                if ( i )
+                {
+                    os << ", ";
+                }
+                os << *ref[i];
+            }
+            os << ']';
+        }
+        else if ( ref.packed() )
+        {
+            os << ref.as_pack();
         }
         else
         {
-            os << (const Tensor&)ref;
+            os << ref.as_tensor();
         }
         return os;
     }
@@ -425,16 +422,16 @@ namespace sknd
             {
                 os << "~";
             }
-            else if ( input.packed() && input.listed() )
+            else if ( input.itemized() )
             {
                 os << '[';
-                for ( size_t j = 0; j < input.max_size(); ++j )
+                for ( size_t j = 0; j < input.item_count(); ++j )
                 {
                     if ( j )
                     {
                         os << ", ";
                     }
-                    os << input[j].name;
+                    os << input[j]->name;
                 }
                 os << ']';
             }
@@ -627,7 +624,18 @@ struct std::hash<sknd::TensorRef>
 {
     std::size_t operator()( const sknd::TensorRef& r ) const noexcept
     {
-        if ( r.packed() )
+        if ( r.itemized() )
+        {
+            std::hash<const sknd::Tensor*> hasher;
+            
+            size_t seed = r.item_count();
+            for ( auto& item : r )
+            {
+                seed ^= hasher(item) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            }
+            return seed;
+        }
+        else if ( r.packed() )
         {
             std::hash<const sknd::TensorPack*> hasher;
             return hasher(&r.as_pack());

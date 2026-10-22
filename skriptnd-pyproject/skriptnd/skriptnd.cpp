@@ -720,8 +720,9 @@ static PyObject* buildPyTensorPack( const sknd::TensorPack& pack, const BuildCon
     PyObject* items;
     if ( pack.items )
     {
-        items = PyList_New(pack.max_size);
-        for ( size_t i = 0; i < pack.max_size; ++i )
+        const size_t count = (size_t)pack.size.as_int();
+        items = PyList_New(count);
+        for ( size_t i = 0; i < count; ++i )
         {
             PyObject* item = context.tensors.at(pack.items[i]);
             Py_INCREF(item);

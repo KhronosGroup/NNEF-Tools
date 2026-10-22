@@ -98,7 +98,7 @@ namespace sknd
             Symbol( const ValueExpr& value, const Typename type, const ValueExpr& size, const Kind kind )
                 : variant_type(value), type(type), size(size), kind(kind) {}
             Symbol( const TensorRef& tensor, const Typename type, const Kind kind )
-                : variant_type(tensor), type(type), size(tensor.size_or_null()), kind(kind) {}
+                : variant_type(tensor), type(type), size(tensor.size()), kind(kind) {}
             Symbol( const Typename type, const ValueExpr& size, const Kind kind )
                 : variant_type(Valueless()), type(type), size(size), kind(kind) {}
             
@@ -960,7 +960,7 @@ namespace sknd
         {
             auto& symbol = symbols.at(iden.name);
             auto& values = symbol.as<TensorRef>();
-            return values.packed() ? (Tensor*)&values[*idx] : (Tensor*)&*values;
+            return values.packed() ? values[*idx] : (Tensor*)&*values;
         }
         
         template<typename T, typename = std::enable_if_t<std::is_same_v<T,TensorRef>>>
@@ -968,7 +968,7 @@ namespace sknd
         {
             auto& symbol = symbols.at(iden.name);
             auto& values = symbol.as<TensorRef>();
-            return idx && values.packed() ? TensorRef((Tensor*)&values[*idx]) : values;
+            return idx && values.packed() ? TensorRef(values[*idx]) : values;
         }
         
         template<typename T = ValueExpr>
@@ -1981,7 +1981,11 @@ namespace sknd
                     {
                         return expr.packed() ? nullptr : expr;
                     }
-                    if ( access.tensor.max_size() == 0 || !access.dim.is_literal() )
+                    if ( access.tensor.itemized() && access.tensor.item_count() == 0 )
+                    {
+                        return nullptr;
+                    }
+                    if ( !access.dim.is_literal() )
                     {
                         return nullptr;
                     }
@@ -2767,7 +2771,7 @@ namespace sknd
                     T min = 0, max = 0;
                     for ( size_t i = 0; i < list.size(); ++i )
                     {
-                        DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds(expr, i))
+                        DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds(expr[i]))
                         if ( i == 0 || item_min < min )
                         {
                             min = item_min;
@@ -2815,14 +2819,33 @@ namespace sknd
                 case ValueExpr::SizeAccess:
                 {
                     auto& access = expr.as_size_access();
-                    return std::make_pair((T)0, (T)access.pack.max_size());
+                    return eval_shape_expr_bounds(access.pack.size());
                 }
                 case ValueExpr::ShapeAccess:
                 {
                     auto& access = expr.as_shape_access();
-                    auto& max_shape = idx ? access.tensor[*idx].max_shape : access.tensor.max_shape();
-                    auto max = access.dim.is_literal() ? max_shape[access.dim.as_int()] : *std::max_element(max_shape.begin(), max_shape.end());
-                    return std::make_pair((T)0, (T)max);
+                    assert(!idx);
+                    if ( access.dim.is_literal() )
+                    {
+                        return eval_shape_expr_bounds(access.tensor.shape()[access.dim.as_int()]);
+                    }
+                    else
+                    {
+                        T min = 0, max = 0;
+                        for ( size_t i = 0; i < access.tensor.rank(); ++i )
+                        {
+                            DECL_BOUNDS(item_min, item_max, eval_shape_expr_bounds(access.tensor.shape()[i]))
+                            if ( i == 0 || item_min < min )
+                            {
+                                min = item_min;
+                            }
+                            if ( i == 0 || item_max > max )
+                            {
+                                max = item_max;
+                            }
+                        }
+                        return std::make_pair(min, max);
+                    }
                 }
                 case ValueExpr::Cast:
                 {
