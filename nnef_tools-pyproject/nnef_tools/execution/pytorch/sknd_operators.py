@@ -74,6 +74,17 @@ def math_clamp(val, min, max, val_align, min_align, max_align):
                        _expand_to_rank(max, rank, max_align))
 
 
+def math_cumsum(input, axis, exclusive, reverse):
+    if reverse:
+        input = input.flip(axis)
+    output = torch.cumsum(input, dim=axis)
+    if exclusive:
+        output = output - input
+    if reverse:
+        output = output.flip(axis)
+    return output
+
+
 def _reduce(input, f, axes, squeeze=False):
     if not axes:
         return input
@@ -920,7 +931,7 @@ Operators = {
     'math.argmax_n': lambda inputs: _reduce_n(inputs, torch.argmax).to(IntType),
     'math.any_n': lambda inputs: _reduce_n(inputs, torch.any),
     'math.all_n': lambda inputs: _reduce_n(inputs, torch.all),
-    'math.cumsum': lambda input, axis, exclusive, reverse: torch.cumsum(input, dim=axis),
+    'math.cumsum': math_cumsum,
     'math.clamp': math_clamp,
     'nn.relu': nn_relu,
     'nn.sigmoid': torch.sigmoid,
