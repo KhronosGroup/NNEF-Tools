@@ -55,9 +55,7 @@ namespace sknd
         }
     }
 
-
-    template<typename T>
-    inline void fill_tensor_header( TensorHeader& header, const size_t version[2], const size_t rank, const T* extents,
+    inline void fill_tensor_header( TensorHeader& header, const size_t version[2], const size_t rank, const size_t item_count,
                                    const size_t bits_per_item, const TensorHeader::ItemType item_type )
     {
         const char* magic = "N\xEF";
@@ -75,13 +73,10 @@ namespace sknd
             throw Error("tensor rank %d exceeds maximum possible value (%d)", (int)rank, (int)TensorHeader::MaxRank);
         }
 
-        const uint32_t item_count = std::accumulate(extents, extents + rank, (uint32_t)1, std::multiplies<uint32_t>());
         header.data_length = (uint32_t)((item_count * bits_per_item + 7) / 8);
         header.bits_per_item = (uint32_t)bits_per_item;
         header.rank = (uint32_t)rank;
         header.item_type = item_type;
-
-        std::copy_n(extents, rank, header.extents);
     }
 
     inline void validate_tensor_header( const TensorHeader& header )

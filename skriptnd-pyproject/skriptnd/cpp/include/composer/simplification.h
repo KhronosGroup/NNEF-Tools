@@ -1850,6 +1850,8 @@ namespace sknd
             }
         }
         
+    public:
+        
         static ValueExpr eval_unary_func( const std::string& name, const int_t arg )
         {
             typedef int_t (*int_builtin_t)(int_t);

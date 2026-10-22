@@ -639,8 +639,7 @@ namespace sknd
                         
                         TRY_DECL(pack, eval(*indexer.array, symbols))
                         auto type = pack.dtype();
-                        auto size = eval_shape_expr_max(canonical(rank));
-                        return ValueExpr(ValueExpr::SliceExpr{ std::move(pack), std::move(first), std::move(last), std::move(stride) }, type, size);
+                        return ValueExpr(ValueExpr::SliceExpr{ std::move(pack), std::move(first), std::move(last), std::move(stride) }, type, true);
                     }
                     break;
                 }
@@ -658,8 +657,7 @@ namespace sknd
                     {
                         break;
                     }
-                    auto size = eval_shape_expr_max(canonical(rank));
-                    return ValueExpr(ValueExpr::RangeExpr{ std::move(first), std::move(last), std::move(stride) }, Typename::Int, size);
+                    return ValueExpr(ValueExpr::RangeExpr{ std::move(first), std::move(last), std::move(stride) }, Typename::Int, true);
                 }
                 case Expr::Zip:
                 {
@@ -3102,48 +3100,6 @@ namespace sknd
         {
             auto bounds = eval_shape_expr_bounds<int_t>(expr, idx);
             return bounds ? bounds->second : -1;
-        }
-        
-        static std::vector<int_t> eval_shape_max( const Shape& shape )
-        {
-            std::vector<int_t> max_shape(shape.size());
-            for ( size_t i = 0; i < shape.size(); ++i )
-            {
-                auto& extent = shape[i];
-                if ( extent.is_list() )
-                {
-                    const size_t rank = extent.as_list().size();
-                    
-                    if ( rank == 0 )
-                    {
-                        max_shape[i] = -1;
-                        continue;
-                    }
-                    auto bounds = eval_shape_expr_bounds(extent, 0);
-                    for ( size_t k = 1; k < rank; ++k )
-                    {
-                        auto item_bounds = eval_shape_expr_bounds(extent, k);
-                        if ( bounds != item_bounds )
-                        {
-                            bounds = std::nullopt;
-                            break;
-                        }
-                    }
-                    max_shape[i] = bounds ? bounds->second : -1;
-                }
-                else if ( extent.is_uniform() )
-                {
-                    auto bounds = eval_shape_expr_bounds(extent.as_uniform().value);
-                    max_shape[i] = bounds ? bounds->second : -1;
-                }
-                else
-                {
-                    assert(!extent.packed());
-                    auto bounds = eval_shape_expr_bounds(extent);
-                    max_shape[i] = bounds ? bounds->second : -1;
-                }
-            }
-            return max_shape;
         }
         
         static bool is_tensor_expr( const Expr& expr, const Dict<Symbol>& symbols )

@@ -700,12 +700,11 @@ static PyObject* buildPyTensor( const sknd::Tensor& tensor, const BuildContext& 
     PyObject* name = buildPyStr(tensor.name);
     PyObject* dtype = buildPyDtype(tensor.dtype);
     PyObject* shape = Py_None; // deferred due to references to other tensors
-    PyObject* max_shape = buildPyShape(tensor.max_shape);
     PyObject* quant = buildPyAttribs(tensor.quant, context);
     PyObject* value = buildPyValueExpr(tensor.value, context);
     PyObject* variable = buildPyBoolean(tensor.variable);
 
-    return makePyObject(Tensor, name, dtype, shape, max_shape, quant, value, variable);
+    return makePyObject(Tensor, name, dtype, shape, quant, value, variable);
 }
 
 static PyObject* buildPyTensorPack( const sknd::TensorPack& pack, const BuildContext& context )
@@ -713,9 +712,7 @@ static PyObject* buildPyTensorPack( const sknd::TensorPack& pack, const BuildCon
     PyObject* name = buildPyStr(pack.name);
     PyObject* dtype = buildPyDtype(pack.dtype);
     PyObject* shape = Py_None;  // deferred due to references to other tensors
-    PyObject* max_shape = buildPyShape(pack.max_shape);
     PyObject* size = Py_None;   // deferred due to references to other tensors
-    PyObject* max_size = buildPyInt(pack.max_size);
 
     PyObject* items;
     if ( pack.items )
@@ -734,7 +731,7 @@ static PyObject* buildPyTensorPack( const sknd::TensorPack& pack, const BuildCon
         items = buildPyNone();
     }
 
-    return makePyObject(TensorPack, name, dtype, shape, max_shape, size, max_size, items);
+    return makePyObject(TensorPack, name, dtype, shape, size, items);
 }
 
 static PyObject* buildPyContraction( const sknd::Contraction& contraction, const BuildContext& context )
@@ -1174,9 +1171,9 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
 
     Contraction = makeDataClass(module, "Contraction", { "left", "right", "condition", "assignment", "locals", "bounds", "subscripts", "axes" });
 
-    Tensor = makeDataClass(module, "Tensor", { "name", "dtype", "shape", "max_shape", "quant", "value", "variable" },
+    Tensor = makeDataClass(module, "Tensor", { "name", "dtype", "shape", "quant", "value", "variable" },
                            { buildPyNone(), buildPyNone(), buildPyBoolean(false) });
-    TensorPack = makeDataClass(module, "TensorPack", { "name", "dtype", "shape", "max_shape", "size", "max_size", "items" },
+    TensorPack = makeDataClass(module, "TensorPack", { "name", "dtype", "shape", "size", "items" },
                                { buildPyInt(0), buildPyInt(0), buildPyNone() });
     Assertion = makeDataClass(module, "Assertion", { "condition", "message", "args" });
 
