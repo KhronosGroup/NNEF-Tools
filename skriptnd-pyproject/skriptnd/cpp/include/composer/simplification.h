@@ -1897,28 +1897,6 @@ namespace sknd
             auto func = real_builtins.at(name);
             return func(arg);
         }
-        
-    protected:
-        
-        static bool is_trigonometric_func( const std::string& func )
-        {
-            static const std::set<std::string> funcs =
-            {
-                "sin",
-                "cos",
-                "tan",
-                "asin",
-                "acos",
-                "atan",
-                "sinh",
-                "cosh",
-                "tanh",
-                "asinh",
-                "acosh",
-                "atanh",
-            };
-            return funcs.count(func) != 0;
-        }
     };
 
 }   // namespace sknd
