@@ -114,7 +114,7 @@ namespace sknd
         std::vector<Contraction> contractions;                          // list of contractions that define the lowering of the operation
         std::vector<Graph*> subgraphs;                                  // list of subgraphs referred to by this operation
         std::vector<Assertion> asserts;                                 // list of dynamic asserts that need to be checked in run-time
-        std::vector<ValueExpr> subexprs;                                // dictionary shared sub-expressions
+        std::vector<ValueExpr> subexprs;                                // list of shared sub-expressions
         bool intrinsic = true;                                          // whether the operation is considered to be a compiler instrinsic
     };
     

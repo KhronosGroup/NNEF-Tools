@@ -19,6 +19,7 @@
 
 #include <stack>
 #include <unordered_set>
+#include "ordereddict.h"
 #include "evaluation.h"
 #include "options.h"
 #include "operator.h"
@@ -603,6 +604,8 @@ namespace sknd
             auto& context = _contexts.at(graph.name);
             auto& then_context = _contexts.at(then_graph->name);
             
+            OrderedDict<ValueExpr> reference_remap;
+            
             for ( size_t i = 0; i < outputs.size(); ++i )
             {
                 auto& output1 = then_graph->outputs[i];
@@ -615,7 +618,7 @@ namespace sknd
                 
                 auto& output = outputs[i] = make_common_output(graph, output1, output2);
                 
-                auto shape = propagate_shape_through_region(output1, then_context);
+                auto shape = propagate_shape_through_region(output1, then_context, reference_remap);
                 for ( size_t k = 0; k < output.shape().size(); ++k )
                 {
                     if ( output1.shape()[k] != output2.shape()[k] )
@@ -627,7 +630,7 @@ namespace sknd
                 ValueExpr size = nullptr;
                 if ( output.packed() )
                 {
-                    size = output1.size() != output2.size() ? output.size() : propagate_size_through_region(output1, then_context);
+                    size = output1.size() != output2.size() ? output.size() : propagate_size_through_region(output1, then_context, reference_remap);
                 }
                 
                 save_shapes_to_context(context, output, simplified(shape), simplified(size));
@@ -639,7 +642,13 @@ namespace sknd
                 attribs["cond"] = cond_value;
             }
             
-            graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, { then_graph, else_graph }, {}, {}, true });
+            std::vector<ValueExpr> subexprs;
+            for ( auto& [key, value] : reference_remap )
+            {
+                subexprs.push_back(value);
+            }
+            
+            graph.operations.push_back(Operation{ "if", {}, attribs, inputs, outputs, {}, {}, { then_graph, else_graph }, {}, subexprs, true });
             return std::make_tuple(inputs, outputs);
         }
         
@@ -779,6 +788,7 @@ namespace sknd
                 }
                 
                 auto& body_context = _contexts.at(body_graph->name);
+                OrderedDict<ValueExpr> reference_remap;
                 
                 std::vector<TensorRef> outputs(body_graph->outputs.size());
                 for ( size_t i = 0; i < loop.carries.size(); ++i )
@@ -792,7 +802,7 @@ namespace sknd
                                      str(outputs[i].shape()).c_str(), (int)i+1, str(internals[i]->shape).c_str(), (int)i+1);
                     }
                     
-                    auto shape = propagate_shape_through_region(body_graph->outputs[i], body_context);
+                    auto shape = propagate_shape_through_region(body_graph->outputs[i], body_context, reference_remap);
                     resolve_access_to_tensors(shape, internals, context);
                     save_shapes_to_context(context, outputs[i], simplified(shape), nullptr);
                 }
@@ -813,7 +823,7 @@ namespace sknd
                         auto pack = make_tensor_pack(graph, output.dtype, canonic_size, output.shape);
                         outputs[i] = TensorRef(pack);
                         
-                        auto shape = propagate_shape_through_region(body_graph->outputs[i], body_context);
+                        auto shape = propagate_shape_through_region(body_graph->outputs[i], body_context, reference_remap);
                         resolve_access_to_tensors(shape, internals, context);
                         save_shapes_to_context(context, outputs[i], simplified(shape), simplified(size));
                     }
@@ -857,7 +867,13 @@ namespace sknd
                 
                 check_loop_variable_shapes(inputs, outputs, loop.carries.size(), loop.position);
                 
-                graph.operations.push_back(Operation{ "do", {}, attribs, inputs, outputs, internals, {}, std::move(subgraphs), {}, {}, true });
+                std::vector<ValueExpr> subexprs;
+                for ( auto& [key, value] : reference_remap )
+                {
+                    subexprs.push_back(value);
+                }
+                
+                graph.operations.push_back(Operation{ "do", {}, attribs, inputs, outputs, internals, {}, std::move(subgraphs), {}, subexprs, true });
                 return std::make_tuple(inputs, outputs);
             }
             else
@@ -1038,30 +1054,30 @@ namespace sknd
             return std::make_tuple(std::vector(inputs.begin(), inputs.end()), std::move(outputs));
         }
         
-        Shape propagate_shape_through_region( const TensorRef& output, const GraphContext& context )
+        Shape propagate_shape_through_region( const TensorRef& output, const GraphContext& context, OrderedDict<ValueExpr>& reference_remap )
         {
             Shape shape = context.shapes.at(output);
             for ( size_t i = 0; i < output.shape().size(); ++i )
             {
-                trace_accesses_within_graph(shape[i], context);
+                trace_accesses_within_graph(shape[i], context, reference_remap);
                 if ( has_placeholders(shape[i]) )
                 {
-                    shape[i] = new_placeholder_expr(eval_shape_expr_max(shape[i]));
+                    shape[i] = new_placeholder_expr(shape[i]);
                 }
             }
             return shape;
         }
         
-        ValueExpr propagate_size_through_region( const TensorRef& output, const GraphContext& context )
+        ValueExpr propagate_size_through_region( const TensorRef& output, const GraphContext& context, OrderedDict<ValueExpr>& reference_remap )
         {
             ValueExpr size = nullptr;
             if ( output.packed() )
             {
                 size = context.sizes.at(output);
-                trace_accesses_within_graph(size, context);
+                trace_accesses_within_graph(size, context, reference_remap);
                 if ( has_placeholders(size) )
                 {
-                    size = new_placeholder_expr(eval_shape_expr_max(size));
+                    size = new_placeholder_expr(size);
                 }
             }
             return size;
@@ -1151,9 +1167,10 @@ namespace sknd
             return any_of(expr, []( const ValueExpr& x ){ return x.is_placeholder(); });
         }
         
-        static void trace_accesses_within_graph( ValueExpr& expr, const GraphContext& context )
+        void trace_accesses_within_graph( ValueExpr& expr, const GraphContext& context, 
+                                         OrderedDict<ValueExpr>& reference_remap )
         {
-            postorder_traverse(expr, [&context]( ValueExpr& x )
+            postorder_traverse(expr, [&]( ValueExpr& x )
             {
                 switch ( x.kind() )
                 {
@@ -1171,7 +1188,7 @@ namespace sknd
                             {
                                 x = ValueExpr::uniform(x, access.tensor.size());
                             }
-                            trace_accesses_within_graph(x, context);
+                            trace_accesses_within_graph(x, context, reference_remap);
                         }
                         break;
                     }
@@ -1182,8 +1199,21 @@ namespace sknd
                         if ( it != context.sizes.end() )
                         {
                             x = it->second;
-                            trace_accesses_within_graph(x, context);
+                            trace_accesses_within_graph(x, context, reference_remap);
                         }
+                        break;
+                    }
+                    case ValueExpr::Reference:
+                    {
+                        auto& reference = x.as_reference();
+                        auto& remapped = reference_remap[reference.name];
+                        if ( remapped == nullptr )  // just got inserted
+                        {
+                            auto expr = *reference.target;
+                            trace_accesses_within_graph(expr, context, reference_remap);
+                            remapped = as_reference(expr);
+                        }
+                        x = remapped;
                         break;
                     }
                     default:
@@ -1875,22 +1905,12 @@ namespace sknd
             Shape shape(shape1.size());
             for ( size_t i = 0; i < shape.size(); ++i )
             {
-                if ( shape1[i] == shape2[i] )
-                {
-                    shape[i] = shape1[i];
-                }
-                else
-                {
-                    auto max_shape = std::max(eval_shape_expr_max(shape1[i]), eval_shape_expr_max(shape2[i]));
-                    shape[i] = new_placeholder_expr(max_shape);
-                }
+                shape[i] = shape1[i] == shape2[i] ? shape1[i] : new_placeholder_expr(max(shape1[i], shape2[i]));
             }
             
             if ( output1.packed() )
             {
-                const int_t max_size = std::max(eval_shape_expr_max(output1.size()), eval_shape_expr_max(output2.size()));
-                const ValueExpr size = output1.size() == output2.size() ? output1.size() : new_placeholder_expr(max_size);
-                
+                const ValueExpr size = output1.size() == output2.size() ? output1.size() : new_placeholder_expr(max(output1.size(), output2.size()));
                 return make_tensor_pack(graph, dtype, size, shape);
             }
             else
@@ -2113,16 +2133,18 @@ namespace sknd
         Result<void> check_outputs( const std::vector<Param>& params, const std::vector<TensorRef>& outputs,
                                    const Dict<Symbol>& symbols, const GraphContext& context )
         {
+            OrderedDict<ValueExpr> reference_remap;
+            
             for ( size_t i = 0; i < params.size(); ++i )
             {
                 auto& param = params[i];
                 auto& output = outputs[i];
                 
-                auto composed_shape = propagate_shape_through_region(output, context);
+                auto composed_shape = propagate_shape_through_region(output, context, reference_remap);
                 resolve(composed_shape, ResolveReference);
                 simplify(composed_shape);
                 
-                auto composed_size = propagate_size_through_region(output, context);
+                auto composed_size = propagate_size_through_region(output, context, reference_remap);
                 resolve(composed_size, ResolveReference);
                 simplify(composed_size);
                 
@@ -2210,7 +2232,7 @@ namespace sknd
             return value.is_literal() || value.is_shape_access() || value.is_size_access() || value.is_reference();
         }
         
-        ValueExpr as_reference( const std::string& name, const ValueExpr& value )
+        ValueExpr as_reference( const ValueExpr& value )
         {
             if ( value == nullptr || non_referenced(value) )
             {
@@ -2339,7 +2361,7 @@ namespace sknd
                     if ( !(param.repeats.value && !value.packed() && value != nullptr) )
                     {
                         attribs.emplace(param.name, value);
-                        locals.emplace(param.name, Symbol(as_reference(param.name, value), type, Symbol::Attrib));
+                        locals.emplace(param.name, Symbol(as_reference(value), type, Symbol::Attrib));
                     }
                 }
                 else if ( param.type.optional )
@@ -2392,7 +2414,7 @@ namespace sknd
                     }
                     
                     attribs.emplace(param.name, value);
-                    locals.emplace(param.name, Symbol(as_reference(param.name, value), type, Symbol::Attrib));
+                    locals.emplace(param.name, Symbol(as_reference(value), type, Symbol::Attrib));
                 }
                 if ( param.repeats.value )
                 {
@@ -2589,14 +2611,14 @@ namespace sknd
                             for ( size_t i = 0; i < item_count; ++i )
                             {
                                 auto& iden = as_identifier(*zip.items[i]);
-                                auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(iden.name, ValueExpr(ptr + i, item_rank, item_count, type)), type, Symbol::Using);
+                                auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(ValueExpr(ptr + i, item_rank, item_count, type)), type, Symbol::Using);
                                 symbols.emplace(iden.name, symbol);
                             }
                         }
                         else
                         {
                             auto& iden = as_identifier(*expand.item);
-                            auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(iden.name, ValueExpr(ptr, rank.as_int(), type)),
+                            auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(ValueExpr(ptr, rank.as_int(), type)),
                                                                                  type, Symbol::Using);
                             symbols.emplace(iden.name, symbol);
                         }
@@ -2605,7 +2627,7 @@ namespace sknd
                     else
                     {
                         auto& iden = as_identifier(*item);
-                        auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(iden.name, value[k++]), type, Symbol::Using);
+                        auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(value[k++]), type, Symbol::Using);
                         symbols.emplace(iden.name, symbol);
                     }
                 }
@@ -2622,7 +2644,7 @@ namespace sknd
                 {
                     TRY_MOVE(declared_rank, eval(*usage.rank, symbols))
                 }
-                auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(iden.name, value), type, Symbol::Using);
+                auto symbol = value == nullptr ? NullSymbol : Symbol(as_reference(value), type, Symbol::Using);
                 symbols.emplace(iden.name, symbol);
             }
             if ( declared_rank != nullptr && canonical(declared_rank) != canonical(value.size()) )
@@ -4400,9 +4422,9 @@ namespace sknd
             return true;
         }
         
-        ValueExpr new_placeholder_expr( const int_t& max_value )
+        ValueExpr new_placeholder_expr( const ValueExpr& max_value )
         {
-            return ValueExpr::placeholder(next_placeholder_name(), max_value != -1 ? ValueExpr(max_value) : ValueExpr(nullptr));
+            return ValueExpr::placeholder(next_placeholder_name(), max_value.is_placeholder() ? max_value.as_placeholder().max_value : max_value);
         }
         
         const ValueExpr& placeholder_for( const ValueExpr& expr )
@@ -4411,8 +4433,7 @@ namespace sknd
             auto it = _placeholders.find(key);
             if ( it == _placeholders.end() )
             {
-                auto max_value = eval_shape_expr_max(expr);
-                it = _placeholders.emplace(key, new_placeholder_expr(max_value)).first;
+                it = _placeholders.emplace(key, new_placeholder_expr(expr)).first;
             }
             return it->second;
         }

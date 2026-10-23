@@ -2537,6 +2537,32 @@ namespace sknd
         }
     }
 
+    inline ValueExpr min( const ValueExpr& left, const ValueExpr& right )
+    {
+        if ( left.is_literal() && right.is_literal() )
+        {
+            return left.dtype() == sknd::Typename::Real ? ValueExpr(std::min(left.as_real(), right.as_real())) :
+                                                       ValueExpr(std::min(left.as_int(), right.as_int()));
+        }
+        else
+        {
+            return ValueExpr::binary("<?", left, right);
+        }
+    }
+
+    inline ValueExpr max( const ValueExpr& left, const ValueExpr& right )
+    {
+        if ( left.is_literal() && right.is_literal() )
+        {
+            return left.dtype() == sknd::Typename::Real ? ValueExpr(std::max(left.as_real(), right.as_real())) :
+                                                       ValueExpr(std::max(left.as_int(), right.as_int()));
+        }
+        else
+        {
+            return ValueExpr::binary(">?", left, right);
+        }
+    }
+
     inline ValueExpr operator!( const ValueExpr& arg )
     {
         if ( arg.is_literal() )
