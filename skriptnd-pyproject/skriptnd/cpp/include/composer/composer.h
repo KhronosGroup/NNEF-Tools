@@ -2211,9 +2211,18 @@ namespace sknd
         
         bool compare_shapes( const ValueExpr& declared_shape, const ValueExpr& composed_shape )
         {
-            if ( declared_shape.is_placeholder() && declared_shape.as_placeholder().max_value != nullptr )
+            if ( declared_shape.is_placeholder() )
             {
-                return declared_shape.as_placeholder().max_value == eval_shape_expr_max(composed_shape);
+                if ( composed_shape.is_placeholder() )
+                {
+                    auto& declared_max_value = declared_shape.as_placeholder().max_value;
+                    auto& composed_max_value = composed_shape.as_placeholder().max_value;
+                    if ( declared_max_value != nullptr && composed_max_value != nullptr )
+                    {
+                        return compare_shapes(declared_max_value, composed_max_value);
+                    }
+                }
+                return true;
             }
             if ( composed_shape.is_uniform() && !declared_shape.packed() )
             {
