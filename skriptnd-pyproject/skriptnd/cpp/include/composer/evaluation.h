@@ -1136,12 +1136,11 @@ namespace sknd
             else
             {
                 TRY_DECL(rank, eval_rank(*expr.array, symbols))
-                auto length = eval_shape_expr_max(canonical(rank));
                 
                 ValueExpr index_value;
                 if ( expr.index->kind == Expr::Range )
                 {
-                    TRY_MOVE(index_value, eval_item(as_range(*expr.index), symbols, idx, cache, length))
+                    TRY_MOVE(index_value, eval_item(as_range(*expr.index), symbols, idx, cache, rank))
                 }
                 else
                 {
@@ -1166,7 +1165,7 @@ namespace sknd
                 }
                 
                 auto index = index_value.as_int();
-                TRY_CALL(check_index_range(index, length, expr.index->position))
+                TRY_CALL(check_index_range(index, rank.as_int(), expr.index->position))
                 
                 return eval_item<T>(*expr.array, symbols, index, cache);
             }
@@ -1233,7 +1232,7 @@ namespace sknd
         }
         
         static Result<ValueExpr> eval_item( const RangeExpr& range, const Dict<Symbol>& symbols, const std::optional<size_t> idx, Cache* cache,
-                                           const std::optional<size_t> length = std::nullopt )
+                                           const ValueExpr& length = nullptr )
         {
             TRY_DECL(stride, range.stride ? eval_item(*range.stride, symbols) : ValueExpr(1))
             if ( stride == 0 )
@@ -1241,9 +1240,9 @@ namespace sknd
                 return Error(range.position, "zero stride in range");
             }
             assert(stride.is_literal());
-            assert(range.first || stride.as_int() >= 0 || length);
-            TRY_DECL(first, range.first ? eval_item(*range.first, symbols) : ValueExpr(stride.as_int() < 0 ? (int_t)*length - 1 : 0))
-            return ValueExpr(first.as_int() + (int_t)*idx * stride.as_int());
+            assert(range.first || stride.as_int() >= 0 || length != nullptr);
+            TRY_DECL(first, range.first ? eval_item(*range.first, symbols) : stride.as_int() < 0 ? length - 1 : ValueExpr(0))
+            return first + (int_t)*idx * stride.as_int();
         }
         
         template<typename T = ValueExpr>
@@ -3090,12 +3089,6 @@ namespace sknd
                     return duplicate((T)0);
                 }
             }
-        }
-        
-        static int_t eval_shape_expr_max( const ValueExpr& expr, const std::optional<size_t>& idx = std::nullopt )
-        {
-            auto bounds = eval_shape_expr_bounds<int_t>(expr, idx);
-            return bounds ? bounds->second : -1;
         }
         
         static bool is_tensor_expr( const Expr& expr, const Dict<Symbol>& symbols )
