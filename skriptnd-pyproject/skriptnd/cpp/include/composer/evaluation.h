@@ -202,9 +202,10 @@ namespace sknd
                     {
                         if ( item->kind == Expr::Expand || item->kind == Expr::Range )
                         {
-                            TRY_DECL(count, eval_rank_max(*item, symbols))
-                            TRY_DECL(items, eval_items<T>(*item, symbols, *count));
-                            for ( size_t i = 0; i < count; ++i )
+                            TRY_DECL(count, eval_rank(*item, symbols))
+                            auto size = (size_t)count.as_int();
+                            TRY_DECL(items, eval_items<T>(*item, symbols, size));
+                            for ( size_t i = 0; i < size; ++i )
                             {
                                 values[k++] = std::move(items[i]);
                             }
@@ -977,13 +978,13 @@ namespace sknd
             {
                 if ( item->kind == Expr::Expand || item->kind == Expr::Range )
                 {
-                    TRY_DECL(rank, eval_rank_max(*item, symbols))
-                    assert(rank);
-                    if ( idx < k + *rank )
+                    TRY_DECL(rank, eval_rank(*item, symbols))
+                    assert(rank.is_literal());
+                    if ( idx < k + rank.as_int() )
                     {
                         return eval_item<T>(*item, symbols, *idx - k, cache);
                     }
-                    k += *rank;
+                    k += rank.as_int();
                 }
                 else
                 {
@@ -1001,8 +1002,8 @@ namespace sknd
         {
             if ( expand.count )
             {
-                TRY_DECL(rank, eval_rank_max(*expand.item, symbols))
-                return rank ? eval_item<T>(*expand.item, symbols, idx, cache) : eval_item<T>(*expand.item, symbols);
+                TRY_DECL(rank, eval_rank(*expand.item, symbols))
+                return rank != nullptr ? eval_item<T>(*expand.item, symbols, idx, cache) : eval_item<T>(*expand.item, symbols);
             }
             else
             {
@@ -1716,17 +1717,19 @@ namespace sknd
         static Result<ValueExpr> eval_arg_fold( const FoldExpr& fold, const Dict<Symbol>& symbols )
         {
             const F<T> func;
-            TRY_DECL(rank, eval_rank_max(*fold.pack, symbols))
+            TRY_DECL(rank, eval_rank(*fold.pack, symbols))
             if ( rank == 0 )
             {
                 return ValueExpr(nullptr);
             }
             
-            TRY_DECL(items, eval_items(*fold.pack, symbols, *rank))
+            auto size = (size_t)rank.as_int();
+            
+            TRY_DECL(items, eval_items(*fold.pack, symbols, size))
             
             T value = (T)items.front();
             size_t idx = 0;
-            for ( size_t i = 1; i < rank; ++i )
+            for ( size_t i = 1; i < size; ++i )
             {
                 auto new_value = func(value, (T)items[i]);
                 if ( new_value != value )
@@ -1820,8 +1823,8 @@ namespace sknd
         template<template<typename> class C>
         static Result<ValueExpr> eval_is_sorted( const Expr& expr, const Dict<Symbol>& symbols )
         {
-            TRY_DECL(rank, eval_rank_max(expr, symbols))
-            TRY_DECL(items, eval_items(expr, symbols, *rank))
+            TRY_DECL(rank, eval_rank(expr, symbols))
+            TRY_DECL(items, eval_items(expr, symbols, rank.as_int()))
             auto type = eval_type(expr, symbols);
             switch ( type )
             {
@@ -1850,8 +1853,8 @@ namespace sknd
         
         static Result<ValueExpr> eval_is_unique( const Expr& expr, const Dict<Symbol>& symbols )
         {
-            TRY_DECL(rank, eval_rank_max(expr, symbols))
-            TRY_DECL(items, eval_items(expr, symbols, *rank))
+            TRY_DECL(rank, eval_rank(expr, symbols))
+            TRY_DECL(items, eval_items(expr, symbols, rank.as_int()))
             auto type = eval_type(expr, symbols);
             switch ( type )
             {
@@ -2134,13 +2137,6 @@ namespace sknd
                 return Error(expr.position, "length of packed expression must not be dynamic in this context");
             }
             return rank;
-        }
-        
-        template<bool Optional = false>
-        static Result<std::optional<int_t>> eval_rank_max( const Expr& expr, const Dict<Symbol>& symbols )
-        {
-            TRY_DECL(rank, eval_rank<Optional>(expr, symbols))
-            return rank == nullptr ? (std::optional<int_t>)std::nullopt : (std::optional<int_t>)eval_shape_expr_max(canonical(rank));
         }
         
         template<bool Optional = false>
@@ -2645,8 +2641,8 @@ namespace sknd
                     {
                         return true;
                     }
-                    TRY_DECL(rank, eval_rank_max(*fold.pack, symbols))
-                    return *rank == 0;
+                    TRY_DECL(rank, eval_rank(*fold.pack, symbols))
+                    return rank == 0;
                 }
             }
             else if ( expr.kind == Expr::Coalesce )

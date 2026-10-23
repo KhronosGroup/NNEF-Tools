@@ -2160,8 +2160,7 @@ namespace sknd
                         resolve(declared_size, ResolveReference);
                         simplify(declared_size);
                         
-                        const int_t count = eval_shape_expr_max(declared_size);
-                        TRY_CALL(check_shape_repeats(*param.shape, symbols, count))
+                        TRY_CALL(check_shape_repeats(*param.shape, symbols, declared_size))
                         
                         if ( !compare_shapes(declared_size, composed_size) )
                         {
@@ -2258,18 +2257,18 @@ namespace sknd
             return ValueExpr(ValueExpr::ReferenceExpr{ next_local_name(), std::make_shared<ValueExpr>(value) }, value.dtype(), value.packed());
         }
         
-        Result<void> check_shape_repeats( const Shapedef& shape, const Dict<Symbol>& symbols, const int_t repeats )
+        Result<void> check_shape_repeats( const Shapedef& shape, const Dict<Symbol>& symbols, const ValueExpr& repeats )
         {
             for ( auto& extent : shape.extents )
             {
                 auto& item = extent.value;
                 if ( item != nullptr && item->kind != Expr::Expand )
                 {
-                    TRY_DECL(rank, eval_rank_max<true>(*item, symbols))
-                    if ( rank && *rank != repeats )
+                    TRY_DECL(rank, eval_rank<true>(*item, symbols))
+                    if ( rank != nullptr && rank != repeats )
                     {
-                        return Error(item->position, "length of spread item (%d) does not match repeat count of parameter (%d)",
-                                     (int)*rank, (int)repeats);
+                        return Error(item->position, "length of spread item (%s) does not match repeat count of parameter (%s)",
+                                     str(rank).c_str(), str(repeats).c_str());
                     }
                 }
             }
@@ -3356,10 +3355,7 @@ namespace sknd
             if ( param.type.packed )
             {
                 TRY_DECL(size, eval_shape_expr(*param.repeats.value, symbols))
-                if ( size.is_literal() )
-                {
-                    TRY_CALL(check_shape_repeats(*param.shape, symbols, size.as_int()))
-                }
+                TRY_CALL(check_shape_repeats(*param.shape, symbols, size))
                 
                 TRY_DECL(shape, eval_shape(*param.shape, symbols))
                 auto canonic_shape = canonical(shape);
@@ -3737,14 +3733,14 @@ namespace sknd
                 }
                 else
                 {
-                    TRY_DECL(rank, eval_rank_max(item, symbols))
-                    return *rank;
+                    TRY_DECL(rank, eval_rank(item, symbols))
+                    return rank.as_int();
                 }
             }
             else if ( item.kind == Expr::Range )
             {
-                TRY_DECL(rank, eval_rank_max(item, symbols))
-                return *rank;
+                TRY_DECL(rank, eval_rank(item, symbols))
+                return rank.as_int();
             }
             else
             {
