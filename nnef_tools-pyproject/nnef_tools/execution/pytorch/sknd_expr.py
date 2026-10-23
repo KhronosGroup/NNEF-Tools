@@ -21,6 +21,12 @@ _Unaries = {
     '!': lambda x: not x,
     '+': lambda x: x,
     '-': lambda x: -x,
+    'abs': abs,
+    'sign': lambda x: 1 if x > 0 else -1 if x < 0 else 0,
+    'floor': math.floor,
+    'ceil': math.ceil,
+    'round': round,
+    'frac': lambda x: math.modf(x)[0]
 }
 
 _Binaries = {
