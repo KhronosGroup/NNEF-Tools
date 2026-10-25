@@ -127,17 +127,14 @@ namespace sknd
                         output.shape() = context.shapes.at(output);
                         if ( output.packed() )
                         {
+                            auto& pack = output.as_pack();
+                            pack.size = context.sizes.at(output);
                             if ( output.itemized() )
                             {
                                 for ( auto& item : output )
                                 {
                                     item->shape = context.shapes.at(item);
                                 }
-                            }
-                            else
-                            {
-                                auto& pack = output.as_pack();
-                                pack.size = context.sizes.at(output);
                             }
                         }
                     }
@@ -508,7 +505,6 @@ namespace sknd
         {
             TRY_DECL(inputs, outputs, compose_expression(component.expression, symbols, model, graph, scope))
             
-            rename_results(component.results, outputs, scope);
             TRY_CALL(add_results_to_symbols(component.results, outputs, graph, symbols, scope, component.position))
             
             return std::make_tuple(inputs, outputs);
@@ -898,6 +894,7 @@ namespace sknd
                     if ( is_tensor_expr(*expr, symbols) )
                     {
                         TRY_DECL(input, eval(*expr, symbols, as_tensor(graph), as_tensor_pack(graph)))
+                        itemize(graph, input.as_pack());
                         inputs.push_back(input);
                     }
                 }
@@ -1638,7 +1635,6 @@ namespace sknd
                                             Graph& graph, Dict<Symbol>& symbols, const std::optional<std::string>& scope,
                                             const Position& position )
         {
-            auto& context = _contexts.at(graph.name);
             for ( size_t i = 0; i < results.size(); ++i )
             {
                 auto& result = results[i];
@@ -1655,6 +1651,7 @@ namespace sknd
                                      (int)result.size(), (int)output.size().as_int());
                     }
                     
+                    itemize(graph, output.as_pack());
                     for ( size_t j = 0; j < result.size(); ++j )
                     {
                         auto& item = result[j];
@@ -1669,18 +1666,11 @@ namespace sknd
                         
                         if ( !item.name.empty() )
                         {
-                            if ( output.itemized() )
+                            if ( scope )
                             {
-                                symbols.insert_or_assign(item.name, Symbol(TensorRef(output[j]), result_type, Symbol::Result));
+                                output[j]->name = scoped_name(scope, item.name);
                             }
-                            else
-                            {
-                                auto shape = item_shape(context.shapes.at(output), j);
-                                auto canonic_shape = item_shape(output_shape, j);
-                                auto tensor = make_tensor(graph, output_type, canonic_shape, item.name);
-                                symbols.insert_or_assign(item.name, Symbol(TensorRef(tensor), result_type, Symbol::Result));
-                                save_shapes_to_context(context, tensor, shape, nullptr);
-                            }
+                            symbols.insert_or_assign(item.name, Symbol(TensorRef(output[j]), result_type, Symbol::Result));
                         }
                         
                         if ( item.shape )
@@ -1740,6 +1730,26 @@ namespace sknd
                     
                     if ( !item.name.empty() )
                     {
+                        if ( scope )
+                        {
+                            auto name = scoped_name(scope, item.name);
+                            if ( output.packed() )
+                            {
+                                output.as_pack().name = name;
+                                if ( output.itemized() )
+                                {
+                                    auto size = (size_t)output.size().as_int();
+                                    for ( size_t j = 0; j < size; ++j )
+                                    {
+                                        output[j]->name = item_name(name, j);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                output.as_tensor().name = name;
+                            }
+                        }
                         symbols.insert_or_assign(item.name, Symbol(output, result_type, Symbol::Result));
                     }
                     
@@ -1809,91 +1819,6 @@ namespace sknd
             symbols.erase(name + ".shape");
             symbols.erase(name + ".rank");
             symbols.erase(name + ".size");
-        }
-        
-        void rename_results( const std::vector<Packable<Typed>>& results, std::vector<TensorRef>& outputs,
-                            const std::optional<std::string>& scope )
-        {
-            for ( size_t i = 0; i < results.size(); ++i )
-            {
-                if ( outputs[i] == nullptr )
-                {
-                    continue;
-                }
-                auto& result = results[i];
-                auto& output = outputs[i];
-                if ( output.packed() )
-                {
-                    if ( result.packed() )
-                    {
-                        if ( output.itemized() )
-                        {
-                            for ( size_t j = 0, k = 0; j < result.size(); ++j )
-                            {
-                                auto& item = result[j];
-                                if ( item.type.packed )
-                                {
-                                    const size_t count = output.item_count() - result.size() + 1;
-                                    if ( !item.name.empty() )
-                                    {
-                                        for ( size_t c = 0; c < count; ++c )
-                                        {
-                                            rename_tensor(*output[k+c], scoped_name(scope, item.name, c+1));
-                                        }
-                                    }
-                                    k += count;
-                                }
-                                else
-                                {
-                                    if ( !item.name.empty() )
-                                    {
-                                        rename_tensor(*output[k], scoped_name(scope, item.name));
-                                    }
-                                    k += 1;
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        auto& item = *result;
-                        if ( !item.name.empty() )
-                        {
-                            if ( output.itemized() )
-                            {
-                                for ( size_t j = 0; j < output.item_count(); ++j )
-                                {
-                                    rename_tensor(*output[j], scoped_name(scope, item.name, j+1));
-                                }
-                            }
-                            else
-                            {
-                                rename_tensor_pack(output.as_pack(), scoped_name(scope, item.name));
-                            }
-                        }
-                    }
-                }
-                else if ( !result->name.empty() )
-                {
-                    rename_tensor(*output, scoped_name(scope, result->name));
-                }
-            }
-        }
-        
-        void rename_tensor( Tensor& tensor, const std::string& name )
-        {
-            if ( !name.empty() )
-            {
-                tensor.name = name;
-            }
-        }
-        
-        void rename_tensor_pack( TensorPack& pack, const std::string& name )
-        {
-            if ( !name.empty() )
-            {
-                pack.name = name;
-            }
         }
         
         TensorRef make_common_output( Graph& graph, const TensorRef& output1, const TensorRef& output2 )
@@ -2775,6 +2700,26 @@ namespace sknd
                 return Error(lowering.unroll_count->position, "unroll count must not depend on dynamic shapes");
             }
             
+            auto itemizer = [&]( const Expr& x )
+            {
+                if ( x.kind == Expr::Access )
+                {
+                    auto& access = as_access(x);
+                    if ( access.tensor->kind == Expr::Index )
+                    {
+                        auto& indexer = as_index(*access.tensor);
+                        auto& tensor = symbols.at(as_identifier(*indexer.array).name).as<TensorRef>();
+                        if ( tensor.size().is_literal() && has_identifier(*indexer.index, lowering.unroll_index) )
+                        {
+                            itemize(graph, (TensorPack&)tensor.as_pack());
+                        }
+                    }
+                }
+            };
+            
+            preorder_traverse(*lowering.left, itemizer);
+            preorder_traverse(*lowering.right, itemizer);
+            
             auto& _symbols = const_cast<Dict<Symbol>&>(symbols);
             
             for ( size_t i = 0; i < count.as_int(); ++i )
@@ -3361,12 +3306,12 @@ namespace sknd
                 auto canonic_shape = canonical(shape);
                 auto canonic_size = canonical(size);
                 auto name = scoped_name(scope, param.name);
-                bool itemized = is_static_expr(*param.repeats.value, symbols);
+                TRY_DECL(value, param.default_value ? eval(*param.default_value, symbols) : ValueExpr(nullptr))
+                bool itemized = variable || value.packed();
                 auto pack = make_tensor_pack(graph, type, canonic_size, canonic_shape, itemized, name);
                 
                 if ( itemized )
                 {
-                    TRY_DECL(value, param.default_value ? eval(*param.default_value, symbols) : ValueExpr(nullptr))
                     for ( size_t i = 0; i < size.as_int(); ++i )
                     {
                         auto shape_i = item_shape(shape, i);
@@ -3469,6 +3414,29 @@ namespace sknd
                 }
             }
             return it->second;
+        }
+        
+        void itemize( Graph& graph, TensorPack& pack )
+        {
+            if ( !pack.items )
+            {
+                auto size = (size_t)pack.size.as_int();
+                pack.items = std::make_unique<Tensor*[]>(size);
+                for ( size_t i = 0; i < size; ++i )
+                {
+                    pack.items[i] = make_tensor(graph, pack.dtype, item_shape(pack.shape, i), item_name(pack.name, i));
+                }
+                
+                auto& context = _contexts.at(graph.name);
+                auto it = context.shapes.find(&pack);
+                if ( it != context.shapes.end() )
+                {
+                    for ( size_t i = 0; i < size; ++i )
+                    {
+                        context.shapes[pack.items[i]] = item_shape(it->second, i);
+                    }
+                }
+            }
         }
         
         Shape make_shape_access( const TensorRef& tensor )
@@ -4279,6 +4247,11 @@ namespace sknd
                 shape[i] = pack_shape[i].packed() ? pack_shape[i].slice(first, last) : pack_shape[i];
             }
             return shape;
+        }
+        
+        std::string item_name( const std::string& name, const size_t idx )
+        {
+            return name + ":" + std::to_string(idx);
         }
         
     private:

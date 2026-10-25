@@ -621,18 +621,7 @@ struct std::hash<sknd::TensorRef>
 {
     std::size_t operator()( const sknd::TensorRef& r ) const noexcept
     {
-        if ( r.itemized() )
-        {
-            std::hash<const sknd::Tensor*> hasher;
-            
-            size_t seed = r.item_count();
-            for ( auto& item : r )
-            {
-                seed ^= hasher(item) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-            }
-            return seed;
-        }
-        else if ( r.packed() )
+        if ( r.packed() )
         {
             std::hash<const sknd::TensorPack*> hasher;
             return hasher(&r.as_pack());

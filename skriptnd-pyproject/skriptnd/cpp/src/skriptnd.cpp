@@ -459,34 +459,26 @@ namespace sknd
         });
     }
 
+    void replace_tensor_usage( std::vector<TensorRef>& tensors, const std::unordered_map<TensorRef,TensorRef>& tensor_remap )
+    {
+        for ( auto& tensor : tensors )
+        {
+            auto it = tensor_remap.find(tensor);
+            if ( it != tensor_remap.end() )
+            {
+                tensor = it->second;
+            }
+        }
+    }
+
     void replace_tensor_usage( Graph& graph, const std::unordered_map<TensorRef,TensorRef>& tensor_remap )
     {
-        for ( auto& tensor : graph.inputs )
-        {
-            auto it = tensor_remap.find(tensor);
-            if ( it != tensor_remap.end() )
-            {
-                tensor = it->second;
-            }
-        }
-        for ( auto& tensor : graph.outputs )
-        {
-            auto it = tensor_remap.find(tensor);
-            if ( it != tensor_remap.end() )
-            {
-                tensor = it->second;
-            }
-        }
+        replace_tensor_usage(graph.inputs, tensor_remap);
+        replace_tensor_usage(graph.outputs, tensor_remap);
         for ( auto& op : graph.operations )
         {
-            for ( auto& tensor : op.inputs )
-            {
-                auto it = tensor_remap.find(tensor);
-                if ( it != tensor_remap.end() )
-                {
-                    tensor = it->second;
-                }
-            }
+            replace_tensor_usage(op.inputs, tensor_remap);
+            replace_tensor_usage(op.outputs, tensor_remap);
             for ( auto& [key, value] : op.attribs )
             {
                 replace_tensor_accesses(value, tensor_remap);
@@ -543,7 +535,7 @@ namespace sknd
                     std::move(body.packs.begin(), body.packs.end(), std::back_inserter(graph.packs));
                     for ( size_t i = 0; i < op.outputs.size(); ++i )
                     {
-                        tensor_remap[op.outputs[i]] = body.outputs[i];
+                        tensor_remap[body.outputs[i]] = op.outputs[i];
                     }
                     removed_subgraphs.insert(&body);
                 }
@@ -554,14 +546,15 @@ namespace sknd
             }
             
             graph.operations = std::move(ops);
-            auto last_tensor = std::remove_if(graph.tensors.begin(), graph.tensors.end(), 
+            
+            replace_tensor_usage(graph, tensor_remap);
+            
+            auto last_tensor = std::remove_if(graph.tensors.begin(), graph.tensors.end(),
                                               [&]( const auto& tensor ){ return tensor_remap.count(tensor.get()) != 0; });
             auto last_pack = std::remove_if(graph.packs.begin(), graph.packs.end(),
                                             [&]( const auto& pack ){ return tensor_remap.count(pack.get()) != 0; });
             graph.tensors.erase(last_tensor, graph.tensors.end());
             graph.packs.erase(last_pack, graph.packs.end());
-            
-            replace_tensor_usage(graph, tensor_remap);
         }
         
         for ( auto& graph : model.graphs )

@@ -614,6 +614,7 @@ def _replace_tensor_usage(graph, tensor_remap):
     graph.outputs = tuple(tensor_remap.get(tensor) or tensor for tensor in graph.outputs)
     for op in graph.operations:
         op.inputs = tuple(tensor_remap.get(tensor) or tensor for tensor in op.inputs)
+        op.outputs = tuple(tensor_remap.get(tensor) or tensor for tensor in op.outputs)
         for key, value in op.attribs.items():
             _replace_tensor_accesses(value, tensor_remap)
         for expr in op.subexprs:
@@ -652,7 +653,7 @@ def inline_compounds(model, filter=lambda op: True, inline_names=True):
                         for subgraph in operation.subgraphs:
                             subgraph.name = _inline_name(subgraph.name, body.name)
                 for op_output, body_output in zip(op.outputs, body.outputs):
-                    tensor_remap[op_output] = body_output
+                    tensor_remap[body_output] = op_output
                 removed_subgraphs.add(body)
             else:
                 ops.append(op)
@@ -662,9 +663,6 @@ def inline_compounds(model, filter=lambda op: True, inline_names=True):
         graph.packs = [pack for pack in graph.packs if pack not in tensor_remap]
 
         _replace_tensor_usage(graph, tensor_remap)
-
-        for op_output, body_output in tensor_remap.items():
-            body_output.name = op_output.name
 
     for graph in model.graphs:
         if graph.parent and graph.parent in removed_subgraphs:

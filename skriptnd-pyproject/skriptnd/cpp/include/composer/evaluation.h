@@ -3099,6 +3099,14 @@ namespace sknd
             });
         }
         
+        static bool has_identifier( const Expr& expr, const std::string& name )
+        {
+            return any_of(expr, [&]( const Expr& e )
+            {
+                return e.kind == Expr::Identifier && as_identifier(e).name == name;
+            });
+        }
+        
     private:
         
         static Result<void> check_index_range( int_t& index, const size_t length, const Position& position )
