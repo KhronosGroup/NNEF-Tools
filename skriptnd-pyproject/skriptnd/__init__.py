@@ -48,7 +48,6 @@ Tensor = _sknd.Tensor           # dataclass('Tensor', {
                                 #   'name': str,
                                 #   'dtype': Dtype,
                                 #   'shape': Tuple[Expr],
-                                #   'max_shape': Tuple[int],
                                 #   'quant': Dict[str, object]},
                                 #   'value': object,
                                 #   'variable': bool,
@@ -57,9 +56,7 @@ TensorPack = _sknd.TensorPack   # dataclass('TensorPack', {
                                 #   'name': str,
                                 #   'dtype': Dtype,
                                 #   'shape': Tuple[Expr],
-                                #   'max_shape': typing.Tuple[int],
                                 #   'size': Expr,
-                                #   'max_size': int,
                                 #   'items': List[Tensor],
                                 # })
 Operation = _sknd.Operation     # dataclass('Operation', {
@@ -207,7 +204,7 @@ Tensor.is_variable = property(lambda tensor: tensor.variable)
 Tensor.is_constant = property(lambda tensor: tensor.value is not None and not tensor.variable)
 
 TensorPack.__hash__ = lambda pack: hash(pack.name)
-TensorPack.__len__ = lambda pack: pack.max_size
+TensorPack.__len__ = lambda pack: len(pack.items)
 TensorPack.__getitem__ = lambda pack, i: pack.items[i]
 TensorPack.__iter__ = lambda pack: iter(pack.items) if pack.items is not None else iter([])
 TensorPack.packed = property(lambda expr: True)
