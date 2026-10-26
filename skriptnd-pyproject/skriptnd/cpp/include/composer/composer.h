@@ -518,6 +518,9 @@ namespace sknd
             
             TRY_DECL(inputs, outputs, compose_expression(expr, symbols, model, graph, scope))
             
+            auto it = std::remove_if(inputs.begin(), inputs.end(), []( const TensorRef& tensor ){ return is_implicit_constant(tensor); });
+            inputs.erase(it, inputs.end());
+            
             insert_copy_operations(graph, inputs, outputs);
             
             graph.inputs = std::move(inputs);
@@ -1004,7 +1007,7 @@ namespace sknd
                         {
                             for ( auto& item : input )
                             {
-                                if ( !internals.count(item) && !is_implicit_constant(item) )
+                                if ( !internals.count(item) )
                                 {
                                     inputs.insert(item);
                                 }
@@ -1012,7 +1015,7 @@ namespace sknd
                         }
                         else
                         {
-                            if ( !internals.count(input) && !is_implicit_constant(input) )
+                            if ( !internals.count(input) )
                             {
                                 inputs.insert(input);
                             }
@@ -1031,7 +1034,7 @@ namespace sknd
                 {
                     for ( auto& item : tensor )
                     {
-                        if ( !internals.count(item) && !is_implicit_constant(item) )
+                        if ( !internals.count(item) )
                         {
                             inputs.insert(item);
                         }
@@ -1039,7 +1042,7 @@ namespace sknd
                 }
                 else
                 {
-                    if ( !internals.count(tensor) && !is_implicit_constant(tensor) )
+                    if ( !internals.count(tensor) )
                     {
                         inputs.insert(tensor);
                     }
