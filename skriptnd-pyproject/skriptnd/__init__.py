@@ -206,8 +206,9 @@ Tensor.is_constant = property(lambda tensor: tensor.value is not None and not te
 TensorPack.__hash__ = lambda pack: hash(pack.name)
 TensorPack.__len__ = lambda pack: len(pack.items)
 TensorPack.__getitem__ = lambda pack, i: pack.items[i]
-TensorPack.__iter__ = lambda pack: iter(pack.items) if pack.items is not None else iter([])
-TensorPack.packed = property(lambda expr: True)
+TensorPack.__iter__ = lambda pack: iter(pack.items)
+TensorPack.packed = property(lambda pack: True)
+TensorPack.itemized = property(lambda pack: pack.items is not None)
 
 Operation.constants = property(lambda op: (tensor for tensor in op.internals if tensor.is_constant))
 Operation.variables = property(lambda op: (tensor for tensor in op.internals if tensor.is_variable))

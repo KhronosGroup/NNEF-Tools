@@ -103,7 +103,7 @@ class SKNDModule(torch.nn.Module):
                 return None
             elif isinstance(tensor, sknd.TensorPack):
                 pack = activations.get(tensor)
-                if pack is None:
+                if pack is None and tensor.itemized:
                     pack = [activations.get(item) for item in tensor]
                     if any(item is None for item in pack):
                         pack = None
@@ -113,8 +113,9 @@ class SKNDModule(torch.nn.Module):
 
         def store_activation(sknd_tensor, torch_tensor):
             if isinstance(sknd_tensor, sknd.TensorPack):
-                for sknd_item, torch_item in zip(sknd_tensor, torch_tensor):
-                    store_activation(sknd_item, torch_item)
+                if sknd_tensor.itemized:
+                    for sknd_item, torch_item in zip(sknd_tensor, torch_tensor):
+                        store_activation(sknd_item, torch_item)
             else:
                 if sknd_tensor.quant and not sknd_tensor.is_variable:
                     torch_tensor = self._fake_quantize(torch_tensor, sknd_tensor.quant)
@@ -207,12 +208,13 @@ class SKNDModule(torch.nn.Module):
                 for input in op.inputs:
                     if input is not None:
                         if isinstance(input, sknd.TensorPack):
-                            for item in input:
-                                if item in activations and item not in self._registered and item not in subgraph.outputs \
-                                        and op is last_references.get(item):
-                                    del activations[item]
-                            if all(item not in activations for item in input) and input in activations:
-                                del activations[input]
+                            if input.itemized:
+                                for item in input:
+                                    if item in activations and item not in self._registered and item not in subgraph.outputs \
+                                            and op is last_references.get(item):
+                                        del activations[item]
+                                if all(item not in activations for item in input) and input in activations:
+                                    del activations[input]
                         else:
                             if input in activations and input not in self._registered and input not in subgraph.outputs \
                                     and op is last_references.get(input):
@@ -265,8 +267,9 @@ class SKNDModule(torch.nn.Module):
                 for input in op.inputs:
                     references[input] = op
                     if isinstance(input, sknd.TensorPack):
-                        for item in input:
-                            references[item] = op
+                        if input.itemized:
+                            for item in input:
+                                references[item] = op
                 for key, value in op.attribs.items():
                     if isinstance(value, sknd.Expr):
                         for tensor in self._referenced_tensors(value):
