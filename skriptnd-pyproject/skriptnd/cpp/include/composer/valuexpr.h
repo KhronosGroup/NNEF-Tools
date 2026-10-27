@@ -108,7 +108,7 @@ namespace sknd
             return index == 0 ? Null : index < 5 ? Literal : (Kind)(index - 3);
         }
         
-        static ValueExpr placeholder( const std::string& id, const ValueExpr& max_value );
+        static ValueExpr placeholder( const std::string& id, const ValueExpr& max_value, const ValueExpr& size = nullptr );
         static ValueExpr identifier( const std::string& name, const IdentifierKind& kind,
                                     const Typename type, const bool packed = false );
         
@@ -922,6 +922,7 @@ namespace sknd
     {
         std::string id;
         ValueExpr max_value;
+        ValueExpr size;
         
         bool operator==( const PlaceholderExpr& x ) const { return id == x.id; };
         bool operator!=( const PlaceholderExpr& x ) const { return !(*this == x); };
@@ -1117,9 +1118,9 @@ namespace sknd
     }
 
 
-    inline ValueExpr ValueExpr::placeholder( const std::string& id, const ValueExpr& max_value )
+    inline ValueExpr ValueExpr::placeholder( const std::string& id, const ValueExpr& max_value, const ValueExpr& size )
     {
-        return ValueExpr(PlaceholderExpr{ id, max_value }, Typename::Int);
+        return ValueExpr(PlaceholderExpr{ id, max_value, size }, Typename::Int, size != nullptr);
     }
 
     inline ValueExpr ValueExpr::identifier( const std::string& name, const IdentifierKind& kind,
@@ -1263,13 +1264,17 @@ namespace sknd
         {
             case Null:
             case Literal:
-            case Placeholder:
             case Identifier:
             case SizeAccess:
             case Bounded:
             case List:
             {
                 return false;
+            }
+            case Placeholder:
+            {
+                auto& placeholder = as_placeholder();
+                return placeholder.size != nullptr;
             }
             case ShapeAccess:
             {
@@ -1370,12 +1375,16 @@ namespace sknd
         {
             case Null:
             case Literal:
-            case Placeholder:
             case Identifier:
             case SizeAccess:
             case Bounded:
             {
                 return nullptr;
+            }
+            case Placeholder:
+            {
+                auto& placeholder = as_placeholder();
+                return placeholder.size;
             }
             case List:
             {
@@ -1515,13 +1524,20 @@ namespace sknd
         {
             case Null:
             case Literal:
-            case Placeholder:
             case Identifier:
             case SizeAccess:
             case TensorAccess:
             case Bounded:
             {
                 return *this;
+            }
+            case Placeholder:
+            {
+                if ( !packed() )
+                {
+                    return *this;
+                }
+                return ValueExpr(SubscriptExpr{ *this, ValueExpr((int_t)idx) }, dtype());
             }
             case List:
             {
@@ -1639,13 +1655,20 @@ namespace sknd
         {
             case Null:
             case Literal:
-            case Placeholder:
             case Identifier:
             case SizeAccess:
             case TensorAccess:
             case Bounded:
             {
                 return *this;
+            }
+            case Placeholder:
+            {
+                if ( !packed() )
+                {
+                    return *this;
+                }
+                return ValueExpr(SubscriptExpr{ *this, idx }, dtype());
             }
             case ShapeAccess:
             {
@@ -1755,7 +1778,6 @@ namespace sknd
         {
             case Null:
             case Literal:
-            case Placeholder:
             case Identifier:
             case SizeAccess:
             case TensorAccess:
@@ -1764,6 +1786,7 @@ namespace sknd
             {
                 return *this;
             }
+            case Placeholder:
             case ShapeAccess:
             case Reference:
             case Concat:
@@ -2086,6 +2109,7 @@ namespace sknd
             {
                 auto& placeholder = expr.as_placeholder();
                 callback(placeholder.max_value);
+                callback(placeholder.size);
                 break;
             }
             case ValueExpr::Kind::Unary:
@@ -2212,6 +2236,7 @@ namespace sknd
             {
                 auto& placeholder = expr.as_placeholder();
                 callback(placeholder.max_value);
+                callback(placeholder.size);
                 break;
             }
             case ValueExpr::Kind::Reference:

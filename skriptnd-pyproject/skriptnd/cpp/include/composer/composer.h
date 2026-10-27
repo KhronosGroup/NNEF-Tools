@@ -257,6 +257,14 @@ namespace sknd
         {
             for ( auto& param : params )
             {
+                if ( param.repeats.value )
+                {
+                    auto& iden = Typing::find_affine_id(expanded(*param.repeats.value));
+                    if ( !iden.empty() )
+                    {
+                        TRY_CALL(add_placeholder_symbol(*param.repeats.value, param.repeats.bound, symbols))
+                    }
+                }
                 if ( param.shape )
                 {
                     for ( auto& extent : param.shape->extents )
@@ -272,14 +280,6 @@ namespace sknd
                         }
                     }
                 }
-                if ( param.repeats.value )
-                {
-                    auto& iden = Typing::find_affine_id(expanded(*param.repeats.value));
-                    if ( !iden.empty() )
-                    {
-                        TRY_CALL(add_placeholder_symbol(*param.repeats.value, param.repeats.bound, symbols))
-                    }
-                }
             }
             return {};
         }
@@ -292,88 +292,38 @@ namespace sknd
             auto it = symbols.find(iden);
             if ( it == symbols.end() )
             {
-                if ( count )
+                TRY_DECL(max_value, bound ? eval(*bound, symbols) : ValueExpr(nullptr))
+                TRY_DECL(size, count ? eval(*count, symbols) : ValueExpr(nullptr))
+                if ( size.is_bool() )
                 {
-                    TRY_DECL(size, eval(*count, symbols))
-                    auto rank = size.is_bool() ? int_t(size.as_bool()) : size.as_int();
-                    TRY_DECL(items, bound ? eval_items(*bound, symbols, rank) : std::vector<ValueExpr>(rank))
-                    
-                    for ( size_t i = 0; i < items.size(); ++i )
+                    if ( size.as_bool() )
                     {
-                        items[i] = ValueExpr::placeholder(next_placeholder_name(), items[i]);
+                        auto value = ValueExpr::placeholder(next_placeholder_name(), max_value);
+                        symbols.emplace(iden, Symbol(value, Typename::Int, Symbol::Extent));
                     }
-                    symbols.emplace(iden, Symbol(ValueExpr::list(std::move(items), Typename::Int), Typename::Int, Symbol::Extent));
+                    else
+                    {
+                        symbols.emplace(iden, Symbol(ValueExpr(nullptr), Typename::Int, Symbol::Extent));
+                    }
                 }
                 else
                 {
-                    TRY_DECL(max_value, bound ? eval(*bound, symbols) : ValueExpr(nullptr))
-                    auto value = ValueExpr::placeholder(next_placeholder_name(), max_value);
+                    auto value = ValueExpr::placeholder(next_placeholder_name(), max_value, size);
                     symbols.emplace(iden, Symbol(value, Typename::Int, Symbol::Extent));
                 }
             }
             else if ( bound )
             {
-                auto& symbol = it->second;
-                assert(symbol.is<ValueExpr>());
-                auto& value = symbol.as<ValueExpr>();
-                if ( count )
+                auto& value = it->second.as<ValueExpr>();
+                auto& old_max_value = value.as_placeholder().max_value;
+                TRY_DECL(new_max_value, eval(*bound, symbols))
+                if ( new_max_value != old_max_value )
                 {
-                    TRY_DECL(new_max_value, eval(*bound, symbols))
-                    if ( !match_max_value(value.as_list(), new_max_value) )
-                    {
-                        auto old_max_value = get_max_value(value.as_list());
-                        return Error(extent.position, "symbol '%s' was previously defined with a different upper bound (%s vs %s)",
-                                     iden.c_str(), str(old_max_value).c_str(), str(new_max_value).c_str());
-                    }
-                }
-                else
-                {
-                    auto& old_max_value = value.as_placeholder().max_value;
-                    TRY_DECL(new_max_value, eval(*bound, symbols))
-                    if ( new_max_value != old_max_value )
-                    {
-                        return Error(extent.position, "symbol '%s' was previously defined with a different upper bound (%s vs %s)",
-                                     iden.c_str(), str(old_max_value).c_str(), str(new_max_value).c_str());
-                    }
+                    return Error(extent.position, "symbol '%s' was previously defined with a different upper bound (%s vs %s)",
+                                 iden.c_str(), str(old_max_value).c_str(), str(new_max_value).c_str());
                 }
             }
             return {};
-        }
-        
-        bool match_max_value( const std::vector<ValueExpr>& placeholders, const ValueExpr& values )
-        {
-            if ( values.packed() && placeholders.size() != values.size().as_int() )
-            {
-                return false;
-            }
-            for ( size_t i = 0; i < placeholders.size(); ++i )
-            {
-                if ( placeholders[i].as_placeholder().max_value != values.at(i) )
-                {
-                    return false;
-                }
-            }
-            return true;
-        }
-        
-        ValueExpr get_max_value( const std::vector<ValueExpr>& placeholders )
-        {
-            if ( placeholders.size() > 0 )
-            {
-                auto& first_value = placeholders.front().as_placeholder().max_value;
-                if ( std::all_of(placeholders.begin() + 1, placeholders.end(),
-                                 [&]( const ValueExpr& x ){ return x.as_placeholder().max_value == first_value; }) )
-                {
-                    return first_value;
-                }
-            }
-            
-            std::vector<ValueExpr> items(placeholders.size());
-            for ( size_t i = 0; i < items.size(); ++i )
-            {
-                items[i] = placeholders[i].as_placeholder().max_value;
-            }
-            return ValueExpr::list(std::move(items), Typename::Int);
         }
         
         Result<void> replace_placeholder_symbols( const std::vector<Param>& params, Dict<Symbol>& symbols )
@@ -2070,14 +2020,17 @@ namespace sknd
                 
                 auto composed_shape = propagate_shape_through_region(output, context, reference_remap);
                 resolve(composed_shape, ResolveReference);
+                resolve<false>(composed_shape, ResolveShapeAccess | ResolveSizeAccess);
                 simplify(composed_shape);
                 
                 auto composed_size = propagate_size_through_region(output, context, reference_remap);
                 resolve(composed_size, ResolveReference);
+                resolve<false>(composed_size, ResolveShapeAccess | ResolveSizeAccess);
                 simplify(composed_size);
                 
                 TRY_DECL(declared_shape, eval_shape(*param.shape, symbols))
                 resolve(declared_shape, ResolveReference);
+                resolve<false>(declared_shape, ResolveShapeAccess | ResolveSizeAccess);
                 simplify(declared_shape);
                 
                 if ( param.type.packed )
@@ -4355,17 +4308,6 @@ namespace sknd
             else
             {
                 replace_dynamic_shapes_with_placeholders(tensor.as_tensor().shape);
-            }
-        }
-        
-        void replace_null_shapes_with_placeholders( Shape& shape, const std::vector<int_t>& max_shape )
-        {
-            for ( size_t i = 0; i < shape.size(); ++i )
-            {
-                if ( shape[i] == nullptr )
-                {
-                    shape[i] = new_placeholder_expr(max_shape[i]);
-                }
             }
         }
         

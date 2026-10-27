@@ -1960,11 +1960,11 @@ namespace sknd
                 case ValueExpr::Null:
                 case ValueExpr::Literal:
                 case ValueExpr::Identifier:
-                case ValueExpr::Placeholder:
                 case ValueExpr::SizeAccess:
                 {
                     return expr;
                 }
+                case ValueExpr::Placeholder:
                 case ValueExpr::TensorAccess:
                 {
                     return expr.packed() ? nullptr : expr;
@@ -1991,10 +1991,6 @@ namespace sknd
                     }
                     auto dim = access.dim.as_int();
                     auto& extent = access.tensor.shape()[dim];
-                    if ( extent.is_placeholder() )
-                    {
-                        return access;
-                    }
                     return uniform_value(extent);
                 }
                 case ValueExpr::Cast:
@@ -3001,18 +2997,20 @@ namespace sknd
             return shape;
         }
         
+        template<bool Recursive = true>
         static void resolve( Shape& shape, const unsigned flags = ResolveAll )
         {
             for ( auto& item : shape )
             {
-                resolve(item, flags);
+                resolve<Recursive>(item, flags);
             }
         }
         
+        template<bool Recursive = true>
         static Shape resolved( const Shape& shape, const unsigned flags = ResolveAll )
         {
             Shape resolved = shape;
-            resolve(resolved, flags);
+            resolve<Recursive>(resolved, flags);
             return resolved;
         }
         
