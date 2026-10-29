@@ -1010,7 +1010,7 @@ namespace sknd
             for ( size_t i = 0; i < output.shape().size(); ++i )
             {
                 trace_accesses_within_graph(shape[i], context, reference_remap);
-                if ( has_placeholders(shape[i]) )
+                if ( has_placeholders(simplified(resolved(shape[i], ResolveReference))) )
                 {
                     shape[i] = new_placeholder_expr(shape[i]);
                 }
@@ -1025,7 +1025,7 @@ namespace sknd
             {
                 size = context.sizes.at(output);
                 trace_accesses_within_graph(size, context, reference_remap);
-                if ( has_placeholders(size) )
+                if ( has_placeholders(simplified(resolved(size, ResolveReference))) )
                 {
                     size = new_placeholder_expr(size);
                 }
@@ -3694,7 +3694,7 @@ namespace sknd
                 std::vector<ValueExpr> items(size);
                 for ( size_t i = 0; i < size; ++i )
                 {
-                    items[i] = make_shape_access_expr(value[i], tensor, spread ? dim : dim + i);
+                    items[i] = make_shape_access_expr(value[i], tensor, dim + i);
                 }
                 return ValueExpr::list(std::move(items), Typename::Int);
             }

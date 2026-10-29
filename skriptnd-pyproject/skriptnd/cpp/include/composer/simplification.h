@@ -246,11 +246,26 @@ namespace sknd
                 case ValueExpr::Null:
                 case ValueExpr::Literal:
                 case ValueExpr::Identifier:
-                case ValueExpr::Placeholder:
                 case ValueExpr::SizeAccess:
-                case ValueExpr::ShapeAccess:
                 case ValueExpr::TensorAccess:
                 {
+                    return false;
+                }
+                case ValueExpr::Placeholder:
+                {
+                    auto& placeholder = expr.as_placeholder();
+                    bool simplified = false;
+                    simplified |= simplify_polynomial(placeholder.max_value, ctx);
+                    simplified |= simplify_polynomial(placeholder.size, ctx);
+                    return simplified;
+                }
+                case ValueExpr::ShapeAccess:
+                {
+                    auto& access = expr.as_shape_access();
+                    if ( access.dim != nullptr )
+                    {
+                        return simplify_polynomial(access.dim, ctx);
+                    }
                     return false;
                 }
                 default:

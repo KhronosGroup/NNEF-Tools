@@ -1991,7 +1991,8 @@ namespace sknd
                     }
                     auto dim = access.dim.as_int();
                     auto& extent = access.tensor.shape()[dim];
-                    return uniform_value(extent);
+                    bool uniform = uniform_value(extent) != nullptr;
+                    return uniform ? ValueExpr(access, expr.dtype(), false) : nullptr;
                 }
                 case ValueExpr::Cast:
                 {
