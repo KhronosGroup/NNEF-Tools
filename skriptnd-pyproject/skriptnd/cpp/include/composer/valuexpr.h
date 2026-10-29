@@ -206,7 +206,6 @@ namespace sknd
         }
         
         ValueExpr( const SizeAccessExpr& access );
-        ValueExpr( const ShapeAccessExpr& access );
         ValueExpr( const TensorAccessExpr& access );
         
         ValueExpr( const ValueExpr& other )
@@ -1104,11 +1103,6 @@ namespace sknd
 
     inline ValueExpr::ValueExpr( const SizeAccessExpr& access )
     : _kind(SizeAccess), _dtype(Typename::Int), _index(variant_data::index_of<SizeAccessExpr>()), _packed(false), _data(access)
-    {
-    }
-
-    inline ValueExpr::ValueExpr( const ShapeAccessExpr& access )
-    : _kind(ShapeAccess), _dtype(Typename::Int), _index(variant_data::index_of<ShapeAccessExpr>()), _packed(false), _data(access)
     {
     }
     

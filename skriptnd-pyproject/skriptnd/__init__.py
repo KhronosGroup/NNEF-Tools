@@ -124,7 +124,7 @@ PlaceholderExpr.size = property(lambda expr: None)
 IdentifierExpr.size = property(lambda expr: None)
 BoundedExpr.size = property(lambda expr: None)
 ReferenceExpr.size = property(lambda expr: expr.target.size)
-ShapeAccess.size = property(lambda access: access.tensor.size if isinstance(access.tensor, TensorPack) else None)
+ShapeAccess.size = property(lambda access: len(access.tensor.shape) if access.dim is None else access.tensor.size if isinstance(access.tensor, TensorPack) and access.packed else None)
 CastExpr.size = property(lambda expr: expr.arg.size)
 UnaryExpr.size = property(lambda expr: expr.arg.size)
 BinaryExpr.size = property(lambda expr: expr.left.size or expr.right.size)
@@ -134,7 +134,6 @@ ListExpr.size = property(lambda expr: len(expr.items))
 SubscriptExpr.size = property(lambda expr: expr.index.size)
 
 SizeAccess.packed = property(lambda access: False)
-ShapeAccess.packed = property(lambda access: access.dim is None)
 TensorAccess.packed = property(lambda access: (isinstance(access.tensor, TensorPack) and access.item is None) or
                                               any(isinstance(index, Expr) and index.packed for index in access.indices))
 PlaceholderExpr.packed = property(lambda expr: False)
@@ -545,7 +544,7 @@ def transform_expr(expr, func, preorder=True):
         expr = SizeAccess(expr.pack)
     elif isinstance(expr, ShapeAccess):
         dim = transform_expr(expr.dim, func)
-        expr = ShapeAccess(expr.tensor, dim)
+        expr = ShapeAccess(expr.tensor, dim, expr.packed)
     elif isinstance(expr, TensorAccess):
         item = transform_expr(expr.item, func)
         indices = [transform_expr(item, func) for item in expr.indices]

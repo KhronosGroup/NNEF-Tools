@@ -375,7 +375,7 @@ namespace sknd
             {
                 if ( dim )
                 {
-                    value = ShapeAccess{ tensor, ValueExpr((int_t)*dim) };
+                    value = ValueExpr(ShapeAccess{ tensor, ValueExpr((int_t)*dim) }, Typename::Int, value.packed());
                 }
                 else
                 {
@@ -389,7 +389,7 @@ namespace sknd
                     size_t k = 0;
                     for ( auto& item : value.as_list() )
                     {
-                        item = ShapeAccess{ TensorRef(tensor[k++]), ValueExpr((int_t)*dim) };
+                        item = ValueExpr(ShapeAccess{ TensorRef(tensor[k++]), ValueExpr((int_t)*dim) }, Typename::Int);
                     }
                 }
                 else
@@ -397,7 +397,7 @@ namespace sknd
                     size_t k = *dim;
                     for ( auto& item : value.as_list() )
                     {
-                        item = ShapeAccess{ tensor, ValueExpr((int_t)k++) };
+                        item = ValueExpr(ShapeAccess{ tensor, ValueExpr((int_t)k++) }, Typename::Int);
                     }
                 }
             }
@@ -1741,7 +1741,7 @@ namespace sknd
         {
             auto tensor = symbols.at(name).as<TensorRef>();
             auto shape_value = is_literal(shape) ? ValueExpr(shape.data(), shape.size(), Typename::Int) :
-                                                   ValueExpr(ShapeAccess{ tensor }, Typename::Int, shape.size());
+                                                   ValueExpr(ShapeAccess{ tensor }, Typename::Int, true);
             auto rank_value = ValueExpr((int_t)shape.size());
             
             assert(shape_value.packed());
@@ -3679,7 +3679,7 @@ namespace sknd
         
         ValueExpr make_shape_access_expr( const ValueExpr& value, const TensorRef tensor, const size_t dim )
         {
-            return value.is_literal() ? value : ShapeAccess{ tensor, (int_t)dim };
+            return value.is_literal() ? value : ValueExpr(ShapeAccess{ tensor, (int_t)dim }, Typename::Int);
         }
         
         ValueExpr make_shape_access_exprs( const ValueExpr& value, const TensorRef tensor, const size_t dim, bool spread = false )
@@ -3700,7 +3700,7 @@ namespace sknd
             }
             else
             {
-                return ValueExpr(ShapeAccess{ tensor, (int_t)dim }, Typename::Int, value.packed());
+                return ValueExpr(ShapeAccess{ tensor, (int_t)dim }, Typename::Int, tensor.packed());
             }
         }
         

@@ -394,7 +394,8 @@ static PyObject* buildPyValueExpr( const sknd::ValueExpr& expr, const BuildConte
             auto& access = expr.as_shape_access();
             PyObject* tensor = buildPyTensorRef(access.tensor, context);
             PyObject* dim = buildPyValueExpr(access.dim, context);
-            return makePyObject(ShapeAccess, tensor, dim);
+            PyObject* packed = buildPyBoolean(expr.packed());
+            return makePyObject(ShapeAccess, tensor, dim, packed);
         }
         case sknd::ValueExpr::TensorAccess:
         {
@@ -1150,7 +1151,7 @@ PyMODINIT_FUNC INIT_FUNC_NAME(void)
 
     Expr = makeDataClass(module, "Expr", {});
     SizeAccess = makeDataClass(module, Expr, "SizeAccess", { "pack" });
-    ShapeAccess = makeDataClass(module, Expr, "ShapeAccess", { "tensor", "dim" });
+    ShapeAccess = makeDataClass(module, Expr, "ShapeAccess", { "tensor", "dim", "packed" });
     TensorAccess = makeDataClass(module, Expr, "TensorAccess", { "tensor", "indices", "item" });
     PlaceholderExpr = makeDataClass(module, Expr, "PlaceholderExpr", { "id", "max_value" });
     IdentifierExpr = makeDataClass(module, Expr, "IdentifierExpr", { "name", "kind", "dtype" });
