@@ -911,7 +911,7 @@ operator lstm_step {
 
 # @text This is a helper operator to describe an LSTM iteration where each batch item has the same number of steps (which may be a static or dynamic count).
 
-operator _lstm_loop {
+operator _batch_lstm_loop {
     @input {
         X: real[s,b,c];
         W: real[4*n,c];
@@ -922,7 +922,7 @@ operator _lstm_loop {
         steps: optional int[];
     }
     @output {
-        Y: real[~|s..(?steps),s..(!?steps),b,n];
+        Y: real[s,b,n];
         hN: real[b,n];
         cN: real[b,n];
     }
@@ -932,7 +932,8 @@ operator _lstm_loop {
             h1, c1 = step: lstm_step(hi, ci, Xi, W, R, B);
             yield h1, c1, h1;
         };
-        Y = layout.stack{axis=0}(hs);
+        h = layout.stack{axis=0}(hs);
+        Y = if ?steps then layout.pad{axes=[0], padding=[0, s - h.shape[0]]}(h) else h;
     }
 }
 
@@ -949,7 +950,7 @@ operator _jagged_lstm_loops {
         steps: int[b];
     }
     @output {
-        Y: real[~|s,b,n];
+        Y: real[s,b,n];
         hN: real[b,n];
         cN: real[b,n];
     }
@@ -959,7 +960,7 @@ operator _jagged_lstm_loops {
         h0s: real[1,n]..(b) = layout.unstack{axis=0, squeeze=false}(h0);
         c0s: real[1,n]..(b) = layout.unstack{axis=0, squeeze=false}(c0);
         Ys..(b), hNs..(b), cNs..(b) = for Xi : Xs, h0i : h0s, c0i : c0s, cnt : counts do..(b)
-                                      item: _lstm_loop(Xi, W, R, B, h0i, c0i, cnt);
+                                      item: _batch_lstm_loop(Xi, W, R, B, h0i, c0i, cnt);
         Y = layout.stack{axis=1, squeeze=true}(Ys);
         hN = layout.stack{axis=0, squeeze=true}(hNs);
         cN = layout.stack{axis=0, squeeze=true}(cNs);
@@ -979,7 +980,7 @@ operator lstm {
         steps: optional int[b];
     }
     @output {
-        Y: real[~|s..(?steps),s..(!?steps),b,n];
+        Y: real[s,b,n];
         hN: real[b,n];
         cN: real[b,n];
     }
@@ -987,6 +988,6 @@ operator lstm {
         Y, hN, cN = if ?steps then
                         _jagged_lstm_loops(X, W, R, B, h0, c0, steps)
                     else
-                        _lstm_loop(X, W, R, B, h0, c0);
+                        _batch_lstm_loop(X, W, R, B, h0, c0);
     }
 }
