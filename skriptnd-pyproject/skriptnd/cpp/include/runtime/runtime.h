@@ -666,7 +666,7 @@ namespace sknd
             
             size_type shape( const size_t i ) const
             {
-                return largest_shape(i);
+                return _items.front().shape(i);
             }
             
         private:
@@ -679,20 +679,6 @@ namespace sknd
             static size_type get_shape_item( const size_pack_type& value, const size_t idx )
             {
                 return value[idx];
-            }
-            
-            size_type largest_shape( const size_t dim ) const
-            {
-                size_type largest = _items.front().shape(dim);
-                for ( size_t i = 1; i < _items.size(); ++i )
-                {
-                    auto shape = _items[i].shape(dim);
-                    if ( shape > largest )
-                    {
-                        largest = shape;
-                    }
-                }
-                return largest;
             }
             
         private:
@@ -787,7 +773,7 @@ namespace sknd
             
             size_type shape( const size_t i ) const
             {
-                return largest_shape(i);
+                return _items.front()->shape(i);
             }
             
         private:
@@ -800,20 +786,6 @@ namespace sknd
             static size_type get_shape_item( const size_pack_type& value, const size_t idx )
             {
                 return value[idx];
-            }
-            
-            size_type largest_shape( const size_t dim ) const
-            {
-                size_type largest = _items.front().shape(dim);
-                for ( size_t i = 1; i < _items.size(); ++i )
-                {
-                    auto shape = _items[i].shape(dim);
-                    if ( shape > largest )
-                    {
-                        largest = shape;
-                    }
-                }
-                return largest;
             }
             
         private:
