@@ -116,22 +116,14 @@ void fill_tensor( sknd::rt::TensorView& tensor, const py::array& array )
         throw std::invalid_argument("unexpected dtype '" + str(array.dtype()) + "'; expected dtype '" + str(dtype) + "'");
     }
     
-    std::vector<long> shape(array.ndim());
-    for ( py::ssize_t i = 0; i < array.ndim(); ++i )
-    {
-        shape[i] = (long)array.shape()[i];
-    }
-    
-    tensor.reshape(shape.size(), shape.data());
+    tensor.reshape(array.ndim(), array.shape());
     
     std::copy_n((char*)array.data(), array.nbytes(), tensor.bytes());
 }
 
 py::array fetch_tensor( const sknd::rt::TensorView& tensor )
 {
-    std::vector<py::ssize_t> shape(tensor.rank());
-    std::copy_n(tensor.shape(), tensor.rank(), shape.data());
-    
+    std::vector<py::ssize_t> shape(tensor.shape(), tensor.shape() + tensor.rank());
     py::array array = py::array(py_dtype(tensor.dtype()), shape);
     std::copy_n(tensor.bytes(), array.nbytes(), (char*)array.data());
     

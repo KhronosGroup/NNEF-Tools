@@ -354,6 +354,7 @@ namespace sknd
                 {
                     throw std::invalid_argument("invalid tensor reshaping to shape " + str(_shape) + " while allocated max shape is " + str(_max_shape));
                 }
+                _data.resize(volume());
             }
             
             void reshape( const size_t rank, const long* shape )
