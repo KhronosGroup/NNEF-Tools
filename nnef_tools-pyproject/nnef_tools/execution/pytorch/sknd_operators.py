@@ -983,7 +983,7 @@ Operators = {
     'layout.shape': lambda x: torch.tensor(x.shape, dtype=IntType, device=x.device),
     'layout.range': lambda first, last, stride: torch.arange(first, last, stride, dtype=IntType),
     'layout.uniform': lambda value, shape: torch.full(shape, value),
-    'layout.nonzero': lambda x: torch.nonzero(x).transpose(0,1),
+    'layout.nonzero': lambda x: torch.nonzero(x),
     'image.resize': image_resize,
     'image.rescale': image_rescale,
     'image.nearest_downsample': image_nearest_downsample,

@@ -1387,7 +1387,7 @@ graph nonzero {
         input: real[10];
     }
     @output {
-        output: int[1,~|10];
+        output: int[~|10,1];
     }
     @compose {
         output = layout.nonzero(input);
@@ -2754,7 +2754,7 @@ graph nonzero_gather {
         input: real[100];
     }
     @output {
-        output: real[1,~|100];
+        output: real[~|100,1];
     }
     @compose {
         greater = math.gt(input, 0.0);
@@ -2768,7 +2768,7 @@ graph nonzero_gather_add {
         input: real[100];
     }
     @output {
-        output: real[1,~|100];
+        output: real[~|100,1];
     }
     @compose {
         greater = math.gt(input, 0.0);

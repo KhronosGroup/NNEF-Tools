@@ -250,7 +250,7 @@ namespace sknd
         void nonzero( const Tensor<N,T>& input, Tensor<2,I>& indices )
         {
             auto count = detail::nnz(input.data(), input.volume());
-            indices.reshape((int)N, (int)count);
+            indices.reshape((int)count, (int)N);
             
             auto input_data = input.data();
             int k = 0;
@@ -261,7 +261,7 @@ namespace sknd
                 {
                     for ( int i = 0; i < (int)N; ++i )
                     {
-                        indices(i,k) = index[i];
+                        indices(k,i) = index[i];
                     }
                     k += 1;
                 }
