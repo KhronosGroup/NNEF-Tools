@@ -1911,7 +1911,7 @@ operator cumsum {
     @lower {
         with
             i = reverse ? n - 1 : 0:
-        output[si..,i,ti..] = exclusive ? 0.0 : input[si..,i,t..],
+        output[si..,i,ti..] = exclusive ? 0.0 : input[si..,i,ti..],
             si < s, ti < t | n > 0;
             
         with
