@@ -122,7 +122,7 @@ void fill_tensor( sknd::rt::TensorView& tensor, const py::array& array )
         shape[i] = (long)array.shape()[i];
     }
     
-    tensor.reshape(array.ndim(), shape.data());
+    tensor.reshape(shape.size(), shape.data());
     
     std::copy_n((char*)array.data(), array.nbytes(), tensor.bytes());
 }
@@ -380,15 +380,24 @@ def _format_nested_loops(contraction, indent):
         loops += indent + "if ( {} )\n".format(_format_value_expr(contraction.condition))
         indent += "\t"
 
+    dynamic_reshape = ""
+    output = contraction.left.tensor
+    if any(_is_placeholder(item) for item in output.shape):
+        shape = ", ".join(_format_value_expr(x, bracket=False) + ("+1" if _is_placeholder(x) else "")
+                          for x in output.shape)
+        dynamic_reshape = indent + f"{_valid_id(output.name)}.reshape({shape});\n"
+
     dynamic_shape_increments = "".join(indent + f"{id}++;\n" for id in dynamic_output_shapes)
 
     if contraction.left.packed:
         loops += indent[:-1] + "{\n"
-        for i in range(contraction.left.max_size):
+        loops += dynamic_reshape
+        for i in range(contraction.left.size):
             loops += _format_contraction_assignment(contraction, indent, i)
         loops += dynamic_shape_increments
         loops += indent[:-1] + "}\n"
     else:
+        loops += dynamic_reshape
         loops += _format_contraction_assignment(contraction, indent)
         loops += dynamic_shape_increments
 
@@ -435,32 +444,33 @@ def _format_decl_type(tensor):
 
     rank = len(tensor.shape)
     dtype = _format_dtype(tensor.dtype)
-    return f"sknd::rt::TensorPack<{rank},{dtype},{tensor.max_size}>" if isinstance(tensor, sknd.TensorPack) else \
-        f"sknd::rt::Tensor<{rank},{dtype}>"
-
-
-def _format_dynamic_mask(tensor):
-    return '0b' + ''.join('1' if isinstance(s, sknd.Expr) else '0' for s in reversed(tensor.shape))
+    if isinstance(tensor, sknd.TensorPack):
+        if tensor.itemized:
+            return f"sknd::rt::TensorList<{rank},{dtype}>"
+        else:
+            return f"sknd::rt::TensorPack<{rank},{dtype}>"
+    else:
+        return f"sknd::rt::Tensor<{rank},{dtype}>"
 
 
 def _format_tensor_declaration(tensor, indent):
     type = _format_decl_type(tensor)
     name = _valid_id(tensor.name)
-    shape = ", ".join(str(s) for s in tensor.max_shape)
-    if len(tensor.shape):
-        shape = _format_dynamic_mask(tensor) + ", " + shape
-    return indent + f"{type} {name}{{{shape}}};"
+    shape = ", ".join("-1" if isinstance(s, sknd.Expr) else str(s) for s in tensor.shape)
+    if isinstance(tensor, sknd.TensorPack):
+        size = "-1" if isinstance(tensor.size, sknd.Expr) else str(tensor.size)
+        if tensor.itemized:
+            return indent + f"{type} {name}{{{size}}};"
+        else:
+            return indent + f"{type} {name}{{{size}, {shape}}};"
+    else:
+        return indent + f"{type} {name}{{{shape}}};"
 
 
 def _format_pack_population(pack, indent):
     name = _valid_id(pack.name)
     items = ", ".join(_valid_id(item.name) for item in pack)
     return indent + f"{name}.populate({items});\n"
-
-
-def _format_pack_shape_update(pack, indent):
-    name = _valid_id(pack.name)
-    return indent + f"{name}.update_shape();\n"
 
 
 def _format_const_initializer(tensor, indent):
@@ -474,18 +484,17 @@ def _format_const_initializer(tensor, indent):
 
 
 def _format_tensor_initializers(model, indent, context):
-    deferred_packs = context['deferred_packs']
     const_inits = "".join(_format_const_initializer(tensor, indent) for tensor in context['tensors']
                           if tensor.is_constant)
     pack_inits = "".join(_format_pack_population(pack, indent) for pack in context['packs']
-                         if pack.name not in deferred_packs)
+                         if pack.itemized)
     separator = "\n" if len(const_inits) and len(pack_inits) else ""
 
     return const_inits + separator + pack_inits
 
 
-def _format_uniform(arg, max_size):
-    return "sknd::rt::uniform<{max_size}>({arg})".format(arg=arg, max_size=max_size)
+def _format_uniform(arg):
+    return f"sknd::rt::uniform({arg})"
 
 
 def _format_value_expr(expr, bracket=True, extent=None):
@@ -517,10 +526,7 @@ def _format_value_expr(expr, bracket=True, extent=None):
     elif isinstance(expr, sknd.ShapeAccess):
         name = _valid_id(expr.tensor.name)
         dim = _format_value_expr(expr.dim)
-        if expr.item is not None:
-            item = _format_value_expr(expr.item)
-            return f"{name}[{item}].shape({dim})"
-        elif isinstance(expr.tensor, sknd.TensorPack) and expr.packed:
+        if isinstance(expr.tensor, sknd.TensorPack) and expr.packed:
             return f"{name}.shapes({dim})"
         else:
             return f"{name}.shape({dim})"
@@ -609,10 +615,10 @@ def _format_value_expr(expr, bracket=True, extent=None):
 
             left = _format_value_expr(expr.left, bracket=False)
             if not sknd.expr_is_packed(expr.left):
-                left = _format_uniform(left, expr.max_size)
+                left = _format_uniform(left)
             right = _format_value_expr(expr.right, bracket=False)
             if not sknd.expr_is_packed(expr.right):
-                right = _format_uniform(right, expr.max_size)
+                right = _format_uniform(right)
             return f"sknd::rt::binary<{op}>({left}, {right})"
     elif isinstance(expr, sknd.SelectExpr):
         cond = _format_value_expr(expr.cond, bracket=False)
@@ -622,9 +628,9 @@ def _format_value_expr(expr, bracket=True, extent=None):
             return lb + cond + " ? " + left + " : " + right + rb
         else:
             if not sknd.expr_is_packed(expr.left):
-                left = _format_uniform(left, expr.max_size)
+                left = _format_uniform(left)
             if not sknd.expr_is_packed(expr.right):
-                right = _format_uniform(right, expr.max_size)
+                right = _format_uniform(right)
             return f"sknd::rt::select({cond}, {left}, {right})"
     elif isinstance(expr, sknd.FoldExpr):
         if expr.op == "+":
@@ -675,15 +681,15 @@ def _format_value_expr(expr, bracket=True, extent=None):
     elif isinstance(expr, sknd.UniformExpr):
         value = _format_value_expr(expr.value)
         size = _format_value_expr(expr.size)
-        return f"sknd::rt::uniform<{expr.max_size}>({value}, {size})"
+        return f"sknd::rt::uniform({value}, {size})"
     elif isinstance(expr, sknd.RangeExpr):
         first = _format_value_expr(expr.first)
         last = _format_value_expr(expr.last)
         if expr.stride == 1:
-            return f"sknd::rt::range<{expr.max_size}>({first}, {last})"
+            return f"sknd::rt::range({first}, {last})"
         else:
             stride = _format_value_expr(expr.stride)
-            return f"sknd::rt::range<{expr.max_size}>({first}, {last}, {stride})"
+            return f"sknd::rt::range({first}, {last}, {stride})"
     else:
         raise TypeError("Invalid value expression: " + str(type(expr)))
 
@@ -697,26 +703,13 @@ def _format_value_exprs(expr, bracket=True):
 
 def _format_shape_propagation(output, indent):
     text = ""
+    name = _valid_id(output.name)
     if isinstance(output, sknd.TensorPack) and _is_dynamic_size(output.size) and not _is_placeholder(output.size):
         length = _format_value_expr(output.size, bracket=False)
-        text += indent + f"{_valid_id(output.name)}.resize({length});\n"
-    if _is_dynamic_shape(output.shape) and all(not _is_placeholder(item) for item in output.shape):
-        shape = ", ".join(_format_value_expr(expr, bracket=False) if not sknd.expr_is_packed(expr) else "-1"
-                          for expr in output.shape)
-        text += indent + f"{_valid_id(output.name)}.reshape({shape});\n"
-    if isinstance(output, sknd.TensorPack):
-        text += "".join(_format_shape_propagation(item, indent) for item in output)
-    return text
-
-
-def _format_shape_definition(output, indent):
-    text = ""
-    if any(_is_placeholder(item) for item in output.shape):
-        shape = ", ".join(_format_value_expr(expr, bracket=False) if not sknd.expr_is_packed(expr) else "-1"
-                          for expr in output.shape)
-        text += indent + f"{_valid_id(output.name)}.reshape({shape});\n"
-    if isinstance(output, sknd.TensorPack):
-        text += "".join(_format_shape_definition(item, indent) for item in output)
+        text += indent + f"{name}.resize({length});\n"
+    if any(_is_dynamic_size(expr) and not _is_placeholder(expr) for expr in output.shape):
+        shape = ", ".join(_format_value_expr(expr, bracket=False) for expr in output.shape)
+        text += indent + f"{name}.reshape({shape});\n"
     return text
 
 
@@ -782,34 +775,24 @@ def _format_invocation_in_comment(name, attribs, inputs, outputs):
 
 
 def _format_operation(op, indent, context):
-    deferred_packs = context['deferred_packs']
-
-    text = "".join(_format_pack_shape_update(input, indent) for input in op.inputs
-                   if isinstance(input, sknd.TensorPack) and _is_dynamic_shape(input.shape))
-
-    text += indent + "// " + _format_invocation_in_comment(op.name, op.attribs, op.inputs, op.outputs) + "\n"
+    text = indent + "// " + _format_invocation_in_comment(op.name, op.attribs, op.inputs, op.outputs) + "\n"
 
     for expr in op.subexprs:
         iden = _valid_id(expr.name)
         target = expr.target
-        size = sknd.expr_max_size(target)
         dtype = _format_dtype(sknd.expr_dtype(target))
         value = _format_value_expr(target, bracket=False) if not isinstance(target, sknd.ListExpr) \
             else "{ " + ", ".join(_format_value_expr(item, bracket=False) for item in target) + " }"
-        if size is not None:
-            text += indent + f"const sknd::rt::ValuePack<{dtype},{size}> {iden} = {value};\n"
+        if expr.packed:
+            text += indent + f"const sknd::rt::ValuePack<{dtype}> {iden} = {value};\n"
         else:
             text += indent + f"const {dtype} {iden} = {value};\n"
 
-    text += "".join(_format_pack_population(output, indent) for output in op.outputs
-                    if output.name in deferred_packs)
     text += "".join(_format_shape_propagation(output, indent) for output in op.outputs)
     text += _format_control_flow(op, indent, context) if op.is_control_flow else \
             _format_intrinsic(op, indent, context) + "\n" if op.is_intrinsic else \
             _format_compound(op, indent, context) if op.is_compound else \
             _format_contractions(op, indent)
-    if op.is_primitive:
-        text += "".join(_format_shape_definition(output, indent) for output in op.outputs)
 
     return text
 
@@ -1006,7 +989,6 @@ def _format_do(op, indent, context):
         bound += _format_condition(condition)
 
     text += indent + f"for ( int $ = 0; {bound}; ++$ )\n"
-
     text += indent + "{\n"
 
     if index is not None:
@@ -1015,14 +997,18 @@ def _format_do(op, indent, context):
     for i in range(nvars):
         text += indent + f"\tstd::swap({_valid_id(vars[i].name)}, {_valid_id(op.outputs[i].name)});\n"
 
+    if condition or isinstance(iters, sknd.Tensor):
+        for output in op.outputs[nvars:]:
+            name = _valid_id(output.name)
+            text += indent + f"\t{name}.resize($+1);\n"
+            if _is_dynamic_shape(output.shape):
+                shape = ", ".join(_format_value_expr(expr, bracket=False) for expr in output.shape)
+                text += indent + f"\t{name}.reshape({shape});\n"
+
     text += "".join(f"{indent}\t{_format_argref(ref, arg)}"
                     for ref, arg in zip(op.internals[nvars:nvars+nscans], op.inputs[nvars:nvars+nscans]))
 
     text += _format_block(body, op.outputs, indent + "\t", context)
-
-    if condition or isinstance(iters, (sknd.Tensor, sknd.Expr)):
-        for i in range(nvars, len(op.outputs)):
-            text += indent + "\t" + _valid_id(op.outputs[i].name) + ".resize($+1);\n"
 
     text += indent + "}\n"
 
@@ -1076,7 +1062,7 @@ def _format_tensor_declarations(model, indent, context):
     declared_tensors = [tensor for tensor in model.tensors
                         if tensor.name not in subgraph_io and not _can_inline_tensor(tensor)]
     declared_packs = [pack for pack in model.packs if pack.name not in subgraph_io]
-    deferred_packs = {pack.name for pack in declared_packs if any(item.name in subgraph_io for item in pack)}
+    deferred_packs = {pack.name for pack in declared_packs if pack.items is None or any(item.name in subgraph_io for item in pack)}
 
     text = "\n".join(_format_tensor_declaration(tensor, indent)
                      for tensor in itertools.chain(declared_tensors, declared_packs))
@@ -1112,11 +1098,6 @@ _id_pattern = re.compile('[^~_$0-9a-zA-Z]')
 
 def _valid_id(name):
     return _id_pattern.sub('$', name)
-
-
-def _make_auxiliary_tensor(tensor, dtype=None):
-    return sknd.Tensor(name='$'+tensor.name, dtype=dtype or tensor.dtype,
-                       shape=tensor.shape, max_shape=tensor.max_shape)
 
 
 def _generate_model_source(model, name):

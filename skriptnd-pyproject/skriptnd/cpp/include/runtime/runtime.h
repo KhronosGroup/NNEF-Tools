@@ -125,7 +125,8 @@ namespace sknd
         template<typename T> using to_bool = cast<bool_t,T>;
     
     
-        template<size_t N, typename T, size_t M> class ShapePack;
+        template<typename P> class ShapePack;
+        template<typename T> class ValuePack;
         
         
         struct TensorView
@@ -145,13 +146,11 @@ namespace sknd
         {
             virtual Dtype dtype() const = 0;
             virtual size_t rank() const = 0;
-            virtual const int* shape() const = 0;
             
             virtual int size() const = 0;
             virtual const TensorView& operator[]( const size_t i ) const = 0;
             virtual TensorView& operator[]( const size_t i ) = 0;
             
-            virtual void reshape( const size_t rank, const long* shape ) = 0;
             virtual void resize( const int size ) = 0;
         };
     
@@ -160,60 +159,44 @@ namespace sknd
     
         
         template<size_t N, typename T>
-        class Tensor : public TensorView
+        class Tensor final : public TensorView
         {
             static const size_t MaxTensorSize = 1 << 30;
+            
+            typedef std::conditional_t<std::is_same_v<T,bool>, char, T> storage_type;
             
         public:
             
             typedef T value_type;
             typedef int size_type;
             
-            static Tensor singular()
-            {
-                return Tensor();
-            }
-            
-        private:
-            
-            Tensor()
-            : _dynamic_mask(0), _data(new T[1])
-            {
-                _max_shape.fill(1);
-                _shape.fill(1);
-                *_data = T();
-            }
-            
         public:
             
-            template<typename ...Ts, typename = std::enable_if_t<sizeof...(Ts) == N && (std::is_same_v<Ts, size_type> && ...)>>
-            Tensor( const size_t dynamic_mask, Ts... shape )
-            : _max_shape({ shape... }), _shape(_max_shape), _dynamic_mask(dynamic_mask)
+            Tensor()
             {
-                const size_t n = max_volume();
-                if ( n > MaxTensorSize )
-                {
-                    throw std::invalid_argument("trying to allocate tensor larger than 1GB");
-                }
-                _data = new T[n];
-                std::fill_n(_data, volume(), T());
+                _max_shape.fill(-1);
+                _shape.fill(-1);
             }
             
             template<typename ...Ts, typename = std::enable_if_t<sizeof...(Ts) == N && (std::is_same_v<Ts, size_type> && ...)>>
             Tensor( Ts... shape )
-            : Tensor(0, shape...)
+            : _max_shape({ shape... }), _shape(_max_shape)
             {
+                bool preallocate = std::all_of(_max_shape.begin(), _max_shape.end(), []( const size_type& x ){ return x != -1; });
+                if ( preallocate )
+                {
+                    const size_t n = max_volume();
+                    if ( n > MaxTensorSize )
+                    {
+                        throw std::invalid_argument("trying to allocate tensor larger than 1GB");
+                    }
+                    _data.resize(n);
+                }
             }
             
             Tensor( const Tensor& other )
-            : _max_shape(other._max_shape), _shape(other._shape), _dynamic_mask(other._dynamic_mask), _data(new T[max_volume()])
+            : _max_shape(other._max_shape), _shape(other._shape), _data(other._data)
             {
-                std::copy_n(other._data, volume(), _data);
-            }
-            
-            ~Tensor()
-            {
-                delete[] _data;
             }
             
             Tensor& operator=( const Tensor& other )
@@ -222,7 +205,8 @@ namespace sknd
                 {
                     throw std::invalid_argument("invalid tensor assignment with shape " + str(other._shape) + " while tensor shape is " + str(_shape));
                 }
-                std::copy_n(other._data, volume(), _data);
+                _max_shape = other._max_shape;
+                _data = other._data;
                 return *this;
             }
             
@@ -231,11 +215,11 @@ namespace sknd
             {
                 if constexpr(sizeof...(indices) == 0)
                 {
-                    return _data[idx];
+                    return (T&)_data[idx];
                 }
                 else
                 {
-                    return _data[offset(idx, indices...)];
+                    return (T&)_data[offset(idx, indices...)];
                 }
             }
             
@@ -244,11 +228,11 @@ namespace sknd
             {
                 if constexpr(sizeof...(indices) == 0)
                 {
-                    return _data[idx];
+                    return (const T&)_data[idx];
                 }
                 else
                 {
-                    return _data[offset(idx, indices...)];
+                    return (const T&)_data[offset(idx, indices...)];
                 }
             }
             
@@ -304,45 +288,44 @@ namespace sknd
             
             const T* data() const
             {
-                return _data;
+                return (const T*)_data.data();
             }
             
             T* data()
             {
-                return _data;
+                return (T*)_data.data();
             }
             
             const char* bytes() const
             {
-                return (const char*)_data;
+                return (const char*)_data.data();
             }
             
             char* bytes()
             {
-                return (char*)_data;
+                return (char*)_data.data();
             }
             
             Tensor& operator=( const T& value )
             {
-                std::fill_n(_data, volume(), value);
+                std::fill_n((T*)_data.data(), volume(), value);
                 return *this;
             }
             
             Tensor& operator=( std::initializer_list<T> values )
             {
-                std::copy(values.begin(), values.end(), _data);
+                std::copy(values.begin(), values.end(), (T*)_data.data());
                 return *this;
             }
             
             Tensor& operator=( const T* values )
             {
-                std::copy_n(values, volume(), _data);
+                std::copy_n(values, volume(), (T*)_data.data());
                 return *this;
             }
             
             void swap( Tensor& other )
             {
-                std::swap(_dynamic_mask, other._dynamic_mask);
                 std::swap(_max_shape, other._max_shape);
                 std::swap(_shape, other._shape);
                 std::swap(_data, other._data);
@@ -356,9 +339,11 @@ namespace sknd
                 {
                     throw std::invalid_argument("invalid tensor reshaping to shape " + str(_shape) + " while allocated max shape is " + str(_max_shape));
                 }
+                _data.resize(volume());
             }
             
-            void reshape( const size_t rank, const long* shape )
+            template<typename S>
+            void reshape( const size_t rank, const S* shape )
             {
                 if ( rank != _shape.size() )
                 {
@@ -369,6 +354,11 @@ namespace sknd
                 {
                     throw std::invalid_argument("invalid tensor reshaping to shape " + str(_shape) + " while allocated max shape is " + str(_max_shape));
                 }
+            }
+            
+            void reshape( const size_t rank, const long* shape )
+            {
+                reshape<long>(rank, shape);
             }
             
         private:
@@ -391,10 +381,12 @@ namespace sknd
             {
                 for ( size_t i = 0; i < _shape.size(); ++i )
                 {
-                    bool dynamic = _dynamic_mask & ((size_t)1 << i);
-                    if ( _shape[i] < 0 || _shape[i] > _max_shape[i] || (!dynamic && _shape[i] != _max_shape[i]) )
+                    if ( _max_shape[i] != -1 )
                     {
-                        return false;
+                        if ( _shape[i] < 0 || _shape[i] > _max_shape[i] )
+                        {
+                            return false;
+                        }
                     }
                 }
                 return true;
@@ -404,23 +396,17 @@ namespace sknd
             
             std::array<size_type,N> _max_shape;
             std::array<size_type,N> _shape;
-            size_t _dynamic_mask;
-            T* _data;
+            std::vector<storage_type> _data;
         };
         
         
         template<typename T>
-        class Tensor<0,T> : public TensorView
+        class Tensor<0,T> final : public TensorView
         {
         public:
             
             typedef T value_type;
             typedef int size_type;
-            
-            static Tensor singular()
-            {
-                return Tensor();
-            }
             
         public:
             
@@ -551,38 +537,40 @@ namespace sknd
         };
         
         
-        template<size_t N, typename T, size_t M>
-        class TensorPack : public TensorPackView
+        template<size_t N, typename T>
+        class TensorPack final : public TensorPackView
         {
         public:
-            
-            static constexpr size_t MaxSize = M;
             
             typedef T value_type;
             typedef Tensor<N,T> tensor_type;
             typedef typename tensor_type::size_type size_type;
+            typedef ValuePack<size_type> size_pack_type;
+            typedef ShapePack<TensorPack<N,T>> shape_pack_type;
+            
+            template<typename S>
+            static constexpr bool is_size_arg = std::is_same_v<S,size_type> || std::is_same_v<S,size_pack_type>;
             
         public:
             
-            template<typename ...Ts, typename = std::enable_if_t<sizeof...(Ts) == N && (std::is_same_v<Ts, size_type> && ...)>>
-            TensorPack( const size_t dynamic_mask, Ts... shape )
-            : _max_shape({ shape... }), _shape(_max_shape), _dynamic_mask(dynamic_mask), _size(0)
+            TensorPack( const size_type max_size )
+            : _max_size(max_size)
             {
-                _items.reserve(MaxSize);
+                _max_shape.fill(-1);
+                if ( _max_size != -1 )
+                {
+                    _items.resize(_max_size);
+                }
             }
             
             template<typename ...Ts, typename = std::enable_if_t<sizeof...(Ts) == N && (std::is_same_v<Ts, size_type> && ...)>>
-            TensorPack( Ts... shape )
-            : TensorPack(0, shape...)
+            TensorPack( const size_type max_size, Ts... shape )
+            : _max_shape({ shape... }), _max_size(max_size)
             {
-            }
-            
-            template<typename ...Items>
-            void populate( Items& ...items )
-            {
-                static_assert(sizeof...(items) == MaxSize, "number of items must match declared max size");
-                _items = { &items... };
-                _size = sizeof...(items);
+                if ( _max_size != -1 )
+                {
+                    _items.resize(_max_size, tensor_type(shape...));
+                }
             }
             
             TensorPack& operator=( const T& value )
@@ -599,7 +587,7 @@ namespace sknd
                 auto itt = values.begin();
                 for ( auto it = _items.begin(); it != _items.end(); ++it )
                 {
-                    **it = *itt++;
+                    *it = *itt++;
                 }
                 return *this;
             }
@@ -608,7 +596,7 @@ namespace sknd
             {
                 for ( size_t i = 0; i < _items.size(); ++i )
                 {
-                    *_items[i] = values[i];
+                    _items[i] = values[i];
                 }
                 return *this;
             }
@@ -618,14 +606,151 @@ namespace sknd
                 return dtype_of<T>::value;
             }
             
+            size_t rank() const
+            {
+                return N;
+            }
+            
             size_type size() const
             {
-                return _size;
+                return (size_type)_items.size();
             }
             
             size_type max_size() const
             {
-                return MaxSize;
+                return _max_size;
+            }
+            
+            tensor_type& operator[]( const size_t i )
+            {
+                return _items[i];
+            }
+            
+            const tensor_type& operator[]( const size_t i ) const
+            {
+                return _items[i];
+            }
+            
+            template<typename ...Ts, typename = std::enable_if_t<sizeof...(Ts) == N && (is_size_arg<Ts> && ...)>>
+            void reshape( Ts... shape )
+            {
+                for ( size_t i = 0; i < _items.size(); ++i )
+                {
+                    _items[i].reshape(get_shape_item(shape, i)...);
+                }
+            }
+            
+            void resize( const size_type size )
+            {
+                if ( max_size() != -1 && size > max_size() )
+                {
+                    throw std::invalid_argument("invalid tensor pack resizing to size " + std::to_string(size) + " while allocated size is " + std::to_string(max_size()));
+                }
+                _items.resize(size, std::make_from_tuple<tensor_type>(_max_shape));
+            }
+            
+            void append( const tensor_type& item )
+            {
+                _items.push_back(item);
+            }
+            
+            void append( tensor_type&& item )
+            {
+                _items.push_back(std::forward<tensor_type>(item));
+            }
+            
+            shape_pack_type shapes( const size_t i ) const
+            {
+                return shape_pack_type(*this, i);
+            }
+            
+            size_type shape( const size_t i ) const
+            {
+                return largest_shape(i);
+            }
+            
+        private:
+            
+            static size_type get_shape_item( const size_type& value, const size_t idx )
+            {
+                return value;
+            }
+            
+            static size_type get_shape_item( const size_pack_type& value, const size_t idx )
+            {
+                return value[idx];
+            }
+            
+            size_type largest_shape( const size_t dim ) const
+            {
+                size_type largest = _items.front().shape(dim);
+                for ( size_t i = 1; i < _items.size(); ++i )
+                {
+                    auto shape = _items[i].shape(dim);
+                    if ( shape > largest )
+                    {
+                        largest = shape;
+                    }
+                }
+                return largest;
+            }
+            
+        private:
+            
+            std::vector<tensor_type> _items;
+            std::array<size_type,N> _max_shape;
+            size_type _max_size;
+        };
+    
+    
+        template<size_t N, typename T>
+        class TensorList final : public TensorPackView
+        {
+        public:
+            
+            typedef T value_type;
+            typedef Tensor<N,T> tensor_type;
+            typedef typename tensor_type::size_type size_type;
+            typedef ValuePack<size_type> size_pack_type;
+            typedef ShapePack<TensorList<N,T>> shape_pack_type;
+            
+            template<typename S>
+            static constexpr bool is_size_arg = std::is_same_v<S,size_type> || std::is_same_v<S,size_pack_type>;
+            
+        public:
+            
+            TensorList( size_t size ) : _items(size)
+            {
+            }
+            
+            template<typename ...Items>
+            TensorList( Items& ...items ) : _items({ items... })
+            {
+            }
+            
+            template<typename ...Items>
+            void populate( Items& ...items )
+            {
+                if ( sizeof...(items) != _items.size() )
+                {
+                    throw std::invalid_argument("invalid tensor list population to size " + std::to_string(sizeof...(items)) + " while fixed size is " + std::to_string(_items.size()));
+                }
+                _items = { &items... };
+            }
+            
+            Dtype dtype() const
+            {
+                return dtype_of<T>::value;
+            }
+            
+            size_t rank() const
+            {
+                return N;
+            }
+            
+            size_type size() const
+            {
+                return (size_type)_items.size();
             }
             
             tensor_type& operator[]( const size_t i )
@@ -638,132 +763,77 @@ namespace sknd
                 return *_items[i];
             }
             
-            template<typename ...Ts, typename = std::enable_if_t<sizeof...(Ts) == N && (std::is_same_v<Ts, size_type> && ...)>>
+            template<typename ...Ts, typename = std::enable_if_t<sizeof...(Ts) == N && (is_size_arg<Ts> && ...)>>
             void reshape( Ts... shape )
             {
-                _shape = { shape... };
-                if ( !check_reshape() )
+                for ( size_t i = 0; i < _items.size(); ++i )
                 {
-                    throw std::invalid_argument("invalid tensor pack reshaping to shape " + str(_shape) + " while allocated max shape is " + str(_max_shape));
-                }
-            }
-            
-            void update_shape()
-            {
-                if ( size() > 0 )
-                {
-                    for ( size_t i = 0; i < rank(); ++i )
-                    {
-                        auto shape = common_shape(i);
-                        if ( shape != -1 )
-                        {
-                            _shape[i] = shape;
-                        }
-                    }
+                    _items[i]->reshape(get_shape_item(shape, i)...);
                 }
             }
             
             void resize( const size_type size )
             {
-                if ( size > max_size() )
+                if ( size != (size_type)_items.size() )
                 {
-                    throw std::invalid_argument("invalid tensor pack resizing to size " + std::to_string(size) + " while allocated size is " + std::to_string(max_size()));
-                }
-                _size = size;
-            }
-            
-            void reshape( const size_t rank, const long* shape )
-            {
-                if ( rank != _shape.size() )
-                {
-                    throw std::invalid_argument("invalid tensor pack reshaping to rank " + std::to_string(rank) + " while allocated rank is " + std::to_string(_shape.size()));
-                }
-                std::copy_n(shape, rank, _shape.data());
-                if ( !check_reshape() )
-                {
-                    throw std::invalid_argument("invalid tensor pack reshaping to shape " + str(_shape) + " while allocated max shape is " + str(_max_shape));
+                    throw std::invalid_argument("invalid tensor list resizing to size " + std::to_string(size) + " while fixed size is " + std::to_string(_items.size()));
                 }
             }
             
-            size_t rank() const
+            shape_pack_type shapes( const size_t i ) const
             {
-                return _shape.size();
+                return shape_pack_type(*this, i);
             }
             
-            const size_type* max_shape() const
+            size_type shape( const size_t i ) const
             {
-                return _max_shape.data();
+                return largest_shape(i);
             }
-            
-            const size_type* shape() const
-            {
-                return _shape.data();
-            }
-            
-            const size_type max_shape( const size_t i ) const
-            {
-                return _max_shape[i];
-            }
-            
-            const size_type shape( const size_t i ) const
-            {
-                return _shape[i];
-            }
-            
-            ShapePack<N,T,M> shapes( const size_t i ) const;
             
         private:
             
-            size_type common_shape( const size_t dim )
+            static size_type get_shape_item( const size_type& value, const size_t idx )
             {
-                const size_type shape = _items.front()->shape(dim);
-                for ( size_t i = 1; i < _items.size(); ++i )
-                {
-                    if ( _items[i]->shape(dim) != shape )
-                    {
-                        return -1;
-                    }
-                }
-                return shape;
+                return value;
             }
             
-            bool check_reshape() const
+            static size_type get_shape_item( const size_pack_type& value, const size_t idx )
             {
-                for ( size_t i = 0; i < _shape.size(); ++i )
+                return value[idx];
+            }
+            
+            size_type largest_shape( const size_t dim ) const
+            {
+                size_type largest = _items.front().shape(dim);
+                for ( size_t i = 1; i < _items.size(); ++i )
                 {
-                    bool dynamic = _dynamic_mask & ((size_t)1 << i);
-                    if ( _shape[i] < -1 || _shape[i] > _max_shape[i] || (!dynamic && _shape[i] != _max_shape[i]) )
+                    auto shape = _items[i].shape(dim);
+                    if ( shape > largest )
                     {
-                        return false;
+                        largest = shape;
                     }
                 }
-                return true;
+                return largest;
             }
             
         private:
             
             std::vector<tensor_type*> _items;
-            std::array<size_type,N> _max_shape;
-            std::array<size_type,N> _shape;
-            size_t _dynamic_mask;
-            size_type _size;
         };
     
     
-        template<size_t N, typename T, size_t M>
+        template<typename P>
         class ShapePack
         {
-            typedef TensorPack<N,T,M> tensor_pack_type;
+            typedef P tensor_pack_type;
             
         public:
-            
-            static constexpr size_t MaxSize = M;
             
             typedef typename tensor_pack_type::size_type value_type;
             
         public:
             
-            ShapePack( const TensorPack<N,T,M>& tensors, const size_t dim )
+            ShapePack( const tensor_pack_type& tensors, const size_t dim )
             : _tensors(tensors), _dim(dim)
             {
             }
@@ -785,36 +855,32 @@ namespace sknd
         };
     
     
-        template<typename T, size_t M>
+        template<typename T>
         class ValuePack
         {
-            typedef std::array<T,M> container_type;
+            typedef std::vector<T> container_type;
             
         public:
-            
-            static constexpr size_t MaxSize = M;
             
             typedef T value_type;
             
         public:
             
             ValuePack( const size_t size = 0, const value_type value = value_type() )
-            : _size(size)
+            : _data(size, value)
             {
-                std::fill(_data.begin(), _data.end(), value);
             }
             
             ValuePack( std::initializer_list<T> il )
-            : _size(il.size())
+            : _data(il)
             {
-                std::copy(il.begin(), il.end(), _data.begin());
             }
             
             template<typename X>
             ValuePack( const X& x )
-            : _size(x.size())
+            : _data(x.size())
             {
-                for ( size_t i = 0; i < _size; ++i )
+                for ( size_t i = 0; i < x.size(); ++i )
                 {
                     _data[i] = x[i];
                 }
@@ -823,8 +889,8 @@ namespace sknd
             template<typename X>
             ValuePack& operator=( const X& x )
             {
-                _size = x.size();
-                for ( size_t i = 0; i < _size; ++i )
+                _data.resize(x.size());
+                for ( size_t i = 0; i < x.size(); ++i )
                 {
                     _data[i] = x[i];
                 }
@@ -833,7 +899,7 @@ namespace sknd
             
             size_t size() const
             {
-                return _size;
+                return _data.size();
             }
             
             value_type& operator[]( const size_t i )
@@ -848,28 +914,25 @@ namespace sknd
             
             void append( const value_type& v )
             {
-                _data[_size++] = v;
+                _data.push_back(v);
             }
             
         private:
             
             container_type _data;
-            size_t _size;
         };
     
     
-        template<typename T, size_t M>
+        template<typename T>
         class UniformExpr
         {
         public:
-            
-            static constexpr size_t MaxSize = M;
             
             typedef T value_type;
             
         public:
             
-            UniformExpr( const value_type& value, const size_t size = MaxSize )
+            UniformExpr( const value_type& value, const size_t size )
             : _value(value), _size(size)
             {
             }
@@ -897,8 +960,6 @@ namespace sknd
             typedef Arg arg_type;
             
         public:
-            
-            static constexpr size_t MaxSize = arg_type::MaxSize;
             
             typedef Op<typename arg_type::value_type> op_type;
             typedef decltype(op_type()(typename arg_type::value_type())) value_type;
@@ -935,10 +996,7 @@ namespace sknd
             
         public:
             
-            static_assert(left_type::MaxSize == right_type::MaxSize);
             static_assert(std::is_same_v<typename left_type::value_type, typename right_type::value_type>);
-            
-            static constexpr size_t MaxSize = left_type::MaxSize;
             
             typedef Op<typename left_type::value_type> op_type;
             typedef decltype(op_type()(typename left_type::value_type(),typename left_type::value_type())) value_type;
@@ -978,12 +1036,8 @@ namespace sknd
             
         public:
             
-            static_assert(left_type::MaxSize == cond_type::MaxSize);
-            static_assert(right_type::MaxSize == cond_type::MaxSize);
             static_assert(std::is_same_v<typename cond_type::value_type, bool_t>);
             static_assert(std::is_same_v<typename left_type::value_type, typename right_type::value_type>);
-            
-            static constexpr size_t MaxSize = cond_type::MaxSize;
             
             typedef typename left_type::value_type value_type;
             
@@ -1023,10 +1077,11 @@ namespace sknd
             static constexpr size_t MaxSize = pack_type::MaxSize;
             
             typedef typename pack_type::value_type value_type;
+            typedef int size_type;
             
         public:
             
-            SliceExpr( const pack_type& pack, const int first, const int last, const int stride )
+            SliceExpr( const pack_type& pack, const size_type first, const size_type last, const size_type stride )
             : _pack(pack), _first(first), _stride(stride), _size((last - first) / stride)
             {
             }
@@ -1044,24 +1099,22 @@ namespace sknd
         private:
             
             const pack_type& _pack;
-            const int _first;
-            const int _stride;
+            const size_type _first;
+            const size_type _stride;
             const size_t _size;
         };
     
     
-        template<size_t M>
         class RangeExpr
         {
         public:
             
-            static constexpr size_t MaxSize = M;
-            
             typedef int_t value_type;
+            typedef int size_type;
             
         public:
             
-            RangeExpr( const int first, const int last, const int stride )
+            RangeExpr( const size_type first, const size_type last, const size_type stride )
             : _first(first), _stride(stride), _size((last - first) / stride)
             {
             }
@@ -1073,13 +1126,13 @@ namespace sknd
             
             value_type operator[]( const size_t i ) const
             {
-                return _first + i * _stride;
+                return (value_type)(_first + i * _stride);
             }
             
         private:
             
-            const int _first;
-            const int _stride;
+            const size_type _first;
+            const size_type _stride;
             const size_t _size;
         };
     
@@ -1113,21 +1166,15 @@ namespace sknd
         
         
         template<typename... Args, typename = std::enable_if_t<(is_typename<Args> && ...)>>
-        ValuePack<detail::first_type<Args...>,sizeof...(Args)> list( const Args&... args )
+        ValuePack<detail::first_type<Args...>> list( const Args&... args )
         {
-            return ValuePack<detail::first_type<Args...>,sizeof...(Args)>{ args... };
+            return ValuePack<detail::first_type<Args...>>{ args... };
         }
     
-        template<size_t M, typename T, typename = std::enable_if_t<is_typename<T>>>
-        UniformExpr<T,M> uniform( const T& value, const size_t size = M )
+        template<typename T, typename = std::enable_if_t<is_typename<T>>>
+        UniformExpr<T> uniform( const T& value, const size_t size )
         {
-            return UniformExpr<T,M>(value, size);
-        }
-        
-        template<size_t N, typename T, size_t M>
-        ShapePack<N,T,M> TensorPack<N,T,M>::shapes( const size_t dim ) const
-        {
-            return ShapePack<N,T,M>(*this, dim);
+            return UniformExpr<T>(value, size);
         }
     
         template<template<typename> class Op, typename Arg>
@@ -1225,10 +1272,10 @@ namespace sknd
         }
     
         template<template<typename> class Op, typename Arg>
-        inline ValuePack<typename Arg::value_type, Arg::MaxSize> accum( const Arg& arg )
+        inline ValuePack<typename Arg::value_type> accum( const Arg& arg )
         {
             static Op<typename Arg::value_type> op;
-            ValuePack<typename Arg::value_type, Arg::MaxSize> res(arg.size());
+            ValuePack<typename Arg::value_type> res(arg.size());
             if ( res.size() )
             {
                 res[0] = arg[0];
@@ -1243,27 +1290,8 @@ namespace sknd
         namespace detail
         {
         
-            template<typename Arg, typename... Args>
-            constexpr size_t concat_max_size()
-            {
-                size_t size = 0;
-                if constexpr( is_typename<Arg> )
-                {
-                    size = 1;
-                }
-                else
-                {
-                    size = Arg::MaxSize;
-                }
-                if constexpr( sizeof...(Args) > 0 )
-                {
-                    size += concat_max_size<Args...>();
-                }
-                return size;
-            }
-        
-            template<typename T, size_t N, typename Arg, typename... Args>
-            inline void concat( ValuePack<T,N>& result, const Arg& first, const Args& ...rest )
+            template<typename T, typename Arg, typename... Args>
+            inline void concat( ValuePack<T>& result, const Arg& first, const Args& ...rest )
             {
                 if constexpr( is_typename<Arg> )
                 {
@@ -1285,9 +1313,9 @@ namespace sknd
         }   // namespace detail
     
         template<typename... Args>
-        inline ValuePack<detail::value_type<Args...>, detail::concat_max_size<Args...>()> concat( const Args& ...args )
+        inline ValuePack<detail::value_type<Args...>> concat( const Args& ...args )
         {
-            ValuePack<detail::value_type<Args...>, detail::concat_max_size<Args...>()> result;
+            ValuePack<detail::value_type<Args...>> result;
             detail::concat(result, args...);
             return result;
         }
@@ -1298,10 +1326,9 @@ namespace sknd
             return SliceExpr<P>(pack, first, last, stride);
         }
     
-        template<size_t M>
-        inline RangeExpr<M> range( const int first, const int last, const int stride = 1 )
+        inline RangeExpr range( const int first, const int last, const int stride = 1 )
         {
-            return RangeExpr<M>(first, last, stride);
+            return RangeExpr(first, last, stride);
         }
         
         
@@ -1346,8 +1373,8 @@ namespace std
 }
 
 
-template<typename T, size_t N>
-std::ostream& operator<<( std::ostream& os, const sknd::rt::ValuePack<T,N>& pack )
+template<typename T>
+std::ostream& operator<<( std::ostream& os, const sknd::rt::ValuePack<T>& pack )
 {
     os << '[';
     for ( size_t i = 0; i < pack.size(); ++i )
