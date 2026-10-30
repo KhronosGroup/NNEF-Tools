@@ -485,8 +485,13 @@ def _format_tensor_initializers(model, indent, context):
     return const_inits + separator + pack_inits
 
 
-def _format_uniform(arg):
-    return f"sknd::rt::uniform({arg})"
+def _format_value_expr_ensure_packed(arg, size):
+    packed = sknd.expr_is_packed(arg)
+    arg = _format_value_expr(arg, bracket=False)
+    if packed:
+        return arg
+    size = _format_value_expr(size, bracket=False)
+    return f"sknd::rt::uniform({arg}, {size})"
 
 
 def _format_value_expr(expr, bracket=True, extent=None):
@@ -605,24 +610,19 @@ def _format_value_expr(expr, bracket=True, extent=None):
             else:
                 op = expr.op
 
-            left = _format_value_expr(expr.left, bracket=False)
-            if not sknd.expr_is_packed(expr.left):
-                left = _format_uniform(left)
-            right = _format_value_expr(expr.right, bracket=False)
-            if not sknd.expr_is_packed(expr.right):
-                right = _format_uniform(right)
+            left = _format_value_expr_ensure_packed(expr.left, expr.size)
+            right = _format_value_expr_ensure_packed(expr.right, expr.size)
             return f"sknd::rt::binary<{op}>({left}, {right})"
     elif isinstance(expr, sknd.SelectExpr):
-        cond = _format_value_expr(expr.cond, bracket=False)
-        left = _format_value_expr(expr.left, bracket=False)
-        right = _format_value_expr(expr.right, bracket=False)
         if not expr.packed or isinstance(expr.cond, bool):
+            cond = _format_value_expr(expr.cond, bracket=False)
+            left = _format_value_expr(expr.left, bracket=False)
+            right = _format_value_expr(expr.right, bracket=False)
             return lb + cond + " ? " + left + " : " + right + rb
         else:
-            if not sknd.expr_is_packed(expr.left):
-                left = _format_uniform(left)
-            if not sknd.expr_is_packed(expr.right):
-                right = _format_uniform(right)
+            cond = _format_value_expr_ensure_packed(expr.cond, expr.size)
+            left = _format_value_expr_ensure_packed(expr.left, expr.size)
+            right = _format_value_expr_ensure_packed(expr.right, expr.size)
             return f"sknd::rt::select({cond}, {left}, {right})"
     elif isinstance(expr, sknd.FoldExpr):
         if expr.op == "+":
