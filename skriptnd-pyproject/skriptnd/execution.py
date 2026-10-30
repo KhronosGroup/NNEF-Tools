@@ -323,11 +323,17 @@ def _format_nested_loops(contraction, indent):
             tensor = _valid_id(contraction.left.tensor.name)
             return indent + f"{tensor} = {value};\n"
 
+    output = contraction.left.tensor
+
     dynamic_output_shapes = {_valid_id(x.id) for x in sknd.recursive_enumerate_expr(contraction.left)
                              if _is_placeholder(x)}
     dynamic_shape_init = "".join(indent + f"int {id} = 0;\n" for id in dynamic_output_shapes)
 
     loops = dynamic_shape_init
+    if any(_is_placeholder(item) for item in output.shape):
+        shape = ", ".join(_format_value_expr(x, bracket=False) for x in output.shape)
+        loops += indent + f"{_valid_id(output.name)}.reshape({shape});\n"
+
     loops += "".join(indent + k * "\t" + "for ( int {i} = 0; {i} < {n}; ++{i} )\n".format(i=id, n=_format_value_expr(bound))
                     for k, (id, bound) in enumerate(contraction.bounds))
 
@@ -373,7 +379,6 @@ def _format_nested_loops(contraction, indent):
         indent += "\t"
 
     dynamic_reshape = ""
-    output = contraction.left.tensor
     if any(_is_placeholder(item) for item in output.shape):
         shape = ", ".join(_format_value_expr(x, bracket=False) + ("+1" if _is_placeholder(x) else "")
                           for x in output.shape)
