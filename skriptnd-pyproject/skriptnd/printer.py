@@ -83,7 +83,10 @@ class Printer:
             return str(value)
 
     def _format_placeholder(self, x):
-        return (x.id if x.id and not x.id.startswith('.') else '~') + '|' + str(x.max_value)
+        str = x.id if x.id and not x.id.startswith('.') else '~'
+        if x.max_value is not None:
+            str += '|' + str(x.max_value)
+        return str
 
     def _format_shape(self, shape, ignore_dynamic_shape=False):
         return "[" + ",".join('~' if ignore_dynamic_shape and isinstance(s, _sknd.Expr) else
