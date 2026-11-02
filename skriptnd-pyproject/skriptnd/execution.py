@@ -481,10 +481,11 @@ def _format_const_initializer(tensor, indent):
 
 
 def _format_tensor_initializers(model, indent, context):
+    deferred_packs = context['deferred_packs']
     const_inits = "".join(_format_const_initializer(tensor, indent) for tensor in context['tensors']
                           if tensor.is_constant)
     pack_inits = "".join(_format_pack_population(pack, indent) for pack in context['packs']
-                         if pack.itemized)
+                         if pack.itemized and pack.name not in deferred_packs)
     separator = "\n" if len(const_inits) and len(pack_inits) else ""
 
     return const_inits + separator + pack_inits
@@ -785,6 +786,10 @@ def _format_operation(op, indent, context):
         else:
             text += indent + f"const {dtype} {iden} = {value};\n"
 
+    deferred_packs = context['deferred_packs']
+
+    text += "".join(_format_pack_population(output, indent) for output in op.outputs
+                    if isinstance(output, sknd.TensorPack) and output.itemized and output.name in deferred_packs)
     text += "".join(_format_shape_propagation(output, indent) for output in op.outputs)
     text += _format_control_flow(op, indent, context) if op.is_control_flow else \
             _format_intrinsic(op, indent, context) + "\n" if op.is_intrinsic else \
@@ -1059,7 +1064,7 @@ def _format_tensor_declarations(model, indent, context):
     declared_tensors = [tensor for tensor in model.tensors
                         if tensor.name not in subgraph_io and not _can_inline_tensor(tensor)]
     declared_packs = [pack for pack in model.packs if pack.name not in subgraph_io]
-    deferred_packs = {pack.name for pack in declared_packs if pack.items is None or any(item.name in subgraph_io for item in pack)}
+    deferred_packs = {pack.name for pack in declared_packs if pack.itemized and any(item.name in subgraph_io for item in pack)}
 
     text = "\n".join(_format_tensor_declaration(tensor, indent)
                      for tensor in itertools.chain(declared_tensors, declared_packs))
