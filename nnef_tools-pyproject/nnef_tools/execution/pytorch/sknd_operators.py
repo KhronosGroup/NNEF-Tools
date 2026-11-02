@@ -119,7 +119,7 @@ def _arg_nd(input, axes, squeeze, fn):
 
 def nn_relu(x, alpha, max):
     x = F.leaky_relu(x, alpha) if alpha is not None else F.relu(x)
-    return x if max is None else torch.minimum(x, max)
+    return x if max is None else torch.minimum(x, torch.tensor(max, dtype=RealType))
 
 
 def nn_prelu(x, alpha, axis):
