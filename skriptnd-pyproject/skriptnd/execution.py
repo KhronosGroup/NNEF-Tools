@@ -998,7 +998,7 @@ def _format_do(op, indent, context):
         for output in op.outputs[nvars:]:
             name = _valid_id(output.name)
             text += indent + f"\t{name}.resize($+1);\n"
-            if _is_dynamic_shape(output.shape):
+            if any(_is_dynamic_size(expr) and not _is_placeholder(expr) for expr in output.shape):
                 shape = ", ".join(_format_value_expr(expr, bracket=False) for expr in output.shape)
                 text += indent + f"\t{name}.reshape({shape});\n"
 
