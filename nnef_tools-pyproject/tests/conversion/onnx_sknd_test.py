@@ -69,13 +69,11 @@ class TestEnv(sknd_test.TestEnv):
     def tearDown(self) -> None:
         pass
 
-    def _convert_to_sknd(self, filename, input_shape=None):
+    def _convert_to_sknd(self, filename):
         onnx_model = self._onnx_reader(filename)
         if self._optimize:
             self._onnx_optimizer(onnx_model)
         sknd_model = self._onnx_to_sknd_converter(onnx_model)
-        if input_shape is not None:
-            self._set_max_input_shapes(sknd_model, input_shape)
         output_filename = filename + '.nnef2'
         self._skriptnd_writer(sknd_model, output_filename)
         if self._optimize:

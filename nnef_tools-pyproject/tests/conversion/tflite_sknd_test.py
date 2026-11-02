@@ -53,7 +53,7 @@ class TestEnv(sknd_test.TestEnv):
     def tearDown(self) -> None:
         tf.reset_default_graph()
 
-    def _convert_to_sknd(self, filename, input_shape=None):
+    def _convert_to_sknd(self, filename):
         tflite_model = self._tflite_reader(filename)
         if self._optimize:
             self._tflite_optimizer(tflite_model)
