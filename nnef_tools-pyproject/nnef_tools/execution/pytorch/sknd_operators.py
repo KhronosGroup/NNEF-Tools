@@ -568,7 +568,7 @@ def _paddings(input_size, kernel, stride, dilation, padding, padding_align, ceil
                 total = (size - 1) * step + span - out
             else:
                 divided = -(size // -step) if ceil_mode else size // step
-                total = (divided - 1) * step + span - size
+                total = max(0, (divided - 1) * step + span - size)
             lead = total // 2 if padding_align == 'UPPER' else -(total // -2)
             before.append(lead)
             after.append(total - lead)
