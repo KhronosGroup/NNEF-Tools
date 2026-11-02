@@ -1009,10 +1009,12 @@ namespace sknd
             Shape shape = context.shapes.at(output);
             for ( size_t i = 0; i < output.shape().size(); ++i )
             {
+                auto count = reference_remap.size();
                 trace_accesses_within_graph(shape[i], context, reference_remap);
                 if ( has_placeholders(simplified(resolved(shape[i], ResolveReference))) )
                 {
-                    shape[i] = new_placeholder_expr(shape[i]);
+                    shape[i] = new_placeholder_expr(nullptr);
+                    reference_remap.erase(std::prev(reference_remap.end(), reference_remap.size() - count), reference_remap.end());
                 }
             }
             return shape;
@@ -1023,11 +1025,13 @@ namespace sknd
             ValueExpr size = nullptr;
             if ( output.packed() )
             {
+                auto count = reference_remap.size();
                 size = context.sizes.at(output);
                 trace_accesses_within_graph(size, context, reference_remap);
                 if ( has_placeholders(simplified(resolved(size, ResolveReference))) )
                 {
-                    size = new_placeholder_expr(size);
+                    size = new_placeholder_expr(nullptr);
+                    reference_remap.erase(std::prev(reference_remap.end(), reference_remap.size() - count), reference_remap.end());
                 }
             }
             return size;
