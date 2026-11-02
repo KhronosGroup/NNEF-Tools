@@ -690,6 +690,12 @@ def nn_deconv(input, filter, bias, stride, dilation, padding, padding_align, out
     return _permute(output, _inverse_axes(data_axes))
 
 
+def _pool_accepts_padding(before, after, size, dilation):
+    if before != after:
+        return False
+    return all(pad <= ((width - 1) * rate + 1) // 2 for pad, width, rate in zip(before, size, dilation))
+
+
 def _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode, pools,
           pad_value=0, count_include_pad=None):
     rank = len(input.shape)
@@ -701,9 +707,8 @@ def _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode
     order = rest + axes
     input = _permute(input, order)
     before, after = _paddings(input.shape[-spatial:], size, stride, dilation, padding, padding_align, ceil_mode, False)
-    if before == after:
-        pool_padding = tuple(before)
-    else:
+    pool_padding = tuple(before)
+    if not _pool_accepts_padding(before, after, size, dilation):
         input = _pad_constant(input, before, after, pad_value)
         pool_padding = 0
     kwargs = {}
@@ -734,7 +739,7 @@ def nn_avg_pool(input, axes, size, stride, dilation, padding, padding_align=None
     rank = len(input.shape)
     spatial_size = [input.shape[axis + rank if axis < 0 else axis] for axis in axes]
     before, after = _paddings(spatial_size, size, stride, dilation, padding, padding_align, ceil_mode, False)
-    if ignore_border and before != after:
+    if ignore_border and not _pool_accepts_padding(before, after, size, dilation):
         summed = nn_sum_pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode)
         counts = nn_sum_pool(torch.ones_like(input), axes, size, stride, dilation, padding, padding_align, ceil_mode)
         return summed / counts
