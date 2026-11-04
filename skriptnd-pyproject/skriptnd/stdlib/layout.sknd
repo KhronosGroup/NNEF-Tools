@@ -198,17 +198,17 @@ operator flatten {
         output: T[s..,shape * ..,t[rank:d]..];
     }
     @assert {
-        axis >= -input.rank && axis < input.rank:
-            "'axis' must be between -input.rank (inclusive) and input.rank (exclusive)",
+        axis >= -input.rank && axis <= input.rank:
+            "'axis' must be between -input.rank (inclusive) and input.rank (inclusive)",
             input.rank, axis;
         rank >= 0; rank <= d:
-            "'rank' must be between 0 (inclusive) and input.rank (exclusive)",
+            "'rank' must be between 0 (inclusive) and input.rank (inclusive)",
             input.rank, rank;
     }
     @using {
         shape = t[:rank];
         prods = [1, shape[::-1]..] * ...;
-        strides = prods[rank-1::-1];
+        strides = prods[::-1][:-1];
     }
     @lower {
         output[si.., (i * strides) + .., ti..] = input[si.., i.., ti..],
