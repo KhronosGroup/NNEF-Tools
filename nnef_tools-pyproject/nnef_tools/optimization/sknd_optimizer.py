@@ -36,7 +36,7 @@ class Optimizer:
                 changed |= self._remove_identity_ops(graph, 'layout.reshape',
                                                      lambda op: self._resolve_shape_references(op.output.shape, op.input) == op.input.shape)
                 changed |= self._remove_identity_ops(graph, 'layout.flatten',
-                                                     lambda op: op.attribs['rank'] <= 1)
+                                                     lambda op: op.attribs['rank'] == 1)
                 changed |= self._remove_identity_ops(graph, 'layout.unflatten',
                                                      lambda op: len(self._resolve_expr_reference(op.attribs['shape'])) == 1)
                 changed |= self._remove_identity_ops(graph, 'layout.transpose',
