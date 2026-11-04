@@ -27,7 +27,6 @@
 #include "either.h"
 #include "packable.h"
 #include "valuexpr.h"
-#include "tensorexpr.h"
 #include "tensorref.h"
 
 
