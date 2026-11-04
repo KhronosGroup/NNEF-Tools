@@ -699,6 +699,9 @@ class ConverterToSkriptND(Converter):
     def _reshape_operation(self, input, output, shape):
         Operation(self._graph, type='layout.reshape', inputs=input, outputs=output, attribs={'shape': list(shape)})
 
+    def _flatten_operation(self, input, output, axis, rank):
+        Operation(self._graph, type='layout.flatten', inputs=input, outputs=output, attribs={'axis': axis, 'rank': rank})
+
     def _squeeze_operation(self, input, output, axes):
         Operation(self._graph, type='layout.squeeze', inputs=input, outputs=output, attribs={'axes': axes})
 

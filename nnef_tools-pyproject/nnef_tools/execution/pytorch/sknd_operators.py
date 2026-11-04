@@ -179,7 +179,7 @@ def layout_flatten(input, axis, rank):
     if axis < 0:
         axis += len(input.shape)
     if rank == 0:
-        return input
+        return input.unsqueeze(axis)
     return torch.flatten(input, start_dim=axis, end_dim=axis + rank - 1)
 
 

@@ -309,6 +309,16 @@ class Converter(_Converter):
     def post_transpose_matrix(self, tensor):
         return self._post_transpose(tensor, perm=[1, 0])
 
+    def pre_flatten(self, input, axis, rank):
+        output = Tensor(input.graph, dtype=input.dtype, shape=None, quant=copy.deepcopy(input.quant))
+        self._flatten_operation(input, output, axis, rank)
+        return output
+
+    def post_flatten(self, output, axis, rank):
+        input = Tensor(output.graph, dtype=output.dtype, shape=None, quant=copy.deepcopy(output.quant))
+        self._flatten_operation(input, output, axis, rank)
+        return input
+
     def unstack_input(self, tensor, axis=0):
         count = tensor.shape[axis]
         items = [Tensor(tensor.graph, dtype=tensor.dtype, shape=tensor.shape[:-1], quant=copy.deepcopy(tensor.quant))
@@ -762,7 +772,7 @@ _Transforms = Converter.unpack_transforms({
                 'axis': 1,
             },
             inputs='!I[0]',
-            outputs='!O[0]',
+            outputs='!O[0] if axis == 1 else post_flatten(O[0], axis=0, rank=axis)',
             attribs={
                 'axis': '!axis'
             }
