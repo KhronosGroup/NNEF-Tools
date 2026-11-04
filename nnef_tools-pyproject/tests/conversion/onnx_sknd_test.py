@@ -2307,6 +2307,10 @@ class NetworkTestCases(TestEnv):
         self._test_conversion_from_file(self._network_folder + 'distilbert.onnx',
                                         input_shape=(4, 100), epsilon=1e-4)
 
+    def test_tiny_llm(self):
+        self._test_conversion_from_file(self._network_folder + 'tiny_llm.onnx',
+                                        input_shape=(4, 100), epsilon=1e-3)
+
 
 if __name__ == '__main__':
     unittest.main()
