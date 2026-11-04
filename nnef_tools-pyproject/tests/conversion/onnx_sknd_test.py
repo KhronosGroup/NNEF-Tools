@@ -138,9 +138,10 @@ class TestEnv(sknd_test.TestEnv):
         self._save_onnx_model(model_def, filename)
         self._test_conversion_from_file(filename, epsilon=epsilon, input_range=input_range)
 
-    def _test_unary(self, op_type, dtype=TensorProto.FLOAT, input_range=None, opset_version=DefaultOpsetVersion):
-        input = helper.make_tensor_value_info('input', dtype, [1, 3, 32, 32])
-        output = helper.make_tensor_value_info('output', dtype, [1, 3, 32, 32])
+    def _test_unary(self, op_type, input_dtype=TensorProto.FLOAT, output_dtype=TensorProto.FLOAT,
+                    input_range=None, opset_version=DefaultOpsetVersion):
+        input = helper.make_tensor_value_info('input', input_dtype, [4, 3, 32, 32])
+        output = helper.make_tensor_value_info('output', output_dtype, [4, 3, 32, 32])
         node = helper.make_node(
             op_type=op_type,
             inputs=['input'],
@@ -1782,7 +1783,7 @@ class TestCases(TestEnv):
         self._test_unary('Selu')
 
     def test_not(self):
-        self._test_unary('Not', dtype=TensorProto.BOOL)
+        self._test_unary('Not', input_dtype=TensorProto.BOOL, output_dtype=TensorProto.BOOL)
 
     def test_elu(self):
         self._test_unary('Elu')
@@ -1868,6 +1869,12 @@ class TestCases(TestEnv):
 
     def test_round(self):
         self._test_unary('Round')
+
+    def test_isnan(self):
+        self._test_unary('IsNaN', output_dtype=TensorProto.BOOL)
+
+    def test_isinf(self):
+        self._test_unary('IsInf', output_dtype=TensorProto.BOOL)
 
     def test_add(self):
         self._test_binary('Add')

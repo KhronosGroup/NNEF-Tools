@@ -227,6 +227,11 @@ namespace sknd
     {
         return std::numeric_limits<real_t>::infinity();
     }
+
+    inline real_t nan()
+    {
+        return std::numeric_limits<real_t>::quiet_NaN();
+    }
     
 }   // namespace sknd
 

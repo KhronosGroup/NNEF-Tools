@@ -1346,4 +1346,24 @@ _Transforms = Converter.unpack_transforms({
                 'reverse': '!reverse != 0',
             },
         ),
+    'IsNaN':
+        Transform(
+            type='math.isnan',
+            inputs='!I[0]',
+            outputs='!O[0]',
+        ),
+    'IsInf':
+        Transform(
+            type='math.isinf',
+            defaults={
+                'detect_positive': 1,
+                'detect_negative': 1,
+            },
+            inputs='!I[0]',
+            outputs='!O[0]',
+            attribs={
+                'detect_positive': '!detect_positive != 0',
+                'detect_negative': '!detect_negative != 0',
+            },
+        ),
 })

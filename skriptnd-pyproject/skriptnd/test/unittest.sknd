@@ -408,6 +408,30 @@ graph round {
     }
 }
 
+graph isinf {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: bool[4,10];
+    }
+    @compose {
+        y = math.isinf(x);
+    }
+}
+
+graph isnan {
+    @input {
+        x: real[4,10];
+    }
+    @output {
+        y: bool[4,10];
+    }
+    @compose {
+        y = math.isnan(x);
+    }
+}
+
 graph as_int {
     @input {
         x: real[4,10];

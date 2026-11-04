@@ -432,6 +432,41 @@ operator round {
     }
 }
 
+# @item Element-wise detection of not-a-number values
+
+operator isnan {
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: bool[s..];
+    }
+    @lower {
+        y[i..] = x[i..] == nan,
+            i < s;
+    }
+}
+
+# @item Element-wise detection of infinite values
+
+operator isinf {
+    @attrib {
+        detect_positive: bool = true;
+        detect_negative: bool = true;
+    }
+    @input {
+        x: real[s..];
+    }
+    @output {
+        y: bool[s..];
+    }
+    @lower {
+        y[i..] = (detect_positive && x[i..] == inf) || (detect_negative && x[i..] == -inf),
+            i < s;
+    }
+}
+
+
 # @section binary-ops Binary Element-wise Operators
 
 # @text In case of binary element-wise operators, broadcasting must also be considered. When the ranks of the two arguments are the eqaul, broadcasting requires that the size of each dimension match or one of them is singular. If the ranks of the two arguments are not equal then one of is implicitly padded with singular dimensions either from left (first dimension) or right (last dimension).

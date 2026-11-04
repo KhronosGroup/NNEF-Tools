@@ -292,6 +292,10 @@ def _ensure_positive_axis(axis, rank):
     return axis + rank if axis < 0 else axis
 
 
+def _is_nan(expr):
+    return isinstance(expr, float) and math.isnan(expr)
+
+
 def _format_tensor_access(access, idx=None):
     is_pack = isinstance(access.tensor, sknd.TensorPack)
     if not is_pack and _can_inline_tensor(access.tensor):
@@ -514,6 +518,8 @@ def _format_value_expr(expr, bracket=True, extent=None):
             return "std::numeric_limits<sknd::rt::real_t>::infinity()"
         elif expr == -math.inf:
             return "-std::numeric_limits<sknd::rt::real_t>::infinity()"
+        elif math.isnan(expr):
+            return "-std::numeric_limits<sknd::rt::real_t>::quiet_NaN()"
         return f"{expr}f"
     elif isinstance(expr, str):
         return f'"{expr}"'
@@ -579,7 +585,13 @@ def _format_value_expr(expr, bracket=True, extent=None):
             elif expr.op == "\\":
                 return f"sknd::rt::ceil_div({left}, {right})"
             else:
-                return lb + f"{left} {expr.op} {right}" + rb
+                nan_cmp = right if _is_nan(expr.left) else left if _is_nan(expr.right) else None
+                if nan_cmp is not None and expr.op == "==":
+                    return f"std::isnan({nan_cmp})"
+                elif nan_cmp is not None and expr.op == "!=":
+                    return f"!std::isnan({nan_cmp})"
+                else:
+                    return lb + f"{left} {expr.op} {right}" + rb
         else:
             if expr.op == "+":
                 op = "std::plus"

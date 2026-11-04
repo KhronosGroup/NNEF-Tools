@@ -85,6 +85,17 @@ def math_cumsum(input, axis, exclusive, reverse):
     return output
 
 
+def math_isinf(x, detect_positive, detect_negative):
+    if detect_positive and detect_negative:
+        return torch.isinf(x)
+    elif detect_positive:
+        return torch.isposinf(x)
+    elif detect_negative:
+        return torch.isneginf(x)
+    else:
+        return x
+
+
 def _reduce(input, f, axes, squeeze=False):
     if not axes:
         return input
@@ -938,6 +949,8 @@ Operators = {
     'math.all_n': lambda inputs: _reduce_n(inputs, torch.all),
     'math.cumsum': math_cumsum,
     'math.clamp': math_clamp,
+    'math.isnan': lambda x: torch.isnan(x),
+    'math.isinf': math_isinf,
     'nn.relu': nn_relu,
     'nn.sigmoid': torch.sigmoid,
     'nn.softabs': lambda x, epsilon: torch.sqrt(torch.pow(x, 2.0) + epsilon),

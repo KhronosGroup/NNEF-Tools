@@ -690,6 +690,11 @@ namespace sknd
                         TRY_CALL(lexer.accept());
                         return (Shared<Expr>)std::make_shared<RealExpr>(position, inf());
                     }
+                    else if ( lexer.is_token(Keyword::NaN) )
+                    {
+                        TRY_CALL(lexer.accept());
+                        return (Shared<Expr>)std::make_shared<RealExpr>(position, nan());
+                    }
                     else if ( lexer.is_token(Keyword::Pi) )
                     {
                         TRY_CALL(lexer.accept());

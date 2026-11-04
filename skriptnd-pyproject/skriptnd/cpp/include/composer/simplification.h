@@ -688,6 +688,20 @@ namespace sknd
             {
                 return Poly<bool_t>(true);
             }
+            if constexpr( std::is_same_v<T,real_t> )
+            {
+                if ( lhs.is_constant() && !std::isfinite(lhs.constant_value()) )
+                {
+                    auto expr = ValueExpr::binary("==", as_expr(rhs, packed, ctx), ValueExpr(lhs.constant_value()), Typename::Bool, packed);
+                    return Poly<bool_t>(make_symbol(expr, ctx));
+                }
+                else if ( rhs.is_constant() && !std::isfinite(rhs.constant_value()) )
+                {
+                    auto expr = ValueExpr::binary("==", as_expr(lhs, packed, ctx), ValueExpr(rhs.constant_value()), Typename::Bool, packed);
+                    return Poly<bool_t>(make_symbol(expr, ctx));
+                }
+            }
+            
             auto diff = lhs - rhs;
             
             auto leading_value = diff.constant_value() != (T)0 ? diff.constant_value() : diff.begin()->second;
