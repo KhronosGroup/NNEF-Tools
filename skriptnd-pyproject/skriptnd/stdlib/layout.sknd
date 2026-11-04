@@ -208,7 +208,7 @@ operator flatten {
     @using {
         shape = t[:rank];
         prods = [1, shape[::-1]..] * ...;
-        strides = prods[::-1][:-1];
+        strides = prods[:-1][::-1];
     }
     @lower {
         output[si.., (i * strides) + .., ti..] = input[si.., i.., ti..],
@@ -242,7 +242,7 @@ operator unflatten {
     }
     @using {
         prods = [1, shape[::-1]..] * ...;
-        strides = prods[d-1::-1];
+        strides = prods[:-1][::-1];
     }
     @lower {
         output[si.., i.., ti..] = input[si.., (i * strides) + .., ti..],
