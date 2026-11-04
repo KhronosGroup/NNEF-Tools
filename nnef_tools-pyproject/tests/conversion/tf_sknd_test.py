@@ -55,14 +55,12 @@ class TestEnv(sknd_test.TestEnv):
     def tearDown(self) -> None:
         tf.reset_default_graph()
 
-    def _convert_to_sknd(self, filename, input_shape=None):
-        tf_model = self._tf_reader(filename, input_shapes=input_shape)
+    def _convert_to_sknd(self, filename):
+        tf_model = self._tf_reader(filename)
         if self._optimize:
             self._tf_optimizer(tf_model)
 
         sknd_model = self._tf_to_sknd_converter(tf_model)
-        if input_shape is not None:
-            self._set_max_input_shapes(sknd_model, input_shape)
 
         output_filename = filename + '.nnef2'
         self._sknd_writer(sknd_model, output_filename)

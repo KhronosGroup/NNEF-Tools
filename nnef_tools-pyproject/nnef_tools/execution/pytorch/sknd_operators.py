@@ -74,6 +74,17 @@ def math_clamp(val, min, max, val_align, min_align, max_align):
                        _expand_to_rank(max, rank, max_align))
 
 
+def math_cumsum(input, axis, exclusive, reverse):
+    if reverse:
+        input = input.flip(axis)
+    output = torch.cumsum(input, dim=axis)
+    if exclusive:
+        output = output - input
+    if reverse:
+        output = output.flip(axis)
+    return output
+
+
 def _reduce(input, f, axes, squeeze=False):
     if not axes:
         return input
@@ -108,7 +119,7 @@ def _arg_nd(input, axes, squeeze, fn):
 
 def nn_relu(x, alpha, max):
     x = F.leaky_relu(x, alpha) if alpha is not None else F.relu(x)
-    return x if max is None else torch.minimum(x, max)
+    return x if max is None else torch.minimum(x, torch.tensor(max, dtype=RealType))
 
 
 def nn_prelu(x, alpha, axis):
@@ -557,7 +568,7 @@ def _paddings(input_size, kernel, stride, dilation, padding, padding_align, ceil
                 total = (size - 1) * step + span - out
             else:
                 divided = -(size // -step) if ceil_mode else size // step
-                total = (divided - 1) * step + span - size
+                total = max(0, (divided - 1) * step + span - size)
             lead = total // 2 if padding_align == 'UPPER' else -(total // -2)
             before.append(lead)
             after.append(total - lead)
@@ -679,6 +690,12 @@ def nn_deconv(input, filter, bias, stride, dilation, padding, padding_align, out
     return _permute(output, _inverse_axes(data_axes))
 
 
+def _pool_accepts_padding(before, after, size, dilation):
+    if before != after:
+        return False
+    return all(pad <= ((width - 1) * rate + 1) // 2 for pad, width, rate in zip(before, size, dilation))
+
+
 def _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode, pools,
           pad_value=0, count_include_pad=None):
     rank = len(input.shape)
@@ -690,9 +707,8 @@ def _pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode
     order = rest + axes
     input = _permute(input, order)
     before, after = _paddings(input.shape[-spatial:], size, stride, dilation, padding, padding_align, ceil_mode, False)
-    if before == after:
-        pool_padding = tuple(before)
-    else:
+    pool_padding = tuple(before)
+    if not _pool_accepts_padding(before, after, size, dilation):
         input = _pad_constant(input, before, after, pad_value)
         pool_padding = 0
     kwargs = {}
@@ -723,7 +739,7 @@ def nn_avg_pool(input, axes, size, stride, dilation, padding, padding_align=None
     rank = len(input.shape)
     spatial_size = [input.shape[axis + rank if axis < 0 else axis] for axis in axes]
     before, after = _paddings(spatial_size, size, stride, dilation, padding, padding_align, ceil_mode, False)
-    if ignore_border and before != after:
+    if ignore_border and not _pool_accepts_padding(before, after, size, dilation):
         summed = nn_sum_pool(input, axes, size, stride, dilation, padding, padding_align, ceil_mode)
         counts = nn_sum_pool(torch.ones_like(input), axes, size, stride, dilation, padding, padding_align, ceil_mode)
         return summed / counts
@@ -920,7 +936,7 @@ Operators = {
     'math.argmax_n': lambda inputs: _reduce_n(inputs, torch.argmax).to(IntType),
     'math.any_n': lambda inputs: _reduce_n(inputs, torch.any),
     'math.all_n': lambda inputs: _reduce_n(inputs, torch.all),
-    'math.cumsum': lambda input, axis, exclusive, reverse: torch.cumsum(input, dim=axis),
+    'math.cumsum': math_cumsum,
     'math.clamp': math_clamp,
     'nn.relu': nn_relu,
     'nn.sigmoid': torch.sigmoid,
@@ -972,7 +988,7 @@ Operators = {
     'layout.shape': lambda x: torch.tensor(x.shape, dtype=IntType, device=x.device),
     'layout.range': lambda first, last, stride: torch.arange(first, last, stride, dtype=IntType),
     'layout.uniform': lambda value, shape: torch.full(shape, value),
-    'layout.nonzero': lambda x: torch.nonzero(x).transpose(0,1),
+    'layout.nonzero': lambda x: torch.nonzero(x),
     'image.resize': image_resize,
     'image.rescale': image_rescale,
     'image.nearest_downsample': image_nearest_downsample,

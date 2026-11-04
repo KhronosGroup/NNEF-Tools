@@ -119,14 +119,12 @@ namespace sknd
                         {
                             auto& access = x.as_shape_access();
                             assert(access.dim.is_literal());
-                            assert(access.item == nullptr || access.item.is_literal());
                             
-                            auto tensor = access.item == nullptr ? access.tensor : access.tensor.at(access.item.as_int());
                             bool packed = x.packed();
-                            x = tensor.shape()[access.dim.as_int()];
+                            x = access.tensor.shape()[access.dim.as_int()];
                             if ( packed && !x.packed() )
                             {
-                                x = ValueExpr::uniform(x, tensor.size(), tensor.max_size());
+                                x = ValueExpr::uniform(x, access.tensor.size());
                             }
                             if ( Recursive )
                             {
@@ -248,31 +246,46 @@ namespace sknd
                 case ValueExpr::Null:
                 case ValueExpr::Literal:
                 case ValueExpr::Identifier:
-                case ValueExpr::Placeholder:
                 case ValueExpr::SizeAccess:
-                case ValueExpr::ShapeAccess:
                 case ValueExpr::TensorAccess:
                 {
                     return false;
                 }
+                case ValueExpr::Placeholder:
+                {
+                    auto& placeholder = expr.as_placeholder();
+                    bool simplified = false;
+                    simplified |= simplify_polynomial(placeholder.max_value, ctx);
+                    simplified |= simplify_polynomial(placeholder.size, ctx);
+                    return simplified;
+                }
+                case ValueExpr::ShapeAccess:
+                {
+                    auto& access = expr.as_shape_access();
+                    if ( access.dim != nullptr )
+                    {
+                        return simplify_polynomial(access.dim, ctx);
+                    }
+                    return false;
+                }
                 default:
                 {
-                    auto size = expr.max_size_or_null();
+                    auto packed = expr.packed();
                     switch ( expr.dtype() )
                     {
                         case Typename::Int:
                         {
-                            expr = as_expr(as_polynom<int_t>(expr, ctx), size, ctx);
+                            expr = as_expr(as_polynom<int_t>(expr, ctx), packed, ctx);
                             break;
                         }
                         case Typename::Real:
                         {
-                            expr = as_expr(as_polynom<real_t>(expr, ctx), size, ctx);
+                            expr = as_expr(as_polynom<real_t>(expr, ctx), packed, ctx);
                             break;
                         }
                         case Typename::Bool:
                         {
-                            expr = as_expr(as_polynom<bool_t>(expr, ctx), size, ctx);
+                            expr = as_expr(as_polynom<bool_t>(expr, ctx), packed, ctx);
                             break;
                         }
                         default:
@@ -351,7 +364,7 @@ namespace sknd
                 {
                     auto& binary = expr.as_binary();
                     auto op = Lexer::operator_value(binary.op);
-                    auto size = expr.max_size_or_null();
+                    auto packed = expr.packed();
                     
                     if constexpr( std::is_same_v<T,bool_t> )
                     {
@@ -359,27 +372,27 @@ namespace sknd
                         {
                             case Lexer::Operator::Equal:
                             {
-                                return eval_equality(binary.left, binary.right, size, ctx);
+                                return eval_equality(binary.left, binary.right, packed, ctx);
                             }
                             case Lexer::Operator::NotEqual:
                             {
-                                return !eval_equality(binary.left, binary.right, size, ctx);
+                                return !eval_equality(binary.left, binary.right, packed, ctx);
                             }
                             case Lexer::Operator::Less:
                             {
-                                return eval_inequality(true, binary.left, binary.right, size, ctx);
+                                return eval_inequality(true, binary.left, binary.right, packed, ctx);
                             }
                             case Lexer::Operator::LessEqual:
                             {
-                                return eval_inequality(false, binary.left, binary.right, size, ctx);
+                                return eval_inequality(false, binary.left, binary.right, packed, ctx);
                             }
                             case Lexer::Operator::Greater:
                             {
-                                return eval_inequality(true, binary.right, binary.left, size, ctx);
+                                return eval_inequality(true, binary.right, binary.left, packed, ctx);
                             }
                             case Lexer::Operator::GreaterEqual:
                             {
-                                return eval_inequality(false, binary.right, binary.left, size, ctx);
+                                return eval_inequality(false, binary.right, binary.left, packed, ctx);
                             }
                             default:
                             {
@@ -453,8 +466,8 @@ namespace sknd
                                         else if ( left.is_partial_divisible(right.constant_value()) )
                                         {
                                             auto remainder_poly = left.partial_const_divide(right.constant_value());
-                                            auto remainder_expr = as_expr(remainder_poly, size, ctx);
-                                            auto remainder_ratio = ValueExpr::binary("/", remainder_expr, binary.right, expr.dtype(), size);
+                                            auto remainder_expr = as_expr(remainder_poly, packed, ctx);
+                                            auto remainder_ratio = ValueExpr::binary("/", remainder_expr, binary.right, expr.dtype(), packed);
                                             left += Poly<T>(make_symbol(remainder_ratio, ctx));
                                             return left;
                                         }
@@ -469,8 +482,8 @@ namespace sknd
                                         else if ( left.is_partial_monomial_divisible(right) )
                                         {
                                             auto remainder_poly = left.partial_monomial_divide(right);
-                                            auto remainder_expr = as_expr(remainder_poly, size, ctx);
-                                            auto remainder_ratio = ValueExpr::binary("/", remainder_expr, binary.right, expr.dtype(), size);
+                                            auto remainder_expr = as_expr(remainder_poly, packed, ctx);
+                                            auto remainder_ratio = ValueExpr::binary("/", remainder_expr, binary.right, expr.dtype(), packed);
                                             left += Poly<T>(make_symbol(remainder_ratio, ctx));
                                             return left;
                                         }
@@ -564,7 +577,7 @@ namespace sknd
         }
         
         template<typename T>
-        static ValueExpr as_expr( const Poly<T>& poly, const std::optional<size_t> size, PolynomContext& ctx )
+        static ValueExpr as_expr( const Poly<T>& poly, const bool packed, PolynomContext& ctx )
         {
             const Typename type = typename_of<T>::value;
             if ( poly.is_constant() )
@@ -577,24 +590,24 @@ namespace sknd
             {
                 if ( expr == nullptr )
                 {
-                    expr = as_expr<T>(symbols, coeff, size, ctx);
+                    expr = as_expr<T>(symbols, coeff, packed, ctx);
                 }
                 else
                 {
                     auto op = coeff < (T)0 ? "-" : "+";
-                    expr = ValueExpr::binary(op, expr, as_expr<T>(symbols, std::abs(coeff), size, ctx), type, size);
+                    expr = ValueExpr::binary(op, expr, as_expr<T>(symbols, std::abs(coeff), packed, ctx), type, packed);
                 }
             }
             if ( poly.constant_value() != (T)0 )
             {
                 auto op = poly.constant_value() < (T)0 ? "-" : "+";
-                expr = ValueExpr::binary(op, expr, ValueExpr(std::abs(poly.constant_value())), type, size);
+                expr = ValueExpr::binary(op, expr, ValueExpr(std::abs(poly.constant_value())), type, packed);
             }
             return expr;
         }
         
         template<typename T, typename S, typename C>
-        static ValueExpr as_expr( const S& symbols, const C& coeff, const std::optional<size_t> size, PolynomContext& ctx )
+        static ValueExpr as_expr( const S& symbols, const C& coeff, const bool packed, PolynomContext& ctx )
         {
             const Typename type = typename_of<T>::value;
             
@@ -607,32 +620,32 @@ namespace sknd
                     ++power;
                 }
                 auto& base = ctx.exprs[symbols[i]];
-                auto term = power == 1 ? base : ValueExpr::binary("**", base, ValueExpr((T)power), type, size);
-                expr = i == 0 ? term : ValueExpr::binary("*", expr, term, type, size);
+                auto term = power == 1 ? base : ValueExpr::binary("**", base, ValueExpr((T)power), type, packed);
+                expr = i == 0 ? term : ValueExpr::binary("*", expr, term, type, packed);
                 i += power;
             }
             if ( coeff == (T)-1 )
             {
-                expr = ValueExpr::unary("-", expr, type, size);
+                expr = ValueExpr::unary("-", expr, type, packed);
             }
             else if ( coeff != (T)1 )
             {
-                expr = ValueExpr::binary("*", ValueExpr(coeff), expr, type, size);
+                expr = ValueExpr::binary("*", ValueExpr(coeff), expr, type, packed);
             }
             return expr;
         }
         
-        static ValueExpr as_expr( const Poly<int_t>& poly, const std::optional<size_t> size, PolynomContext& ctx )
+        static ValueExpr as_expr( const Poly<int_t>& poly, const bool packed, PolynomContext& ctx )
         {
-            return as_expr<int_t>(poly, size, ctx);
+            return as_expr<int_t>(poly, packed, ctx);
         }
         
-        static ValueExpr as_expr( const Poly<real_t>& poly, const std::optional<size_t> size, PolynomContext& ctx )
+        static ValueExpr as_expr( const Poly<real_t>& poly, const bool packed, PolynomContext& ctx )
         {
-            return as_expr<real_t>(poly, size, ctx);
+            return as_expr<real_t>(poly, packed, ctx);
         }
         
-        static ValueExpr as_expr( const Poly<bool_t>& poly, const std::optional<size_t> size, PolynomContext& ctx )
+        static ValueExpr as_expr( const Poly<bool_t>& poly, const bool packed, PolynomContext& ctx )
         {
             if ( poly.is_constant() )
             {
@@ -643,33 +656,33 @@ namespace sknd
             {
                 if ( expr == nullptr )
                 {
-                    expr = as_expr(symbols, size, ctx);
+                    expr = as_expr(symbols, packed, ctx);
                 }
                 else
                 {
-                    expr = ValueExpr::binary("^", expr, as_expr(symbols, size, ctx), Typename::Bool, size);
+                    expr = ValueExpr::binary("^", expr, as_expr(symbols, packed, ctx), Typename::Bool, packed);
                 }
             }
             if ( poly.constant_value() )
             {
-                expr = ValueExpr::binary("^", expr, ValueExpr(poly.constant_value()), Typename::Bool, size);
+                expr = ValueExpr::binary("^", expr, ValueExpr(poly.constant_value()), Typename::Bool, packed);
             }
             return expr;
         }
         
         template<typename S>
-        static ValueExpr as_expr( const S& symbols, const std::optional<size_t> size, PolynomContext& ctx )
+        static ValueExpr as_expr( const S& symbols, const bool packed, PolynomContext& ctx )
         {
             ValueExpr expr = ctx.exprs[symbols.front()];
             for ( size_t i = 1; i < symbols.size(); ++i )
             {
-                expr = ValueExpr::binary("&&", expr, ctx.exprs[symbols[i]], Typename::Bool, size);
+                expr = ValueExpr::binary("&&", expr, ctx.exprs[symbols[i]], Typename::Bool, packed);
             }
             return expr;
         }
         
         template<typename T>
-        static Poly<bool_t> eval_equality( const Poly<T>& lhs, const Poly<T>& rhs, const std::optional<size_t> size, PolynomContext& ctx )
+        static Poly<bool_t> eval_equality( const Poly<T>& lhs, const Poly<T>& rhs, const bool packed, PolynomContext& ctx )
         {
             if ( lhs == rhs )
             {
@@ -682,11 +695,11 @@ namespace sknd
             {
                 diff.negate();
             }
-            auto expr = ValueExpr::binary("==", as_expr(diff, size, ctx), ValueExpr((T)0), Typename::Bool, size);
+            auto expr = ValueExpr::binary("==", as_expr(diff, packed, ctx), ValueExpr((T)0), Typename::Bool, packed);
             return Poly<bool_t>(make_symbol(expr, ctx));
         }
         
-        static Poly<bool_t> eval_equality( const Poly<bool_t>& lhs, const Poly<bool_t>& rhs, const std::optional<size_t> size, PolynomContext& ctx )
+        static Poly<bool_t> eval_equality( const Poly<bool_t>& lhs, const Poly<bool_t>& rhs, const bool packed, PolynomContext& ctx )
         {
             if ( lhs == rhs )
             {
@@ -694,12 +707,12 @@ namespace sknd
             }
             auto diff = lhs ^ rhs;
             
-            auto expr = ValueExpr::binary("==", as_expr(diff, size, ctx), ValueExpr(false), Typename::Bool, size);
+            auto expr = ValueExpr::binary("==", as_expr(diff, packed, ctx), ValueExpr(false), Typename::Bool, packed);
             return Poly<bool_t>(make_symbol(expr, ctx));
         }
         
         template<typename T>
-        static Poly<bool_t> eval_inequality( const bool strict, const Poly<T>& lhs, const Poly<T>& rhs, const std::optional<size_t> size,
+        static Poly<bool_t> eval_inequality( const bool strict, const Poly<T>& lhs, const Poly<T>& rhs, const bool packed,
                                             PolynomContext& ctx )
         {
             auto diff = lhs - rhs;
@@ -710,12 +723,12 @@ namespace sknd
             }
             else
             {
-                auto expr = ValueExpr::binary(strict ? "<" : "<=", as_expr(diff, size, ctx), ValueExpr((T)0), Typename::Bool, size);
+                auto expr = ValueExpr::binary(strict ? "<" : "<=", as_expr(diff, packed, ctx), ValueExpr((T)0), Typename::Bool, packed);
                 return Poly<bool_t>(make_symbol(expr, ctx));
             }
         }
         
-        static Poly<bool_t> eval_equality( ValueExpr& left, ValueExpr& right, const std::optional<size_t> size, PolynomContext& ctx )
+        static Poly<bool_t> eval_equality( ValueExpr& left, ValueExpr& right, const bool packed, PolynomContext& ctx )
         {
             switch ( left.dtype() )
             {
@@ -723,19 +736,19 @@ namespace sknd
                 {
                     auto lhs = as_polynom<int_t>(left, ctx);
                     auto rhs = as_polynom<int_t>(right, ctx);
-                    return eval_equality<int_t>(lhs, rhs, size, ctx);
+                    return eval_equality<int_t>(lhs, rhs, packed, ctx);
                 }
                 case Typename::Real:
                 {
                     auto lhs = as_polynom<real_t>(left, ctx);
                     auto rhs = as_polynom<real_t>(right, ctx);
-                    return eval_equality<real_t>(lhs, rhs, size, ctx);
+                    return eval_equality<real_t>(lhs, rhs, packed, ctx);
                 }
                 case Typename::Bool:
                 {
                     auto lhs = as_polynom<bool_t>(left, ctx);
                     auto rhs = as_polynom<bool_t>(right, ctx);
-                    return eval_equality(lhs, rhs, size, ctx);
+                    return eval_equality(lhs, rhs, packed, ctx);
                 }
                 default:
                 {
@@ -745,7 +758,7 @@ namespace sknd
             }
         }
         
-        static Poly<bool_t> eval_inequality( const bool strict, ValueExpr& left, ValueExpr& right, const std::optional<size_t> size,
+        static Poly<bool_t> eval_inequality( const bool strict, ValueExpr& left, ValueExpr& right, const bool packed,
                                             PolynomContext& ctx )
         {
             switch ( left.dtype() )
@@ -754,13 +767,13 @@ namespace sknd
                 {
                     auto lhs = as_polynom<int_t>(left, ctx);
                     auto rhs = as_polynom<int_t>(right, ctx);
-                    return eval_inequality<int_t>(strict, lhs, rhs, size, ctx);
+                    return eval_inequality<int_t>(strict, lhs, rhs, packed, ctx);
                 }
                 case Typename::Real:
                 {
                     auto lhs = as_polynom<real_t>(left, ctx);
                     auto rhs = as_polynom<real_t>(right, ctx);
-                    return eval_inequality<real_t>(strict, lhs, rhs, size, ctx);
+                    return eval_inequality<real_t>(strict, lhs, rhs, packed, ctx);
                 }
                 default:
                 {
@@ -831,7 +844,7 @@ namespace sknd
                     }
                     else if ( cast.arg.is_cast() )
                     {
-                        expr = ValueExpr(ValueExpr::CastExpr{ cast.dtype, cast.arg.as_cast().arg.detach() }, cast.dtype, expr.max_size_or_null());
+                        expr = ValueExpr(ValueExpr::CastExpr{ cast.dtype, cast.arg.as_cast().arg.detach() }, cast.dtype, expr.packed());
                         return true;
                     }
                     else if ( cast.arg.dtype() == cast.dtype )
@@ -852,7 +865,7 @@ namespace sknd
                                                            fold_constants_unary_func(unary.op, arg);
                         if ( unary.arg.is_uniform() )
                         {
-                            expr = ValueExpr::uniform(std::move(value), unary.arg.as_uniform().size.detach(), expr.max_size());
+                            expr = ValueExpr::uniform(std::move(value), unary.arg.as_uniform().size.detach());
                             return true;
                         }
                         else
@@ -883,12 +896,12 @@ namespace sknd
                         auto value = fold_constants_binary(op, left, right);
                         if ( binary.left.is_uniform() )
                         {
-                            expr = ValueExpr::uniform(std::move(value), binary.left.as_uniform().size.detach(), expr.max_size());
+                            expr = ValueExpr::uniform(std::move(value), binary.left.as_uniform().size.detach());
                             return true;
                         }
                         else if ( binary.right.is_uniform() )
                         {
-                            expr = ValueExpr::uniform(std::move(value), binary.right.as_uniform().size.detach(), expr.max_size());
+                            expr = ValueExpr::uniform(std::move(value), binary.right.as_uniform().size.detach());
                             return true;
                         }
                         else
@@ -960,15 +973,14 @@ namespace sknd
                         auto& items = pack.as_list();
                         if ( std::all_of(items.begin(), items.end(), []( const ValueExpr& x ){ return x.is_literal(); }) )
                         {
-                            expr = fold_constants_fold(op, fold.accumulate, pack);
+                            expr = fold_constants_fold(op, fold.cumulative, pack);
                             return true;
                         }
-                        else if ( !fold.accumulate )
+                        else if ( !fold.cumulative )
                         {
                             if ( fold.pack.is_list() )
                             {
                                 simplified |= remove_null_elements(op, expr.dtype(), fold.pack.as_list());
-                                fold.pack.resize(fold.pack.as_list().size());
                             }
                             if ( items.size() == 1 )
                             {
@@ -985,7 +997,7 @@ namespace sknd
                     }
                     else if ( pack.is_uniform() )
                     {
-                        auto value = simplify_uniform_fold(op, fold.accumulate, pack);
+                        auto value = simplify_uniform_fold(op, fold.cumulative, pack);
                         if ( value != nullptr )
                         {
                             expr = std::move(value);
@@ -1027,7 +1039,7 @@ namespace sknd
                     {
                         auto& uniform = subscript.index.as_uniform();
                         auto index = (size_t)uniform.value.as_int();
-                        expr = ValueExpr::uniform(subscript.pack.at(index), uniform.size.detach(), subscript.index.max_size());
+                        expr = ValueExpr::uniform(subscript.pack.at(index), uniform.size.detach());
                         return true;
                     }
                     break;
@@ -1035,9 +1047,9 @@ namespace sknd
                 case ValueExpr::TensorAccess:
                 {
                     auto& access = expr.as_tensor_access();
-                    if ( access.item.is_literal() )
+                    if ( access.item.is_literal() && access.tensor.itemized() )
                     {
-                        access.tensor = &access.tensor[access.item.as_int()];
+                        access.tensor = access.tensor[access.item.as_int()];
                         access.item = nullptr;
                         return true;
                     }
@@ -1560,7 +1572,7 @@ namespace sknd
                         if ( child.right.is_literal() )
                         {
                             auto arg = right < child.right ? right : child.right;
-                            return ValueExpr::binary(child.op, child.left.detach(), arg, left.dtype(), left.max_size_or_null());
+                            return ValueExpr::binary(child.op, child.left.detach(), arg, left.dtype(), left.packed());
                         }
                     }
                     break;
@@ -1606,7 +1618,7 @@ namespace sknd
                         if ( child.right.is_literal() )
                         {
                             auto arg = right > child.right ? right : child.right;
-                            return ValueExpr::binary(child.op, child.left.detach(), arg, left.dtype(), left.max_size_or_null());
+                            return ValueExpr::binary(child.op, child.left.detach(), arg, left.dtype(), left.packed());
                         }
                     }
                     break;
@@ -1757,7 +1769,7 @@ namespace sknd
                     else if ( pack.dtype() == Typename::Int )
                     {
                         return ValueExpr(ValueExpr::RangeExpr{ uniform.value, uniform.value + uniform.size * uniform.value, uniform.value },
-                                         pack.dtype(), pack.max_size());
+                                         pack.dtype(), true);
                     }
                 }
                 case Lexer::Operator::Multiply:
@@ -1853,6 +1865,8 @@ namespace sknd
             }
         }
         
+    public:
+        
         static ValueExpr eval_unary_func( const std::string& name, const int_t arg )
         {
             typedef int_t (*int_builtin_t)(int_t);
@@ -1897,28 +1911,6 @@ namespace sknd
             
             auto func = real_builtins.at(name);
             return func(arg);
-        }
-        
-    protected:
-        
-        static bool is_trigonometric_func( const std::string& func )
-        {
-            static const std::set<std::string> funcs =
-            {
-                "sin",
-                "cos",
-                "tan",
-                "asin",
-                "acos",
-                "atan",
-                "sinh",
-                "cosh",
-                "tanh",
-                "asinh",
-                "acosh",
-                "atanh",
-            };
-            return funcs.count(func) != 0;
         }
     };
 

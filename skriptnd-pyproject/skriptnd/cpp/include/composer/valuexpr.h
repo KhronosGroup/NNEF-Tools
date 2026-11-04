@@ -72,7 +72,7 @@ namespace sknd
         
     private:
         
-        typedef VariantData<int_t,real_t,bool_t,str_t,
+        typedef VariantData<nullptr_t,int_t,real_t,bool_t,str_t,
                             PlaceholderExpr,IdentifierExpr,ReferenceExpr,
                             SizeAccessExpr,ShapeAccessExpr,TensorAccessExpr,
                             UnaryExpr,BinaryExpr,SelectExpr,FoldExpr,ListExpr,
@@ -80,10 +80,6 @@ namespace sknd
                             UniformExpr,RangeExpr> variant_data;
         
         typedef uint8_t index_type;
-        typedef uint32_t size_type;
-        
-        static constexpr index_type NullIndex = -1;
-        static constexpr size_type UnpackedSize = -1;
         
     public:
         
@@ -109,128 +105,111 @@ namespace sknd
         static Kind kind_of()
         {
             auto index = variant_data::index_of<T>();
-            return index < 4 ? Literal : (Kind)(index - 2);
+            return index == 0 ? Null : index < 5 ? Literal : (Kind)(index - 3);
         }
         
-        static ValueExpr placeholder( const std::string& id, const ValueExpr& max_value );
+        static ValueExpr placeholder( const std::string& id, const ValueExpr& max_value, const ValueExpr& size = nullptr );
         static ValueExpr identifier( const std::string& name, const IdentifierKind& kind,
-                                    const Typename type, const std::optional<size_t> size = std::nullopt );
+                                    const Typename type, const bool packed = false );
         
-        static ValueExpr unary( const std::string& op, const ValueExpr& arg, const Typename type,
-                               const std::optional<size_t> size = std::nullopt );
-        static ValueExpr binary( const std::string& op, const ValueExpr& left, const ValueExpr& right, const Typename type,
-                                const std::optional<size_t> size = std::nullopt );
-        static ValueExpr select( const ValueExpr& cond, const ValueExpr& left, const ValueExpr& right,
-                                const std::optional<size_t> size = std::nullopt );
-        static ValueExpr fold( const std::string& op, const ValueExpr& pack,
-                              const std::optional<size_t> size = std::nullopt );
+        static ValueExpr unary( const std::string& op, const ValueExpr& arg, const Typename type, const bool packed = false );
+        static ValueExpr binary( const std::string& op, const ValueExpr& left, const ValueExpr& right, const Typename type, const bool packed = false );
+        static ValueExpr select( const ValueExpr& cond, const ValueExpr& left, const ValueExpr& right, const bool packed = false );
+        static ValueExpr fold( const std::string& op, const ValueExpr& pack, const bool packed = false );
         static ValueExpr list( const std::vector<ValueExpr>& items, const Typename type );
         static ValueExpr list( const ValueExpr& item, const size_t count );
         static ValueExpr bounded( const ValueExpr& arg, const ValueExpr& lower, const ValueExpr& upper );
-        static ValueExpr uniform( const ValueExpr& value, const ValueExpr& size, const size_t max_size );
+        static ValueExpr uniform( const ValueExpr& value, const ValueExpr& size );
         
-        static ValueExpr unary( const std::string& op, ValueExpr&& arg, const Typename type,
-                               const std::optional<size_t> size = std::nullopt );
-        static ValueExpr binary( const std::string& op, ValueExpr&& left, ValueExpr&& right, const Typename type,
-                                const std::optional<size_t> size = std::nullopt );
-        static ValueExpr select( ValueExpr&& cond, ValueExpr&& left, ValueExpr&& right,
-                                const std::optional<size_t> size = std::nullopt );
-        static ValueExpr fold( const std::string& op, ValueExpr&& pack,
-                              const std::optional<size_t> size = std::nullopt );
+        static ValueExpr unary( const std::string& op, ValueExpr&& arg, const Typename type, const bool packed = false );
+        static ValueExpr binary( const std::string& op, ValueExpr&& left, ValueExpr&& right, const Typename type, const bool packed = false );
+        static ValueExpr select( ValueExpr&& cond, ValueExpr&& left, ValueExpr&& right, const bool packed = false );
+        static ValueExpr fold( const std::string& op, ValueExpr&& pack, const bool packed = false );
         static ValueExpr list( std::vector<ValueExpr>&& items, const Typename type );
         static ValueExpr bounded( ValueExpr&& arg, ValueExpr&& lower, ValueExpr&& upper );
-        static ValueExpr uniform( ValueExpr&& value, ValueExpr&& size, const size_t max_size );
+        static ValueExpr uniform( ValueExpr&& value, ValueExpr&& size );
         
         static ValueExpr unary( const std::string& op, const ValueExpr& arg )
         {
-            return unary(op, arg, arg.dtype(), arg.max_size_or_null());
+            return unary(op, arg, arg.dtype(), arg.packed());
         }
         
         static ValueExpr binary( const std::string& op, const ValueExpr& left, const ValueExpr& right )
         {
             auto type = left.dtype();
-            auto size = left.packed() ? left.max_size() : right.packed() ? right.max_size() : (std::optional<size_t>)std::nullopt;
-            return binary(op, left, right, type, size);
+            auto packed = left.packed() || right.packed();
+            return binary(op, left, right, type, packed);
         }
         
         static ValueExpr unary( const std::string& op, ValueExpr&& arg )
         {
             auto type = arg.dtype();
-            auto size = arg.max_size_or_null();
-            return unary(op, std::forward<ValueExpr>(arg), type, size);
+            auto packed = arg.packed();
+            return unary(op, std::forward<ValueExpr>(arg), type, packed);
         }
         
         static ValueExpr binary( const std::string& op, ValueExpr&& left, ValueExpr&& right )
         {
             auto type = left.dtype();
-            auto size = left.packed() ? left.max_size() : right.packed() ? right.max_size() : (std::optional<size_t>)std::nullopt;
-            return binary(op, std::forward<ValueExpr>(left), std::forward<ValueExpr>(right), type, size);
+            auto packed = left.packed() || right.packed();
+            return binary(op, std::forward<ValueExpr>(left), std::forward<ValueExpr>(right), type, packed);
         }
         
     public:
         
         ValueExpr( std::nullptr_t = nullptr )
-        : _kind(Null), _dtype(Typename::Type), _index(NullIndex), _size(UnpackedSize)
+        : _kind(Null), _dtype(Typename::Type), _index(variant_data::index_of<nullptr_t>()), _packed(false)
         {
         }
         
         ValueExpr( const int& value )
-        : _kind(Literal), _dtype(Typename::Int), _index(variant_data::index_of<int_t>()),
-          _size(UnpackedSize), _data((int_t)value)
+        : _kind(Literal), _dtype(Typename::Int), _index(variant_data::index_of<int_t>()), _packed(false), _data((int_t)value)
         {
         }
         
         ValueExpr( const bool& value )
-        : _kind(Literal), _dtype(Typename::Bool), _index(variant_data::index_of<bool_t>()),
-          _size(UnpackedSize), _data((bool_t)value)
+        : _kind(Literal), _dtype(Typename::Bool), _index(variant_data::index_of<bool_t>()), _packed(false), _data((bool_t)value)
         {
         }
         
         ValueExpr( const float& value )
-        : _kind(Literal), _dtype(Typename::Real), _index(variant_data::index_of<real_t>()),
-          _size(UnpackedSize), _data((real_t)value)
+        : _kind(Literal), _dtype(Typename::Real), _index(variant_data::index_of<real_t>()), _packed(false), _data((real_t)value)
         {
         }
         
         ValueExpr( const double& value )
-        : _kind(Literal), _dtype(Typename::Real), _index(variant_data::index_of<real_t>()),
-          _size(UnpackedSize), _data((real_t)value)
+        : _kind(Literal), _dtype(Typename::Real), _index(variant_data::index_of<real_t>()), _packed(false), _data((real_t)value)
         {
         }
         
         ValueExpr( const char* value )
-        : _kind(Literal), _dtype(Typename::Str), _index(variant_data::index_of<str_t>()),
-          _size(UnpackedSize), _data((str_t)value)
+        : _kind(Literal), _dtype(Typename::Str), _index(variant_data::index_of<str_t>()), _packed(false), _data((str_t)value)
         {
         }
         
         template<typename T, typename = std::enable_if_t<is_typename<T>>>
         ValueExpr( const T& value )
-        : _kind(Literal), _dtype(typename_of<T>::value), _index(variant_data::index_of<T>()),
-          _size(UnpackedSize), _data(value)
+        : _kind(Literal), _dtype(typename_of<T>::value), _index(variant_data::index_of<T>()), _packed(false), _data(value)
         {
         }
         
         template<typename T, typename = std::enable_if_t<variant_data::contains<T>() && !is_typename<T>>>
-        ValueExpr( const T& value, const Typename type, const std::optional<size_t> size = std::nullopt )
-        : _kind(kind_of<T>()), _dtype(type), _index(variant_data::index_of<T>()), 
-          _size(size ? (size_type)*size : UnpackedSize), _data(value)
+        ValueExpr( const T& value, const Typename type, const bool packed = false )
+        : _kind(kind_of<T>()), _dtype(type), _index(variant_data::index_of<T>()), _packed(packed), _data(value)
         {
         }
         
         template<typename T, typename = std::enable_if_t<variant_data::contains<T>() && !is_typename<T>>>
-        ValueExpr( T&& value, const Typename type, const std::optional<size_t> size = std::nullopt )
-        : _kind(kind_of<T>()), _dtype(type), _index(variant_data::index_of<T>()), 
-          _size(size ? (size_type)*size : UnpackedSize), _data(std::forward<T>(value))
+        ValueExpr( T&& value, const Typename type, const bool packed = false )
+        : _kind(kind_of<T>()), _dtype(type), _index(variant_data::index_of<T>()), _packed(packed), _data(std::forward<T>(value))
         {
         }
         
         ValueExpr( const SizeAccessExpr& access );
-        ValueExpr( const ShapeAccessExpr& access );
         ValueExpr( const TensorAccessExpr& access );
         
         ValueExpr( const ValueExpr& other )
-        : _kind(other._kind), _dtype(other._dtype), _index(other._index), _size(other._size)
+        : _kind(other._kind), _dtype(other._dtype), _index(other._index), _packed(other._packed)
         {
             if ( other != nullptr )
             {
@@ -268,10 +247,7 @@ namespace sknd
         
         ~ValueExpr()
         {
-            if ( *this != nullptr )
-            {
-                _data.destruct(_index);
-            }
+            _data.destruct(_index);
         }
         
         Kind kind() const
@@ -286,17 +262,7 @@ namespace sknd
         
         bool packed() const
         {
-            return _size != UnpackedSize;
-        }
-        
-        size_t max_size() const
-        {
-            return _size;
-        }
-        
-        std::optional<size_t> max_size_or_null() const
-        {
-            return packed() ? _size : (std::optional<size_t>)std::nullopt;
+            return _packed;
         }
         
         template<typename T, typename = std::enable_if_t<variant_data::contains<T>()>>
@@ -712,7 +678,7 @@ namespace sknd
         
         bool operator==( const ValueExpr& other ) const
         {
-            return _index == other._index && (_index == NullIndex || _data.equals(other._data, _index));
+            return _index == other._index && _data.equals(other._data, _index);
         }
         
         bool operator!=( const ValueExpr& other ) const
@@ -875,7 +841,7 @@ namespace sknd
             std::swap(_kind, other._kind);
             std::swap(_dtype, other._dtype);
             std::swap(_index, other._index);
-            std::swap(_size, other._size);
+            std::swap(_packed, other._packed);
             _data.swap(other._data);
         }
         
@@ -898,6 +864,7 @@ namespace sknd
         ValueExpr at( const ValueExpr& idx ) const;
         
         ValueExpr slice( const size_t first, const size_t last, const size_t stride = 1 ) const;
+        ValueExpr slice( const ValueExpr& first, const ValueExpr& last, const ValueExpr& stride ) const;
         
         bool is_dynamic() const;
         bool has_dynamic_size() const;
@@ -910,11 +877,6 @@ namespace sknd
         bool is_infinite() const
         {
             return is_real() && std::isinf(_data.as<real_t>());
-        }
-        
-        void resize( const size_t size )
-        {
-            _size = (size_type)size;
         }
         
     private:
@@ -950,7 +912,7 @@ namespace sknd
         Kind _kind;
         Typename _dtype;
         index_type _index;
-        size_type _size;
+        bool _packed;
         variant_data _data;
     };
     
@@ -959,6 +921,7 @@ namespace sknd
     {
         std::string id;
         ValueExpr max_value;
+        ValueExpr size;
         
         bool operator==( const PlaceholderExpr& x ) const { return id == x.id; };
         bool operator!=( const PlaceholderExpr& x ) const { return !(*this == x); };
@@ -994,9 +957,8 @@ namespace sknd
     {
         TensorRef tensor;
         ValueExpr dim;
-        ValueExpr item;
         
-        bool operator==( const ShapeAccessExpr& x ) const { return tensor == x.tensor && dim == x.dim && item == x.item; };
+        bool operator==( const ShapeAccessExpr& x ) const { return tensor == x.tensor && dim == x.dim; };
         bool operator!=( const ShapeAccessExpr& x ) const { return !(*this == x); };
     };
 
@@ -1043,9 +1005,9 @@ namespace sknd
     {
         std::string op;
         ValueExpr pack;
-        bool accumulate;
+        bool cumulative;
         
-        bool operator==( const FoldExpr& x ) const { return op == x.op && pack == x.pack && accumulate == x.accumulate; };
+        bool operator==( const FoldExpr& x ) const { return op == x.op && pack == x.pack && cumulative == x.cumulative; };
         bool operator!=( const FoldExpr& x ) const { return !(*this == x); };
     };
 
@@ -1123,13 +1085,13 @@ namespace sknd
 
 
     inline ValueExpr::ValueExpr( const ValueExpr* values, const size_t size, const Typename type )
-    : _kind(List), _dtype(type), _index(variant_data::index_of<ListExpr>()), _size((size_type)size)
+    : _kind(List), _dtype(type), _index(variant_data::index_of<ListExpr>()), _packed(true)
     {
         _data = ListExpr{ std::vector<ValueExpr>(values, values + size) };
     }
 
     inline ValueExpr::ValueExpr( const ValueExpr* values, const size_t size, const size_t stride, const Typename type )
-    : _kind(List), _dtype(type), _index(variant_data::index_of<ListExpr>()), _size((size_type)size)
+    : _kind(List), _dtype(type), _index(variant_data::index_of<ListExpr>()), _packed(true)
     {
         std::vector<ValueExpr> items(size);
         for ( size_t i = 0; i < size; ++i, values += stride )
@@ -1140,66 +1102,56 @@ namespace sknd
     }
 
     inline ValueExpr::ValueExpr( const SizeAccessExpr& access )
-    : _kind(SizeAccess), _dtype(Typename::Int), _index(variant_data::index_of<SizeAccessExpr>()),
-      _size(UnpackedSize), _data(access)
-    {
-    }
-
-    inline ValueExpr::ValueExpr( const ShapeAccessExpr& access )
-    : _kind(ShapeAccess), _dtype(Typename::Int), _index(variant_data::index_of<ShapeAccessExpr>()),
-      _size(UnpackedSize), _data(access)
+    : _kind(SizeAccess), _dtype(Typename::Int), _index(variant_data::index_of<SizeAccessExpr>()), _packed(false), _data(access)
     {
     }
     
     inline ValueExpr::ValueExpr( const TensorAccessExpr& access )
-    : _kind(TensorAccess), _dtype(access.tensor.dtype()), _index(variant_data::index_of<TensorAccessExpr>()), 
-      _size(UnpackedSize), _data(access)
+    : _kind(TensorAccess), _dtype(access.tensor.dtype()), _index(variant_data::index_of<TensorAccessExpr>()), _packed(false), _data(access)
     {
     }
 
 
-    inline ValueExpr ValueExpr::placeholder( const std::string& id, const ValueExpr& max_value )
+    inline ValueExpr ValueExpr::placeholder( const std::string& id, const ValueExpr& max_value, const ValueExpr& size )
     {
-        return ValueExpr(PlaceholderExpr{ id, max_value }, Typename::Int);
+        return ValueExpr(PlaceholderExpr{ id, max_value, size }, Typename::Int, size != nullptr);
     }
 
     inline ValueExpr ValueExpr::identifier( const std::string& name, const IdentifierKind& kind,
-                                           const Typename type, const std::optional<size_t> size )
+                                           const Typename type, const bool packed )
     {
-        return ValueExpr(IdentifierExpr{ name, kind }, type, size);
+        return ValueExpr(IdentifierExpr{ name, kind }, type, packed);
     }
 
-    inline ValueExpr ValueExpr::unary( const std::string& op, const ValueExpr& arg,  const Typename type, const std::optional<size_t> size )
+    inline ValueExpr ValueExpr::unary( const std::string& op, const ValueExpr& arg,  const Typename type, const bool packed )
     {
-        return ValueExpr(UnaryExpr{ op, arg }, type, size);
+        return ValueExpr(UnaryExpr{ op, arg }, type, packed);
     }
 
     inline ValueExpr ValueExpr::binary( const std::string& op, const ValueExpr& left, const ValueExpr& right,
-                                       const Typename type, const std::optional<size_t> size )
+                                       const Typename type, const bool packed )
     {
-        return ValueExpr(BinaryExpr{ op, left, right }, type, size);
+        return ValueExpr(BinaryExpr{ op, left, right }, type, packed);
     }
 
-    inline ValueExpr ValueExpr::select( const ValueExpr& cond, const ValueExpr& left, const ValueExpr& right, 
-                                       const std::optional<size_t> size )
+    inline ValueExpr ValueExpr::select( const ValueExpr& cond, const ValueExpr& left, const ValueExpr& right, const bool packed )
     {
-        return ValueExpr(SelectExpr{ cond, left, right }, left.dtype(), size);
+        return ValueExpr(SelectExpr{ cond, left, right }, left.dtype(), packed);
     }
 
-    inline ValueExpr ValueExpr::fold( const std::string& op, const ValueExpr& pack,
-                                     const std::optional<size_t> size )
+    inline ValueExpr ValueExpr::fold( const std::string& op, const ValueExpr& pack, const bool packed )
     {
-        return ValueExpr(FoldExpr{ op, pack, (bool)size }, pack.dtype(), size);
+        return ValueExpr(FoldExpr{ op, pack, packed }, pack.dtype(), packed);
     }
 
     inline ValueExpr ValueExpr::list( const std::vector<ValueExpr>& items, const Typename type )
     {
-        return ValueExpr(ListExpr{ items }, type, items.size());
+        return ValueExpr(ListExpr{ items }, type, true);
     }
 
     inline ValueExpr ValueExpr::list( const ValueExpr& item, const size_t count )
     {
-        return ValueExpr(ListExpr{ std::vector<ValueExpr>(count, item) }, item.dtype(), count);
+        return ValueExpr(ListExpr{ std::vector<ValueExpr>(count, item) }, item.dtype(), true);
     }
 
     inline ValueExpr ValueExpr::bounded( const ValueExpr& arg, const ValueExpr& lower, const ValueExpr& upper )
@@ -1207,42 +1159,39 @@ namespace sknd
         return ValueExpr(BoundedExpr{ arg, lower, upper }, arg.dtype());
     }
 
-    inline ValueExpr ValueExpr::uniform( const ValueExpr& value, const ValueExpr& size, const size_t max_size )
+    inline ValueExpr ValueExpr::uniform( const ValueExpr& value, const ValueExpr& size )
     {
-        return ValueExpr(UniformExpr{ value, size }, value.dtype(), max_size);
+        return ValueExpr(UniformExpr{ value, size }, value.dtype(), true);
     }
 
 
     inline ValueExpr ValueExpr::unary( const std::string& op, ValueExpr&& arg,
-                                      const Typename type, const std::optional<size_t> size )
+                                      const Typename type, const bool packed )
     {
-        return ValueExpr(UnaryExpr{ op, std::forward<ValueExpr>(arg) }, type, size);
+        return ValueExpr(UnaryExpr{ op, std::forward<ValueExpr>(arg) }, type, packed);
     }
 
     inline ValueExpr ValueExpr::binary( const std::string& op, ValueExpr&& left, ValueExpr&& right,
-                                       const Typename type, const std::optional<size_t> size )
+                                       const Typename type, const bool packed )
     {
-        return ValueExpr(BinaryExpr{ op, std::forward<ValueExpr>(left), std::forward<ValueExpr>(right) }, type, size);
+        return ValueExpr(BinaryExpr{ op, std::forward<ValueExpr>(left), std::forward<ValueExpr>(right) }, type, packed);
     }
 
-    inline ValueExpr ValueExpr::select( ValueExpr&& cond, ValueExpr&& left, ValueExpr&& right, 
-                                       const std::optional<size_t> size )
+    inline ValueExpr ValueExpr::select( ValueExpr&& cond, ValueExpr&& left, ValueExpr&& right, const bool packed )
     {
         auto type = left.dtype();
-        return ValueExpr(SelectExpr{ std::forward<ValueExpr>(cond), std::forward<ValueExpr>(left), std::forward<ValueExpr>(right) }, type, size);
+        return ValueExpr(SelectExpr{ std::forward<ValueExpr>(cond), std::forward<ValueExpr>(left), std::forward<ValueExpr>(right) }, type, packed);
     }
 
-    inline ValueExpr ValueExpr::fold( const std::string& op, ValueExpr&& pack,
-                                     const std::optional<size_t> size )
+    inline ValueExpr ValueExpr::fold( const std::string& op, ValueExpr&& pack, const bool packed )
     {
         auto type = pack.dtype();
-        return ValueExpr(FoldExpr{ op, std::forward<ValueExpr>(pack), (bool)size }, type, size);
+        return ValueExpr(FoldExpr{ op, std::forward<ValueExpr>(pack), packed }, type, packed);
     }
 
     inline ValueExpr ValueExpr::list( std::vector<ValueExpr>&& items, const Typename type )
     {
-        auto size = items.size();
-        return ValueExpr(ListExpr{ std::forward<std::vector<ValueExpr>>(items) }, type, size);
+        return ValueExpr(ListExpr{ std::forward<std::vector<ValueExpr>>(items) }, type, true);
     }
 
     inline ValueExpr ValueExpr::bounded( ValueExpr&& arg, ValueExpr&& lower, ValueExpr&& upper )
@@ -1251,10 +1200,10 @@ namespace sknd
         return ValueExpr(BoundedExpr{ std::forward<ValueExpr>(arg), std::forward<ValueExpr>(lower), std::forward<ValueExpr>(upper) }, type);
     }
 
-    inline ValueExpr ValueExpr::uniform( ValueExpr&& value, ValueExpr&& size, const size_t max_size )
+    inline ValueExpr ValueExpr::uniform( ValueExpr&& value, ValueExpr&& size )
     {
         auto type = value.dtype();
-        return ValueExpr(UniformExpr{ std::forward<ValueExpr>(value), std::forward<ValueExpr>(size) }, type, max_size);
+        return ValueExpr(UniformExpr{ std::forward<ValueExpr>(value), std::forward<ValueExpr>(size) }, type, true);
     }
 
     inline bool ValueExpr::is_unary( const std::string& op ) const
@@ -1309,13 +1258,17 @@ namespace sknd
         {
             case Null:
             case Literal:
-            case Placeholder:
             case Identifier:
             case SizeAccess:
             case Bounded:
             case List:
             {
                 return false;
+            }
+            case Placeholder:
+            {
+                auto& placeholder = as_placeholder();
+                return placeholder.size != nullptr;
             }
             case ShapeAccess:
             {
@@ -1367,7 +1320,7 @@ namespace sknd
             case Fold:
             {
                 auto& fold = as_fold();
-                return fold.accumulate && fold.pack.has_dynamic_size();
+                return fold.cumulative && fold.pack.has_dynamic_size();
             }
             case Cast:
             {
@@ -1416,12 +1369,16 @@ namespace sknd
         {
             case Null:
             case Literal:
-            case Placeholder:
             case Identifier:
             case SizeAccess:
             case Bounded:
             {
                 return nullptr;
+            }
+            case Placeholder:
+            {
+                auto& placeholder = as_placeholder();
+                return placeholder.size;
             }
             case List:
             {
@@ -1436,7 +1393,7 @@ namespace sknd
                 auto& access = as_shape_access();
                 if ( access.dim == nullptr )
                 {
-                    return ValueExpr((int_t)_size);
+                    return ValueExpr((int_t)access.tensor.rank());
                 }
                 else
                 {
@@ -1491,7 +1448,7 @@ namespace sknd
             case Fold:
             {
                 auto& fold = as_fold();
-                return fold.accumulate ? fold.pack.size() : nullptr;
+                return fold.cumulative ? fold.pack.size() : nullptr;
             }
             case Cast:
             {
@@ -1557,18 +1514,24 @@ namespace sknd
 
     inline ValueExpr ValueExpr::at( const size_t idx ) const
     {
-        assert(idx < _size);
         switch ( kind() )
         {
             case Null:
             case Literal:
-            case Placeholder:
             case Identifier:
             case SizeAccess:
             case TensorAccess:
             case Bounded:
             {
                 return *this;
+            }
+            case Placeholder:
+            {
+                if ( !packed() )
+                {
+                    return *this;
+                }
+                return ValueExpr(SubscriptExpr{ *this, ValueExpr((int_t)idx) }, dtype());
             }
             case List:
             {
@@ -1583,11 +1546,15 @@ namespace sknd
                 auto& access = as_shape_access();
                 if ( access.dim == nullptr )
                 {
-                    return ValueExpr(ShapeAccessExpr{ access.tensor, (int_t)idx, access.item }, dtype());
+                    return ValueExpr(ShapeAccessExpr{ access.tensor, (int_t)idx }, dtype());
+                }
+                else if ( access.tensor.itemized() )
+                {
+                    return ValueExpr(ShapeAccessExpr{ access.tensor[idx], access.dim }, dtype());
                 }
                 else
                 {
-                    return ValueExpr(ShapeAccessExpr{ (Tensor*)&access.tensor[idx], access.dim }, dtype());
+                    return ValueExpr(SubscriptExpr{ *this, ValueExpr((int_t)idx) }, dtype());
                 }
             }
             case Unary:
@@ -1608,7 +1575,7 @@ namespace sknd
             case Fold:
             {
                 auto& fold = as_fold();
-                if ( fold.accumulate )
+                if ( fold.cumulative )
                 {
                     return ValueExpr(FoldExpr{ fold.op, fold.pack.slice(0, idx + 1), false }, dtype());
                 }
@@ -1636,7 +1603,7 @@ namespace sknd
                     {
                         break;
                     }
-                    const size_t size = item.packed() ? item.max_size() : 1;
+                    const size_t size = item.packed() ? item.size().as_int() : 1;
                     if ( idx < offs + size )
                     {
                         return item.at(idx - offs);
@@ -1682,13 +1649,20 @@ namespace sknd
         {
             case Null:
             case Literal:
-            case Placeholder:
             case Identifier:
             case SizeAccess:
             case TensorAccess:
             case Bounded:
             {
                 return *this;
+            }
+            case Placeholder:
+            {
+                if ( !packed() )
+                {
+                    return *this;
+                }
+                return ValueExpr(SubscriptExpr{ *this, idx }, dtype());
             }
             case ShapeAccess:
             {
@@ -1699,11 +1673,11 @@ namespace sknd
                 auto& access = as_shape_access();
                 if ( access.dim == nullptr )
                 {
-                    return ValueExpr(ShapeAccessExpr{ access.tensor, idx, access.item }, dtype());
+                    return ValueExpr(ShapeAccessExpr{ access.tensor, idx }, dtype());
                 }
                 else
                 {
-                    return ValueExpr(ShapeAccessExpr{ access.tensor, access.dim, idx }, dtype());
+                    return ValueExpr(SubscriptExpr{ *this, idx }, dtype());
                 }
             }
             case Unary:
@@ -1724,7 +1698,7 @@ namespace sknd
             case Fold:
             {
                 auto& fold = as_fold();
-                if ( fold.accumulate )
+                if ( fold.cumulative )
                 {
                     return ValueExpr(SubscriptExpr{ *this, idx }, dtype());
                 }
@@ -1772,13 +1746,12 @@ namespace sknd
 
     inline const ValueExpr& ValueExpr::operator[]( const size_t i ) const
     {
-        assert(i < _size);
         switch ( kind() )
         {
             case List:
             {
                 auto& items = as_list();
-                return items[i];
+                return items.at(i);
             }
             case Uniform:
             {
@@ -1799,7 +1772,6 @@ namespace sknd
         {
             case Null:
             case Literal:
-            case Placeholder:
             case Identifier:
             case SizeAccess:
             case TensorAccess:
@@ -1808,6 +1780,7 @@ namespace sknd
             {
                 return *this;
             }
+            case Placeholder:
             case ShapeAccess:
             case Reference:
             case Concat:
@@ -1842,7 +1815,7 @@ namespace sknd
             case Fold:
             {
                 auto& fold = as_fold();
-                if ( fold.accumulate )
+                if ( fold.cumulative )
                 {
                     return ValueExpr(FoldExpr{ fold.op, fold.pack.slice(first, last, stride), true }, dtype(), size);
                 }
@@ -1875,6 +1848,15 @@ namespace sknd
 
         assert(false);
         return *this;
+    }
+
+    inline ValueExpr ValueExpr::slice( const ValueExpr& first, const ValueExpr& last, const ValueExpr& stride ) const
+    {
+        if ( first.is_literal() && last.is_literal() && stride.is_literal() )
+        {
+            return slice((size_t)first.as_int(), (size_t)last.as_int(), (size_t)stride.as_int());
+        }
+        return ValueExpr(SliceExpr{ *this, first, last, stride }, dtype(), true);
     }
     
     
@@ -1924,7 +1906,10 @@ namespace sknd
         {
             os << '~';
         }
-        os << '|' << placeholder.max_value;
+        if ( placeholder.max_value != nullptr )
+        {
+            os << '|' << placeholder.max_value;
+        }
         return os;
     }
 
@@ -1948,12 +1933,7 @@ namespace sknd
 
     inline std::ostream& operator<<( std::ostream& os, const ValueExpr::ShapeAccessExpr& access )
     {
-        os << access.tensor.name();
-        if ( access.item != nullptr )
-        {
-            os << '[' << access.item << ']';
-        }
-        os << ".shape";
+        os << access.tensor.name() << ".shape";
         if ( access.dim != nullptr )
         {
             os << '[' << access.dim << ']';
@@ -2002,7 +1982,7 @@ namespace sknd
     
     inline std::ostream& operator<<( std::ostream& os, const ValueExpr::FoldExpr& fold )
     {
-        os << '(' << fold.pack << ' ' << fold.op << (fold.accumulate ? " ..." : " ..") << ')';
+        os << '(' << fold.pack << ' ' << fold.op << (fold.cumulative ? " ..." : " ..") << ')';
         return os;
     }
 
@@ -2123,6 +2103,7 @@ namespace sknd
             {
                 auto& placeholder = expr.as_placeholder();
                 callback(placeholder.max_value);
+                callback(placeholder.size);
                 break;
             }
             case ValueExpr::Kind::Unary:
@@ -2178,7 +2159,7 @@ namespace sknd
             case ValueExpr::Kind::ShapeAccess:
             {
                 auto& access = expr.as_shape_access();
-                callback(access.item);
+                callback(access.dim);
                 break;
             }
             case ValueExpr::Kind::TensorAccess:
@@ -2249,6 +2230,7 @@ namespace sknd
             {
                 auto& placeholder = expr.as_placeholder();
                 callback(placeholder.max_value);
+                callback(placeholder.size);
                 break;
             }
             case ValueExpr::Kind::Reference:
@@ -2313,7 +2295,7 @@ namespace sknd
             case ValueExpr::Kind::ShapeAccess:
             {
                 auto& access = expr.as_shape_access();
-                callback(access.item);
+                callback(access.dim);
                 break;
             }
             case ValueExpr::Kind::TensorAccess:
@@ -2571,6 +2553,32 @@ namespace sknd
         else
         {
             return ValueExpr::binary("**", left, right);
+        }
+    }
+
+    inline ValueExpr min( const ValueExpr& left, const ValueExpr& right )
+    {
+        if ( left.is_literal() && right.is_literal() )
+        {
+            return left.dtype() == sknd::Typename::Real ? ValueExpr(std::min(left.as_real(), right.as_real())) :
+                                                       ValueExpr(std::min(left.as_int(), right.as_int()));
+        }
+        else
+        {
+            return ValueExpr::binary("<?", left, right);
+        }
+    }
+
+    inline ValueExpr max( const ValueExpr& left, const ValueExpr& right )
+    {
+        if ( left.is_literal() && right.is_literal() )
+        {
+            return left.dtype() == sknd::Typename::Real ? ValueExpr(std::max(left.as_real(), right.as_real())) :
+                                                       ValueExpr(std::max(left.as_int(), right.as_int()));
+        }
+        else
+        {
+            return ValueExpr::binary(">?", left, right);
         }
     }
 

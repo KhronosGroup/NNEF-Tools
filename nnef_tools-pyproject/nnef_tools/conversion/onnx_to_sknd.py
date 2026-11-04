@@ -298,13 +298,16 @@ class Converter(_Converter):
         else:
             return self.unsqueeze_input(tensor, axes=[0])
 
-    def transpose_matrix(self, tensor):
+    def pre_transpose_matrix(self, tensor):
         original = self._tensor_map[tensor]
         if self._is_constant(original) and len(original.consumers) == 1:
             self._transform_constant(tensor, lambda data: np.transpose(data))
             return tensor
         else:
             return self._pre_transpose(tensor, perm=[1, 0])
+
+    def post_transpose_matrix(self, tensor):
+        return self._post_transpose(tensor, perm=[1, 0])
 
     def unstack_input(self, tensor, axis=0):
         count = tensor.shape[axis]
@@ -817,7 +820,7 @@ _Transforms = Converter.unpack_transforms({
             },
             inputs=(
                 '!I[0]',
-                '!transpose_matrix(I[1]) if is_linear and not transB else I[1]',
+                '!pre_transpose_matrix(I[1]) if is_linear and not transB else I[1]',
                 '!I[2] if len(I) > 2 else None',
             ),
             outputs='!O[0]',
@@ -1193,7 +1196,7 @@ _Transforms = Converter.unpack_transforms({
         Transform(
             type='layout.nonzero',
             inputs='!I[0]',
-            outputs='!O[0]',
+            outputs='!post_transpose_matrix(O[0])',
         ),
     'TopK':
         Transform(

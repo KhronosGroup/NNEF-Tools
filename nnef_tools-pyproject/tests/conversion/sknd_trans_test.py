@@ -49,11 +49,9 @@ class TestEnv(sknd_test.TestEnv):
     def nxc2ncx(shape):
         return [shape[0], shape[-1], *shape[1:-1]] if len(shape) > 2 else shape
 
-    def _convert_to_sknd(self, filename, input_shape=None):
+    def _convert_to_sknd(self, filename):
         sknd_model = self._skriptnd_reader(filename)
         self._skriptnd_transposer(sknd_model)
-        if input_shape is not None:
-            self._set_max_input_shapes(sknd_model, input_shape)
         output_filename = filename + '.nnef2'
         self._skriptnd_writer(sknd_model, output_filename)
 

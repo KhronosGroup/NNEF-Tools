@@ -187,6 +187,11 @@ namespace sknd
             return _items.erase(pos);
         }
         
+        iterator erase( iterator first, iterator last )
+        {
+            return _items.erase(first, last);
+        }
+        
         size_type erase( const key_type& key )
         {
             auto it = find(key);

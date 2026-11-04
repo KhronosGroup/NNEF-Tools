@@ -39,6 +39,7 @@ namespace sknd
         enum Flags : unsigned
         {
             AllowTensorOperators = 0x01,
+            AllowDynamicFuncs = 0x02,
             AllowBounded = 0x04,
         };
         
@@ -174,10 +175,6 @@ namespace sknd
                 declare_symbol(decls, param.position, param.name, param.type, param.shape, param.repeats.value, Declaration::Input);
                 if ( param.repeats.value )
                 {
-                    if ( op.graph )
-                    {
-                        check_repeat_bound(decls, param.repeats.value, param.repeats.bound);
-                    }
                     declare_repeats(decls, param);
                 }
                 declare_shape_rank(decls, param.rank);
@@ -283,7 +280,7 @@ namespace sknd
                 if ( param.shape )
                 {
                     declare_dynamic_shape_components(decls, *param.shape);
-                    check_shape_components(decls, *param.shape, param.repeats.value, true, false, !op.graph);
+                    check_shape_components(decls, *param.shape, param.repeats.value, true, false);
                 }
                 else
                 {
@@ -536,7 +533,7 @@ namespace sknd
         }
         
         void check_shape_components( const Dict<Declaration>& decls, const Shapedef& shape, const Shared<Expr>& repeats,
-                                    bool enforce_check = true, bool enforce_static = false, bool enforce_bound = false ) const
+                                    bool enforce_check = true, bool enforce_static = false ) const
         {
             for ( auto& extent : shape.extents )
             {
@@ -608,10 +605,6 @@ namespace sknd
                         }
                     }
                 }
-                else if ( !bound && enforce_bound )
-                {
-                    report_error(item->position, "upper bound must be specified for dynamic shape components");
-                }
                 
                 if ( bound )
                 {
@@ -625,11 +618,6 @@ namespace sknd
             for ( auto& extent : shape.extents )
             {
                 auto& item = extent.value;
-                auto& iden = find_affine_id(expanded(*item));
-                if ( !iden.empty() && !decls.count(iden) && !extent.bound )
-                {
-                    report_error(item->position, "upper bound must be specified in graph for dynamic shape");
-                }
                 if ( item->kind == Expr::Expand )
                 {
                     auto count = as_expand(*item).count;
@@ -637,18 +625,6 @@ namespace sknd
                     {
                         report_error(count->position, "shape components of graph inputs must have fixed length");
                     }
-                }
-            }
-        }
-        
-        void check_repeat_bound( const Dict<Declaration>& decls, const Shared<Expr>& repeats, const Shared<Expr>& bound ) const
-        {
-            if ( repeats )
-            {
-                auto& iden = find_affine_id(*repeats);
-                if ( !iden.empty() && !decls.count(iden) && !bound )
-                {
-                    report_error(repeats->position, "upper bound must be specified in graph for dynamic pack size");
                 }
             }
         }
@@ -1311,7 +1287,7 @@ namespace sknd
             }
             
             check_tensor_expr(*lowering.right, decls);
-            auto [right_type, right_rank] = check_expr(*lowering.right, decls, AllowTensorOperators);
+            auto [right_type, right_rank] = check_expr(*lowering.right, decls, AllowTensorOperators | AllowDynamicFuncs);
             
             if ( *left_rank == nullptr && *right_rank != nullptr )
             {
@@ -1326,7 +1302,7 @@ namespace sknd
             if ( lowering.condition )
             {
                 check_tensor_expr(*lowering.condition, decls);
-                auto [cond_type, cond_rank] = check_expr(*lowering.condition, decls, AllowTensorOperators);
+                auto [cond_type, cond_rank] = check_expr(*lowering.condition, decls, AllowTensorOperators | AllowDynamicFuncs);
                 if ( cond_type && cond_rank )
                 {
                     if ( cond_type->name != Typename::Bool )
@@ -3117,30 +3093,30 @@ namespace sknd
         
         static Result<Type> eval_type( const BuiltinExpr& builtin, const Dict<Declaration>& decls, unsigned flags )
         {
-            static const std::map<std::string,std::pair<Typename,Typename>> func_types =
+            static const std::map<std::string,std::pair<Typename,bool>> func_types =
             {
-                { "abs", { Typename::Num, Typename::Num } },
-                { "sign", { Typename::Num, Typename::Num } },
-                { "sqrt", { Typename::Real, Typename::Real } },
-                { "log", { Typename::Real, Typename::Real } },
-                { "exp", { Typename::Real, Typename::Real } },
-                { "sin", { Typename::Real, Typename::Real } },
-                { "cos", { Typename::Real, Typename::Real } },
-                { "tan", { Typename::Real, Typename::Real } },
-                { "asin", { Typename::Real, Typename::Real } },
-                { "acos", { Typename::Real, Typename::Real } },
-                { "atan", { Typename::Real, Typename::Real } },
-                { "sinh", { Typename::Real, Typename::Real } },
-                { "cosh", { Typename::Real, Typename::Real } },
-                { "tanh", { Typename::Real, Typename::Real } },
-                { "asinh", { Typename::Real, Typename::Real } },
-                { "acosh", { Typename::Real, Typename::Real } },
-                { "atanh", { Typename::Real, Typename::Real } },
-                { "erf", { Typename::Real, Typename::Real } },
-                { "round", { Typename::Real, Typename::Real } },
-                { "floor", { Typename::Real, Typename::Real } },
-                { "ceil", { Typename::Real, Typename::Real } },
-                { "frac", { Typename::Real, Typename::Real } },
+                { "abs", { Typename::Num, true } },
+                { "sign", { Typename::Num, true } },
+                { "sqrt", { Typename::Real, false } },
+                { "log", { Typename::Real, false } },
+                { "exp", { Typename::Real, false } },
+                { "sin", { Typename::Real, false } },
+                { "cos", { Typename::Real, false } },
+                { "tan", { Typename::Real, false } },
+                { "asin", { Typename::Real, false } },
+                { "acos", { Typename::Real, false } },
+                { "atan", { Typename::Real, false } },
+                { "sinh", { Typename::Real, false } },
+                { "cosh", { Typename::Real, false } },
+                { "tanh", { Typename::Real, false } },
+                { "asinh", { Typename::Real, false } },
+                { "acosh", { Typename::Real, false } },
+                { "atanh", { Typename::Real, false } },
+                { "erf", { Typename::Real, false } },
+                { "round", { Typename::Real, true } },
+                { "floor", { Typename::Real, true } },
+                { "ceil", { Typename::Real, true } },
+                { "frac", { Typename::Real, true } },
             };
             
             TRY_DECL(arg_type, eval_type(*builtin.arg, decls, flags))
@@ -3150,20 +3126,24 @@ namespace sknd
             {
                 return Error(builtin.position, "undefined function '%s'", builtin.func.c_str());
             }
-            auto& types = it->second;
-            if ( !is_compatible(types.first, arg_type.name) )
+            auto [type, always_allow] = it->second;
+            if ( !is_compatible(type, arg_type.name) )
             {
                 return Error(builtin.position, "invalid argument type '%s' for function '%s'; expected '%s'",
-                             str(arg_type.name).c_str(), builtin.func.c_str(), str(types.first).c_str());
+                             str(arg_type.name).c_str(), builtin.func.c_str(), str(type).c_str());
             }
             if ( arg_type.tensor && !(flags & Flags::AllowTensorOperators) )
             {
                 return Error(builtin.position, "function '%s' is not allowed for tensors in this context",
                              builtin.func.c_str());
             }
+            if ( arg_type.dynamic && !(flags & Flags::AllowDynamicFuncs) && !always_allow )
+            {
+                return Error(builtin.position, "function '%s' is not allowed in this context with argument that depends on dynamic shapes",
+                             builtin.func.c_str());
+            }
             
-            return make_type(types.second == types.first ? arg_type.name : types.second,
-                             arg_type.optional, arg_type.tensor, arg_type.packed, arg_type.dynamic);
+            return make_type(arg_type.name, arg_type.optional, arg_type.tensor, arg_type.packed, arg_type.dynamic);
         }
         
         static Result<Type> eval_type( const FormatExpr& format, const Dict<Declaration>& decls )

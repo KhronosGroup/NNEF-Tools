@@ -30,7 +30,7 @@ class TestEnv(unittest.TestCase):
     def target(self):
         return self._target
 
-    def _convert_to_sknd(self, filename, input_shape=None):
+    def _convert_to_sknd(self, filename):
         raise NotImplementedError()
 
     def _exec_orig_model(self, filename, input_shape=None, input_range=None):
@@ -95,7 +95,7 @@ class TestEnv(unittest.TestCase):
             return np.random.randint(low=lo, high=hi, size=shape, dtype=dtype)
 
     def _test_conversion_from_file(self, filename, epsilon=1e-5, input_shape=None, input_range=None, execute=True, compile=True):
-        self._convert_to_sknd(filename, input_shape=input_shape)
+        self._convert_to_sknd(filename)
 
         if self._execute and execute:
             self._test_execution_from_file(filename, epsilon=epsilon, input_shape=input_shape, input_range=input_range)

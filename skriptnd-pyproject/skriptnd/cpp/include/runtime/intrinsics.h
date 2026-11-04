@@ -250,7 +250,7 @@ namespace sknd
         void nonzero( const Tensor<N,T>& input, Tensor<2,I>& indices )
         {
             auto count = detail::nnz(input.data(), input.volume());
-            indices.reshape((int)N, (int)count);
+            indices.reshape((int)count, (int)N);
             
             auto input_data = input.data();
             int k = 0;
@@ -261,7 +261,7 @@ namespace sknd
                 {
                     for ( int i = 0; i < (int)N; ++i )
                     {
-                        indices(i,k) = index[i];
+                        indices(k,i) = index[i];
                     }
                     k += 1;
                 }
@@ -275,7 +275,15 @@ namespace sknd
             const size_t batch = detail::volume(input.shape(), axis);
             const size_t stride = detail::volume(input.shape() + axis + 1, input.rank() - axis - 1);
             const size_t input_count = input.shape()[axis];
-            const size_t output_count = std::min((size_t)values.shape()[axis], k);
+            const size_t output_count = std::min(input_count, k);
+            
+            std::array<T,N> shape;
+            std::copy_n(input.shape(), shape.size(), shape.data());
+            if ( k < shape[axis] )
+                shape[axis] = k;
+            
+            values.reshape(shape.size(), shape.data());
+            indices.reshape(shape.size(), shape.data());
             
             const T* input_data = input.data();
             T* values_data = values.data();

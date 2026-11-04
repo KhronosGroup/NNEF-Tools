@@ -27,6 +27,7 @@
 #include "either.h"
 #include "packable.h"
 #include "valuexpr.h"
+#include "tensorexpr.h"
 #include "tensorref.h"
 
 
@@ -67,7 +68,6 @@ namespace sknd
         std::string name;                                               // name of the tensor in the graph
         Typename dtype;                                                 // data-type of the tensor
         std::vector<ValueExpr> shape;                                   // shape the tensor (expressed in terms of shape symbols)
-        std::vector<int_t> max_shape;                                   // upper bound of tensor shape
         std::map<std::string,ValueExpr> quant;                          // quantization info for the tensor
         std::vector<char> data;                                         // data of variable tensor
         ValueExpr value;                                                // value of constant tensors
@@ -80,12 +80,11 @@ namespace sknd
      */
     struct TensorPack
     {
-        std::vector<Tensor*> items;                                     // items in the pack
         std::string name;                                               // name of the pack
         Typename dtype;                                                 // dtype of the tensors in the pack
         std::vector<ValueExpr> shape;                                   // shape of tensors in the pack (expressed in terms of shape symbols)
-        std::vector<int_t> max_shape;                                   // upper bound of tensor shape
         ValueExpr size;                                                 // canonical dynamic size of the pack
+        std::unique_ptr<Tensor*[]> items;                               // items in the pack if pack is explicitly listed
     };
 
 
@@ -115,7 +114,7 @@ namespace sknd
         std::vector<Contraction> contractions;                          // list of contractions that define the lowering of the operation
         std::vector<Graph*> subgraphs;                                  // list of subgraphs referred to by this operation
         std::vector<Assertion> asserts;                                 // list of dynamic asserts that need to be checked in run-time
-        std::vector<ValueExpr> subexprs;                                // dictionary shared sub-expressions
+        std::vector<ValueExpr> subexprs;                                // list of shared sub-expressions
         bool intrinsic = true;                                          // whether the operation is considered to be a compiler instrinsic
     };
     
@@ -276,35 +275,32 @@ namespace sknd
 
     inline std::ostream& operator<<( std::ostream& os, const TensorPack& pack )
     {
-        if ( pack.name.front() != '.' )
-        {
-            os << pack.name << ": " << str(pack.dtype) << pack.shape << "..(" << pack.size << ")";
-        }
-        else
-        {
-            os << '[';
-            for ( size_t i = 0; i < pack.items.size(); ++i )
-            {
-                if ( i )
-                {
-                    os << ", ";
-                }
-                os << *pack.items[i];
-            }
-            os << ']';
-        }
+        os << pack.name << ": " << str(pack.dtype) << pack.shape << "..(" << pack.size << ")";
         return os;
     }
 
     inline std::ostream& operator<<( std::ostream& os, const TensorRef& ref )
     {
-        if ( ref.packed() )
+        if ( ref.itemized() )
         {
-            os << (const TensorPack&)ref;
+            os << '[';
+            for ( size_t i = 0; i < ref.item_count(); ++i )
+            {
+                if ( i )
+                {
+                    os << ", ";
+                }
+                os << *ref[i];
+            }
+            os << ']';
+        }
+        else if ( ref.packed() )
+        {
+            os << ref.as_pack();
         }
         else
         {
-            os << (const Tensor&)ref;
+            os << ref.as_tensor();
         }
         return os;
     }
@@ -423,16 +419,16 @@ namespace sknd
             {
                 os << "~";
             }
-            else if ( input.packed() && input.name().front() == '.' )
+            else if ( input.itemized() )
             {
                 os << '[';
-                for ( size_t j = 0; j < input.max_size(); ++j )
+                for ( size_t j = 0; j < input.item_count(); ++j )
                 {
                     if ( j )
                     {
                         os << ", ";
                     }
-                    os << input[j].name;
+                    os << input[j]->name;
                 }
                 os << ']';
             }
@@ -627,13 +623,13 @@ struct std::hash<sknd::TensorRef>
     {
         if ( r.packed() )
         {
-            std::hash<sknd::TensorPack*> hasher;
-            return hasher(r.as<sknd::TensorPack*>());
+            std::hash<const sknd::TensorPack*> hasher;
+            return hasher(&r.as_pack());
         }
         else
         {
-            std::hash<sknd::Tensor*> hasher;
-            return hasher(r.as<sknd::Tensor*>());
+            std::hash<const sknd::Tensor*> hasher;
+            return hasher(&r.as_tensor());
         }
     }
 };
