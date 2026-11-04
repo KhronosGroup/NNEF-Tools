@@ -1137,7 +1137,7 @@ def _save_to_file(text, filename):
 def _normalize_dtype(array):
     if array.dtype == np.int64:
         return array.astype(np.int32)
-    if array.dtype == np.float64:
+    if array.dtype == np.float16 or array.dtype == np.float64:
         return array.astype(np.float32)
     return array
 

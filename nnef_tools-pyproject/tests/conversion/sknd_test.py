@@ -83,7 +83,7 @@ class TestEnv(unittest.TestCase):
     def _random_data(dtype, shape, range=None):
         if dtype == np.bool or dtype == np.bool_:
             return np.array(np.random.random(shape) > 0.5)
-        elif dtype == np.float32 or dtype == np.float64:
+        elif dtype == np.float16 or dtype == np.float32 or dtype == np.float64:
             data = np.random.random(shape).astype(dtype)
             if range:
                 lo, hi = range
@@ -114,7 +114,7 @@ class TestEnv(unittest.TestCase):
         for idx, (original, converted) in enumerate(zip(original_outputs, converted_outputs)):
             self.assertEqual(original.shape, converted.shape)
             if all(s != 0 for s in original.shape):
-                if original.dtype != np.float32 and original.dtype != np.float64:
+                if original.dtype != np.float16 and original.dtype != np.float32 and original.dtype != np.float64:
                     self.assertTrue(np.all(original == converted))
                 else:
                     max = np.max(np.abs(original))
