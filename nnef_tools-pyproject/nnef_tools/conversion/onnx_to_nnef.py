@@ -436,10 +436,9 @@ _Transforms = Converter.unpack_transforms({
                 'axes': '!as_const(I[1]) if len(I) > 1 and I[1].name else []',
             },
             using={
-                '_axes': '!ensure_positive(list(axes), I[0].rank) if len(axes) else list(range(I[0].rank))',
-            },
-            cond={
-                '!len(axes) or not noop_with_empty_axes': 'noop_with_empty_axes must be 0 when axes is empty',
+                # empty axes reduce over all axes, or over none if noop_with_empty_axes is set
+                '_axes': '!ensure_positive(list(axes), I[0].rank) if len(axes) else '
+                         '[] if noop_with_empty_axes else list(range(I[0].rank))',
             },
             inputs='!I[0]',
             outputs='!squeeze_output(O[0], _axes, keepdims)',

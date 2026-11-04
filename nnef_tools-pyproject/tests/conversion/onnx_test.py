@@ -196,6 +196,20 @@ class TestEnv(unittest.TestCase):
         self._test_conversion(op_type.lower() + '_axes_input', [node], [input, axes], [output],
                               constants=[axes], values={'axes': [1]}, opset_version=opset_version, ir_version=ir_version)
 
+    def _test_reduce_noop(self, op_type, opset_version, ir_version=8):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 16, 32, 32])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 16, 32, 32])
+        node = helper.make_node(
+            op_type=op_type,
+            inputs=['input'],
+            outputs=['output'],
+            keepdims=0,
+            noop_with_empty_axes=1,
+        )
+
+        self._test_conversion(op_type.lower() + '_noop', [node], [input], [output],
+                              opset_version=opset_version, ir_version=ir_version)
+
     def _test_reduce(self, op_type, keepdims, dtype=TensorProto.FLOAT, p=None,
                      opset_version=DEFAULT_OPSET_VERSION, ir_version=DEFAULT_IR_VERSION):
         input = helper.make_tensor_value_info('input', dtype, [1, 16, 32, 32])
@@ -1100,6 +1114,15 @@ class TestCases(TestEnv):
         )
 
         self._test_conversion('mean_reduce_all_axes', [node], [input], [output])
+
+    def test_mean_reduce_noop(self):
+        self._test_reduce_noop('ReduceMean', opset_version=18)
+
+    def test_sum_reduce_noop(self):
+        self._test_reduce_noop('ReduceSum', opset_version=13, ir_version=7)
+
+    def test_lp_reduce_noop(self):
+        self._test_reduce_noop('ReduceL2', opset_version=18)
 
     def test_relu(self):
         self._test_unary('Relu')
