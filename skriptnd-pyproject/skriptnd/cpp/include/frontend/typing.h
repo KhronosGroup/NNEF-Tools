@@ -3584,7 +3584,7 @@ namespace sknd
         
         static Result<void> augment_negative_index( Shared<Expr>& index, const Shared<Expr>& length )
         {
-            if ( is_const_expr(*index) )
+            if ( is_const_expr(*index) && length )
             {
                 TRY_DECL(value, Evaluation::eval(*index, {}))
                 if ( value.as_int() < 0 )
