@@ -1161,6 +1161,7 @@ def compile_model(model, keep_generated_code=False, tmp_dir_path="."):
                               ('MODEL_TYPE', model_type),
                               ('MODULE_NAME', module_name),
                               ('HEADER_NAME', '"' + hdr_name + '"'),
+                              ('PYBIND11_INTERNALS_VERSION', '101'),
                           ],
                           ),
     ]
