@@ -321,12 +321,13 @@ class Optimizer:
         if conv.inputs[1].data is None:
             return False
 
+        dtype = conv.inputs[1].data.dtype
         weights, bias = Optimizer._merged_conv_batch_norm_params(conv.inputs[1].data,
-                                    np.squeeze(conv.inputs[2].data if len(conv.inputs) > 2 else 0, axis=0),
+                                    np.squeeze(conv.inputs[2].data if len(conv.inputs) > 2 else np.zeros(1, dtype), axis=0),
                                     np.squeeze(bn.inputs[1].data, axis=0),
                                     np.squeeze(bn.inputs[2].data, axis=0),
-                                    np.squeeze(bn.inputs[3].data if len(bn.inputs) > 3 else 0, axis=0),
-                                    np.squeeze(bn.inputs[4].data if len(bn.inputs) > 4 else 1, axis=0),
+                                    np.squeeze(bn.inputs[3].data if len(bn.inputs) > 3 else np.zeros(1, dtype), axis=0),
+                                    np.squeeze(bn.inputs[4].data if len(bn.inputs) > 4 else np.ones(1, dtype), axis=0),
                                     bn.attribs['epsilon'],
                                     axis=1 if conv.type == 'deconv' else 0)
 
@@ -354,11 +355,12 @@ class Optimizer:
         if any(tensor.quant for tensor in bn.inputs):
             return False
 
+        dtype = bn.inputs[1].data.dtype
         scale, offset = Optimizer._merged_batch_norm_params(
                                     bn.inputs[1].data,
                                     bn.inputs[2].data,
-                                    bn.inputs[3].data if len(bn.inputs) > 3 else 0,
-                                    bn.inputs[4].data if len(bn.inputs) > 4 else 1,
+                                    bn.inputs[3].data if len(bn.inputs) > 3 else np.array(0, dtype),
+                                    bn.inputs[4].data if len(bn.inputs) > 4 else np.array(1, dtype),
                                     bn.attribs['epsilon'])
 
         scale = Optimizer._add_variable(bn.graph, data=scale, name=bn.output.name + '_scale')
