@@ -150,7 +150,7 @@ _Transforms = Converter.unpack_transforms({
                 'strides': '!stride',
                 'dilations': '!dilation',
                 'group': '!group',
-                'output_shape': '!output_shape if _type_ == "deconv" and output_shape != [] and padding == [] else None',
+                'output_shape': '!output_shape[2:] if _type_ == "deconv" and output_shape != [] and padding == [] else None',
                 'output_padding': '!convert_output_padding(I[0].shape, I[1].shape, output_shape, padding=padding, '
                                   'stride=stride, dilation=dilation, groups=group) '
                                   'if _type_ == "deconv" and output_shape != [] and padding != [] else None',
@@ -176,27 +176,29 @@ _Transforms = Converter.unpack_transforms({
                 'count_include_pad': '!(1 if border == "constant" else 0) if _type_ == "avg_pool" else None',
             }
         ),
+    # reducing over no axes is the identity (|x| for lp_reduce), but empty axes would reduce over all axes in ONNX
     ('min_reduce', 'max_reduce', 'mean_reduce', 'sum_reduce'):
         Transform(
-            type=('ReduceMin', 'ReduceMax', 'ReduceMean', 'ReduceSum'),
+            type=('!"ReduceMin" if len(axes) else "Identity"', '!"ReduceMax" if len(axes) else "Identity"',
+                  '!"ReduceMean" if len(axes) else "Identity"', '!"ReduceSum" if len(axes) else "Identity"'),
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
-                'axes': '!axes',
-                'keepdims': 1,
+                'axes': '!axes if len(axes) else None',
+                'keepdims': '!1 if len(axes) else None',
             }
         ),
     'lp_reduce':
         Transform(
-            type='!"ReduceL1" if p == 1 else "ReduceL2"',
+            type='!("ReduceL1" if p == 1 else "ReduceL2") if len(axes) else "Abs"',
             cond={
                 '!p == 1 or p == 2': 'p must be 1 or 2',
             },
             inputs='!I[0]',
             outputs='!O[0]',
             attribs={
-                'axes': '!axes',
-                'keepdims': 1,
+                'axes': '!axes if len(axes) else None',
+                'keepdims': '!1 if len(axes) else None',
             }
         ),
     ('argmin_reduce', 'argmax_reduce'):
@@ -230,11 +232,11 @@ _Transforms = Converter.unpack_transforms({
         ),
     ('relu', 'sigmoid', 'tanh', 'softplus', 'selu', 'not', 'copy', 'elu', 'erf', 'mish', 'abs', 'sign',
      'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
-     'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round'):
+     'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round', 'rcp'):
         Transform(
             type=('Relu', 'Sigmoid', 'Tanh', 'Softplus', 'Selu', 'Not', 'Identity', 'Elu', 'Erf', 'Mish', 'Abs', 'Sign',
                   'Sin', 'Cos', 'Tan', 'Asin', 'Acos', 'Atan', 'Sinh', 'Cosh', 'Tanh', 'Asinh', 'Acosh', 'Atanh',
-                  'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round'),
+                  'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round', 'Reciprocal'),
             inputs='!I[0]',
             outputs='!O[0]',
         ),
