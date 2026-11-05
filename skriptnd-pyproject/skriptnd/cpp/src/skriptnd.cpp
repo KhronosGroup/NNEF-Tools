@@ -599,6 +599,47 @@ namespace sknd
         model.graphs.erase(last, model.graphs.end());
     }
 
+    Shape item_shape( const Shape& pack_shape, const size_t idx )
+    {
+        Shape shape(pack_shape.size());
+        for ( size_t i = 0; i < shape.size(); ++i )
+        {
+            shape[i] = pack_shape[i].packed() ? pack_shape[i].at(idx) : pack_shape[i];
+        }
+        return shape;
+    }
+
+    std::string item_name( const std::string& name, const size_t idx )
+    {
+        return name + ":" + std::to_string(idx);
+    }
+
+    Tensor* make_tensor( Graph& graph, const std::string& name, const Typename dtype, const Shape& shape )
+    {
+        auto tensor = std::make_unique<Tensor>(Tensor{ name, dtype, shape, {}, {}, nullptr, false });
+        graph.tensors.push_back(std::move(tensor));
+        return graph.tensors.back().get();
+    }
+
+    void itemize_packs( Model& model ) noexcept
+    {
+        for ( auto& graph : model.graphs )
+        {
+            for ( auto& pack : graph->packs )
+            {
+                if ( !pack->items && pack->size.is_literal() )
+                {
+                    auto size = (size_t)pack->size.as_int();
+                    pack->items = std::make_unique<Tensor*[]>(size);
+                    for ( size_t i = 0; i < size; ++i )
+                    {
+                        pack->items[i] = make_tensor(*graph, item_name(pack->name, i), pack->dtype, item_shape(pack->shape, i));
+                    }
+                }
+            }
+        }
+    }
+
     void collect_references( const ValueExpr& expr, std::vector<ValueExpr>& references )
     {
         recurse(expr, [&]( const ValueExpr& x ){ collect_references(x, references); }, true);

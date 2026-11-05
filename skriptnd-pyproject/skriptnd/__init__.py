@@ -682,3 +682,20 @@ def atomize_compounds(model, filter=lambda op: True):
             removed_subgraphs.add(graph)
 
     model.graphs = [graph for graph in model.graphs if graph not in removed_subgraphs]
+
+
+def item_shape(pack_shape, idx):
+    return [s[idx] if expr_is_packed(s) else s for s in pack_shape]
+
+
+def item_name(pack_name, idx):
+    return f"{pack_name}:{idx}"
+
+
+def itemize_packs(model):
+    for graph in model.graphs:
+        for pack in graph.packs:
+            if pack.items is None and isinstance(pack.size, int):
+                pack.items = [Tensor(item_name(pack.name, i), pack.dtype, item_shape(pack.shape, i))
+                              for i in range(pack.size)]
+                graph.tensors.extend(pack.items)

@@ -66,6 +66,7 @@ namespace sknd
 
     void inline_compounds( Model& model, OperationFilter filter = TrueOperationFilter ) noexcept;
     void atomize_compounds( Model& model, OperationFilter filter = TrueOperationFilter ) noexcept;
+    void itemize_packs( Model& model ) noexcept;
 
     int_t shape_max( const ValueExpr& expr ) noexcept;
     std::vector<int_t> shape_max( const Shape& shape ) noexcept;
