@@ -503,7 +503,7 @@ def _upsample_weights_nd(factor, symmetric):
 def _upsample_filter_and_bias(factor, symmetric, channels, dtype, device):
     rank = len(factor)
     weights = _upsample_weights_nd(factor, symmetric)
-    weights = np.tile(np.reshape(weights, newshape=(1, 1) + weights.shape), reps=(channels, 1) + (1,) * rank)
+    weights = np.tile(np.reshape(weights, shape=(1, 1) + weights.shape), reps=(channels, 1) + (1,) * rank)
     filter = torch.from_numpy(weights).to(device=device, dtype=dtype)
     bias = torch.zeros(size=(channels,), device=device, dtype=dtype)
     return filter, bias

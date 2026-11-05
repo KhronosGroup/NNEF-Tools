@@ -351,7 +351,7 @@ class Optimizer:
 
         rank = len(weights.shape)
         shape = scale.shape + (1,) * (rank - 1) if linear.type == 'nn.deconv' else (1,) + scale.shape + (1,) * (rank - 2)
-        scale = np.reshape(scale, newshape=shape)
+        scale = np.reshape(scale, shape=shape)
 
         weights.data = weights.data * scale if mul.type != 'math.div' else weights.data / scale
 
@@ -414,7 +414,7 @@ class Optimizer:
 
         rank = len(weights.shape)
         shape = (1,) + scale.shape + (1,) * (rank - 2) if linear.type == 'nn.deconv' else scale.shape + (1,) * (rank - 1)
-        scale = np.reshape(scale, newshape=shape)
+        scale = np.reshape(scale, shape=shape)
 
         weights.data = weights.data * scale if not negate else weights.data / scale
 
