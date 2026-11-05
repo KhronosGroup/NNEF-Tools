@@ -148,7 +148,7 @@ _Transforms = Converter.unpack_transforms({
                 'strides': '!stride',
                 'dilations': '!dilation',
                 'group': '!group',
-                'output_shape': '!output_shape if _type_ == "deconv" and output_shape != [] and padding == [] else None',
+                'output_shape': '!output_shape[2:] if _type_ == "deconv" and output_shape != [] and padding == [] else None',
                 'output_padding': '!convert_output_padding(I[0].shape, I[1].shape, output_shape, padding=padding, '
                                   'stride=stride, dilation=dilation, groups=group) '
                                   'if _type_ == "deconv" and output_shape != [] and padding != [] else None',

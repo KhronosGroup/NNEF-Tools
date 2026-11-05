@@ -381,7 +381,7 @@ _Transforms = Converter.unpack_transforms({
                 'dilation': '!dilations',
                 'padding': '!convert_padding(_pads, auto_pad, output_padding, I[0].rank - 2)',
                 'groups': '!group',
-                'output_shape': '!output_shape',
+                'output_shape': '!list(O[0].shape[:2]) + output_shape if output_shape is not None else None',
             }
         ),
     ('MaxPool', 'AveragePool', 'LpPool'):
