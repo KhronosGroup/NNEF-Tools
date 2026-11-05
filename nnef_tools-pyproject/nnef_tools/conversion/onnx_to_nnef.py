@@ -431,11 +431,19 @@ _Transforms = Converter.unpack_transforms({
             type=('min_reduce', 'max_reduce', 'mean_reduce', 'sum_reduce', 'lp_reduce', 'lp_reduce'),
             defaults={
                 'keepdims': 1,
+                'noop_with_empty_axes': 0,
+                # axes is an attribute up to opset 17 (ReduceSum: 12), an optional input from opset 18 (ReduceSum: 13)
+                'axes': '!as_const(I[1]) if len(I) > 1 and I[1].name else []',
+            },
+            using={
+                # empty axes reduce over all axes, or over none if noop_with_empty_axes is set
+                '_axes': '!ensure_positive(list(axes), I[0].rank) if len(axes) else '
+                         '[] if noop_with_empty_axes else list(range(I[0].rank))',
             },
             inputs='!I[0]',
-            outputs='!squeeze_output(O[0], axes, keepdims)',
+            outputs='!squeeze_output(O[0], _axes, keepdims)',
             attribs={
-                'axes': '!ensure_positive(axes, I[0].rank)',
+                'axes': '!_axes',
                 'p': '!1.0 if _type_ == "ReduceL1" else 2.0 if _type_ == "ReduceL2" else None',
             }
         ),
@@ -480,11 +488,11 @@ _Transforms = Converter.unpack_transforms({
         ),
     ('Relu', 'Sigmoid', 'Tanh', 'Softplus', 'Selu', 'Not', 'Identity', 'Elu', 'Erf', 'Mish', 'Abs', 'Sign',
      'Sin', 'Cos', 'Tan', 'Asin', 'Acos', 'Atan', 'Sinh', 'Cosh', 'Tanh', 'Asinh', 'Acosh', 'Atanh',
-     'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round'):
+     'Exp', 'Log', 'Neg', 'Sqrt', 'Ceil', 'Floor', 'Round', 'Reciprocal'):
         Transform(
             type=('relu', 'sigmoid', 'tanh', 'softplus', 'selu', 'not', 'copy', 'elu', 'erf', 'mish', 'abs', 'sign',
                   'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
-                  'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round'),
+                  'exp', 'log', 'neg', 'sqrt', 'ceil', 'floor', 'round', 'rcp'),
             inputs='!I[0]',
             outputs='!O[0]',
         ),
@@ -652,13 +660,15 @@ _Transforms = Converter.unpack_transforms({
             type='split',
             defaults={
                 'axis': 0,
-                'split': '!as_const(I[1])',
+                # split sizes: an attribute up to opset 12, an optional input from opset 13; without them the
+                # input is split into equal parts (opset 18: num_outputs), as the output shapes show
+                'split': '!as_const(I[1]) if len(I) > 1 and I[1].name else None',
             },
             inputs='!I[0]',
             outputs=['!O[:]'],
             attribs={
                 'axis': '!ensure_positive(axis, I[0].rank)',
-                'ratios': '!split',
+                'ratios': '!split if split is not None else [o.shape[ensure_positive(axis, I[0].rank)] for o in O]',
             }
         ),
     'Dropout':
