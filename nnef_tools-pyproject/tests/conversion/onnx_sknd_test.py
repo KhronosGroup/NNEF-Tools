@@ -331,7 +331,7 @@ class TestCases(TestEnv):
             inputs=['input', 'filter', 'bias'],
             outputs=['output'],
             auto_pad='SAME_UPPER',
-            output_shape=[1, 3, 32, 32],
+            output_shape=[32, 32],
         )
 
         self._test_conversion('conv2d_transpose-output_shape', [node], [input], [output], constants=[filter, bias], epsilon=1e-3)

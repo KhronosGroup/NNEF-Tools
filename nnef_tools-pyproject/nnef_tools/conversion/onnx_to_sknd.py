@@ -550,7 +550,7 @@ _Transforms = Converter.unpack_transforms({
                 'padding': '!convert_padding(pads, auto_pad, output_padding)',
                 'padding_align': '!"UPPER" if auto_pad == "SAME_UPPER" else None',
                 'groups': '!group',
-                'output_size': '!output_shape[2:] if output_shape is not None else None',
+                'output_size': '!output_shape',
             }
         ),
     ('MaxPool', 'AveragePool', 'LpPool'):
