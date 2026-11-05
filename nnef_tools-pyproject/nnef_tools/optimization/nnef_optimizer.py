@@ -230,7 +230,7 @@ class Optimizer:
         if len(linear.inputs) == 2:
             new_shape = (1, 1) if len(bias.shape) == 0 else (1, *bias.shape) if len(bias.shape) == 1 else None
             if new_shape is not None:
-                bias.data = np.reshape(bias.data, newshape=new_shape)
+                bias.data = np.reshape(bias.data, shape=new_shape)
                 bias.shape = new_shape
         else:
             bias.data = linear.inputs[2].data + bias.data
@@ -309,7 +309,7 @@ class Optimizer:
     def _merged_conv_batch_norm_params(weights, bias, mean, variance, offset, scale, epsilon, axis):
         std = np.sqrt(variance + epsilon)
         factor = scale / std
-        new_weights = weights * np.reshape(factor, newshape=(1,) * axis + factor.shape + (1,) * (len(weights.shape) - axis - 1))
+        new_weights = weights * np.reshape(factor, shape=(1,) * axis + factor.shape + (1,) * (len(weights.shape) - axis - 1))
         new_bias = (bias - mean) * factor + offset
         return new_weights, new_bias
 
@@ -389,7 +389,7 @@ class Optimizer:
 
         rank = len(weights.shape)
         shape = scale.shape + (1,) * (rank - 1) if linear.type == 'deconv' else (1,) + scale.shape + (1,) * (rank - 2)
-        scale = np.reshape(scale, newshape=shape)
+        scale = np.reshape(scale, shape=shape)
 
         weights.data = weights.data * scale if mul.type != 'div' else weights.data / scale
 
@@ -424,7 +424,7 @@ class Optimizer:
 
         rank = len(weights.shape)
         shape = (1,) + scale.shape + (1,) * (rank - 2) if linear.type == 'deconv' else scale.shape + (1,) * (rank - 1)
-        scale = np.reshape(scale, newshape=shape)
+        scale = np.reshape(scale, shape=shape)
 
         weights.data = weights.data * scale if not negate else weights.data / scale
 
@@ -540,7 +540,7 @@ class Optimizer:
 
     @staticmethod
     def _ensure_quant_param_rank(param, rank, offset=0):
-        return np.reshape(param, newshape=(1,) * offset + param.shape + (1,) * (rank - 1 - offset)) \
+        return np.reshape(param, shape=(1,) * offset + param.shape + (1,) * (rank - 1 - offset)) \
             if isinstance(param, np.ndarray) and len(param.shape) == 1 else param
 
     @staticmethod
