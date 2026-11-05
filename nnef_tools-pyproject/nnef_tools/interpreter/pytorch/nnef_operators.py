@@ -709,7 +709,7 @@ def nnef_multilinear_upsample(input, factor, method='symmetric', border='replica
     symmetric = method == 'symmetric'
     replicate = border == 'replicate'
     weights = _upsample_weights_nd(factor, symmetric)
-    weights = np.tile(np.reshape(weights, newshape=(1, 1) + weights.shape), reps=(c, 1) + (1,) * rank)
+    weights = np.tile(np.reshape(weights, shape=(1, 1) + weights.shape), reps=(c, 1) + (1,) * rank)
     filter = torch.from_numpy(weights).to(device=input.device, dtype=input.dtype)
     bias = torch.zeros(size=tuple(), device=input.device, dtype=input.dtype)
 
