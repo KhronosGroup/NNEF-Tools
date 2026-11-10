@@ -88,6 +88,52 @@ operator onnx_global_lp_pool {
 }
 """
 
+ONNX_LAYER_NORM = """
+operator onnx_layer_norm {
+    @attrib {
+        axis: int;
+        epsilon: real;
+    }
+    @input {
+        input: real^(rank)[z..(axis < 0 ? axis + rank : axis),s..(d)];
+        scale: optional real[s..(d)];
+        bias: optional real[s..(d)];
+    }
+    @output {
+        output: real[z..,s..];
+    }
+    @using {
+        first_axis = axis < 0 ? axis + rank : axis;
+    }
+    @compose {
+        normalized = nn.mean_variance_norm{axes=[first_axis:rank], epsilon=epsilon}(input);
+        scaled = if ?scale then math.mul(normalized, scale) else normalized;
+        output = if ?bias then math.add(scaled, bias) else scaled; 
+    }
+}
+"""
+
+ONNX_INSTANCE_NORM = """
+operator onnx_instance_norm {
+    @attrib {
+        epsilon: real;
+    }
+    @input {
+        input: real^(rank)[b,c,s..(d)];
+        scale: optional real[c];
+        bias: optional real[c];
+    }
+    @output {
+        output: real[b,c,s..];
+    }
+    @compose {
+        normalized = nn.mean_variance_norm{axes=[2:rank], epsilon=epsilon}(input);
+        scaled = if ?scale then math.mul{rhs_align=1}(normalized, scale) else normalized;
+        output = if ?bias then math.add{rhs_align=1}(scaled, bias) else scaled; 
+    }
+}
+"""
+
 
 class Converter(_Converter):
 
@@ -98,6 +144,8 @@ class Converter(_Converter):
             'onnx_global_avg_pool': ONNX_GLOBAL_AVG_POOL,
             'onnx_global_max_pool': ONNX_GLOBAL_MAX_POOL,
             'onnx_global_lp_pool': ONNX_GLOBAL_LP_POOL,
+            'onnx_instance_norm': ONNX_INSTANCE_NORM,
+            'onnx_layer_norm': ONNX_LAYER_NORM,
         }
 
     @staticmethod
@@ -1021,18 +1069,36 @@ _Transforms = Converter.unpack_transforms({
         ),
     'InstanceNormalization':
         Transform(
-            type='nn.mean_variance_norm',
+            type='onnx_instance_norm',
             defaults={
                 'epsilon': 1e-5,
             },
             inputs=(
                 '!I[0]',
-                '!I[2]',
-                '!I[1]',
+                '!I[1] if I[1].name != "" else None',
+                '!I[2] if I[2].name != "" else None',
             ),
             outputs='!O[0]',
             attribs={
                 'epsilon': '!epsilon',
+            }
+        ),
+    'LayerNormalization':
+        Transform(
+            type='onnx_layer_norm',
+            defaults={
+                'epsilon': 1e-5,
+                'axis': -1,
+            },
+            inputs=(
+                '!I[0]',
+                '!I[1] if I[1].name != "" else None',
+                '!I[2] if I[2].name != "" else None',
+            ),
+            outputs='!O[0]',
+            attribs={
+                'epsilon': '!epsilon',
+                'axis': '!axis'
             }
         ),
     'Upsample':

@@ -722,19 +722,17 @@ operator batch_norm {
 
 operator mean_variance_norm {
     @attrib {
-        axes: int.. = [2:d+2];
+        axes: int..;
         epsilon: real = 1e-5;
     }
     @input {
-        input: real[b,c,s..(d)];
-        bias: optional real[c];
-        scale: optional real[c];
+        input: real[s..(d)];
     }
     @output {
-        output: real[b,c,s..];
+        output: real[s..];
     }
     @assert {
-        axes >= -(d + 2) && axes < d + 2:
+        axes >= -d && axes < d:
             "axes must be between -input.rank (inclusive) and input.rank (exclusive)",
             input.rank, axes;
         axes != ..:
@@ -747,9 +745,7 @@ operator mean_variance_norm {
         centered = math.sub(input, mean);
         stabilized = math.add(variance, epsilon);
         sigma = math.sqrt(stabilized);
-        normalized = math.div(centered, sigma);
-        scaled = if ?scale then math.mul{rhs_align=1}(normalized, scale) else normalized;
-        output = if ?bias then math.add{rhs_align=1}(scaled, bias) else scaled;
+        output = math.div(centered, sigma);
     }
 }
 

@@ -1061,7 +1061,38 @@ class TestCases(TestEnv):
             outputs=['output'],
         )
 
-        self._test_conversion('instance_normalization', [node], [input], [output], constants=[scale, offset])
+        self._test_conversion('instance_normalization', [node], [input], [output],
+                              constants=[scale, offset])
+
+    def test_layer_normalization(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 16, 32, 32])
+        scale = helper.make_tensor_value_info('scale', TensorProto.FLOAT, [16, 32, 32])
+        offset = helper.make_tensor_value_info('offset', TensorProto.FLOAT, [16, 32, 32])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [1, 16, 32, 32])
+        node = helper.make_node(
+            op_type='LayerNormalization',
+            inputs=['input', 'scale', 'offset'],
+            outputs=['output'],
+            axis=1,
+        )
+
+        self._test_conversion('layer_normalization', [node], [input], [output],
+                              constants=[scale, offset], opset_version=17)
+
+    def test_layer_normalization_last_axis(self):
+        input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [4, 16])
+        scale = helper.make_tensor_value_info('scale', TensorProto.FLOAT, [16])
+        offset = helper.make_tensor_value_info('offset', TensorProto.FLOAT, [16])
+        output = helper.make_tensor_value_info('output', TensorProto.FLOAT, [4, 16])
+        node = helper.make_node(
+            op_type='LayerNormalization',
+            inputs=['input', 'scale', 'offset'],
+            outputs=['output'],
+            axis=-1,
+        )
+
+        self._test_conversion('layer_normalization_last_axis', [node], [input], [output],
+                              constants=[scale, offset], opset_version=17)
 
     def test_lp_reduce(self):
         input = helper.make_tensor_value_info('input', TensorProto.FLOAT, [1, 16, 32, 32])

@@ -2172,7 +2172,9 @@ graph instance_norm {
         bias: real[32];
     }
     @compose {
-        output = nn.mean_variance_norm{axes=[2,3]}(input, scale, bias);
+        normalized = nn.mean_variance_norm{axes=[2,3]}(input);
+        scaled = math.mul{rhs_align=1}(normalized, scale);
+        output = math.add{rhs_align=1}(scaled, bias);
     }
 }
 
