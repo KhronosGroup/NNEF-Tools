@@ -60,7 +60,9 @@ namespace sknd
         {
             return [&graph,this]( const ValueExpr& value, const Typename& type ) -> TensorRef
             {
-                return make_constant(graph, value, type);
+                auto tensor = make_constant(graph, value, type);
+                save_shapes_to_context(_contexts.at(graph.name), tensor, tensor.shape(), tensor.size());
+                return tensor;
             };
         }
         
@@ -75,6 +77,7 @@ namespace sknd
                 {
                     pack->items[i] = tensors[i];
                 }
+                save_shapes_to_context(_contexts.at(graph.name), pack, shape, size);
                 return TensorRef(pack);
             };
         }
