@@ -81,7 +81,7 @@ class TestEnv(sknd_test.TestEnv):
             self._skriptnd_optimizer(sknd_model)
             self._skriptnd_writer(sknd_model, output_filename)
 
-    def _exec_orig_model(self, filename, input_shape=None, input_range=None):
+    def _exec_orig_model(self, filename, input_shape=None, input_range=None, shape_symbols=None):
         import onnxruntime
         np.random.seed(0)
 
@@ -99,10 +99,15 @@ class TestEnv(sknd_test.TestEnv):
             input_range = [input_range] * len(session.get_inputs())
 
         inputs = {input.name: TestEnv._random_data(TestEnv._onnx_type_to_numpy[input.type],
-                                                   input_shape[idx] or input.shape, input_range[idx])
+                                                   input_shape[idx] or self._instantiate_onnx_shape(input.shape, shape_symbols),
+                                                   input_range[idx])
                   for idx, input in enumerate(session.get_inputs())}
 
         return session.run([output.name for output in session.get_outputs()], inputs)
+
+    @staticmethod
+    def _instantiate_onnx_shape(shape, symbols):
+        return [eval(s, symbols) if isinstance(s, str) else s for s in shape] if symbols else shape
 
     @staticmethod
     def _create_tensor(value_info, data, range=None):
@@ -2265,7 +2270,7 @@ class NetworkTestCases(TestEnv):
 
     def test_mobilenet_v3(self):
         self._test_conversion_from_file(self._network_folder + 'mobilenet_v3.onnx',
-                                        input_shape=(1, 3, 224, 224))
+                                        shape_symbols={'batch_size': 1})
 
     def test_resnet50_v1(self):
         self._test_conversion_from_file(self._network_folder + 'resnet50_v1.onnx',
@@ -2304,8 +2309,7 @@ class NetworkTestCases(TestEnv):
                                         epsilon=1e-4)
 
     def test_yolo_v3(self):
-        self._test_conversion_from_file(self._network_folder + 'yolo_v3.onnx',
-                                        input_shape=[(1, 3, 224, 224), (1, 2)])
+        self._test_conversion_from_file(self._network_folder + 'yolo_v3.onnx')
 
     def test_yolo_v4(self):
         self._test_conversion_from_file(self._network_folder + 'yolo_v4.onnx')
@@ -2330,7 +2334,14 @@ class NetworkTestCases(TestEnv):
     def test_unet3d(self):
         self._test_conversion_from_file(self._network_folder + 'unet3d.onnx', epsilon=1e-3)
 
-    def test_gpt2(self):
+    def test_gpt2_2(self):
+        self._test_conversion_from_file(self._network_folder + 'gpt2.onnx',
+                                        epsilon=1e-3, shape_symbols={'batch_size': 4,
+                                                                     'sequence_length': 100,
+                                                                     'past_sequence_length': 10,
+                                                                     })
+
+    def test_gpt2_10(self):
         self._test_conversion_from_file(self._network_folder + 'gpt2-10.onnx',
                                         input_shape=(1, 1, 8))
 
@@ -2340,6 +2351,11 @@ class NetworkTestCases(TestEnv):
 
     def test_tiny_llm(self):
         self._test_conversion_from_file(self._network_folder + 'tiny_llm.onnx',
+                                        epsilon=1e-3, shape_symbols={'batch_size': 4,
+                                                                     'sequence_length': 100})
+
+    def test_smollm2(self):
+        self._test_conversion_from_file(self._network_folder + 'smollm2.onnx',
                                         input_shape=(4, 100), epsilon=1e-3)
 
 

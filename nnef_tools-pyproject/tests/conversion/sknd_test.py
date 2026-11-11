@@ -33,7 +33,7 @@ class TestEnv(unittest.TestCase):
     def _convert_to_sknd(self, filename):
         raise NotImplementedError()
 
-    def _exec_orig_model(self, filename, input_shape=None, input_range=None):
+    def _exec_orig_model(self, filename, input_shape=None, input_range=None, shape_symbols=None):
         raise NotImplementedError()
 
     def _set_max_input_shapes(self, model, input_shape):
@@ -46,7 +46,7 @@ class TestEnv(unittest.TestCase):
             input.shape = tuple(s if s is not None else sknd.PlaceholderExpr(None, shape[i])
                                 for i, s in enumerate(input.shape))
 
-    def _exec_sknd_model(self, path, input_shape=None, input_range=None):
+    def _exec_sknd_model(self, path, input_shape=None, input_range=None, shape_symbols=None):
         np.random.seed(0)
 
         model = sknd.read_model(path)
@@ -59,7 +59,7 @@ class TestEnv(unittest.TestCase):
             input_range = [input_range] * len(model.graphs[0].inputs)
 
         inputs = [TestEnv._random_data(sknd.DtypeToNumpy[input.dtype],
-                                       input_shape[idx] or input.shape,
+                                       input_shape[idx] or self._instantiate_sknd_shape(input.shape, shape_symbols),
                                        input_range[idx])
                   for idx, input in enumerate(model.graphs[0].inputs)]
 
@@ -70,6 +70,10 @@ class TestEnv(unittest.TestCase):
             from nnef_tools.execution.pytorch import SKNDInterpreter
             interpreter = SKNDInterpreter(model)
             return list(interpreter(inputs).values())
+
+    @staticmethod
+    def _instantiate_sknd_shape(shape, symbols):
+        return [eval(str(s), symbols) if isinstance(s, sknd.Expr) else s for s in shape] if symbols else shape
 
     @staticmethod
     def _compile_sknd_model(path):
@@ -94,18 +98,19 @@ class TestEnv(unittest.TestCase):
             lo, hi = range if range else (0, 100)
             return np.random.randint(low=lo, high=hi, size=shape, dtype=dtype)
 
-    def _test_conversion_from_file(self, filename, epsilon=1e-5, input_shape=None, input_range=None, execute=True, compile=True):
+    def _test_conversion_from_file(self, filename, epsilon=1e-5, input_shape=None, input_range=None, shape_symbols=None, execute=True, compile=True):
         self._convert_to_sknd(filename)
 
         if self._execute and execute:
-            self._test_execution_from_file(filename, epsilon=epsilon, input_shape=input_shape, input_range=input_range)
+            self._test_execution_from_file(filename, epsilon=epsilon, input_shape=input_shape, input_range=input_range,
+                                           shape_symbols=shape_symbols)
         elif compile:
             assert self._compile_sknd_model(filename + '.nnef2') is not None
 
-    def _test_execution_from_file(self, filename, epsilon=1e-5, input_shape=None, input_range=None):
+    def _test_execution_from_file(self, filename, epsilon=1e-5, input_shape=None, input_range=None, shape_symbols=None):
 
-        original_outputs = self._exec_orig_model(filename, input_shape=input_shape, input_range=input_range)
-        converted_outputs = self._exec_sknd_model(filename + '.nnef2', input_shape=input_shape, input_range=input_range)
+        original_outputs = self._exec_orig_model(filename, input_shape=input_shape, input_range=input_range, shape_symbols=shape_symbols)
+        converted_outputs = self._exec_sknd_model(filename + '.nnef2', input_shape=input_shape, input_range=input_range, shape_symbols=shape_symbols)
 
         self.assertTrue(original_outputs is not None)
         self.assertTrue(converted_outputs is not None)
