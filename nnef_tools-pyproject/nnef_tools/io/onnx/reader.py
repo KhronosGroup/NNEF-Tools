@@ -55,8 +55,7 @@ def as_str(s):
 
 
 def _get_shape(tensor_shape_proto):
-    # TODO dim_param
-    return ([int(dim.dim_value) if dim.HasField('dim_value') else None for dim in tensor_shape_proto.dim]
+    return ([int(dim.dim_value) if dim.HasField('dim_value') else dim.dim_param for dim in tensor_shape_proto.dim]
             if tensor_shape_proto is not None else None)
 
 
@@ -247,12 +246,14 @@ def _set_tensor_shapes_from_dict(value_infos, shapes):
         input_shape = shapes.get(name)
         if input_shape is not None:
             assert len(input_shape) == len(shape)
-            assert all(s is None or z is None or z == s for s, z in zip(shape, input_shape))
+            assert all(isinstance(s, str) or isinstance(z, str) or z == s for s, z in zip(shape, input_shape))
 
             del value_info.type.tensor_type.shape.dim[:]
             for s in input_shape:
                 dim = value_info.type.tensor_type.shape.dim.add()
-                if s is not None:
+                if isinstance(s, str):
+                    dim.dim_param = s
+                else:
                     dim.dim_value = s
 
 

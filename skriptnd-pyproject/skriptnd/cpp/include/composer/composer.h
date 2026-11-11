@@ -301,7 +301,7 @@ namespace sknd
                 {
                     if ( size.as_bool() )
                     {
-                        auto value = ValueExpr::placeholder(next_placeholder_name(), max_value);
+                        auto value = ValueExpr::placeholder(iden, max_value);
                         symbols.emplace(iden, Symbol(value, Typename::Int, Symbol::Extent));
                     }
                     else
@@ -311,7 +311,7 @@ namespace sknd
                 }
                 else
                 {
-                    auto value = ValueExpr::placeholder(next_placeholder_name(), max_value, size);
+                    auto value = ValueExpr::placeholder(iden, max_value, size);
                     symbols.emplace(iden, Symbol(value, Typename::Int, Symbol::Extent));
                 }
             }

@@ -18,6 +18,7 @@ from ..model.utils import *
 from ..model import *
 from ..utils import types
 from collections import OrderedDict
+from skriptnd import PlaceholderExpr
 from .converter import ShapeExpr
 import numpy as np
 import copy
@@ -196,6 +197,7 @@ class Converter(_Converter):
         self._fix_constants_in_dependent_graphs(model)
         self._fix_loops(model)
         self._fix_shape_expr_args(model)
+        self._add_placeholders(model)
         generate_missing_tensor_names_from_op_type(model)
         ensure_valid_ids(model)
         if max_input_shapes:
@@ -204,6 +206,21 @@ class Converter(_Converter):
 
     def should_skip_conversion(self, op):
         return op in self._shape_ops
+
+    def _add_placeholders(self, model):
+        for graph in model.graphs:
+            for tensor in graph.tensors:
+                if tensor.shape is not None:
+                    tensor.shape = tuple(PlaceholderExpr(s, None) if isinstance(s, str) else s
+                                         for s in tensor.shape)
+
+    def _set_max_input_shapes(model, max_input_shapes):
+        for tensor in model.main.inputs:
+            max_shape = max_input_shapes.get(tensor.name)
+            if max_shape is not None:
+                for i, s in enumerate(tensor.shape):
+                    if isinstance(s, PlaceholderExpr):
+                        s.max_value = max_shape[i]
 
     def _eliminate_constant_ops(self, model):
         for graph in model.graphs:
