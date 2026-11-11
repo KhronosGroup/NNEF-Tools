@@ -272,9 +272,9 @@ namespace sknd
                 {
                     for ( auto& extent : param.shape->extents )
                     {
-                        if ( extent.value )
+                        if ( extent.value && expanded(extent.value) )
                         {
-                            auto& iden = Typing::find_affine_id(expanded(*extent.value));
+                            auto& iden = Typing::find_affine_id(*expanded(extent.value));
                             if ( !iden.empty() )
                             {
                                 TRY_CALL(add_placeholder_symbol(*extent.value, extent.bound, symbols,
