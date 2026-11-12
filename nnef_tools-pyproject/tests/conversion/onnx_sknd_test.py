@@ -2334,7 +2334,7 @@ class NetworkTestCases(TestEnv):
     def test_unet3d(self):
         self._test_conversion_from_file(self._network_folder + 'unet3d.onnx', epsilon=1e-3)
 
-    def test_gpt2_2(self):
+    def test_gpt2(self):
         self._test_conversion_from_file(self._network_folder + 'gpt2.onnx',
                                         epsilon=1e-3, shape_symbols={'batch_size': 4,
                                                                      'sequence_length': 100,
