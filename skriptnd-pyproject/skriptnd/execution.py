@@ -1174,48 +1174,45 @@ def compile_model(model, keep_generated_code=False, tmp_dir_path="."):
         try:
             _save_to_file(_generate_model_source(model, model_type), hdr_name)
             _save_to_file(WrapperSource, cpp_name)
-        except ValueError as e:
+
+            if keep_generated_code:
+                shutil.copyfile(hdr_name, os.path.join(cwd, hdr_name))
+
+            lib_root = "./lib"
+
+            setup(
+                name=module_name,
+                version="1.0",
+                ext_modules=ext_modules,
+                packages=[],
+                cmdclass={"build_ext": build_ext},
+                zip_safe=False,
+                python_requires=">=3.6",
+                script_name='setup.py',
+                script_args=['--quiet', 'build_ext', '--inplace', '--build-lib', lib_root],
+                include_dirs=["skriptnd/cpp/include", "skriptnd/cpp/include/core",
+                              "skriptnd/cpp/include/frontend", "skriptnd/cpp/include/composer",
+                              "skriptnd/cpp/include/runtime"],
+            )
+
+            # get the generated .so file
+            so_path = os.path.join(lib_root, os.listdir(lib_root)[0])
+
+            # on windows dlls can't be deleted, move to cwd/.skndworkdir/ for delayed deletion
+            if platform.system() == "Windows":
+                target_path = os.path.join(cwd, ".skndworkdir", os.path.basename(so_path))
+                if WindowsPydDir is None:
+                    WindowsPydDir = os.path.dirname(target_path)
+                os.makedirs(WindowsPydDir, exist_ok=True)
+                shutil.move(so_path, target_path)
+                so_path = target_path
+
+            # use specification to collect the module and load it
+            spec = importlib.util.spec_from_file_location(module_name, so_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        finally:
             os.chdir(cwd)
-            raise e
-
-        lib_root = "./lib"
-
-        setup(
-            name=module_name,
-            version="1.0",
-            ext_modules=ext_modules,
-            packages=[],
-            cmdclass={"build_ext": build_ext},
-            zip_safe=False,
-            python_requires=">=3.6",
-            script_name='setup.py',
-            script_args=['--quiet', 'build_ext', '--inplace', '--build-lib', lib_root],
-            include_dirs=["skriptnd/cpp/include", "skriptnd/cpp/include/core",
-                          "skriptnd/cpp/include/frontend", "skriptnd/cpp/include/composer",
-                          "skriptnd/cpp/include/runtime"],
-        )
-
-        # get the generated .so file
-        so_path = os.path.join(lib_root, os.listdir(lib_root)[0])
-
-        # on windows dlls can't be deleted, move to cwd/.skndworkdir/ for delayed deletion
-        if platform.system() == "Windows":
-            target_path = os.path.join(cwd, ".skndworkdir", os.path.basename(so_path))
-            if WindowsPydDir is None:
-                WindowsPydDir = os.path.dirname(target_path)
-            os.makedirs(WindowsPydDir, exist_ok=True)
-            shutil.move(so_path, target_path)
-            so_path = target_path
-
-        # use specification to collect the module and load it
-        spec = importlib.util.spec_from_file_location(module_name, so_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-
-        if keep_generated_code:
-            shutil.copyfile(hdr_name, os.path.join(cwd, hdr_name))
-
-        os.chdir(cwd)
 
     compiled_model = module.Model()
     compiled_model.load({tensor.name: _normalize_dtype(tensor.value) for tensor in model.variables})
