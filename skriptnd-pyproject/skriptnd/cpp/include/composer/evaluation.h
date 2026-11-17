@@ -2922,7 +2922,17 @@ namespace sknd
                 {
                     auto& iden = as_identifier(expr);
                     auto& symbol = symbols.at(iden.name);
-                    return symbol.is<TensorRef>() ? symbol.as<TensorRef>().shape() : Shape();
+                    if ( !symbol.is<TensorRef>() )
+                    {
+                        return Shape();
+                    }
+                    auto tensor = symbol.as<TensorRef>();
+                    Shape shape(tensor.shape().size());
+                    for ( size_t i = 0; i < shape.size(); ++i )
+                    {
+                        shape[i] = is_literal(tensor.shape()[i]) ? tensor.shape()[i] : ValueExpr(ShapeAccess{ tensor, (int_t)i }, Typename::Int);
+                    }
+                    return shape;
                 }
                 case Expr::List:
                 {
