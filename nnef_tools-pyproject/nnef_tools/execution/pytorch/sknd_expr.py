@@ -15,6 +15,7 @@
 import skriptnd as sknd
 import builtins
 import math
+from itertools import repeat
 
 
 _Unaries = {
@@ -85,16 +86,36 @@ def eval_expr(expr, tensors):
         return len(pack)
     elif isinstance(expr, sknd.CastExpr):
         cast = _Casts[expr.dtype]
-        return cast(eval_expr(expr.arg, tensors))
+        arg = eval_expr(expr.arg, tensors)
+        return [cast(item) for item in arg] if isinstance(arg, list) else cast(arg)
     elif isinstance(expr, sknd.UnaryExpr):
         op = _Unaries[expr.op]
-        return op(eval_expr(expr.arg, tensors))
+        arg = eval_expr(expr.arg, tensors)
+        return [op(item) for item in arg] if isinstance(arg, list) else op(arg)
     elif isinstance(expr, sknd.BinaryExpr):
         op = _Binaries[expr.op]
-        return op(eval_expr(expr.left, tensors), eval_expr(expr.right, tensors))
+        lhs = eval_expr(expr.left, tensors)
+        rhs = eval_expr(expr.right, tensors)
+        if not expr.packed:
+            return op(lhs, rhs)
+        elif not isinstance(rhs, list):
+            return [op(l, rhs) for l in lhs]
+        elif not isinstance(lhs, list):
+            return [op(lhs, r) for r in rhs]
+        else:
+            return [op(l,r) for l, r in zip(lhs, rhs)]
     elif isinstance(expr, sknd.SelectExpr):
         cond = eval_expr(expr.cond, tensors)
-        return eval_expr(expr.left if cond else expr.right, tensors)
+        if not isinstance(cond, list):
+            return eval_expr(expr.left if cond else expr.right, tensors)
+        else:
+            lhs = eval_expr(expr.left, tensors)
+            if not isinstance(lhs, list):
+                lhs = repeat(lhs)
+            rhs = eval_expr(expr.right, tensors)
+            if not isinstance(rhs, list):
+                rhs = repeat(rhs)
+            return [l if c else r for c, l, r in zip(cond, lhs, rhs)]
     elif isinstance(expr, sknd.ReferenceExpr):
         return eval_expr(expr.target, tensors)
     elif isinstance(expr, sknd.FoldExpr):
