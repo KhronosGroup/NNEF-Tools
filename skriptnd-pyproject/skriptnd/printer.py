@@ -55,7 +55,7 @@ class Printer:
 
     def _format_value(self, value):
         if value is None:
-            return "~"  # null tensor
+            return "~"  # null tensor or null shape
         elif isinstance(value, _sknd.Tensor):
             if self._can_inline(value):
                 if isinstance(value.value, bool):
@@ -88,20 +88,18 @@ class Printer:
             text += '|' + str(x.max_value)
         return text
 
-    def _format_shape(self, shape, ignore_dynamic_shape=False):
-        return "[" + ",".join('~' if ignore_dynamic_shape and isinstance(s, _sknd.Expr) else
-                              self._format_placeholder(s) if isinstance(s, _sknd.PlaceholderExpr) else
+    def _format_shape(self, shape):
+        return "[" + ",".join(self._format_placeholder(s) if isinstance(s, _sknd.PlaceholderExpr) else
                               self._format_value(s)
                               for s in shape) + "]"
 
-    def _format_param(self, name, dtype, shape, default=None, optional=False, packed=False, repeats=None,
-                      ignore_dynamic_shape=False):
+    def _format_param(self, name, dtype, shape, default=None, optional=False, packed=False, repeats=None):
         text = self._make_id(name) + ": "
         if optional:
             text += "optional "
         text += dtype.name.lower()
         if shape is not None:
-            text += self._format_shape(shape, ignore_dynamic_shape)
+            text += self._format_shape(shape)
         if packed:
             text += ".."
         if repeats is not None:
@@ -241,22 +239,20 @@ class Printer:
 
         print("\t@input {", file=file)
         for input in graph.inputs:
-            if isinstance(input, _sknd.TensorPack):
-                print("\t\t" + self._format_param(input.name, input.dtype, input.shape,
-                                                  packed=True, repeats=len(input)) + ";", file=file)
-            else:
-                print("\t\t" + self._format_param(input.name, input.dtype, input.shape) + ";", file=file)
+            packed = isinstance(input, _sknd.TensorPack)
+            repeats = len(input) if packed else None
+            param = self._format_param(input.name, input.dtype, input.shape, packed=packed, repeats=repeats)
+            print("\t\t" + param + ";", file=file)
         print("\t}", file=file)
 
         print("\t@output {", file=file)
         for output in graph.outputs:
-            if isinstance(output, _sknd.TensorPack):
-                print("\t\t" + self._format_param(output.name, output.dtype, output.shape,
-                                                  packed=True, repeats=len(output),
-                                                  ignore_dynamic_shape=True) + ";", file=file)
-            else:
-                print("\t\t" + self._format_param(output.name, output.dtype, output.shape,
-                                                  ignore_dynamic_shape=True) + ";", file=file)
+            packed = isinstance(output, _sknd.TensorPack)
+            repeats = len(output) if packed else None
+            shape = [None if isinstance(s, _sknd.Expr) and self._references_outside(s, graph.inputs) else s
+                     for s in output.shape]
+            param = self._format_param(output.name, output.dtype, shape, packed=packed, repeats=repeats)
+            print("\t\t" + param + ";", file=file)
         print("\t}", file=file)
 
         variables = list(graph.variables)
@@ -282,6 +278,15 @@ class Printer:
         print("\t}", file=file)
 
         print("}\n", file=file)
+
+    def _references_outside(self, expr, tensors):
+        from . import recursive_enumerate_expr
+        for x in recursive_enumerate_expr(expr, follow_references=True):
+            if isinstance(x, _sknd.ShapeAccess) and x.tensor not in tensors:
+                return True
+            elif isinstance(x, _sknd.SizeAccess) and x.pack not in tensors:
+                return True
+        return False
 
 
 def print_model(model, file=None):

@@ -208,10 +208,14 @@ class Converter(_Converter):
         return op in self._shape_ops
 
     def _add_placeholders(self, model):
+        input_symbols = {s for graph in model.graphs for input in graph.inputs
+                         if input is not None and input.shape is not None
+                         for s in input.shape if isinstance(s, str)}
         for graph in model.graphs:
             for tensor in graph.tensors:
                 if tensor.shape is not None:
-                    tensor.shape = tuple(PlaceholderExpr(s, None) if isinstance(s, str) else s
+                    tensor.shape = tuple(s if not isinstance(s, str) else
+                                         PlaceholderExpr(s, None) if s in input_symbols else None
                                          for s in tensor.shape)
 
     def _set_max_input_shapes(model, max_input_shapes):
