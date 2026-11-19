@@ -1386,22 +1386,6 @@ namespace sknd
             
             TRY_CALL(add_placeholder_symbols(op.outputs, locals, true))
             
-            std::vector<Shape> output_shapes(op.outputs.size());
-            std::vector<ValueExpr> output_sizes(op.outputs.size());
-            for ( size_t i = 0; i < op.outputs.size(); ++i )
-            {
-                auto& param = op.outputs[i];
-                
-                TRY_DECL(shape, eval_shape(*param.shape, locals))
-                output_shapes[i] = simplified(shape);
-                
-                if ( param.type.packed )
-                {
-                    TRY_DECL(size, eval_shape_expr(*param.repeats.value, locals))
-                    output_sizes[i] = simplified(size);
-                }
-            }
-            
             std::vector<TensorRef> outputs;
             
             if ( inlined )
@@ -1465,7 +1449,21 @@ namespace sknd
             auto& context = _contexts.at(graph.name);
             for ( size_t i = 0; i < outputs.size(); ++i )
             {
-                save_shapes_to_context(context, outputs[i], output_shapes[i], output_sizes[i]);
+                auto& param = op.outputs[i];
+                
+                TRY_DECL(shape, eval_shape(*param.shape, locals))
+                resolve(shape, ResolveReference);
+                simplify(shape);
+                
+                ValueExpr size = nullptr;
+                if ( param.type.packed )
+                {
+                    TRY_MOVE(size, eval_shape_expr(*param.repeats.value, locals))
+                    resolve(size, ResolveReference);
+                    simplify(size);
+                }
+                
+                save_shapes_to_context(context, outputs[i], shape, size);
             }
             
             return std::make_tuple(std::move(inputs), std::move(outputs));
