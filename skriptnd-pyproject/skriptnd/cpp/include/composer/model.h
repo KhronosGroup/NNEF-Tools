@@ -84,6 +84,7 @@ namespace sknd
         std::vector<ValueExpr> shape;                                   // shape of tensors in the pack (expressed in terms of shape symbols)
         ValueExpr size;                                                 // canonical dynamic size of the pack
         std::unique_ptr<Tensor*[]> items;                               // items in the pack if pack is explicitly listed
+        std::map<std::string,ValueExpr> quant;                          // quantization info for the tensor
     };
 
 

@@ -14,7 +14,7 @@
 
 # @title quant-ops Quatization Operators
 
-# @item Linear Quantization
+# @item Linear quantization of real tensors
 
 operator zero_point_linear_quantize {
     @attrib {
@@ -83,5 +83,40 @@ operator min_max_linear_quantize {
             quantized = round(((input[i..] >? mn <? mx) - mn) / sc * r) - p:
         output[i..] = real((quantized + p) / r * sc + mn),
             i < s;
+    }
+}
+
+# @item Floating-point quantization of real tensors
+
+operator float {
+    @attrib {
+        bits: int;
+    }
+    @input {
+        input: real[s..];
+    }
+    @output {
+        output: real[s..];
+    }
+    @assert {
+        bits in [4, 8, 16, 32, 64];
+    }
+}
+
+# @item Bit-width and signed-ness specification of int tensors
+
+operator integer {
+    @attrib {
+        bits: int;
+        signed: bool;
+    }
+    @input {
+        input: int[s..];
+    }
+    @output {
+        output: int[s..];
+    }
+    @assert {
+        bits in [4, 8, 16, 32, 64];
     }
 }

@@ -287,7 +287,9 @@ class SKNDModule(torch.nn.Module):
     def _dequantize(data, quant):
         op_name = quant['op-name']
         rank = len(data.shape)
-        if op_name == 'quant.zero_point_linear_quantize':
+        if op_name == 'quant.float' or op_name == 'quant.integer':
+            return data
+        elif op_name == 'quant.zero_point_linear_quantize':
             channel_axis = quant['channel_axis']
             zero_point = SKNDModule._as_array(quant['zero_point'], rank, channel_axis)
             scale = SKNDModule._as_array(quant['scale'], rank, channel_axis)
@@ -315,11 +317,14 @@ class SKNDModule(torch.nn.Module):
         return data * ((max - min) / r) + min
 
     def _fake_quantize(self, tensor, quant):
-        op_type = quant['op-name']
+        op_name = quant['op-name']
+        if op_name == 'quant.float' or op_name == 'quant.integer':
+            return tensor
+
         attribs = {key: value for key, value in six.iteritems(quant) if key != 'op-name'}
 
-        assert op_type in self._operators, "Unsupported quantization operation: {}".format(op_type)
-        func = self._operators[op_type]
+        assert op_name in self._operators, "Unsupported quantization operation: {}".format(op_name)
+        func = self._operators[op_name]
         return func(tensor, **attribs)
 
     @staticmethod

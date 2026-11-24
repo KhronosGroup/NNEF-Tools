@@ -4131,21 +4131,9 @@ namespace sknd
         
         Result<void> eval_quantization( Graph& graph, const std::vector<Quantization>& quantization, const Dict<Symbol>& symbols )
         {
-            Dict<Tensor*> tensors;
-            for ( auto& tensor : graph.tensors )
-            {
-                tensors.emplace(tensor->name, tensor.get());
-            }
-            
             for ( auto& quant : quantization )
             {
-                auto it = tensors.find(quant.tensor);
-                if ( it == tensors.end() )
-                {
-                    report_error(quant.position, "'%s' is not a public tensor identifier", quant.tensor.c_str());
-                    continue;
-                }
-                auto& tensor = *it->second;
+                auto tensor = symbols.at(quant.tensor).as<TensorRef>();
                 
                 auto& op = *_operators.at(quant.invocation.target);
                 auto dtypes = eval_dtypes(op, quant.invocation);
@@ -4153,13 +4141,13 @@ namespace sknd
                 auto& param = op.inputs.front();
                 auto param_type = !param.type_alias.empty() ? dtypes.at(param.type_alias) : param.type.name;
                 
-                if ( !is_compatible(param_type, tensor.dtype) )
+                if ( !is_compatible(param_type, tensor.dtype()) )
                 {
                     report_error(quant.position, "tensor type '%s' incompatible with quantization operator's parameter type '%s'",
-                                 str(tensor.dtype).c_str(), str(param_type).c_str());
+                                 str(tensor.dtype()).c_str(), str(param_type).c_str());
                 }
                 
-                tensor.quant.emplace("op-name", ValueExpr(quant.invocation.target));
+                tensor.quant().emplace("op-name", ValueExpr(quant.invocation.target));
                 for ( auto& [key, value] : quant.invocation.attribs )
                 {
                     TRY_DECL(val, eval_optional(*value, symbols))
@@ -4167,7 +4155,7 @@ namespace sknd
                     {
                         report_error(value->position, "quantization attribute must not depend on tensor shapes");
                     }
-                    tensor.quant.emplace(key, val);
+                    tensor.quant().emplace(key, val);
                 }
             }
             return Result<void>();

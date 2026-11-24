@@ -146,7 +146,7 @@ class Printer:
             text += '\t\t}'
             return text
 
-    def _format_invocation(self, name, args, dtypes=None, attribs=None, alias=None, label=None):
+    def _format_invocation(self, name, args=None, dtypes=None, attribs=None, alias=None, label=None):
         text = ""
         if label:
             text += label + ": "
@@ -155,7 +155,8 @@ class Printer:
             text += "<" + ",".join(dtype.name.lower() for dtype in dtypes) + ">"
         if attribs and any(v is not None for k, v in attribs.items()):
             text += "{" + ", ".join(k + "=" + self._format_value(v) for k, v in attribs.items() if v is not None) + "}"
-        text += "(" + ", ".join(self._format_value(a) for a in args) + ")"
+        if args is not None:
+            text += "(" + ", ".join(self._format_value(a) for a in args) + ")"
         if alias:
             text += " as " + alias
         return text
@@ -276,6 +277,17 @@ class Printer:
             print("\t\t" + self._format_operation(op.outputs, op.name, op.dtypes.values(), op.attribs, op.inputs, op.internals, op.subgraphs)
                   + ";", file=file)
         print("\t}", file=file)
+
+        internals = {tensor for op in graph.operations for tensor in op.internals}
+        if any(tensor.quant for tensor in graph.tensors):
+            print("\t@quantize {", file=file)
+            for tensor in graph.tensors:
+                if tensor.quant and not (tensor.is_constant and self._can_inline(tensor)) and not tensor in internals:
+                    op_name = tensor.quant['op-name']
+                    attribs = {key: value for key, value in tensor.quant.items() if key != 'op-name'}
+                    invocation = self._format_invocation(name=op_name, attribs=attribs)
+                    print(f"\t\t{self._make_id(tensor.name)}: {invocation};", file=file)
+            print("\t}", file=file)
 
         print("}\n", file=file)
 

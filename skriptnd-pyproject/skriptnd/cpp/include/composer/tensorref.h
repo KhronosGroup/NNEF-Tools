@@ -150,6 +150,16 @@ namespace sknd
                 return as_pack().items.get() + as_pack().size.as_int();
             }
             
+            const std::map<std::string,ValueExpr>& quant() const
+            {
+                return packed() ? as_pack().quant : as_tensor().quant;
+            }
+            
+            std::map<std::string,ValueExpr>& quant()
+            {
+                return packed() ? as_pack().quant : as_tensor().quant;
+            }
+            
             bool is_constant() const
             {
                 if ( itemized() )

@@ -325,6 +325,23 @@ DtypeFromNumpy = {
     np.void: Dtype.Type,
 }
 
+QuantFromNumpy = {
+    np.float16: {'op-name': 'quant.float', 'bits': 16},
+    np.float32: {'op-name': 'quant.float', 'bits': 32},
+    np.float64: {'op-name': 'quant.float', 'bits': 64},
+    np.int8: {'op-name': 'quant.integer', 'bits': 8, 'signed': True},
+    np.uint8: {'op-name': 'quant.integer', 'bits': 8, 'signed': False},
+    np.int16: {'op-name': 'quant.integer', 'bits': 16, 'signed': True},
+    np.uint16: {'op-name': 'quant.integer', 'bits': 16, 'signed': False},
+    np.int32: {'op-name': 'quant.integer', 'bits': 32, 'signed': True},
+    np.uint32: {'op-name': 'quant.integer', 'bits': 32, 'signed': False},
+    np.int64: {'op-name': 'quant.integer', 'bits': 64, 'signed': True},
+    np.uint64: {'op-name': 'quant.integer', 'bits': 64, 'signed': False},
+    np.bool_: None,
+    np.str_: None,
+    np.void: None,
+}
+
 
 def read_model(path, attribs=None, init_data=True, flags=DefaultCompilerFlags):
     if not os.path.isfile(path) and not os.path.isdir(path):
@@ -351,6 +368,8 @@ def scan_model(source, attribs=None, init_data=True, flags=DefaultCompilerFlags)
 
 def write_model(model, path, operators=None, imports=None, include_variables=True):
     imported = {_split_module_name(op.name) for graph in model.graphs for op in graph.operations}
+    imported.update(_split_module_name(tensor.quant['op-name'])
+                    for graph in model.graphs for tensor in graph.tensors if tensor.quant)
     if imports:
         imported.update(imports)
 

@@ -65,7 +65,7 @@ def _build_tensor(tensor):
     return sknd.Tensor(name=tensor.name or "~",
                        shape=tensor.shape,
                        dtype=sknd.DtypeFromNumpy[tensor.dtype] if tensor.dtype else None,
-                       quant=tensor.quant,
+                       quant=tensor.quant or (sknd.QuantFromNumpy[tensor.dtype] if tensor.dtype else None),
                        value=tensor.data,
                        variable=tensor.is_variable)
 

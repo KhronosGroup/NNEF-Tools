@@ -1155,6 +1155,15 @@ namespace sknd
         
         void check_quantization( const Quantization& quantization, const Dict<Declaration>& decls ) const
         {
+            auto it = decls.find(quantization.tensor);
+            if ( it == decls.end() )
+            {
+                report_error(quantization.position, "undeclared identifier '%s'", quantization.tensor.c_str());
+            }
+            else if ( !it->second.type.tensor )
+            {
+                report_error(quantization.position, "'%s' is not declared as tensor identifier", quantization.tensor.c_str());
+            }
             auto types = check_invocation(quantization.invocation, decls, true);
             if ( !types.empty() )
             {
