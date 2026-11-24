@@ -151,7 +151,7 @@ class Converter(_Converter):
 
     @staticmethod
     def defined_imports():
-        return {'nn', 'math', 'image', 'quant'}
+        return {'nn', 'math', 'image'}
 
     @staticmethod
     def shape_expr_args(op_type):
