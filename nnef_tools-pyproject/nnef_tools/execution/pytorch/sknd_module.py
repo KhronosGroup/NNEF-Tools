@@ -47,9 +47,10 @@ class SKNDModule(torch.nn.Module):
 
     def __init__(self,
                  model,  # type: str
-                 decomposed=None,           # type: typing.Optional[typing.List[str]]
+                 decomposed=None,  # type: typing.Optional[typing.List[str]]
                  activation_callback=None,  # type: typing.Optional[typing.Callable[[str, torch.Tensor], None]]
                  training_attributes=None,  # type: typing.Optional[typing.Dict[str, typing.Dict[str, typing.Any]]]
+                 apply_quantization=True,  # type: bool
                  ):
         # type: (...)->None
         """
@@ -73,15 +74,15 @@ class SKNDModule(torch.nn.Module):
             for tensor in graph.tensors:
                 if tensor.is_variable:
                     name = self._registered_name(tensor.name)
-                    dtype = sknd.DtypeToNumpy[tensor.dtype]
                     data = self._dequantize(tensor.value, tensor.quant) \
-                        if tensor.quant else tensor.value
+                        if apply_quantization and tensor.quant else tensor.value
+                    dtype = sknd.numpy_dtype(tensor.dtype, tensor.quant if apply_quantization else None)
                     data = data.astype(dtype)
                     self.register_parameter(name, torch.nn.Parameter(torch.tensor(data), requires_grad=tensor.dtype == sknd.Dtype.Real))
                     self._registered[tensor] = getattr(self, name)
                 elif tensor.is_constant:
                     name = self._registered_name(tensor.name)
-                    dtype = sknd.DtypeToNumpy[tensor.dtype]
+                    dtype = sknd.numpy_dtype(tensor.dtype, tensor.quant if apply_quantization else None)
                     data = tensor.value.astype(dtype) if isinstance(tensor.value, np.ndarray) \
                         else np.array(tensor.value, dtype=dtype).reshape(tensor.shape) if isinstance(tensor.value, Iterable) \
                         else np.full(tensor.shape, tensor.value, dtype=dtype)
@@ -91,6 +92,7 @@ class SKNDModule(torch.nn.Module):
         self._operators = sknd_operators.Operators
         self._activation_callback = activation_callback
         self._training_attributes = training_attributes or {}
+        self._apply_quantization = apply_quantization
 
     def forward(self, *inputs):
         graph = self._sknd_model.graphs[0]
@@ -117,7 +119,7 @@ class SKNDModule(torch.nn.Module):
                     for sknd_item, torch_item in zip(sknd_tensor, torch_tensor):
                         store_activation(sknd_item, torch_item)
             else:
-                if sknd_tensor.quant and not sknd_tensor.is_variable:
+                if self._apply_quantization and sknd_tensor.quant and not sknd_tensor.is_variable:
                     torch_tensor = self._fake_quantize(torch_tensor, sknd_tensor.quant)
 
             activations[sknd_tensor] = torch_tensor
@@ -230,7 +232,8 @@ class SKNDModule(torch.nn.Module):
             for sknd_tensor in graph.tensors:
                 if sknd_tensor.is_variable:
                     torch_tensor = getattr(self, self._registered_name(sknd_tensor.name))
-                    sknd_tensor.value = torch_tensor.detach().cpu().numpy().astype(sknd.DtypeToNumpy[sknd_tensor.dtype])
+                    numpy_dtype = sknd.numpy_dtype(sknd_tensor.dtype, sknd_tensor.quant if self._apply_quantization else None)
+                    sknd_tensor.value = torch_tensor.detach().cpu().numpy().astype(numpy_dtype)
 
         writer = sknd_io.Writer()
         writer(self._sknd_model, path)
@@ -317,6 +320,10 @@ class SKNDModule(torch.nn.Module):
         return data * ((max - min) / r) + min
 
     def _fake_quantize(self, tensor, quant):
+        quant_dtype = self._quant_dtype(quant)
+        if quant_dtype is not None:
+            return tensor.to(quant_dtype)
+
         op_name = quant['op-name']
         if op_name == 'quant.float' or op_name == 'quant.integer':
             return tensor
@@ -331,3 +338,38 @@ class SKNDModule(torch.nn.Module):
     def _as_array(value, rank, axis):
         array = np.array(value)
         return np.reshape(array, newshape=(1,) * axis + array.shape + (1,) * (rank - axis - len(array.shape)))
+
+    @staticmethod
+    def _quant_dtype(quant):
+        op = quant['op-name']
+        bits = quant['bits']
+        if op == 'quant.float':
+            layout = quant.get('layout')
+            if bits == 64:
+                return torch.float64
+            elif bits == 32:
+                return torch.float32
+            elif bits == 16:
+                return torch.bfloat16 if layout == 'e8m7' else torch.float16
+            elif bits <= 8:
+                if layout == 'e5m2fnuz':
+                    return torch.float8_e5m2fnuz
+                elif layout == 'e4m3fnuz':
+                    return torch.float8_e4m3fnuz
+                elif layout == 'e4m3fn':
+                    return torch.float8_e4m3fn
+                elif layout == 'e8m0fnu':
+                    return torch.float8_e8m0fnu
+                else:
+                    return torch.float8_e5m2
+        elif op == 'quant.integer':
+            signed = quant['signed']
+            if bits == 64:
+                return torch.int64 if signed else torch.uint64
+            elif bits == 32:
+                return torch.int32 if signed else torch.uint32
+            elif bits == 16:
+                return torch.int16 if signed else torch.uint16
+            elif bits <= 8:
+                return torch.int8 if signed else torch.uint8
+        return None

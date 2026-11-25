@@ -90,13 +90,13 @@ class NNEFInterpreter:
 
 class SKNDInterpreter:
 
-    def __init__(self, model, device=None, decomposed=None):
+    def __init__(self, model, device=None, decomposed=None, apply_quantization=True):
         if isinstance(model, sknd.Model):
             self._sknd_model = model
         else:
             self._sknd_model = sknd.parse_file(os.path.join(model, 'main.sknd'))
 
-        self._sknd_module = SKNDModule(model=model, decomposed=decomposed)
+        self._sknd_module = SKNDModule(model=model, decomposed=decomposed, apply_quantization=apply_quantization)
 
         if device is None:
             device = 'cuda' if torch.cuda.is_available() else 'cpu'

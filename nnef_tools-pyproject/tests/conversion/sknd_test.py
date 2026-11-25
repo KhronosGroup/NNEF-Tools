@@ -19,12 +19,14 @@ import skriptnd as sknd
 
 class TestEnv(unittest.TestCase):
 
-    def __init__(self, *args, optimize=True, execute=True, keep_generated_code=False, target='cpp', **kwargs):
+    def __init__(self, *args, optimize=True, execute=True, keep_generated_code=False, target='cpp',
+                 apply_quantization=True, **kwargs):
         super().__init__(*args, **kwargs)
         self._optimize = optimize
         self._execute = execute
         self._keep_generated_code = keep_generated_code
         self._target = target
+        self._apply_quantization = apply_quantization
 
     @property
     def target(self):
@@ -68,7 +70,7 @@ class TestEnv(unittest.TestCase):
             return compiled_model(*inputs)
         elif self._target == 'torch':
             from nnef_tools.execution.pytorch import SKNDInterpreter
-            interpreter = SKNDInterpreter(model)
+            interpreter = SKNDInterpreter(model, apply_quantization=self._apply_quantization)
             return list(interpreter(inputs).values())
 
     @staticmethod

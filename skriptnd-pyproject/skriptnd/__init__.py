@@ -15,6 +15,8 @@
 import _skriptnd as _sknd
 import collections.abc
 
+import numpy as np
+
 from .parser import *
 from .printer import *
 from .binary import *
@@ -341,6 +343,25 @@ QuantFromNumpy = {
     np.str_: None,
     np.void: None,
 }
+
+
+def numpy_dtype(dtype, quant=None):
+    if quant:
+        op = quant['op-name']
+        bits = quant['bits']
+        if op == 'quant.float':
+            return np.float64 if bits == 64 else np.float32 if bits == 32 else np.float16
+        elif op == 'quant.int':
+            signed = quant['signed']
+            if bits == 64:
+                return np.int64 if signed else np.uint64
+            elif bits == 32:
+                return np.int32 if signed else np.uint32
+            elif bits == 16:
+                return np.int16 if signed else np.uint16
+            elif bits <= 8:
+                return np.int8 if signed else np.uint8
+    return DtypeToNumpy[dtype]
 
 
 def read_model(path, attribs=None, init_data=True, flags=DefaultCompilerFlags):

@@ -130,7 +130,7 @@ def _arg_nd(input, axes, squeeze, fn):
 
 def nn_relu(x, alpha, max):
     x = F.leaky_relu(x, alpha) if alpha is not None else F.relu(x)
-    return x if max is None else torch.minimum(x, torch.tensor(max, dtype=RealType))
+    return x if max is None else torch.minimum(x, torch.tensor(max, dtype=x.dtype))
 
 
 def nn_prelu(x, alpha, axis):
@@ -310,8 +310,8 @@ def layout_scatter_nd(data, indices, updates, batch_dims):
     return data.index_put(_nd_indices(data, indices, batch_dims), updates)
 
 
-def _nearest_index(in_size, out_size, coordinate_transform, rounding_method, device):
-    i = torch.arange(out_size, device=device, dtype=RealType)
+def _nearest_index(in_size, out_size, coordinate_transform, rounding_method, device, dtype):
+    i = torch.arange(out_size, device=device, dtype=dtype)
     if coordinate_transform == 'ASYMMETRIC':
         x = i * (in_size / out_size)
     elif coordinate_transform == 'SYMMETRIC':
@@ -336,7 +336,8 @@ def _nearest_index(in_size, out_size, coordinate_transform, rounding_method, dev
 def _nearest_resize(tensor, size, coordinate_transform, rounding_method):
     axis = tensor.dim() - len(size)
     for out_size in size:
-        index = _nearest_index(tensor.shape[axis], out_size, coordinate_transform, rounding_method, tensor.device)
+        index = _nearest_index(tensor.shape[axis], out_size, coordinate_transform, rounding_method,
+                               device=tensor.device, dtype=tensor.dtype)
         tensor = tensor.index_select(axis, index)
         axis += 1
     return tensor

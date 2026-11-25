@@ -54,7 +54,7 @@ class TestEnv(sknd_test.TestEnv):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs, optimize=True, execute=True,
-                         keep_generated_code=False, target='torch')
+                         keep_generated_code=False, target='torch', apply_quantization=False)
 
     def setUp(self) -> None:
         self._onnx_reader = onnx_io.Reader(simplify=False, enforce_output_shapes=True)
